@@ -1,0 +1,75 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V7
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDEs & editors
+.idea/
+*.swp
+*.swo
+*~
+.vscode/settings.json
+
+# Coverage
+coverage/
+.nyc_output/
+
+# Prisma
+packages/backend/prisma/dev.db
+packages/backend/prisma/dev.db-journal
+packages/backend/prisma/*.db
+
+# Expo / React Native
+packages/mobile/.expo/
+packages/mobile/android/
+packages/mobile/ios/
+packages/mobile/*.jks
+packages/mobile/*.p8
+packages/mobile/*.p12
+packages/mobile/*.key
+packages/mobile/*.mobileprovision
+packages/mobile/*.orig.*
+packages/mobile/web-build/
+
+# Next.js
+packages/admin-web/.next/
+packages/admin-web/out/
+
+# Upload directories
+packages/backend/uploads/
+
+# Misc
+*.pem
+.cache/

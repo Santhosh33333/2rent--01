@@ -1,0 +1,33 @@
+{
+  "name": "rentbuddy-2026",
+  "version": "2.0.0",
+  "private": true,
+  "description": "RentBuddy 2026 — Enterprise rebuild monorepo",
+  "workspaces": [
+    "packages/backend",
+    "packages/web"
+  ],
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "scripts": {
+    "dev:backend": "npm run dev --workspace=packages/backend",
+    "dev:admin": "npm run dev --workspace=packages/admin-web",
+    "dev:web": "npm run dev --workspace=packages/web",
+    "build:backend": "npm run build --workspace=packages/backend",
+    "build:admin": "npm run build --workspace=packages/admin-web",
+    "build:web": "npm run build --workspace=packages/web",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "db:generate": "npm run prisma:generate --workspace=packages/backend",
+    "db:migrate": "npm run prisma:migrate --workspace=packages/backend",
+    "db:seed": "npm run prisma:seed --workspace=packages/backend",
+    "db:studio": "npm run prisma:studio --workspace=packages/backend",
+    "docker:up": "docker-compose up --build",
+    "docker:down": "docker-compose down"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
