@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>RentBuddy - Play Store Asset Generator</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #0f0f14; color: #e4e4e7; padding: 2rem; }
+    h1 { font-size: 1.8rem; margin-bottom: 0.5rem; background: linear-gradient(135deg, #6366f1, #f97316); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .subtitle { color: #71717a; margin-bottom: 2rem; font-size: 0.95rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem; }
+    .card { background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 1.5rem; }
+    .card h2 { font-size: 1.1rem; margin-bottom: 0.25rem; color: #fafafa; }
+    .card .meta { font-size: 0.8rem; color: #71717a; margin-bottom: 1rem; }
+    canvas { display: block; max-width: 100%; border-radius: 8px; border: 1px solid #27272a; margin-bottom: 1rem; }
+    button { background: linear-gradient(135deg, #6366f1, #818cf8); color: white; border: none; padding: 0.6rem 1.2rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+    button:hover { opacity: 0.85; }
+    .btn-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .full-width { grid-column: 1 / -1; }
+    .info { background: #1e1b4b; border: 1px solid #312e81; border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; font-size: 0.85rem; color: #a5b4fc; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <h1>RentBuddy Play Store Assets</h1>
+  <p class="subtitle">Open this file in a browser to preview and download all required Google Play Store listing images.</p>
+
+  <div class="info">
+    <strong>Required Play Store assets:</strong><br/>
+    App Icon (512x512 PNG) &bull; Feature Graphic (1024x500 PNG) &bull; Phone Screenshots (min 2, 1080x1920 or 1080x2340) &bull; TV Banner (1280x720 optional)
+  </div>
+
+  <div class="grid">
+
+    <!-- App Icon 512x512 -->
+    <div class="card">
+      <h2>App Icon</h2>
+      <p class="meta">512 x 512 px &mdash; Required for Play Store</p>
+      <canvas id="icon512" width="512" height="512"></canvas>
+      <div class="btn-row">
+        <button onclick="download('icon512', 'rentbuddy-icon-512.png')">Download PNG</button>
+        <button onclick="download('icon512', 'rentbuddy-icon-512.jpg', 'image/jpeg')">Download JPG</button>
+      </div>
+    </div>
+
+    <!-- Feature Graphic 1024x500 -->
+    <div class="card">
+      <h2>Feature Graphic</h2>
+      <p class="meta">1024 x 500 px &mdash; Play Store banner</p>
+      <canvas id="featureGraphic" width="1024" height="500"></canvas>
+      <div class="btn-row">
+        <button onclick="download('featureGraphic', 'rentbuddy-feature-graphic.png')">Download PNG</button>
+      </div>
+    </div>
+
+    <!-- Phone Screenshot 1 -->
+    <div class="card">
+      <h2>Phone Screenshot 1 &mdash; Splash</h2>
+      <p class="meta">1080 x 2340 px &mdash; Modern phone aspect ratio</p>
+      <canvas id="screenshot1" width="1080" height="2340"></canvas>
+      <div class="btn-row">
+        <button onclick="download('screenshot1', 'rentbuddy-screenshot-1.png')">Download PNG</button>
+      </div>
+    </div>
+
+    <!-- Phone Screenshot 2 -->
+    <div class="card">
+      <h2>Phone Screenshot 2 &mdash; Dashboard</h2>
+      <p class="meta">1080 x 2340 px</p>
+      <canvas id="screenshot2" width="1080" height="2340"></canvas>
+      <div class="btn-row">
+        <button onclick="download('screenshot2', 'rentbuddy-screenshot-2.png')">Download PNG</button>
+      </div>
+    </div>
+
+    <!-- Phone Screenshot 3 -->
+    <div class="card">
+      <h2>Phone Screenshot 3 &mdash; Chat</h2>
+      <p class="meta">1080 x 2340 px</p>
+      <canvas id="screenshot3" width="1080" height="2340"></canvas>
+      <div class="btn-row">
+        <button onclick="download('screenshot3', 'rentbuddy-screenshot-3.png')">Download PNG</button>
+      </div>
+    </div>
+
+    <!-- Phone Screenshot 4 -->
+    <div class="card">
+      <h2>Phone Screenshot 4 &mdash; Map</h2>
+      <p class="meta">1080 x 2340 px</p>
+      <canvas id="screenshot4" width="1080" height="2340"></canvas>
+      <div class="btn-row">
+        <button onclick="download('screenshot4', 'rentbuddy-screenshot-4.png')">Download PNG</button>
+      </div>
+    </div>
+
+    <!-- TV Banner -->
+    <div class="card full-width">
+      <h2>TV Banner</h2>
+      <p class="meta">1280 x 720 px &mdash; Android TV (optional)</p>
+      <canvas id="tvBanner" width="1280" height="720"></canvas>
+      <div class="btn-row">
+        <button onclick="download('tvBanner', 'rentbuddy-tv-banner.png')">Download PNG</button>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const COLORS = {
+      indigo: '#6366f1',
+      indigoLight: '#818cf8',
+      orange: '#f97316',
+      orangeLight: '#fb923c',
+      dark: '#09090b',
+      darkCard: '#18181b',
+      surface: '#27272a',
+      text: '#fafafa',
+      textMuted: '#a1a1aa',
+    };
+
+    function roundRect(ctx, x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+
+    function drawLogo(ctx, cx, cy, size, showText) {
+      const s = size;
+      const hs = s / 2;
+
+      // Background rounded square
+      const grad = ctx.createLinearGradient(cx - hs, cy - hs, cx + hs, cy + hs);
+      grad.addColorStop(0, COLORS.indigo);
+      grad.addColorStop(0.5, COLORS.indigoLight);
+      grad.addColorStop(1, COLORS.orange);
+      roundRect(ctx, cx - hs, cy - hs, s, s, s * 0.2);
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // Subtle circles
+      ctx.globalAlpha = 0.06;
+      ctx.fillStyle = 'white';
+      ctx.beginPath();
+      ctx.arc(cx + hs * 0.5, cy - hs * 0.6, s * 0.35, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx - hs * 0.6, cy + hs * 0.6, s * 0.28, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      // House
+      const roofTop = cy - s * 0.3;
+      const roofLeft = cx - s * 0.3;
+      const roofRight = cx + s * 0.3;
+      const roofMid = cy - s * 0.05;
+      const houseBottom = cy + s * 0.32;
+      const houseLeft = cx - s * 0.28;
+      const houseRight = cx + s * 0.28;
+
+      // Roof shadow
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.15)';
+      ctx.shadowBlur = s * 0.04;
+      ctx.shadowOffsetY = s * 0.02;
+
+      ctx.fillStyle = 'rgba(255,255,255,0.93)';
+      ctx.beginPath();
+      ctx.moveTo(cx, roofTop);
+      ctx.lineTo(roofRight, roofMid);
+      ctx.lineTo(roofRight - s * 0.04, roofMid);
+      ctx.lineTo(roofRight - s * 0.04, houseBottom);
+      ctx.lineTo(houseLeft + s * 0.04, houseBottom);
+      ctx.lineTo(houseLeft + s * 0.04, roofMid);
+      ctx.lineTo(houseLeft, roofMid);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+
+      // Door
+      const doorW = s * 0.12;
+      const doorH = s * 0.16;
+      roundRect(ctx, cx - doorW / 2, houseBottom - doorH, doorW, doorH, s * 0.015);
+      ctx.fillStyle = COLORS.indigo;
+      ctx.globalAlpha = 0.8;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      // Door knob
+      ctx.beginPath();
+      ctx.arc(cx + doorW * 0.25, houseBottom - doorH * 0.45, s * 0.01, 0, Math.PI * 2);
+      ctx.fillStyle = 'white';
+      ctx.globalAlpha = 0.9;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      // Windows
+      const winW = s * 0.1;
+      const winH = s * 0.085;
+      const winY = cy - s * 0.01;
+      const winGap = s * 0.22;
+
+      ctx.fillStyle = COLORS.indigoLight;
+      ctx.globalAlpha = 0.55;
+      roundRect(ctx, cx - winGap - winW / 2, winY, winW, winH, s * 0.012);
+      ctx.fill();
+      roundRect(ctx, cx + winGap - winW / 2, winY, winW, winH, s * 0.012);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      // Window cross lines
+      ctx.strokeStyle = 'white';
+      ctx.lineWidth = s * 0.004;
+      ctx.globalAlpha = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(cx - winGap, winY + winH / 2);
+      ctx.lineTo(cx - winGap + winW, winY + winH / 2);
+      ctx.moveTo(cx - winGap + winW / 2, winY);
+      ctx.lineTo(cx - winGap + winW / 2, winY + winH);
+      ctx.moveTo(cx + winGap, winY + winH / 2);
+      ctx.lineTo(cx + winGap + winW, winY + winH / 2);
+      ctx.moveTo(cx + winGap + winW / 2, winY);
+      ctx.lineTo(cx + winGap + winW / 2, winY + winH);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      // Two buddies above roof
+      const buddyY = cy - s * 0.35;
+      const buddyR = s * 0.032;
+
+      // Person 1
+      ctx.beginPath();
+      ctx.arc(cx - s * 0.045, buddyY, buddyR, 0, Math.PI * 2);
+      ctx.fillStyle = COLORS.orange;
+      ctx.globalAlpha = 0.9;
+      ctx.fill();
+      ctx.globalAlpha = 0.7;
+      ctx.beginPath();
+      ctx.ellipse(cx - s * 0.045, buddyY + buddyR * 2.2, buddyR * 1.1, buddyR * 1.8, 0, Math.PI, 0);
+      ctx.fill();
+
+      // Person 2
+      ctx.beginPath();
+      ctx.arc(cx + s * 0.045, buddyY, buddyR, 0, Math.PI * 2);
+      ctx.globalAlpha = 0.9;
+      ctx.fill();
+      ctx.globalAlpha = 0.7;
+      ctx.beginPath();
+      ctx.ellipse(cx + s * 0.045, buddyY + buddyR * 2.2, buddyR * 1.1, buddyR * 1.8, 0, Math.PI, 0);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      // Connection arc between buddies
+      ctx.strokeStyle = 'white';
+      ctx.lineWidth = s * 0.005;
+      ctx.globalAlpha = 0.55;
+      ctx.beginPath();
+      ctx.arc(cx, buddyY - s * 0.04, s * 0.045, Math.PI * 0.15, Math.PI * 0.85, true);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      if (showText) {
+        ctx.fillStyle = COLORS.text;
+        ctx.font = `bold ${s * 0.12}px 'Segoe UI', system-ui, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.fillText('RentBuddy', cx, cy + hs + s * 0.14);
+      }
+    }
+
+    // Draw App Icon 512
+    (function() {
+      const c = document.getElementById('icon512');
+      const ctx = c.getContext('2d');
+      drawLogo(ctx, 256, 256, 380, false);
+    })();
+
+    // Draw Feature Graphic 1024x500
+    (function() {
+      const c = document.getElementById('featureGraphic');
+      const ctx = c.getContext('2d');
+
+      // Background
+      const bg = ctx.createLinearGradient(0, 0, 1024, 500);
+      bg.addColorStop(0, '#1e1b4b');
+      bg.addColorStop(0.5, '#0f0a2e');
+      bg.addColorStop(1, '#1a0f00');
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, 1024, 500);
+
+      // Glow
+      ctx.globalAlpha = 0.12;
+      const glow = ctx.createRadialGradient(300, 250, 0, 300, 250, 300);
+      glow.addColorStop(0, COLORS.indigo);
+      glow.addColorStop(1, 'transparent');
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, 1024, 500);
+
+      const glow2 = ctx.createRadialGradient(750, 300, 0, 750, 300, 250);
+      glow2.addColorStop(0, COLORS.orange);
+      glow2.addColorStop(1, 'transparent');
+      ctx.fillStyle = glow2;
+      ctx.fillRect(0, 0, 1024, 500);
+      ctx.globalAlpha = 1;
+
+      // Logo
+      drawLogo(ctx, 240, 250, 280, false);
+
+      // Text
+      ctx.fillStyle = COLORS.text;
+      ctx.font = "bold 72px 'Segoe UI', system-ui, sans-serif";
+      ctx.textAlign = 'left';
+      ctx.fillText('RentBuddy', 420, 220);
+
+      ctx.fillStyle = COLORS.textMuted;
+      ctx.font = "300 30px 'Segoe UI', system-ui, sans-serif";
+      ctx.fillText('Trust-based social connections', 424, 270);
+
+      // Accent line
+      const lineGrad = ctx.createLinearGradient(424, 300, 700, 300);
+      lineGrad.addColorStop(0, COLORS.indigo);
+      lineGrad.addColorStop(1, COLORS.orange);
+      ctx.fillStyle = lineGrad;
+      roundRect(ctx, 424, 300, 200, 3, 2);
+      ctx.fill();
+
+      // Tagline
+      ctx.fillStyle = COLORS.indigoLight;
+      ctx.font = "500 22px 'Segoe UI', system-ui, sans-serif";
+      ctx.fillText('Find your perfect roommate', 424, 350);
+    })();
+
+    // Screenshot 1 - Splash
+    (function() {
+      const c = document.getElementById('screenshot1');
+      const ctx = c.getContext('2d');
+      const W = 1080, H = 2340;
+
+      // Background
+      const bg = ctx.createLinearGradient(0, 0, W, H);
+      bg.addColorStop(0, COLORS.dark);
+      bg.addColorStop(1, '#0c0c18');
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, W, H);
+
+      // Glow orbs
+      ctx.globalAlpha = 0.08;
+      const g1 = ctx.createRadialGradient(W / 2, H * 0.3, 0, W / 2, H * 0.3, 400);
+      g1.addColorStop(0, COLORS.indigo);
+      g1.addColorStop(1, 'transparent');
+      ctx.fillStyle = g1;
+      ctx.fillRect(0, 0, W, H);
+      const g2 = ctx.createRadialGradient(W * 0.3, H * 0.7, 0, W * 0.3, H * 0.7, 350);
+      g2.addColorStop(0, COLORS.orange);
+      g2.addColorStop(1, 'transparent');
+      ctx.fillStyle = g2;
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalAlpha = 1;
+
+      // Status bar
+      ctx.fillStyle = COLORS.textMuted;
+      ctx.font = "500 28px 'Segoe UI', system-ui, sans-serif";
+      ctx.textAlign = 'left';
+      ctx.fillText('9:41', 60, 56);
+      ctx.textAlign = 'right';
+      ctx.fillText('100%', W - 60, 56);
+
+      // Logo
+      drawLogo(ctx, W / 2, H * 0.35, 320, false);
+
+      // App name
+      ctx.textAlign = 'center';
+      ctx.fillStyle = COLORS.text;
+      ctx.font = "bold 80px 'Segoe UI', system-ui, sans-serif";
+      ctx.fillText('RentBuddy', W / 2, H * 0.55);
+
+      ctx.fillStyle = COLORS.textMuted;
+      ctx.font = "300 32px 'Segoe UI', system-ui, sans-serif";
+      ctx.fillText('Trust-based social connections', W / 2, H * 0.55 + 60);
+
+      // Bottom text
+      ctx.fillStyle = COLORS.indigoLight;
+      ctx.font = "600 28px 'Segoe UI', system-ui, sans-serif";
+      ctx.fillText('Find your perfect roommate', W / 2, H * 0.85);
+
+      // Home indicator
+      roundRect(ctx, W / 2 - 80, H - 40, 160, 6, 3);
+      ctx.fillStyle = COLORS.textMuted;
+      ctx.globalAlpha = 0.4;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    })();
+
+    // Screenshot 2 - Dashboard
+    (function() {
+      const c = document.getElementById('screenshot2');
+      const ctx = c.getContext('2d');
+      const W = 1080, H = 2340;
+
+      ctx.fillStyle = COLORS.dark;
+      ctx.fillRect(0, 0, W, H);
+
+      // Status bar
+      ctx.fillStyle = COLORS.textMuted;
+      ctx.font = "500 28px 'Segoe UI', system-ui, sans-serif";
+      ctx.textAlign = 'left';
+      ctx.fillText('9:41', 60, 56);
+
+      // Top bar
+      ctx.fillStyle = COLORS.darkCard;
+      roundRect(ctx, 0, 0, W, 120, 0);
+      ctx.fill();
+
+      ctx.fillStyle = COLORS.text;
+      ctx.font = "bold 36px 'Segoe UI', system-ui, sans-serif";
+      ctx.textAlign = 'left';
+      ctx.fillText('Dashboard', 60, 78);
+
+      // Avatar circle
+      const avGrad = ctx.createLinearGradient(900, 40, 960, 100);
+      avGrad.addColorStop(0, COLORS.indigo);
+      avGrad.addColorStop(1, COLORS.orange);
+      ctx.beginPath();
+      ctx.arc(940, 70, 28, 0, Math.PI * 2);
+      ctx.fillStyle = avGrad;
+      ctx.fill();
+
+      // Cards
+      const cards = [
+        { title: 'Active Listings', value: '3', icon: '🏠', color: COLORS.indigo },
+        { title: 'Chat Requests', value: '12', icon: '💬', color: COLORS.orange },
+        { title: 'Walking Partners', value: '5', icon: '🚶', color: '#10b981' },
+        { title: 'Events Nearby', value: '8', icon: '🎉', color: '#ec4899' },
+      ];
+
+      cards.forEach((card, i) => {
+        const x = 60;
+        const y = 180 + i * 200;
+        const w = W - 120;
+        const h = 160;
+
+        ctx.fillStyle = COLORS.darkCard;
+        roundRect(ctx, x, y, w, h, 20);
+        ctx.fill();
+
+        // Color accent
+        ctx.fillStyle = card.color;
+        ctx.globalAlpha = 0.15;
+        roundRect(ctx, x, y, 8, h, 4);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // Icon circle
+        ctx.beginPath();
+        ctx.arc(x + 60, y + h / 2, 30, 0, Math.PI * 2);
+        ctx.fillStyle = card.color;
+        ctx.globalAlpha = 0.2;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        ctx.font = "30px serif";
+        ctx.textAlign = 'center';
+        ctx.fillText(card.icon, x + 60, y + h / 2 + 10);
+
+        ctx.fillStyle = COLORS.text;
+        ctx.font = "bold 32px 'Segoe UI', system-ui, sans-serif";
+        ctx.textAlign = 'left';
+        ctx.fillText(card.title, x + 110, y + 60);
+
+        ctx.fillStyle = card.color;
+        ctx.font = "bold 44px 'Segoe UI', system-ui, sans-serif";
+        ctx.fillText(card.value, x + 110, y + 115);
+      });
+
+      // Bottom nav bar
+      ctx.fillStyle = COLORS.darkCard;
+      ctx.fillRect(0, H - 140, W, 140);
+
+      const navItems = ['🏠', '🔍', '💬', '👤'];
+      navItems.forEach((icon, i) => {
+        const nx = (W / 4) * i + W / 8;
+        ctx.font = "36px serif";
+        ctx.textAlign = 'center';
+        ctx.fillStyle = i === 0 ? COLORS.indigo : COLORS.textMuted;
+        ctx.fillText(icon, nx, H - 80);
+      });
+
+      // Home indicator
+      roundRect(ctx, W / 2 - 80, H - 40, 160, 6, 3);
+      ctx.fillStyle = COLORS.textMuted;
+      ctx.globalAlpha = 0.4;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    })();
+
+    // Screenshot 3 - Chat
+    (function() {
+      const c = document.getElementById('screenshot3');
+      const ctx = c.getContext('2d');
+      const W = 1080, H = 2340;
+
+      ctx.fillStyle = COLORS.dark;
+      ctx.fillRect(0, 0, W, H);
+
+      // Chat header
+      ctx.fillStyle = COLORS.darkCard;
+      ctx.fillRect(0, 0, W, 140);
+
+      // Back arrow
+      ctx.fillStyle = COLORS.text;
+      ctx.font = "400 36px 'Segoe UI', system-ui, sans-serif";
+      ctx.textAlign = 'left';
+      ctx.fillText('\u2190', 50, 88);
+
+      // Avatar
+      ctx.beginPath();
+      ctx.arc(130, 70, 28, 0, Math.PI * 2);
+      const avGrad = ctx.createLinearGradient(102, 42, 158, 98);
+      avGrad.addColorStop(0, COLORS.indigo);
+      avGrad.addColorStop(1, COLORS.orange);
+      ctx.fillStyle = avGrad;
+      ctx.fill();
+
+      ctx.fillStyle = COLORS.text;
+      ctx.font = "bold 30px 'Segoe UI', system-ui, sans-serif";
+      ctx.fillText('Priya S.', 180, 62);
+      ctx.fillStyle = '#10b981';
+      ctx.font = "400 22px 'Segoe UI', system-ui, sans-serif";
+      ctx.fillText('Online', 180, 92);
+
+      // Chat messages
+      const messages = [
+        { text: 'Hi! I saw your listing for the 2BHK in Koramangala', me: false, time: '10:30 AM' },
+        { text: 'Hey! Yes, it\'s still available. Would you like to visit?', me: true, time: '10:32 AM' },
+        { text: 'That would be great! Can I come tomorrow evening?', me: false, time: '10:33 AM' },
+        { text: 'Sure! I\'ll share the location pin. It\'s near the metro station.', me: true, time: '10:35 AM' },
+        { text: 'Perfect, thanks! See you tomorrow 😊', me: false, time: '10:36 AM' },
+        { text: 'See you! I\'ll be at the apartment by 5 PM.', me: true, time: '10:38 AM' },
+      ];
+
+      let msgY = 200;
+      messages.forEach((msg) => {
+        const maxW = 650;
+        const msgW = maxW;
+        const lines = wrapText(ctx, msg.text, msgW - 40);
+        const msgH = lines.length * 36 + 40;
+        const x = msg.me ? W - msgW - 60 : 120;
+
+        ctx.fillStyle = msg.me ? COLORS.indigo : COLORS.darkCard;
+        roundRect(ctx, x, msgY, msgW, msgH, 18);
+        ctx.fill();
+
+        if (!msg.me) {
+          ctx.strokeStyle = COLORS.surface;
+          ctx.lineWidth = 1;
+          roundRect(ctx, x, msgY, msgW, msgH, 18);
+          ctx.stroke();
+        }
+
+        ctx.fillStyle = COLORS.text;
+        ctx.font = "400 28px 'Segoe UI', system-ui, sans-serif";
+        ctx.textAlign = 'left';
+        lines.forEach((line, li) => {
+          ctx.fillText(line, x + 20, msgY + 36 + li * 36);
+        });
+
+        ctx.fillStyle = COLORS.textMuted;
+        ctx.font = "400 20px 'Segoe UI', system-ui, sans-serif";
+        ctx.textAlign = msg.me ? 'right' : 'left';
+        ctx.fillText(msg.time, msg.me ? x + msgW - 20 : x + 20, msgY + msgH - 10);
+
+        msgY += msgH + 16;
+      });
+
+      // Message input
+      ctx.fillStyle = COLORS.darkCard;
+      ctx.fillRect(0, H - 140, W, 140);
+      ctx.fillStyle = COLORS.surface;
+      roundRect(ctx, 40, H - 110, W - 180, 70, 35);
+      ctx.fill();
+      ctx.fillStyle = COLORS.textMuted;
+      ctx.font = "400 26px 'Segoe UI', system-ui, sans-serif";
+      ctx.textAlign = 'left';
+      ctx.fillText('Type a message...', 80, H - 68);
+
+      // Send button
+      ctx.beginPath();
+      ctx.arc(W - 80, H - 75, 32, 0, Math.PI * 2);
+      const sendGrad = ctx.createLinearGradient(W - 112, H - 107, W - 48, H - 43);
+      sendGrad.addColorStop(0, COLORS.indigo);
+      sendGrad.addColorStop(1, COLORS.orange);
+      ctx.fillStyle = sendGrad;
+      ctx.fill();
+
+      // Home indicator
+      roundRect(ctx, W / 2 - 80, H - 40, 160, 6, 3);
+      ctx.fillStyle = COLORS.textMuted;
+      ctx.globalAlpha = 0.4;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    })();
+
+    // Screenshot 4 - Map
+    (function() {
+      const c = document.getElementById('screenshot4');
+      const ctx = c.getContext('2d');
+      const W = 1080, H = 2340;
+
+      // Map background
+      ctx.fillStyle = '#1a2332';
+      ctx.fillRect(0, 0, W, H);
+
+      // Fake map grid
+      ctx.strokeStyle = '#1e3040';
+      ctx.lineWidth = 1;
+      for (let x = 0; x < W; x += 60) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+      }
+      for (let y = 0; y < H; y += 60) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+      }
+
+      // Fake roads
+      ctx.strokeStyle = '#253545';
+      ctx.lineWidth = 12;
+      ctx.beginPath(); ctx.moveTo(0, H * 0.3); ctx.lineTo(W, H * 0.35); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(W * 0.4, 0); ctx.lineTo(W * 0.35, H); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, H * 0.65); ctx.lineTo(W, H * 0.6); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(W * 0.7, 0); ctx.lineTo(W * 0.75, H); ctx.stroke();
+
+      // Map pins
+      const pins = [
+        { x: 300, y: 500, color: COLORS.indigo, label: '2BHK - Koramangala' },
+        { x: 650, y: 800, color: COLORS.orange, label: '3BHK - Indiranagar' },
+        { x: 450, y: 1200, color: '#10b981', label: '1RK - HSR Layout' },
+        { x: 780, y: 1500, color: '#ec4899', label: '2BHK - Whitefield' },
+      ];
+
+      pins.forEach((pin) => {
+        // Shadow
+        ctx.globalAlpha = 0.3;
+        ctx.beginPath();
+        ctx.ellipse(pin.x, pin.y + 50, 20, 8, 0, 0, Math.PI * 2);
+        ctx.fillStyle = '#000';
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // Pin
+        ctx.beginPath();
+        ctx.arc(pin.x, pin.y - 10, 22, 0, Math.PI * 2);
+        ctx.fillStyle = pin.color;
+        ctx.fill();
+
+        // Inner circle
+        ctx.beginPath();
+        ctx.arc(pin.x, pin.y - 10, 10, 0, Math.PI * 2);
+        ctx.fillStyle = 'white';
+        ctx.globalAlpha = 0.9;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // Label
+        ctx.fillStyle = 'white';
+        ctx.font = "bold 24px 'Segoe UI', system-ui, sans-serif";
+        ctx.textAlign = 'center';
+        ctx.fillText(pin.label, pin.x, pin.y - 45);
+      });
+
+      // Header overlay
+      const headerGrad = ctx.createLinearGradient(0, 0, 0, 180);
+      headerGrad.addColorStop(0, 'rgba(9,9,11,0.95)');
+      headerGrad.addColorStop(1, 'rgba(9,9,11,0)');
+      ctx.fillStyle = headerGrad;
+      ctx.fillRect(0, 0, W, 180);
+
+      ctx.fillStyle = COLORS.text;
+      ctx.font = "bold 36px 'Segoe UI', system-ui, sans-serif";
+      ctx.textAlign = 'left';
+      ctx.fillText('Explore Listings', 60, 88);
+
+      // Search bar
+      ctx.fillStyle = COLORS.darkCard;
+      roundRect(ctx, 60, 120, W - 120, 60, 30);
+      ctx.fill();
+      ctx.fillStyle = COLORS.textMuted;
+      ctx.font = "400 26px 'Segoe UI', system-ui, sans-serif";
+      ctx.fillText('🔍  Search by location...', 100, 158);
+
+      // Bottom overlay
+      const bottomGrad = ctx.createLinearGradient(0, H - 400, 0, H);
+      bottomGrad.addColorStop(0, 'rgba(9,9,11,0)');
+      bottomGrad.addColorStop(0.3, 'rgba(9,9,11,0.9)');
+      bottomGrad.addColorStop(1, 'rgba(9,9,11,1)');
+      ctx.fillStyle = bottomGrad;
+      ctx.fillRect(0, H - 400, W, 400);
+
+      // Listing card
+      ctx.fillStyle = COLORS.darkCard;
+      roundRect(ctx, 60, H - 350, W - 120, 200, 20);
+      ctx.fill();
+
+      ctx.fillStyle = COLORS.indigo;
+      roundRect(ctx, 80, H - 330, 140, 140, 14);
+      ctx.globalAlpha = 0.2;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      ctx.font = "48px serif";
+      ctx.textAlign = 'center';
+      ctx.fillText('🏠', 150, H - 240);
+
+      ctx.fillStyle = COLORS.text;
+      ctx.font = "bold 30px 'Segoe UI', system-ui, sans-serif";
+      ctx.textAlign = 'left';
+      ctx.fillText('2BHK in Koramangala', 250, H - 290);
+
+      ctx.fillStyle = COLORS.textMuted;
+      ctx.font = "400 24px 'Segoe UI', system-ui, sans-serif";
+      ctx.fillText('Rs. 18,000/mo  •  Furnished', 250, H - 250);
+
+      ctx.fillStyle = '#10b981';
+      ctx.font = "bold 26px 'Segoe UI', system-ui, sans-serif";
+      ctx.fillText('Verified  •  2.3 km away', 250, H - 210);
+
+      // Home indicator
+      roundRect(ctx, W / 2 - 80, H - 40, 160, 6, 3);
+      ctx.fillStyle = COLORS.textMuted;
+      ctx.globalAlpha = 0.4;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    })();
+
+    // TV Banner
+    (function() {
+      const c = document.getElementById('tvBanner');
+      const ctx = c.getContext('2d');
+      const W = 1280, H = 720;
+
+      const bg = ctx.createLinearGradient(0, 0, W, H);
+      bg.addColorStop(0, '#1e1b4b');
+      bg.addColorStop(0.5, '#0f0a2e');
+      bg.addColorStop(1, '#1a0f00');
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, W, H);
+
+      // Glow
+      ctx.globalAlpha = 0.1;
+      const g1 = ctx.createRadialGradient(250, 360, 0, 250, 360, 300);
+      g1.addColorStop(0, COLORS.indigo);
+      g1.addColorStop(1, 'transparent');
+      ctx.fillStyle = g1;
+      ctx.fillRect(0, 0, W, H);
+      const g2 = ctx.createRadialGradient(900, 360, 0, 900, 360, 300);
+      g2.addColorStop(0, COLORS.orange);
+      g2.addColorStop(1, 'transparent');
+      ctx.fillStyle = g2;
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalAlpha = 1;
+
+      drawLogo(ctx, 220, 360, 340, false);
+
+      ctx.fillStyle = COLORS.text;
+      ctx.font = "bold 80px 'Segoe UI', system-ui, sans-serif";
+      ctx.textAlign = 'left';
+      ctx.fillText('RentBuddy', 440, 310);
+
+      ctx.fillStyle = COLORS.textMuted;
+      ctx.font = "300 32px 'Segoe UI', system-ui, sans-serif";
+      ctx.fillText('Find your perfect roommate', 444, 370);
+
+      const lineGrad = ctx.createLinearGradient(444, 400, 750, 400);
+      lineGrad.addColorStop(0, COLORS.indigo);
+      lineGrad.addColorStop(1, COLORS.orange);
+      ctx.fillStyle = lineGrad;
+      roundRect(ctx, 444, 400, 250, 4, 2);
+      ctx.fill();
+
+      ctx.fillStyle = COLORS.indigoLight;
+      ctx.font = "500 26px 'Segoe UI', system-ui, sans-serif";
+      ctx.fillText('Trust-based social connections', 444, 450);
+    })();
+
+    function wrapText(ctx, text, maxWidth) {
+      const words = text.split(' ');
+      const lines = [];
+      let line = '';
+      for (const word of words) {
+        const test = line ? line + ' ' + word : word;
+        if (ctx.measureText(test).width > maxWidth) {
+          if (line) lines.push(line);
+          line = word;
+        } else {
+          line = test;
+        }
+      }
+      if (line) lines.push(line);
+      return lines;
+    }
+
+    function download(canvasId, filename, type) {
+      const canvas = document.getElementById(canvasId);
+      const link = document.createElement('a');
+      link.download = filename;
+      link.href = canvas.toDataURL(type || 'image/png', 1.0);
+      link.click();
+    }
+  </script>
+</body>
+</html>

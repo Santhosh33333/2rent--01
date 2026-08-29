@@ -1,0 +1,1 @@
+const {PrismaClient}=require('@prisma/client'); const p=new PrismaClient(); (async()=>{ const r=await p.adminRole.findMany(); console.log('ROLES:',JSON.stringify(r,null,1)); const au=await p.adminUser.findMany({include:{user:{select:{email:true}},role:true}}); console.log('ADMINUSERS:',JSON.stringify(au.map(a=>({email:a.user.email,role:a.role?.name})))); await p.$disconnect()})()

@@ -1,0 +1,30 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="rbTile" x1="64" y1="40" x2="460" y2="484" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6366F1"/>
+      <stop offset="0.52" stop-color="#8B5CF6"/>
+      <stop offset="1" stop-color="#EC4899"/>
+    </linearGradient>
+    <linearGradient id="rbInner" x1="150" y1="120" x2="370" y2="360" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4F46E5"/>
+      <stop offset="1" stop-color="#DB2777"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="116" fill="url(#rbTile)"/>
+  <circle cx="118" cy="92" r="150" fill="#FFFFFF" opacity="0.08"/>
+  <circle cx="420" cy="470" r="120" fill="#000000" opacity="0.06"/>
+
+  <!-- route trail: journey starts here -->
+  <path d="M78 446 Q158 500 252 456" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round" stroke-dasharray="0.1 30" opacity="0.9"/>
+  <circle cx="78" cy="446" r="13" fill="#FFFFFF"/>
+
+  <!-- location pin -->
+  <path d="M256 74 C167 74 106 139 106 222 C106 297 171 353 223 397 Q243 414 254 432 C266 415 283 400 301 385 C351 344 406 292 406 222 C406 139 345 74 256 74 Z" fill="#FFFFFF"/>
+
+  <!-- two buddies leaning toward each other -->
+  <circle cx="213" cy="184" r="33" fill="url(#rbInner)"/>
+  <circle cx="299" cy="184" r="33" fill="url(#rbInner)"/>
+  <rect x="173" y="228" width="82" height="114" rx="39" fill="url(#rbInner)" transform="rotate(-9 214 285)"/>
+  <rect x="257" y="228" width="82" height="114" rx="39" fill="url(#rbInner)" transform="rotate(9 298 285)"/>
+</svg>
