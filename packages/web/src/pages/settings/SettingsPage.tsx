@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Sun, Moon, Monitor, Bell, Shield, Smartphone, Globe, Type, WifiOff, Save, Loader2, Eye, Clock } from 'lucide-react'
+import { ArrowLeft, Sun, Moon, Monitor, Bell, Shield, Smartphone, Type, WifiOff, Save, Loader2, Eye, Clock } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
@@ -9,7 +9,6 @@ import { api } from '../../lib/api'
 interface Settings {
   theme: string
   fontSize: string
-  language: string
   notificationsEnabled: boolean
   chatNotifications: boolean
   eventReminders: boolean
@@ -28,7 +27,7 @@ interface Settings {
 }
 
 const defaultSettings: Settings = {
-  theme: 'system', fontSize: 'medium', language: 'en',
+  theme: 'system', fontSize: 'medium',
   notificationsEnabled: true, chatNotifications: true, eventReminders: true,
   walkingAlerts: true, communityUpdates: true, pushEnabled: true,
   emailNotifications: true, smsNotifications: false, dataSaver: false,
@@ -46,16 +45,6 @@ const fontSizes = [
   { value: 'small', label: 'Small' },
   { value: 'medium', label: 'Medium' },
   { value: 'large', label: 'Large' },
-]
-
-const languages = [
-  { value: 'en', label: 'English' },
-  { value: 'hi', label: 'हिन्दी' },
-  { value: 'ta', label: 'தமிழ்' },
-  { value: 'te', label: 'తెలుగు' },
-  { value: 'bn', label: 'বাংলা' },
-  { value: 'mr', label: 'मराठी' },
-  { value: 'kn', label: 'ಕನ್ನಡ' },
 ]
 
 function ToggleSwitch({ enabled, onChange }: { enabled: boolean; onChange: (v: boolean) => void }) {
@@ -155,11 +144,7 @@ export function SettingsPage() {
             </div>
           </SettingRow>
 
-          <SettingRow icon={Globe} label="Language" description="Select your preferred language">
-            <select value={settings.language} onChange={e => update('language', e.target.value)} className="input py-1.5 px-3 text-xs w-32">
-              {languages.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
-            </select>
-          </SettingRow>
+          {/* Language is English-only — no selector shown. */}
 
           {/* Notifications */}
           <h2 className="text-xs font-semibold text-surface-400 uppercase tracking-wider mb-3 mt-8">Notifications</h2>

@@ -39,7 +39,7 @@ export const SERVICE_CATALOG: ServiceDef[] = [
     icon: "🚶",
     requiresItem: false,
     requiresDistance: true,
-    pricing: { baseFee: 50, perMinute: 2, perKm: 0.7, minDurationMinutes: 10, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 1, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
+    pricing: { baseFee: 50, perMinute: 2, perKm: 0.7, minDurationMinutes: 10, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
   },
   {
     key: "CARRY_BUDDY",
@@ -49,7 +49,7 @@ export const SERVICE_CATALOG: ServiceDef[] = [
     icon: "📦",
     requiresItem: true,
     requiresDistance: true,
-    pricing: { baseFee: 80, perMinute: 2.5, perKm: 1, minDurationMinutes: 10, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 1, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
+    pricing: { baseFee: 80, perMinute: 2.5, perKm: 1, minDurationMinutes: 10, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
   },
   {
     key: "FLAT_SHIFT",
@@ -59,7 +59,7 @@ export const SERVICE_CATALOG: ServiceDef[] = [
     icon: "🛋️",
     requiresItem: false,
     requiresDistance: false,
-    pricing: { baseFee: 60, perMinute: 3, perKm: 0, minDurationMinutes: 30, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 1, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
+    pricing: { baseFee: 60, perMinute: 3, perKm: 0, minDurationMinutes: 30, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
   },
   {
     key: "LOCAL_MOVE",
@@ -69,7 +69,7 @@ export const SERVICE_CATALOG: ServiceDef[] = [
     icon: "🚚",
     requiresItem: false,
     requiresDistance: true,
-    pricing: { baseFee: 120, perMinute: 4, perKm: 2, minDurationMinutes: 60, waitingChargePerMin: 0, waitingFreeMinutes: 10, platformFeePercent: 1, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
+    pricing: { baseFee: 120, perMinute: 4, perKm: 2, minDurationMinutes: 60, waitingChargePerMin: 0, waitingFreeMinutes: 10, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
   },
   {
     key: "RIDE_BUDDY",
@@ -79,7 +79,7 @@ export const SERVICE_CATALOG: ServiceDef[] = [
     icon: "🛵",
     requiresItem: false,
     requiresDistance: true,
-    pricing: { baseFee: 40, perMinute: 3, perKm: 2.5, minDurationMinutes: 15, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 1, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
+    pricing: { baseFee: 40, perMinute: 3, perKm: 2.5, minDurationMinutes: 15, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
   },
   {
     key: "ERRAND_BUDDY",
@@ -89,7 +89,7 @@ export const SERVICE_CATALOG: ServiceDef[] = [
     icon: "🏃",
     requiresItem: false,
     requiresDistance: true,
-    pricing: { baseFee: 30, perMinute: 2.5, perKm: 1.5, minDurationMinutes: 15, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 1, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
+    pricing: { baseFee: 30, perMinute: 2.5, perKm: 1.5, minDurationMinutes: 15, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
   },
   {
     key: "WAIT_BUDDY",
@@ -99,7 +99,7 @@ export const SERVICE_CATALOG: ServiceDef[] = [
     icon: "⏳",
     requiresItem: false,
     requiresDistance: false,
-    pricing: { baseFee: 0, perMinute: 2, perKm: 0, minDurationMinutes: 15, waitingChargePerMin: 2, waitingFreeMinutes: 5, platformFeePercent: 1, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
+    pricing: { baseFee: 0, perMinute: 2, perKm: 0, minDurationMinutes: 15, waitingChargePerMin: 2, waitingFreeMinutes: 5, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
   },
   {
     key: "STUDY_BUDDY",
@@ -109,7 +109,7 @@ export const SERVICE_CATALOG: ServiceDef[] = [
     icon: "📚",
     requiresItem: false,
     requiresDistance: false,
-    pricing: { baseFee: 50, perMinute: 4, perKm: 0, minDurationMinutes: 30, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 1, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
+    pricing: { baseFee: 50, perMinute: 4, perKm: 0, minDurationMinutes: 30, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
   },
   {
     key: "SPOT_BUDDY",
@@ -119,7 +119,7 @@ export const SERVICE_CATALOG: ServiceDef[] = [
     icon: "📍",
     requiresItem: false,
     requiresDistance: false,
-    pricing: { baseFee: 20, perMinute: 2, perKm: 0, minDurationMinutes: 15, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 1, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
+    pricing: { baseFee: 20, perMinute: 2, perKm: 0, minDurationMinutes: 15, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
   },
   {
     key: "TRAVEL_BUDDY",
@@ -129,7 +129,7 @@ export const SERVICE_CATALOG: ServiceDef[] = [
     icon: "✈️",
     requiresItem: false,
     requiresDistance: true,
-    pricing: { baseFee: 60, perMinute: 3, perKm: 2, minDurationMinutes: 30, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 1, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
+    pricing: { baseFee: 60, perMinute: 3, perKm: 2, minDurationMinutes: 30, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
   },
   {
     key: "EVENT_BUDDY",
@@ -139,7 +139,7 @@ export const SERVICE_CATALOG: ServiceDef[] = [
     icon: "🎉",
     requiresItem: false,
     requiresDistance: false,
-    pricing: { baseFee: 80, perMinute: 3.5, perKm: 0, minDurationMinutes: 60, waitingChargePerMin: 0, waitingFreeMinutes: 10, platformFeePercent: 1, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
+    pricing: { baseFee: 80, perMinute: 3.5, perKm: 0, minDurationMinutes: 60, waitingChargePerMin: 0, waitingFreeMinutes: 10, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
   },
   {
     key: "BUSINESS_BUDDY",
@@ -149,7 +149,7 @@ export const SERVICE_CATALOG: ServiceDef[] = [
     icon: "💼",
     requiresItem: false,
     requiresDistance: true,
-    pricing: { baseFee: 100, perMinute: 5, perKm: 1.5, minDurationMinutes: 30, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 1, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
+    pricing: { baseFee: 100, perMinute: 5, perKm: 1.5, minDurationMinutes: 30, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
   },
   {
     key: "PET_BUDDY",
@@ -159,7 +159,7 @@ export const SERVICE_CATALOG: ServiceDef[] = [
     icon: "🐾",
     requiresItem: false,
     requiresDistance: true,
-    pricing: { baseFee: 60, perMinute: 3, perKm: 1, minDurationMinutes: 15, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 1, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
+    pricing: { baseFee: 60, perMinute: 3, perKm: 1, minDurationMinutes: 15, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
   },
   {
     key: "COMMERCIAL",
@@ -169,7 +169,7 @@ export const SERVICE_CATALOG: ServiceDef[] = [
     icon: "🏭",
     requiresItem: false,
     requiresDistance: true,
-    pricing: { baseFee: 200, perMinute: 6, perKm: 4, minDurationMinutes: 120, waitingChargePerMin: 0, waitingFreeMinutes: 10, platformFeePercent: 1, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
+    pricing: { baseFee: 200, perMinute: 6, perKm: 4, minDurationMinutes: 120, waitingChargePerMin: 0, waitingFreeMinutes: 10, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
   },
 ];
 
@@ -194,7 +194,7 @@ export function catalogDefaults(key: string): Record<string, number> {
       MIN_DURATION_MINUTES: 0,
       WAITING_CHARGE_PER_MIN: 0,
       WAITING_FREE_MINUTES: 5,
-      PLATFORM_FEE_PERCENT: 1,
+      PLATFORM_FEE_PERCENT: 10,
       SURGE_ENABLED: 0,
       PEAK_HOUR_START: 0,
       PEAK_HOUR_END: 0,

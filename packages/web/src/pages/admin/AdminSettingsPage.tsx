@@ -63,8 +63,8 @@ export function AdminSettingsPage() {
           category: 'PRICING',
         })
       }
-      setSavedAt(new Date().toLocaleTimeString())
-      toast.success(`Platform fee updated to ${pct}% â€” applies to all new bookings`)
+      setSavedAt(new Date().toLocaleTimeString('en-IN'))
+      toast.success(`Platform fee updated to ${pct}% — applies to all new bookings`)
       await load()
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to save platform fee'))
@@ -87,7 +87,7 @@ export function AdminSettingsPage() {
           </Link>
           <div>
             <h1 className="text-2xl font-bold text-white">Platform Settings</h1>
-            <p className="text-gray-400 text-sm mt-1">Fees and pricing â€” changes apply immediately</p>
+            <p className="text-gray-400 text-sm mt-1">Fees and pricing — changes apply immediately</p>
           </div>
         </div>
 
@@ -107,7 +107,7 @@ export function AdminSettingsPage() {
               </div>
               <p className="text-gray-400 text-sm mb-5 ml-13">
                 Percentage commission the platform keeps from every completed booking. Partner earnings are calculated as
-                booking amount minus this fee. You can change it at any time â€” new bookings use the latest value.
+                booking amount minus this fee. You can change it at any time — new bookings use the latest value.
               </p>
 
               <div className="flex flex-col sm:flex-row sm:items-end gap-3">
@@ -138,7 +138,7 @@ export function AdminSettingsPage() {
                 {savedAt ? (
                   <>
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                    Saved at {savedAt} Â· currently charging <span className="text-gray-300 font-medium">{feeInput || '10'}%</span>
+                    Saved at {savedAt} · currently charging <span className="text-gray-300 font-medium">{feeInput || '10'}%</span>
                   </>
                 ) : (
                   <>Currently active value: <span className="text-gray-300 font-medium">{feeInput !== '' ? `${feeInput}%` : '10% (default)'}</span></>
@@ -150,7 +150,7 @@ export function AdminSettingsPage() {
             <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700/60">
               <h2 className="text-white font-semibold mb-4">All pricing configuration</h2>
               {configs.length === 0 ? (
-                <p className="text-gray-500 text-sm">No pricing overrides yet â€” defaults are in effect.</p>
+                <p className="text-gray-500 text-sm">No pricing overrides yet — defaults are in effect.</p>
               ) : (
                 <div className="divide-y divide-gray-700/60">
                   {configs.map((c) => (

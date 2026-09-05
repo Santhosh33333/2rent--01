@@ -160,7 +160,7 @@ export function CommunityDetailPage() {
               {community.createdAt && (
                 <div className="flex items-center gap-1.5 text-sm text-surface-500">
                   <Calendar className="w-4 h-4" />
-                  <span>Created {new Date(community.createdAt).toLocaleDateString()}</span>
+                  <span>Created {new Date(community.createdAt).toLocaleDateString('en-IN')}</span>
                 </div>
               )}
               <div className="flex items-center gap-1.5 text-sm text-surface-500">

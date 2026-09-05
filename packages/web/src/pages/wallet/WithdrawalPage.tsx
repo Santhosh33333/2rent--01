@@ -93,7 +93,7 @@ export function WithdrawalPage() {
             <div>
               <h2 className="text-2xl font-bold font-display text-surface-900 dark:text-white">Withdraw Funds</h2>
               <p className="text-sm text-surface-500">
-                {balanceLoading ? 'Loading balance...' : `Available balance: ₹${balance.toLocaleString()}`}
+                {balanceLoading ? 'Loading balance...' : `Available balance: ₹${balance.toLocaleString('en-IN')}`}
               </p>
             </div>
           </div>
@@ -102,7 +102,7 @@ export function WithdrawalPage() {
             <div className="flex items-center justify-between">
               <span className="text-sm text-surface-500">Current Balance</span>
               <span className="text-2xl font-bold text-surface-900 dark:text-white">
-                {balanceLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : `₹${balance.toLocaleString()}`}
+                {balanceLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : `₹${balance.toLocaleString('en-IN')}`}
               </span>
             </div>
           </div>
@@ -126,7 +126,7 @@ export function WithdrawalPage() {
               {errors.amount && <p className="mt-1 text-sm text-danger-500">{errors.amount.message}</p>}
               {amountValue && Number(amountValue) > 0 && !errors.amount && (
                 <p className="mt-1 text-xs text-surface-400">
-                  You'll receive ₹{Number(amountValue).toLocaleString()}
+                  You'll receive ₹{Number(amountValue).toLocaleString('en-IN')}
                 </p>
               )}
             </div>

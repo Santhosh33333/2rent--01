@@ -5,11 +5,22 @@ import { ShieldCheck, ArrowLeft, Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '../../lib/auth'
 import { api } from '../../lib/api'
 
-const ADMIN_ROLES = ['SUPER_ADMIN', 'ADMIN', 'MODERATOR', 'SUPPORT', 'FINANCE']
+const ADMIN_ROLES = [
+  'SUPER_ADMIN',
+  'ADMIN',
+  'MODERATOR',
+  'SUPPORT',
+  'FINANCE',
+  'SUPPORT_ADMIN',
+  'FINANCE_ADMIN',
+  'KYC_ADMIN',
+  'MARKETING_ADMIN',
+  'PARTNER_ADMIN',
+]
 
 export function AdminLoginPage() {
   const navigate = useNavigate()
-  const { login } = useAuth()
+  const { completeLogin } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -22,23 +33,31 @@ export function AdminLoginPage() {
     setError('')
     setLoading(true)
     try {
-      await login(email, password)
-      // Re-fetch user to verify admin role
-      const userRes = await api.get('/users/profile')
-      const user = userRes.data?.data || {}
-      const role = String(user.activeRole || user.role || 'USER').toUpperCase()
-      if (!ADMIN_ROLES.includes(role)) {
-        setError('This account does not have admin access. Use the regular sign-in instead.')
-        return
+      const res = await api.post('/auth/login', { email, password })
+      const payload = res.data?.data
+      if (!payload || !payload.accessToken) {
+        throw new Error('Invalid admin credentials.')
       }
-      localStorage.setItem('activeRole', role)
-      navigate('/admin/dashboard', { replace: true })
+      completeLogin(payload)
+      await afterLogin()
     } catch (err: unknown) {
       const msg = getErrorMessage(err, 'Invalid admin credentials.')
       setError(msg)
     } finally {
       setLoading(false)
     }
+  }
+
+  const afterLogin = async () => {
+    const userRes = await api.get('/users/profile')
+    const user = userRes.data?.data || {}
+    const role = String(user.activeRole || user.role || 'USER').toUpperCase()
+    if (!ADMIN_ROLES.includes(role)) {
+      setError('This account does not have admin access. Use the regular sign-in instead.')
+      return
+    }
+    localStorage.setItem('activeRole', role)
+    navigate('/admin/dashboard', { replace: true })
   }
 
   return (
@@ -53,7 +72,9 @@ export function AdminLoginPage() {
             <ShieldCheck className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-2xl font-bold font-display tracking-tight text-white">Admin Access</h1>
-          <p className="mt-2 text-sm text-surface-400">Secure portal for provisioned administrators only.</p>
+          <p className="mt-2 text-sm text-surface-400">
+            Secure portal for provisioned administrators only.
+          </p>
         </div>
 
         {error && (

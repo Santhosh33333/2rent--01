@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { Radio, MapPin, User as UserIcon, Navigation, RefreshCw, Siren } from 'lucide-react';
 import { api } from '../../lib/api';
-import { useBookingTracking } from '../../hooks/useSocket';
+import { useBookingTracking, useSocket } from '../../hooks/useSocket';
 import { GlassCard } from '../../components/GlassCard';
 import { LiveMap, MapPoint } from '../../components/LiveMap';
 
@@ -26,6 +26,25 @@ export function AdminLiveTrackingPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [sosByBooking, setSosByBooking] = useState<Record<string, SosAlert>>({});
+
+  // Admin-wide SOS feed: the backend broadcasts `sos_alert` to the `admins` room,
+  // so every admin sees emergencies immediately without first opening the booking.
+  const { on } = useSocket({ autoConnect: true });
+  const [globalSos, setGlobalSos] = useState<SosAlert[]>([]);
+  useEffect(() => {
+    const off = on('sos_alert', (a: any) => {
+      const alert: SosAlert = {
+        bookingId: a.bookingId,
+        message: a.message || 'Emergency SOS',
+        latitude: a.latitude,
+        longitude: a.longitude,
+        timestamp: a.timestamp || Date.now(),
+      };
+      setGlobalSos((prev) => [alert, ...prev.filter((s) => s.bookingId !== alert.bookingId)].slice(0, 20));
+      setSosByBooking((s) => ({ ...s, [alert.bookingId]: alert }));
+    });
+    return () => { off?.(); };
+  }, [on]);
 
   const load = useCallback(async () => {
     try {
@@ -73,6 +92,23 @@ export function AdminLiveTrackingPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-1 space-y-2">
+            {globalSos.length > 0 && (
+              <div className="rounded-xl bg-red-900/40 border border-red-600 p-3">
+                <p className="text-red-200 text-xs font-semibold flex items-center gap-1 mb-2">
+                  <Siren className="w-3 h-3 animate-pulse" /> ACTIVE SOS ALERTS ({globalSos.length})
+                </p>
+                {globalSos.map((s) => (
+                  <button
+                    key={s.bookingId}
+                    onClick={() => setSelectedId(s.bookingId)}
+                    className="w-full text-left mb-2 last:mb-0 p-2 rounded-lg bg-red-950/60 hover:bg-red-950 border border-red-800"
+                  >
+                    <p className="text-red-100 text-xs font-medium">{s.message}</p>
+                    <p className="text-red-300/80 text-[11px] font-mono">{s.bookingId.slice(0, 8)}… · {new Date(s.timestamp).toLocaleTimeString('en-IN')}</p>
+                  </button>
+                ))}
+              </div>
+            )}
             {loading && <p className="text-gray-500 text-sm">Loading…</p>}
             {!loading && bookings.length === 0 && (
               <p className="text-gray-500 text-sm">No active bookings to monitor.</p>

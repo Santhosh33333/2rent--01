@@ -91,6 +91,7 @@ model User {
   mutedBy                        MuteList[]           @relation("MuteTarget")
   chatReportsFiled               ChatReport[]         @relation("ChatReportFiledBy")
   paymentOrders                  PaymentOrder[]
+  creditLedgers                   CreditLedger[]
 
   @@index([status])
   @@index([role])
@@ -259,12 +260,13 @@ model EarningDetail {
 // ============================================================
 
 model Wallet {
-  id        String   @id @default(uuid())
-  userId    String   @unique
-  balance   Decimal  @default(0) @db.Decimal(10, 2)
-  currency  String   @default("INR")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                String   @id @default(uuid())
+  userId            String   @unique
+  balance           Decimal  @default(0) @db.Decimal(10, 2)
+  promotionalBalance Decimal @default(0) @db.Decimal(10, 2)
+  currency          String   @default("INR")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions  Transaction[]
@@ -282,6 +284,7 @@ model Transaction {
   amount      Decimal
   description String?
   referenceId String?
+  offerSnapshot Json?
   createdAt   DateTime @default(now())
 
   wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
@@ -333,6 +336,31 @@ model PaymentOrder {
   @@index([status])
   @@index([userId])
   @@index([createdAt])
+}
+
+// Manual UPI / QR payment collection (temporary flow for personal UPI accounts
+// that are not an approved merchant gateway). The user pays the configured UPI
+// QR externally, then submits the bank/UTR reference; an admin verifies it
+// against the statement before the booking is confirmed. Never auto-confirm.
+model UpiPayment {
+  id               String   @id @default(uuid())
+  bookingId        String
+  userId           String
+  amount           Decimal
+  currency         String   @default("INR")
+  referenceNumber  String?  @unique // UTR / bank reference; must be unique across bookings
+  status           String   @default("VERIFICATION_PENDING") // VERIFICATION_PENDING, VERIFIED, REJECTED, REQUEST_INFO
+  verifiedByAdminId String?
+  verificationNote String?
+  metadata         String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([bookingId])
+  @@index([referenceNumber])
 }
 
 // ============================================================
@@ -901,16 +929,25 @@ model AdminRole {
 }
 
 model AdminUser {
-  id               String    @id @default(uuid())
-  userId           String    @unique
-  roleId           String
-  department       String?
-  permissions      String?
-  twoFactorEnabled Boolean   @default(false)
-  twoFactorSecret  String?
-  lastActiveAt     DateTime?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id                  String    @id @default(uuid())
+  userId              String    @unique
+  roleId              String
+  department          String?
+  permissions         String?
+  twoFactorEnabled    Boolean   @default(false)
+  twoFactorSecret     String?
+  ipAllowList         String[]  @default([])
+  sessionLimit        Int       @default(1)
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+  passwordChangedAt   DateTime?
+  requirePasswordRotation Boolean @default(false)
+  loginAlertsEnabled  Boolean   @default(true)
+  lastLoginIp         String?
+  lastLoginAt         DateTime?
+  lastActiveAt        DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   role          AdminRole           @relation(fields: [roleId], references: [id], onDelete: Restrict)
@@ -1355,11 +1392,17 @@ model Booking {
   pricingVersion    Int?
   pricingSnapshot   Json?
 
+  // Offer snapshot (frozen at booking creation so a later offer change never
+  // alters an already-confirmed transaction).
+  offerSnapshot     Json?
+  offerCode         String?
+
   // Payment
   razorpayOrderId   String?
   razorpayPaymentId String?
   razorpaySignature String?
-  paymentStatus     String    @default("PENDING") // PENDING, INITIATED, PAID, FAILED
+  paymentStatus     String    @default("PENDING") // PENDING, INITIATED, PAID, FAILED, VERIFICATION_PENDING, REJECTED
+  paymentMethod     String?   @default("ONLINE") // ONLINE, CASH, UPI_MANUAL
   paymentVerifiedAt DateTime?
 
   // OTP
@@ -1385,6 +1428,7 @@ model Booking {
 
   user    User     @relation("BookingUser", fields: [userId], references: [id], onDelete: Cascade)
   partner Partner? @relation("BookingPartner", fields: [partnerId], references: [id])
+  upiPayments UpiPayment[]
   timeout BookingTimeout?
   logs    BookingLog[]
 
@@ -1470,5 +1514,125 @@ model DispatchRequest {
   @@unique([bookingId, partnerId])
   @@index([bookingId])
   @@index([partnerId, status])
+}
+
+// ============================================================
+// ADMIN RBAC — PROMOTIONAL CREDIT LEDGER (spec sections 9-13)
+// ============================================================
+
+model CreditLedger {
+  id          String   @id @default(uuid())
+  userId      String
+  adminId     String
+  type        String // PROMOTIONAL_CREDIT, PROMOTIONAL_DEBIT, EXPIRATION, REVERSAL, ADJUSTMENT
+  creditType  String?  // PROMOTIONAL_CREDIT, COMPENSATION, REFERRAL_BONUS, etc.
+  amount      Decimal  @db.Decimal(10, 2)
+  balanceAfter Decimal @db.Decimal(10, 2)
+  reason      String?
+  referenceId String?  // bookingId / paymentId / withdrawalId this credit paid for
+  expiresAt   DateTime?
+  status      String   @default("COMPLETED") // PENDING, COMPLETED, REVERSED, EXPIRED
+  metadata    String?
+  createdAt   DateTime @default(now())
+
+  user   User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([adminId])
+  @@index([createdAt])
+}
+
+// Promotional-credit policy knobs (spec section 12). Stored as rows so a
+// marketing/finance admin can reconfigure without a deploy.
+model CreditRule {
+  id                       String   @id @default(uuid())
+  key                      String   @unique
+  canPayBooking            Boolean  @default(true)
+  canPayPlatformFees       Boolean  @default(true)
+  canPayServiceFees        Boolean  @default(true)
+  expires                  Boolean  @default(false)
+  expiryDays               Int?     @default(365)
+  canBePartiallyUsed       Boolean  @default(true)
+  canCombineWithCoupons    Boolean  @default(true)
+  canBeRefunded            Boolean  @default(false)
+  canBecomeWithdrawableCash Boolean @default(false)
+  updatedBy                String?
+  updatedAt                DateTime @updatedAt
+}
+
+// ============================================================
+// ADMIN RBAC — OFFERS (spec sections 7-8)
+// ============================================================
+
+model Offer {
+  id            String   @id @default(uuid())
+  code          String   @unique
+  title         String
+  description   String?
+  type          String // PERCENTAGE_DISCOUNT, FIXED_AMOUNT_DISCOUNT, FIRST_BOOKING, RETURNING_USER, PARTNER_PROMOTION, SERVICE_SPECIFIC, TIME_LIMITED, CITY_SPECIFIC, REFERRAL, FESTIVAL
+  discountType  String   @default("PERCENTAGE") // PERCENTAGE, FIXED
+  discountValue Float
+  status        String   @default("DRAFT") // DRAFT, PREVIEW, ACTIVE, PAUSED, EXPIRED, DEACTIVATED
+  startDate     DateTime?
+  endDate       DateTime?
+  maxUses       Int?
+  usedCount     Int      @default(0)
+  perUserLimit  Int?     @default(1)
+  minBooking    Float    @default(0)
+  maxDiscount   Float?
+  serviceType   String?
+  accountType   String?  // USER, PARTNER
+  city          String?
+  snapshot      Json?    // frozen configuration; copied onto bookings/payments
+  createdBy     String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([status])
+  @@index([code])
+}
+
+// ============================================================
+// ADMIN RBAC — TWO-STEP APPROVAL WORKFLOW (spec section 18)
+// ============================================================
+
+model AdminApprovalRequest {
+  id               String   @id @default(uuid())
+  type             String // LARGE_REFUND, LARGE_CREDIT, LARGE_PRICING_CHANGE, PERMISSION_ESCALATION, ADMIN_CREATION
+  requestedById    String
+  requestedByRole  String?
+  status           String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  payload          Json?
+  targetEntityType String?
+  targetEntityId   String?
+  reason           String?
+  reviewedById     String?
+  reviewedAt       DateTime?
+  reviewNote       String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([status])
+  @@index([type])
+}
+
+// ============================================================
+// ADMIN RBAC — CITY MANAGEMENT (spec section 27)
+// ============================================================
+
+model City {
+  id            String   @id @default(uuid())
+  key           String   @unique // CHENNAI, BANGALORE, MUMBAI, DELHI
+  name          String
+  state         String?
+  isActive      Boolean  @default(true)
+  operatingHours Json?   // { open: "06:00", close: "23:00", tz: "Asia/Kolkata" }
+  taxes         Json?    // { gst: 18, sgst: 9, cess: 0 }
+  config        Json?    // services, pricingRef, partnerCategory overrides
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([key])
+  @@index([isActive])
 }
 

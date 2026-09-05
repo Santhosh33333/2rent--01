@@ -276,7 +276,7 @@ export function StatusPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="glass-card-sm p-4 text-center">
                 <DollarSign className="w-5 h-5 text-primary-500 mx-auto mb-1" />
-                <p className="text-2xl font-bold text-surface-900 dark:text-white">₹{earningsData.totalEarnings.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-surface-900 dark:text-white">₹{earningsData.totalEarnings.toLocaleString('en-IN')}</p>
                 <p className="text-xs text-surface-500">Total Earnings</p>
               </div>
               <div className="glass-card-sm p-4 text-center">

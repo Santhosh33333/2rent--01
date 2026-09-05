@@ -183,6 +183,12 @@ export const adminApi = {
   // Payment Center (real Razorpay order/payment ledger)
   getPayments: (params?: PaginationParams) => api.get('/admin/payments', { params }),
   getPaymentStats: () => api.get('/admin/payments/stats'),
+  // Manual UPI verification (temporary flow for personal UPI accounts)
+  getUpiPayments: (params?: PaginationParams) => api.get('/admin/payments/upi', { params }),
+  verifyUpiPayment: (id: string, data: { action: 'VERIFY' | 'REJECT' | 'REQUEST_INFO'; note?: string }) =>
+    api.post(`/admin/payments/upi/${id}/verify`, data),
+  getUpiConfig: () => api.get('/admin/settings/upi'),
+  setUpiConfig: (data: { upiId: string; accountName?: string; qrUrl?: string }) => api.put('/admin/settings/upi', data),
   // Platform settings (dynamic pricing config, e.g. PLATFORM_FEE_PERCENT)
   getPricingConfigs: (params?: PaginationParams) => api.get('/admin/pricing', { params }),
   createPricingConfig: (data: PricingConfigInput) => api.post('/admin/pricing', data),
@@ -198,6 +204,7 @@ export const adminApi = {
   getAdminAccounts: () => api.get('/admin/admins'),
   createAdminAccount: (data: AdminAccountInput) => api.post('/admin/admins', data),
   updateAdminAccount: (userId: string, data: AdminAccountInput) => api.patch(`/admin/admins/${userId}`, data),
+  resetAdminPassword: (userId: string) => api.post(`/admin/admins/${userId}/reset-password`),
 }
 
 // Account role switching (USER <-> PARTNER), backend-enforced

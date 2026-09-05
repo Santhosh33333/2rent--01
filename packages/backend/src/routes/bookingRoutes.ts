@@ -47,6 +47,10 @@ router.post("/:id/pay", bookingController.initiatePayment);
 // Verify payment
 router.post("/:id/verify-payment", bookingController.verifyPayment);
 
+// Manual UPI / QR payment (temporary flow for personal UPI accounts)
+router.get("/:id/upi-details", bookingController.getUpiDetails);
+router.post("/:id/upi-reference", bookingController.submitUpiReference);
+
 // Accept booking (partner)
 router.post("/:id/accept", bookingController.acceptBooking);
 
@@ -113,7 +117,7 @@ router.get("/:id/receipt", bookingController.getBookingReceipt);
 // Select payment method (after partner accepts)
 router.post(
   '/:id/select-payment-method',
-  [body('paymentMethod').notEmpty().isIn(['ONLINE', 'CASH'])],
+  [body('paymentMethod').notEmpty().isIn(['ONLINE', 'CASH', 'UPI_MANUAL'])],
   sanitizeInput,
   validateRequest,
   bookingController.selectPaymentMethod

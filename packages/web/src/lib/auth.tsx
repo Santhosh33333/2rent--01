@@ -28,6 +28,7 @@ interface AuthContextType {
   user: User | null
   loading: boolean
   login: (email: string, password: string) => Promise<void>
+  completeLogin: (data: { accessToken: string; refreshToken: string; user?: Record<string, unknown> }) => void
   register: (data: RegisterInput) => Promise<void>
   logout: () => void
   updateUser: (data: Partial<User>) => void
@@ -221,6 +222,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(u)
   }
 
+  const completeLogin = (
+    data: { accessToken: string; refreshToken: string; user?: Record<string, unknown> }
+  ) => {
+    const { accessToken, refreshToken, user: apiUser } = data
+    const u = buildUserFromPayload(
+      {
+        ...(apiUser || {}),
+        email: (apiUser?.email as string) || 'user@rentbuddy.local',
+        id: (apiUser?.id as string) || `user-${Date.now()}`,
+        role: (apiUser?.role as string) || 'USER',
+        activeRole: (apiUser?.activeRole as string) || (apiUser?.role as string) || 'USER',
+        accountType: (apiUser?.accountType as string) || (apiUser?.userType as string) || (apiUser?.activeRole as string) || (apiUser?.role as string) || 'USER',
+      },
+      (apiUser?.email as string) || 'user@rentbuddy.local'
+    )
+    localStorage.setItem('token', accessToken)
+    localStorage.setItem('refreshToken', refreshToken)
+    localStorage.setItem('user', JSON.stringify(u))
+    localStorage.setItem('activeRole', u.activeRole || u.role || 'USER')
+    setUser(u)
+  }
+
   const register = async (data: RegisterInput) => {
     const payload = {
       fullName: data.fullName || data.name,
@@ -290,7 +313,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser, refreshProfile }}>
+    <AuthContext.Provider value={{ user, loading, login, completeLogin, register, logout, updateUser, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   )

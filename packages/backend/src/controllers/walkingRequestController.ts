@@ -1,15 +1,57 @@
+/**
+ * @deprecated Legacy flow. The unified `Booking` engine (services/bookingEngine.ts)
+ * is the single canonical service engine and supports WALKING as a first-class
+ * serviceType with server-authoritative, admin-configurable pricing. This
+ * controller is retained only for historical WalkingRequest records and will be
+ * removed once clients migrate to POST /bookings (serviceType: "WALKING").
+ */
 import { Response } from "express";
 import { prisma } from "../config/database";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
+import { calculatePrice, getConfig } from "../services/pricingEngine";
 
 function getPagination(req: AuthedRequest) {
   return { page: Number(req.query.page) || 1, limit: Number(req.query.limit) || 20 };
 }
 
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+// Server-authoritative fare bounds: the client-proposed fare is accepted only
+// when it sits within a sane band around the server estimate. This stops
+// requester/partner collusion (e.g. fare=1 to dodge fees, or absurd fares).
+async function resolveWalkingFare(clientFare: unknown, durationMinutes: unknown): Promise<number> {
+  const duration = Number(durationMinutes) || 0;
+  const estimate = await calculatePrice({ durationMinutes: duration, distanceKm: 0 });
+  const parsed = Number(clientFare);
+  if (Number.isFinite(parsed) && parsed > 0) {
+    const min = estimate.finalAmount * 0.5;
+    const max = estimate.finalAmount * 2;
+    if (parsed < min || parsed > max) {
+      throw Object.assign(new Error("INVALID_FARE"), {
+        detail: `Fare must be between ₹${min.toFixed(2)} and ₹${max.toFixed(2)} (server estimate ₹${estimate.finalAmount.toFixed(2)}).`,
+      });
+    }
+    return round2(parsed);
+  }
+  return round2(estimate.finalAmount);
+}
+
 export async function createWalkingRequest(req: AuthedRequest, res: Response): Promise<void> {
   try {
     const { startLocation, endLocation, startTime, durationMinutes, notes, fare } = req.body;
+    let finalFare: number;
+    try {
+      finalFare = await resolveWalkingFare(fare, durationMinutes);
+    } catch (e: any) {
+      if (e.message === "INVALID_FARE") {
+        sendError(res, e.detail ?? "Invalid fare.", 400, "INVALID_FARE");
+        return;
+      }
+      throw e;
+    }
     const request = await prisma.walkingRequest.create({
       data: {
         requesterId: req.user!.userId,
@@ -18,7 +60,7 @@ export async function createWalkingRequest(req: AuthedRequest, res: Response): P
         startTime: new Date(startTime),
         durationMinutes,
         notes,
-        fare,
+        fare: finalFare,
         status: "OPEN",
       },
     });
@@ -152,9 +194,11 @@ export async function completeWalk(req: AuthedRequest, res: Response): Promise<v
       data: { status: "COMPLETED", completedById: req.user!.userId, completedAt: new Date() },
     });
     if (request.fare) {
+      const platformFeePercent = await getConfig("PLATFORM_FEE_PERCENT", 10);
+      const payout = round2(Number(request.fare) - (Number(request.fare) * platformFeePercent) / 100);
       await prisma.walkingPartner.update({
         where: { userId: req.user!.userId },
-        data: { totalWalks: { increment: 1 }, totalEarnings: { increment: request.fare } },
+        data: { totalWalks: { increment: 1 }, totalEarnings: { increment: payout } },
       });
     }
     sendSuccess(res, undefined, "Walk marked complete.");
@@ -175,36 +219,38 @@ export async function confirmWalkCompletion(req: AuthedRequest, res: Response): 
       sendError(res, "Only the requester can confirm completion.", 403, "FORBIDDEN");
       return;
     }
-    if (request.fare && request.completedById) {
-      // Atomic: credit wallet AND mark completed in a single transaction to
-      // prevent double-credit from concurrent confirmations.
-      const fare = request.fare;
-      const partnerUserId = request.completedById;
-      const wallet = await prisma.wallet.findUnique({ where: { userId: partnerUserId }, select: { id: true } });
-      if (wallet) {
-        const result = await prisma.$transaction(async (tx) => {
-          // Latch: only the first confirmation wins
-          const claimed = await tx.walkingRequest.updateMany({
-            where: { id, confirmedAt: null },
-            data: { confirmedAt: new Date(), status: "COMPLETED" },
-          });
-          if (claimed.count !== 1) return null;
+      if (request.fare && request.completedById) {
+        // Atomic: credit wallet AND mark completed in a single transaction to
+        // prevent double-credit from concurrent confirmations.
+        const fare = Number(request.fare);
+        const platformFeePercent = await getConfig("PLATFORM_FEE_PERCENT", 10);
+        const payout = round2(fare - (fare * platformFeePercent) / 100);
+        const partnerUserId = request.completedById;
+        const wallet = await prisma.wallet.findUnique({ where: { userId: partnerUserId }, select: { id: true } });
+        if (wallet) {
+          const result = await prisma.$transaction(async (tx) => {
+            // Latch: only the first confirmation wins
+            const claimed = await tx.walkingRequest.updateMany({
+              where: { id, confirmedAt: null },
+              data: { confirmedAt: new Date(), status: "COMPLETED" },
+            });
+            if (claimed.count !== 1) return null;
 
-          await tx.wallet.update({
-            where: { userId: partnerUserId },
-            data: { balance: { increment: fare } },
+            await tx.wallet.update({
+              where: { userId: partnerUserId },
+              data: { balance: { increment: payout } },
+            });
+            await tx.transaction.create({
+              data: {
+                walletId: wallet.id,
+                userId: partnerUserId,
+                type: "CREDIT",
+                amount: payout,
+                description: `Walk payout (incl. ${(platformFeePercent)}% platform fee) for request ${id}`,
+              },
+            });
+            return true;
           });
-          await tx.transaction.create({
-            data: {
-              walletId: wallet.id,
-              userId: partnerUserId,
-              type: "CREDIT",
-              amount: fare,
-              description: `Walk payout for request ${id}`,
-            },
-          });
-          return true;
-        });
         if (!result) {
           sendSuccess(res, undefined, "Walk completion already confirmed.");
           return;

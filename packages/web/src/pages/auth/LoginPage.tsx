@@ -241,7 +241,7 @@ export function LoginPage() {
                   to="/sign-in"
                   className="w-full py-3 rounded-xl border border-surface-300 dark:border-surface-600 text-sm font-semibold text-surface-700 dark:text-surface-200 hover:border-primary-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors flex items-center justify-center"
                 >
-                  Continue with Clerk&nbsp;Â·&nbsp;Google, OTP & more
+                  Continue with Clerk&nbsp;·&nbsp;Google, OTP & more
                 </Link>
               </div>
             )}

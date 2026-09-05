@@ -149,7 +149,7 @@ export function ForgotPasswordPage() {
             </div>
             {devOtp && (
               <div className="glass-elevated p-4 mb-4 border-2 border-amber-300 dark:border-amber-600">
-                <p className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase mb-1">Dev Mode â€” Your OTP:</p>
+                <p className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase mb-1">Dev Mode — Your OTP:</p>
                 <p className="text-2xl font-mono font-bold text-amber-700 dark:text-amber-300 tracking-widest">{devOtp}</p>
               </div>
             )}

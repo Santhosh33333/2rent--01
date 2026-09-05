@@ -141,7 +141,7 @@ export function BookingPaymentPage() {
           </p>
           {doneType === 'CASH' && (
             <div className="my-4 p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30">
-              <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">ðŸ’µ Remember: Pay cash to your partner when the service is complete.</p>
+              <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">💵 Remember: Pay cash to your partner when the service is complete.</p>
             </div>
           )}
           <button onClick={() => navigate(`/bookings/${id}`)} className="w-full btn-primary mt-4">
@@ -287,7 +287,7 @@ export function BookingPaymentPage() {
           )}
         </button>
         <p className="text-xs text-center text-surface-400 mt-2">
-          {selected === 'ONLINE' ? 'ðŸ”’ Secured by Razorpay' : selected === 'CASH' ? 'ðŸ“ Transaction will be recorded' : 'Choose online or cash to continue'}
+          {selected === 'ONLINE' ? '🔒 Secured by Razorpay' : selected === 'CASH' ? '📝 Transaction will be recorded' : 'Choose online or cash to continue'}
         </p>
       </AnimatedPage>
     </div>

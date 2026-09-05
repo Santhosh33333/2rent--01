@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
+import { v4 as uuidv4 } from "uuid";
 import { createHash, createPublicKey, verify as cryptoVerify } from "crypto";
 import { prisma } from "../config/database";
 import { env } from "../config/env";
@@ -8,19 +9,24 @@ import { generateOTP, hashOTP, verifyOTP, sendOTP } from "../utils/otp";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
 import { getFirebaseAuth, verifyIdToken, getUserByPhone, getUserByEmail, createUserWithPhone, createUserWithEmail } from "../services/firebaseAuthService";
+import {
+  isAdminRole, getClientIp, checkAdminLockout, AdminLockoutError, isIpAllowed,
+  recordFailedLogin, resetFailedLogin, createAdminSession, enforceAdminSessionLimit, flagNewDevice,
+} from "../rbac/adminSecurity";
 
 interface OtpRecord {
   otpHash: string;
   expiresAt: Date;
   verified: boolean;
+  code?: string; // plaintext kept only in non-production for dev/testing
 }
 
 const otpStore = new Map<string, OtpRecord>();
 
 function setOtp(key: string): string {
   const otp = generateOTP();
-  const expiresAt = new Date(Date.now() + env.OTP_EXPIRY_MINUTES * 60 * 1000);
-  otpStore.set(key, { otpHash: hashOTP(otp), expiresAt, verified: false });
+  const expiresAt = new Date(Date.now() + (Number(env.OTP_EXPIRY_MINUTES) || 10) * 60 * 1000);
+  otpStore.set(key, { otpHash: hashOTP(otp), expiresAt, verified: false, code: env.isProduction ? undefined : otp });
   return otp;
 }
 
@@ -33,6 +39,20 @@ function getOtp(key: string): OtpRecord | undefined {
   }
   return record;
 }
+
+// Dev/test-only: read the plaintext OTP that was just issued.
+export function devPeekOtp(key: string): string | undefined {
+  const r = otpStore.get(key);
+  return r && r.expiresAt.getTime() > Date.now() ? r.code : undefined;
+}
+
+function maskPhone(phone: string): string {
+  const p = phone.replace(/\D/g, "");
+  if (p.length < 4) return phone;
+  return p.slice(0, 2) + "****" + p.slice(-2);
+}
+
+
 
 async function createUserSession(userId: string, req: Request): Promise<{ accessToken: string; refreshToken: string }> {
   const accessToken = generateAccessToken({ userId, email: (await prisma.user.findUnique({ where: { id: userId }, select: { email: true } }))?.email ?? "" });
@@ -215,7 +235,7 @@ export async function register(req: Request, res: Response): Promise<void> {
 
 export async function login(req: Request, res: Response): Promise<void> {
   try {
-    const { identifier, password, email, phone } = req.body;
+    const { identifier, password, email, phone, twoFactorCode } = req.body;
     const loginIdentifier = identifier || email || phone;
     if (!loginIdentifier || !password) {
       sendError(res, "Email/phone and password are required.", 400, "MISSING_FIELDS");
@@ -230,6 +250,11 @@ export async function login(req: Request, res: Response): Promise<void> {
     }
     const match = await bcrypt.compare(password, user.passwordHash);
     if (!match) {
+      // Count failed attempts for admin accounts to drive lockout.
+      if (isAdminRole(user.role)) {
+        const admin = await prisma.adminUser.findUnique({ where: { userId: user.id }, select: { id: true } });
+        if (admin) await recordFailedLogin(admin.id);
+      }
       sendError(res, "Invalid credentials.", 401, "INVALID_CREDENTIALS");
       return;
     }
@@ -241,11 +266,47 @@ export async function login(req: Request, res: Response): Promise<void> {
     // Admin-tier accounts must always resolve their session role from the
     // stored account type — never from a stale activeRole left over from a
     // previous regular-user session.
-    const ADMIN_TIER_ROLES = ["SUPER_ADMIN", "ADMIN", "MODERATOR", "SUPPORT", "FINANCE"];
     let effectiveActiveRole = user.activeRole || user.role;
-    if (ADMIN_TIER_ROLES.includes(user.role) && effectiveActiveRole !== user.role) {
+    if (isAdminRole(user.role) && effectiveActiveRole !== user.role) {
       await prisma.user.update({ where: { id: user.id }, data: { activeRole: user.role } });
       effectiveActiveRole = user.role;
+    }
+
+    // ---- Admin access-security enforcement (never trust the client) ----
+    if (isAdminRole(user.role)) {
+      const admin = await prisma.adminUser.findUnique({ where: { userId: user.id } });
+      if (admin) {
+        // 1) Lockout after repeated failures.
+        try {
+          await checkAdminLockout(admin.id);
+        } catch (lockErr: any) {
+          if (lockErr instanceof AdminLockoutError) {
+            await prisma.auditLog.create({
+              data: { actorId: user.id, actorType: "ADMIN", action: "ADMIN_LOGIN_BLOCKED_LOCKED", entityType: "AdminUser", entityId: admin.id, metadata: JSON.stringify({ ip: getClientIp(req) }) },
+            }).catch(() => {});
+            sendError(res, "Too many failed attempts. Account locked. Try again later.", 423, "ACCOUNT_LOCKED", undefined, { lockedUntil: lockErr.lockedUntil });
+            return;
+          }
+          throw lockErr;
+        }
+
+        // 2) IP allowlist.
+        const ip = getClientIp(req);
+        if (!isIpAllowed(admin.ipAllowList, ip)) {
+          await prisma.auditLog.create({
+            data: { actorId: user.id, actorType: "ADMIN", action: "ADMIN_LOGIN_BLOCKED_IP", entityType: "AdminUser", entityId: admin.id, metadata: JSON.stringify({ ip, allowList: admin.ipAllowList }) },
+          }).catch(() => {});
+          sendError(res, "Sign-in from this IP address is not allowed.", 403, "ADMIN_IP_DENIED");
+          return;
+        }
+
+        // Success path for admin: reset failures, record session, flag new device.
+        // All security state is keyed on the canonical AdminUser.id.
+        await resetFailedLogin(admin.id);
+        await createAdminSession(admin.id, uuidv4(), ip, req.headers["user-agent"]);
+        await enforceAdminSessionLimit(admin.id, admin.sessionLimit || 1);
+        await flagNewDevice(admin.id, ip, user.id);
+      }
     }
 
     const { accessToken, refreshToken } = await createUserSession(user.id, req);

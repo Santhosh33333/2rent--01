@@ -88,7 +88,7 @@ async function main(): Promise<void> {
     update: {},
     create: {
       userId: user.id,
-      balance: 1500.0,
+      balance: 0,
       currency: "INR",
     },
   });

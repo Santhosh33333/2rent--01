@@ -69,6 +69,7 @@ const AdminReportsPage = lazy(() => import('./pages/admin/AdminReportsPage').the
 const AdminAuditLogsPage = lazy(() => import('./pages/admin/AdminAuditLogsPage').then(m => ({ default: m.AdminAuditLogsPage })))
 const AdminAdminsPage = lazy(() => import('./pages/admin/AdminAdminsPage').then(m => ({ default: m.AdminAdminsPage })))
 const AdminPaymentsPage = lazy(() => import('./pages/admin/AdminPaymentsPage').then(m => ({ default: m.AdminPaymentsPage })))
+const AdminUpiVerificationPage = lazy(() => import('./pages/admin/AdminUpiVerificationPage').then(m => ({ default: m.AdminUpiVerificationPage })))
 const AdminSettingsPage = lazy(() => import('./pages/admin/AdminSettingsPage').then(m => ({ default: m.AdminSettingsPage })))
 const AdminPricingPage = lazy(() => import('./pages/admin/AdminPricingPage').then(m => ({ default: m.AdminPricingPage })))
 const AdminLiveTrackingPage = lazy(() => import('./pages/admin/AdminLiveTrackingPage').then(m => ({ default: m.AdminLiveTrackingPage })))
@@ -196,7 +197,7 @@ export function App() {
             </Route>
           </Route>
 
-          <Route element={<ProtectedRoute allowedRoles={['ADMIN', 'SUPER_ADMIN', 'MODERATOR', 'SUPPORT', 'FINANCE']} />}>
+          <Route element={<ProtectedRoute allowedRoles={['ADMIN', 'SUPER_ADMIN', 'MODERATOR', 'SUPPORT', 'FINANCE', 'SUPPORT_ADMIN', 'FINANCE_ADMIN', 'KYC_ADMIN', 'MARKETING_ADMIN', 'PARTNER_ADMIN']} />}>
             <Route element={<Layout />}>
               <Route path="/admin/portal" element={<AdminPortalPage />} />
               <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
@@ -214,7 +215,8 @@ export function App() {
               <Route path="/admin/reports" element={<AdminReportsPage />} />
               <Route path="/admin/audit-logs" element={<AdminAuditLogsPage />} />
               <Route path="/admin/admins" element={<AdminAdminsPage />} />
-              <Route path="/admin/payments" element={<AdminPaymentsPage />} />
+               <Route path="/admin/payments" element={<AdminPaymentsPage />} />
+               <Route path="/admin/upi-verification" element={<AdminUpiVerificationPage />} />
           <Route path="/admin/settings" element={<AdminSettingsPage />} />
           <Route path="/admin/pricing" element={<AdminPricingPage />} />
           <Route path="/admin/live-tracking" element={<AdminLiveTrackingPage />} />

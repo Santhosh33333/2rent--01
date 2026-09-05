@@ -44,7 +44,7 @@ const FILTERS = [
 
 const PAGE_LIMIT = 20
 
-// One KYC document preview â€” click opens the full-screen viewer.
+// One KYC document preview — click opens the full-screen viewer.
 function DocCard({ label, url, onOpen }: { label: string; url?: string | null; onOpen: () => void }) {
   return (
     <div>
@@ -145,7 +145,7 @@ export function AdminKycPage() {
   const downloadPdf = () => {
     exportTableToPdf({
       title: 'KYC Verification Queue',
-      subtitle: `Filter: ${statusFilter} Â· ${total} submission(s)`,
+      subtitle: `Filter: ${statusFilter} · ${total} submission(s)`,
       columns: ['Applicant', 'Email', 'Phone', 'Status', 'ID Type', 'Emergency Contact', 'Updated'],
       rows: entries.map((e) => [
         e.user?.fullName || '-',
@@ -153,7 +153,7 @@ export function AdminKycPage() {
         e.user?.phone || '-',
         e.status,
         e.govIdType || '-',
-        [e.emergencyContactName, e.emergencyContactPhone].filter(Boolean).join(' Â· ') || '-',
+        [e.emergencyContactName, e.emergencyContactPhone].filter(Boolean).join(' · ') || '-',
         e.updatedAt ? new Date(e.updatedAt).toLocaleString('en-IN') : '-',
       ]),
       fileName: `rentbuddy-kyc-${statusFilter.toLowerCase()}-${new Date().toISOString().slice(0, 10)}`,
@@ -263,7 +263,7 @@ export function AdminKycPage() {
                           </div>
                           <div className="text-sm text-gray-400">
                             Emergency contact: <span className="text-gray-300">{entry.emergencyContactName || '-'}</span>
-                            {entry.emergencyContactPhone ? ` Â· ${entry.emergencyContactPhone}` : ''}
+                            {entry.emergencyContactPhone ? ` · ${entry.emergencyContactPhone}` : ''}
                             {entry.emergencyContactRelation ? ` (${entry.emergencyContactRelation})` : ''}
                           </div>
                           <div className="text-sm text-gray-400">
@@ -276,7 +276,7 @@ export function AdminKycPage() {
                             Last update: {entry.updatedAt ? new Date(entry.updatedAt).toLocaleString('en-IN') : '-'}
                           </div>
                           <div className="text-xs text-gray-500 sm:col-span-2 break-all">
-                            User ID: <span className="font-mono">{entry.userId}</span> Â· Submission ID:{' '}
+                            User ID: <span className="font-mono">{entry.userId}</span> · Submission ID:{' '}
                             <span className="font-mono">{entry.id}</span>
                           </div>
                         </div>
@@ -288,7 +288,7 @@ export function AdminKycPage() {
                           </div>
                         )}
 
-                        {/* Documents â€” click any card for the full-size viewer */}
+                        {/* Documents — click any card for the full-size viewer */}
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
                           <DocCard
                             label={`Government ID${entry.govIdType ? ` (${entry.govIdType})` : ''}`}
@@ -353,7 +353,7 @@ export function AdminKycPage() {
             </div>
 
             <div className="flex items-center justify-between mt-4">
-              <p className="text-gray-500 text-sm">{total} submission{total === 1 ? '' : 's'} Â· Page {page} of {totalPages}</p>
+              <p className="text-gray-500 text-sm">{total} submission{total === 1 ? '' : 's'} · Page {page} of {totalPages}</p>
               <div className="flex gap-2">
                 <button
                   onClick={() => setPage((p) => Math.max(1, p - 1))}

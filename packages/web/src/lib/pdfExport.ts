@@ -28,7 +28,7 @@ export function exportTableToPdf({ title, subtitle, columns, rows, fileName, lan
   }
   doc.setFontSize(8)
   doc.setTextColor(140)
-  doc.text(`Generated ${new Date().toLocaleString()}`, pageWidth - 40, 40, { align: 'right' })
+  doc.text(`Generated ${new Date().toLocaleString('en-IN')}`, pageWidth - 40, 40, { align: 'right' })
   doc.setTextColor(0)
 
   autoTable(doc, {

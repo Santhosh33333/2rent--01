@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "../config/database";
 import { SERVICE_CATALOG, isServiceEnabled } from "../services/serviceCatalog";
@@ -8,6 +9,7 @@ import { env } from "../config/env";
 import * as bookingEngine from "../services/bookingEngine";
 import { PRICING_VERSION_KEY } from "../services/bookingEngine";
 import { SERVICE_KEYS } from "../services/serviceCatalog";
+import * as partnerMatching from "../services/partnerMatchingEngine";
 
 // ============================================================================
 // SECTION 1: DASHBOARD & ANALYTICS
@@ -1316,12 +1318,234 @@ export async function getPaymentStats(_req: AuthedRequest, res: Response): Promi
 }
 
 // ============================================================================
+// MANUAL UPI VERIFICATION QUEUE (admin confirms external UPI payments)
+// ============================================================================
+
+export async function listUpiPayments(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const status = (req.query.status as string) || "VERIFICATION_PENDING";
+    const items = await prisma.upiPayment.findMany({
+      where: { status },
+      orderBy: { createdAt: "desc" },
+      include: {
+        booking: { select: { id: true, serviceType: true, status: true, estimatedAmount: true, startLocation: true, endLocation: true } },
+      },
+    });
+    const userIds = Array.from(new Set(items.map((i) => i.userId)));
+    const users = userIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, fullName: true, email: true, phone: true },
+        })
+      : [];
+    const userById = new Map(users.map((u) => [u.id, u]));
+    const enriched = items.map((i) => ({ ...i, user: userById.get(i.userId) ?? null }));
+    sendSuccess(res, { items: enriched, total: enriched.length });
+  } catch (err: any) {
+    console.error("listUpiPayments error:", err);
+    sendError(res, "Failed to list UPI payments.", 500, "INTERNAL_ERROR");
+  }
+}
+
+export async function verifyUpiPayment(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const { action, note } = req.body; // VERIFY | REJECT | REQUEST_INFO
+
+    const upi = await prisma.upiPayment.findUnique({ where: { id }, include: { booking: true } });
+    if (!upi) {
+      sendError(res, "UPI payment not found.", 404, "NOT_FOUND");
+      return;
+    }
+    if (upi.status === "VERIFIED" && action === "VERIFY") {
+      sendSuccess(res, { status: "VERIFIED" }, "Already verified.");
+      return;
+    }
+
+    const booking = upi.booking;
+    const amount = Number(upi.amount);
+
+    if (action === "VERIFY") {
+      await prisma.$transaction(async (tx) => {
+        // Hold escrow only if this booking hasn't already been paid (idempotent).
+        if (booking.paymentStatus !== "PAID") {
+          const wallet = await tx.wallet.findUnique({ where: { userId: upi.userId } });
+          if (!wallet) throw new Error("WALLET_MISSING");
+          if (Number(wallet.balance) < amount) throw new Error("INSUFFICIENT_BALANCE");
+          await tx.wallet.update({ where: { userId: upi.userId }, data: { balance: { decrement: amount } } });
+          await tx.transaction.create({
+            data: {
+              userId: upi.userId,
+              walletId: wallet.id,
+              bookingId: booking.id,
+              type: "WALLET_DEBIT",
+              amount,
+              status: "SUCCESS",
+              description: `UPI booking payment - ${booking.serviceType}`,
+            },
+          });
+        }
+        await tx.upiPayment.update({
+          where: { id },
+          data: { status: "VERIFIED", verifiedByAdminId: req.user!.userId, verificationNote: note ?? null },
+        });
+        await tx.booking.updateMany({
+          where: { id: booking.id, paymentStatus: "VERIFICATION_PENDING" },
+          data: { status: "PARTNER_SEARCHING", paymentStatus: "PAID", paymentVerifiedAt: new Date(), paymentMethod: "UPI_MANUAL" },
+        });
+        await tx.auditLog.create({
+          data: {
+            actorId: req.user!.userId,
+            actorType: "ADMIN",
+            action: "UPI_PAYMENT_VERIFIED",
+            entityType: "Booking",
+            entityId: booking.id,
+            metadata: JSON.stringify({ referenceNumber: upi.referenceNumber, amount, note }),
+          },
+        });
+      });
+
+      await prisma.notification.create({
+        data: {
+          userId: upi.userId,
+          title: "Payment Verified",
+          body: `Your UPI payment for booking ${booking.id.slice(0, 8)} is verified. Searching for a partner.`,
+          data: JSON.stringify({ bookingId: booking.id }),
+        },
+      });
+      // Trigger partner matching (same as the Razorpay verified path).
+      partnerMatching
+        .assignPartnerToBooking(booking.id, {
+          serviceType: booking.serviceType,
+          startLocation: booking.startLocation,
+          endLocation: booking.endLocation,
+          startLatitude: booking.startLatitude || undefined,
+          startLongitude: booking.startLongitude || undefined,
+          endLatitude: booking.endLatitude || undefined,
+          endLongitude: booking.endLongitude || undefined,
+          durationMinutes: booking.durationMinutes || undefined,
+          userId: booking.userId,
+        })
+        .catch((e) => console.error("[UPI] dispatch error:", e));
+
+      sendSuccess(res, { status: "VERIFIED" }, "Payment verified. Booking confirmed.");
+    } else if (action === "REJECT") {
+      await prisma.$transaction(async (tx) => {
+        await tx.upiPayment.update({
+          where: { id },
+          data: { status: "REJECTED", verifiedByAdminId: req.user!.userId, verificationNote: note ?? null },
+        });
+        await tx.booking.updateMany({ where: { id: booking.id }, data: { paymentStatus: "REJECTED" } });
+        await tx.auditLog.create({
+          data: {
+            actorId: req.user!.userId,
+            actorType: "ADMIN",
+            action: "UPI_PAYMENT_REJECTED",
+            entityType: "Booking",
+            entityId: booking.id,
+            metadata: JSON.stringify({ referenceNumber: upi.referenceNumber, note }),
+          },
+        });
+      });
+      await prisma.notification.create({
+        data: {
+          userId: upi.userId,
+          title: "Payment Rejected",
+          body: `Your UPI payment reference was rejected. ${note ?? ""}`.trim(),
+          data: JSON.stringify({ bookingId: booking.id }),
+        },
+      });
+      sendSuccess(res, { status: "REJECTED" }, "Payment rejected.");
+    } else if (action === "REQUEST_INFO") {
+      await prisma.upiPayment.update({
+        where: { id },
+        data: { status: "REQUEST_INFO", verificationNote: note ?? null },
+      });
+      await prisma.notification.create({
+        data: {
+          userId: upi.userId,
+          title: "More info needed",
+          body: `Admin needs more information for your UPI payment. ${note ?? ""}`.trim(),
+          data: JSON.stringify({ bookingId: booking.id }),
+        },
+      });
+      sendSuccess(res, { status: "REQUEST_INFO" }, "Information requested.");
+    } else {
+      sendError(res, "Action must be VERIFY, REJECT or REQUEST_INFO.", 400, "VALIDATION_ERROR");
+    }
+  } catch (err: any) {
+    if (err?.message === "INSUFFICIENT_BALANCE") {
+      sendError(res, "User has insufficient wallet balance to hold escrow.", 400, "INSUFFICIENT_BALANCE");
+      return;
+    }
+    console.error("verifyUpiPayment error:", err);
+    sendError(res, "Failed to verify UPI payment.", 500, "INTERNAL_ERROR");
+  }
+}
+
+// Admin sets the platform's personal UPI QR (used for the manual UPI flow).
+export async function setUpiConfig(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const { upiId, accountName, qrUrl } = req.body;
+    if (!upiId || !/^[\w.\-@]+$/.test(String(upiId))) {
+      sendError(res, "A valid UPI ID (e.g. name@bank) is required.", 400, "VALIDATION_ERROR");
+      return;
+    }
+    const entries = [
+      { key: "UPI_ID", value: String(upiId) },
+      { key: "UPI_ACCOUNT_NAME", value: accountName ? String(accountName) : "" },
+      { key: "UPI_QR_URL", value: qrUrl ? String(qrUrl) : "" },
+    ];
+    for (const e of entries) {
+      await prisma.pricingConfig.upsert({
+        where: { key: e.key },
+        create: { key: e.key, value: e.value, description: "Platform UPI config", category: "PAYMENT" },
+        update: { value: e.value },
+      });
+    }
+    await prisma.auditLog.create({
+      data: {
+        actorId: req.user!.userId,
+        actorType: "ADMIN",
+        action: "UPI_CONFIG_UPDATED",
+        entityType: "Platform",
+        entityId: "UPI",
+        metadata: JSON.stringify({ upiId }),
+      },
+    });
+    sendSuccess(res, { upiId, accountName, qrUrl }, "UPI configuration saved.");
+  } catch (err: any) {
+    console.error("setUpiConfig error:", err);
+    sendError(res, "Failed to save UPI config.", 500, "INTERNAL_ERROR");
+  }
+}
+
+// Admin reads the platform's configured UPI details.
+export async function getUpiConfig(_req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const [upiId, name, qr] = await Promise.all([
+      prisma.pricingConfig.findUnique({ where: { key: "UPI_ID" } }),
+      prisma.pricingConfig.findUnique({ where: { key: "UPI_ACCOUNT_NAME" } }),
+      prisma.pricingConfig.findUnique({ where: { key: "UPI_QR_URL" } }),
+    ]);
+    sendSuccess(res, {
+      upiId: upiId?.value ?? null,
+      accountName: name?.value ?? null,
+      qrUrl: qr?.value ?? null,
+    });
+  } catch (err: any) {
+    console.error("getUpiConfig error:", err);
+    sendError(res, "Failed to load UPI config.", 500, "INTERNAL_ERROR");
+  }
+}
+
+// ============================================================================
 // ADMIN ACCOUNT PROVISIONING � only SUPER_ADMIN can add/manage admins here.
 // Public signup can never create admin accounts (register hardcodes USER).
 // ============================================================================
 
-const ADMIN_TIER = ["SUPER_ADMIN", "ADMIN", "MODERATOR", "SUPPORT", "FINANCE"];
-const ASSIGNABLE_ADMIN_ROLES = ["ADMIN", "MODERATOR", "SUPPORT", "FINANCE"];
+const ADMIN_TIER = ["SUPER_ADMIN", "ADMIN", "MODERATOR", "SUPPORT", "FINANCE", "SUPPORT_ADMIN", "FINANCE_ADMIN", "KYC_ADMIN", "MARKETING_ADMIN", "PARTNER_ADMIN"];
+const ASSIGNABLE_ADMIN_ROLES = ["SUPPORT_ADMIN", "FINANCE_ADMIN", "KYC_ADMIN", "MARKETING_ADMIN", "PARTNER_ADMIN"];
 
 async function ensureAdminRole(name: string, permissions?: string[]) {
   const existing = await prisma.adminRole.findUnique({ where: { name } });
@@ -1361,7 +1585,7 @@ export async function getAdminAccounts(req: AuthedRequest, res: Response): Promi
 
 export async function createAdminAccount(req: AuthedRequest, res: Response): Promise<void> {
   try {
-    const { email, phone, password, fullName, role, department, permissions } = req.body;
+    const { email, phone, password, fullName, role, department, permissions, sections } = req.body;
     if (!email || !password || !fullName || !role || !phone) {
       sendError(res, "Email, phone, password, full name and role are required.", 400, "VALIDATION_ERROR");
       return;
@@ -1380,6 +1604,22 @@ export async function createAdminAccount(req: AuthedRequest, res: Response): Pro
       return;
     }
 
+    // Resolve the effective permission set for this account.
+    // 1) explicit `permissions` array (section.action tokens) wins,
+    // 2) otherwise derive from the role template,
+    // 3) `sections` convenience object { SECTION: [ACTIONS] } is also accepted.
+    let effectivePermissions: string[] | undefined;
+    if (Array.isArray(permissions) && permissions.length) {
+      effectivePermissions = permissions;
+    } else if (sections && typeof sections === "object") {
+      effectivePermissions = Object.entries(sections).flatMap(([section, acts]) =>
+        (acts as string[]).map((a) => `${section}.${a}`)
+      );
+    } else {
+      const { permissionsForRole } = await import("../rbac/sections.js");
+      effectivePermissions = permissionsForRole(role);
+    }
+
     const passwordHash = await bcrypt.hash(String(password), env.BCRYPT_SALT_ROUNDS);
     const result = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
@@ -1396,7 +1636,7 @@ export async function createAdminAccount(req: AuthedRequest, res: Response): Pro
           emailVerified: true,
         },
       });
-      const adminRole = await ensureAdminRole(role, permissions);
+      const adminRole = await ensureAdminRole(role, effectivePermissions);
       await tx.adminUser.create({
         data: {
           userId: user.id,
@@ -1404,7 +1644,7 @@ export async function createAdminAccount(req: AuthedRequest, res: Response): Pro
           ...(department ? { department } : {}),
           // Per-admin access override — what THIS account can access, chosen by
           // the super admin at creation time. Falls back to role defaults when unset.
-          ...(Array.isArray(permissions) ? { permissions: JSON.stringify(permissions) } : {}),
+          ...(effectivePermissions ? { permissions: JSON.stringify(effectivePermissions) } : {}),
         },
       });
       await tx.auditLog.create({
@@ -1414,13 +1654,13 @@ export async function createAdminAccount(req: AuthedRequest, res: Response): Pro
           action: "ADMIN_ACCOUNT_CREATED",
           entityType: "User",
           entityId: user.id,
-          metadata: JSON.stringify({ newRole: role, department: department ?? null, permissions: Array.isArray(permissions) ? permissions : null }),
+          metadata: JSON.stringify({ newRole: role, department: department ?? null, permissions: effectivePermissions }),
         },
       });
       return user;
     });
 
-    sendSuccess(res, { id: result.id, email: result.email, fullName: result.fullName, role: result.role }, "Admin account created.", 201);
+    sendSuccess(res, { id: result.id, email: result.email, fullName: result.fullName, role: result.role, permissions: effectivePermissions }, "Admin account created.", 201);
   } catch (err) {
     console.error("createAdminAccount error:", err);
     sendError(res, "Failed to create admin account.", 500, "INTERNAL_ERROR");
@@ -1442,7 +1682,7 @@ export async function updateAdminAccount(req: AuthedRequest, res: Response): Pro
     }
 
     const data: any = {};
-    if (status && ["ACTIVE", "SUSPENDED"].includes(status)) data.status = status;
+    if (status && ["ACTIVE", "SUSPENDED", "DISABLED"].includes(status)) data.status = status;
     if (department !== undefined) data.department = department;
 
     const updated = await prisma.$transaction(async (tx) => {
@@ -1476,6 +1716,47 @@ export async function updateAdminAccount(req: AuthedRequest, res: Response): Pro
   } catch (err) {
     console.error("updateAdminAccount error:", err);
     sendError(res, "Failed to update admin account.", 500, "INTERNAL_ERROR");
+  }
+}
+
+// Super-admin-only: reset a delegated admin's password and return the new
+// plaintext so it can be shared securely. The primary SUPER_ADMIN is protected.
+export async function resetAdminPassword(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const { userId } = req.params;
+    const target = await prisma.user.findUnique({ where: { id: userId } });
+    if (!target || !ADMIN_TIER.includes(target.role)) {
+      sendError(res, "Admin account not found.", 404, "NOT_FOUND");
+      return;
+    }
+    if (target.role === "SUPER_ADMIN") {
+      sendError(res, "The primary super admin password cannot be reset here.", 403, "PROTECTED_ACCOUNT");
+      return;
+    }
+    const plain =
+      crypto.randomBytes(9).toString("base64").replace(/[^A-Za-z0-9]/g, "").slice(0, 12) + "Aa1!";
+    const passwordHash = await bcrypt.hash(plain, env.BCRYPT_SALT_ROUNDS);
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: userId }, data: { passwordHash } });
+      await tx.auditLog.create({
+        data: {
+          actorId: req.user!.userId,
+          actorType: "USER",
+          action: "ADMIN_PASSWORD_RESET",
+          entityType: "User",
+          entityId: userId,
+          metadata: JSON.stringify({ email: target.email }),
+        },
+      });
+    });
+    sendSuccess(
+      res,
+      { userId, email: target.email, newPassword: plain },
+      "Password reset. Share the new password securely with the admin."
+    );
+  } catch (err) {
+    console.error("resetAdminPassword error:", err);
+    sendError(res, "Failed to reset admin password.", 500, "INTERNAL_ERROR");
   }
 }
 

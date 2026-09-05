@@ -294,7 +294,7 @@ export function AdminPaymentsPage() {
                   </div>
                   <div>
                     <p className="text-gray-500 text-[11px] uppercase tracking-wide">Created</p>
-                    <p className="text-gray-200">{new Date(r.createdAt).toLocaleString()}</p>
+                    <p className="text-gray-200">{new Date(r.createdAt).toLocaleString('en-IN')}</p>
                   </div>
                 </div>
               </div>

@@ -112,7 +112,7 @@ export async function requireWalkingPartner(req: AuthedRequest, res: Response, n
 
 export async function requireAdmin(req: AuthedRequest, res: Response, next: NextFunction): Promise<void> {
   try {
-    if (!req.user?.activeRole || !["SUPER_ADMIN", "ADMIN", "MODERATOR", "SUPPORT", "FINANCE"].includes(req.user.activeRole)) {
+    if (!req.user?.activeRole || !ADMIN_ROLES.includes(req.user.activeRole)) {
       sendError(res, "Admin access required.", 403, "FORBIDDEN");
       return;
     }
@@ -180,7 +180,7 @@ export async function requireSuperAdmin(req: AuthedRequest, res: Response, next:
   }
 }
 
-const ADMIN_ROLES = ["SUPER_ADMIN", "ADMIN", "MODERATOR", "SUPPORT", "FINANCE"];
+const ADMIN_ROLES = ["SUPER_ADMIN", "ADMIN", "MODERATOR", "SUPPORT", "FINANCE", "SUPPORT_ADMIN", "FINANCE_ADMIN", "KYC_ADMIN", "MARKETING_ADMIN", "PARTNER_ADMIN"];
 
 export function requirePermission(permission: string) {
   return async (req: AuthedRequest, res: Response, next: NextFunction): Promise<void> => {

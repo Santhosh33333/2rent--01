@@ -15,8 +15,14 @@ interface RefreshTokenPayload {
   jti: string;
 }
 
-const accessSecret = env.JWT_ACCESS_SECRET ?? env.JWT_SECRET;
-const refreshSecret = env.JWT_REFRESH_SECRET ?? env.JWT_SECRET;
+interface TwoFactorChallengePayload {
+  userId: string;
+  email: string;
+  type: "twofactor";
+}
+
+const accessSecret = env.JWT_ACCESS_SECRET ?? (env.JWT_SECRET as string);
+const refreshSecret = env.JWT_REFRESH_SECRET ?? (env.JWT_SECRET as string);
 
 export function generateAccessToken(user: AuthPayload): string {
   const payload: AccessTokenPayload = {
@@ -54,4 +60,19 @@ export function verifyRefreshToken(token: string): RefreshTokenPayload {
     throw new Error("Invalid token type");
   }
   return decoded as RefreshTokenPayload;
+}
+
+// Short-lived token issued after password check when 2FA is enabled. It authorizes
+// exactly one subsequent call to the 2FA verification endpoint.
+export function generateTwoFactorChallengeToken(userId: string, email: string): string {
+  const payload: TwoFactorChallengePayload = { userId, email, type: "twofactor" };
+  return jwt.sign(payload, accessSecret, { expiresIn: "5m" });
+}
+
+export function verifyTwoFactorChallengeToken(token: string): TwoFactorChallengePayload {
+  const decoded = jwt.verify(token, accessSecret) as jwt.JwtPayload;
+  if (decoded.type !== "twofactor") {
+    throw new Error("Invalid token type");
+  }
+  return decoded as TwoFactorChallengePayload;
 }

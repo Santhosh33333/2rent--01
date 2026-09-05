@@ -1,9 +1,16 @@
+/**
+ * @deprecated Legacy flow. The unified `Booking` engine (services/bookingEngine.ts)
+ * is the single canonical service engine and supports CARRY_BUDDY as a first-class
+ * serviceType with server-authoritative, admin-configurable pricing + escrow. This
+ * controller is retained only for historical CarryBuddyRequest records and will be
+ * removed once clients migrate to POST /bookings (serviceType: "CARRY_BUDDY").
+ */
 import { Response } from "express";
 import { prisma } from "../config/database";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
+import { calculatePrice, getConfig } from "../services/pricingEngine";
 
-const PLATFORM_FEE_PERCENT = 0.1;
 const MAX_CARRY_FARE = 100000;
 
 class CarryFlowError extends Error {
@@ -14,6 +21,11 @@ class CarryFlowError extends Error {
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+// Platform fee fraction is admin-configurable (PLATFORM_FEE_PERCENT, default 10%).
+async function platformFeeFraction(): Promise<number> {
+  return (await getConfig("PLATFORM_FEE_PERCENT", 10)) / 100;
 }
 
 export async function createRequest(req: AuthedRequest, res: Response): Promise<void> {
@@ -27,6 +39,21 @@ export async function createRequest(req: AuthedRequest, res: Response): Promise<
     }
     if (parsedFare > MAX_CARRY_FARE) {
       sendError(res, `Maximum carry buddy fare is ${MAX_CARRY_FARE}.`, 400, "FARE_EXCEEDS_LIMIT");
+      return;
+    }
+    // Server-authoritative fare bounds: reject fares that deviate wildly from the
+    // server estimate so requester/partner collusion can't dodge fees or launder.
+    const duration = durationMinutes ? Number(durationMinutes) : 0;
+    const estimate = await calculatePrice({ durationMinutes: duration, distanceKm: 0 });
+    const min = estimate.finalAmount * 0.5;
+    const max = estimate.finalAmount * 2;
+    if (parsedFare < min || parsedFare > max) {
+      sendError(
+        res,
+        `Fare must be between ₹${min.toFixed(2)} and ₹${max.toFixed(2)} (server estimate ₹${estimate.finalAmount.toFixed(2)}).`,
+        400,
+        "INVALID_FARE",
+      );
       return;
     }
     const parsedStart = new Date(startTime);
@@ -170,7 +197,7 @@ export async function acceptRequest(req: AuthedRequest, res: Response): Promise<
       if (claimed.count !== 1) throw new CarryFlowError("ALREADY_ACCEPTED");
 
       const fare = Number(request.fare);
-      const platformFee = round2(fare * PLATFORM_FEE_PERCENT);
+      const platformFee = round2(fare * (await platformFeeFraction()));
       const partnerEarning = round2(fare - platformFee);
 
       return tx.carryBuddyRequest.update({

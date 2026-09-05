@@ -1,0 +1,12 @@
+prisma:query SELECT "public"."User"."id", "public"."User"."email", "public"."User"."activeRole" FROM "public"."User" WHERE ("public"."User"."id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+findUnique: {
+  id: 'eacfc05a-84fb-4315-9acb-031de7c273a0',
+  email: 'santhoshkrishna958@gmail.com',
+  activeRole: 'SUPER_ADMIN'
+} ms= 92
+prisma:query SELECT COUNT(*) FROM (SELECT "public"."User"."id" FROM "public"."User" WHERE 1=1 OFFSET $1) AS "sub"
+count: 52 ms= 3
+prisma:query SELECT SUM("balance") FROM (SELECT "public"."Wallet"."balance" FROM "public"."Wallet" WHERE 1=1 OFFSET $1) AS "sub"
+walletAgg: { _sum: { balance: 7892.5 } } ms= 5
+prisma:query SELECT COUNT(*) FROM (SELECT "public"."Booking"."id" FROM "public"."Booking" WHERE 1=1 OFFSET $1) AS "sub"
+bookingCount: 66 ms= 10

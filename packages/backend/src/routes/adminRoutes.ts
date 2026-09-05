@@ -1,8 +1,9 @@
 import { Router } from "express";
 import { body } from "express-validator";
 import { authRateLimiter } from "../middleware/rateLimiter";
-import { authenticateToken, requireAdmin, requirePermission, requireSuperAdmin } from "../middleware/auth";
+import { authenticateToken, requireAdmin, requireSuperAdmin } from "../middleware/auth";
 import { sanitizeInput, validateRequest } from "../middleware/validation";
+import { requireSectionAction } from "../rbac/permissions";
 import * as adminController from "../controllers/adminController";
 import * as communityController from "../controllers/communityController";
 import * as eventController from "../controllers/eventController";
@@ -12,26 +13,55 @@ const router = Router();
 router.use(authenticateToken);
 router.use(requireAdmin);
 
-const users = requirePermission("users.manage");
-const kycReview = requirePermission("kyc.review");
-const partnersManage = requirePermission("partners.manage");
-const bookingsView = requirePermission("bookings.view");
-const withdrawalsManage = requirePermission("withdrawals.manage");
-const reportsManage = requirePermission("reports.manage");
-const auditView = requirePermission("audit.view");
-const notificationsSend = requirePermission("notifications.send");
-const pricingManage = requirePermission("pricing.manage");
-const couponsManage = requirePermission("coupons.manage");
-const areasManage = requirePermission("areas.manage");
-const campaignsManage = requirePermission("campaigns.manage");
-const revenueView = requirePermission("revenue.view");
-const paymentsView = requirePermission("payments.view");
-const walletsView = requirePermission("wallets.view");
-const dispatchView = requirePermission("dispatch.view");
-const communitiesView = requirePermission("communities.view");
-const eventsView = requirePermission("events.view");
+// Section/action permission guards — backend-enforced (never trust the UI).
+const users = requireSectionAction("USERS", "VIEW");
+const kycReview = requireSectionAction("KYC", "APPROVE");
+const partnersManage = requireSectionAction("PARTNERS", "VIEW");
+const bookingsView = requireSectionAction("BOOKINGS", "VIEW");
+const withdrawalsManage = requireSectionAction("WITHDRAWALS", "VIEW");
+const reportsManage = requireSectionAction("REPORTS", "VIEW");
+const auditView = requireSectionAction("AUDIT_LOGS", "VIEW");
+const notificationsSend = requireSectionAction("NOTIFICATIONS", "CREATE");
+const pricingManage = requireSectionAction("PRICING", "VIEW");
+const pricingEdit = requireSectionAction("PRICING", "EDIT");
+const couponsManage = requireSectionAction("COUPONS", "VIEW");
+const couponsEdit = requireSectionAction("COUPONS", "EDIT");
+const areasManage = requireSectionAction("SYSTEM_SETTINGS", "VIEW");
+const areasEdit = requireSectionAction("SYSTEM_SETTINGS", "EDIT");
+const campaignsManage = requireSectionAction("OFFERS", "VIEW");
+const revenueView = requireSectionAction("ANALYTICS", "VIEW");
+const paymentsView = requireSectionAction("PAYMENTS", "VIEW");
+const walletsView = requireSectionAction("WALLETS", "VIEW");
+const dispatchView = requireSectionAction("DISPATCH", "VIEW");
+const communitiesView = requireSectionAction("COMMUNITIES", "VIEW");
+const eventsView = requireSectionAction("EVENTS", "VIEW");
+const adminMgmtView = requireSectionAction("ADMIN_MANAGEMENT", "VIEW");
 
 router.get("/dashboard", adminController.getDashboardStats);
+
+// Manual UPI / QR payment verification (temporary flow for personal UPI accounts)
+router.get("/payments/upi", paymentsView, adminController.listUpiPayments);
+router.post(
+  "/payments/upi/:id/verify",
+  requireSectionAction("PAYMENTS", "APPROVE"),
+  [body("action").isIn(["VERIFY", "REJECT", "REQUEST_INFO"]), body("note").optional().isString()],
+  sanitizeInput,
+  validateRequest,
+  adminController.verifyUpiPayment
+);
+router.get("/settings/upi", paymentsView, adminController.getUpiConfig);
+router.put(
+  "/settings/upi",
+  requireSectionAction("PAYMENTS", "EDIT"),
+  [
+    body("upiId").notEmpty().isString(),
+    body("accountName").optional().isString(),
+    body("qrUrl").optional().isString(),
+  ],
+  sanitizeInput,
+  validateRequest,
+  adminController.setUpiConfig
+);
 router.get("/users", users, adminController.getUsers);
 router.get("/users/:id", users, adminController.getUserById);
 router.put("/users/:id/status", users, [body("status").isIn(["ACTIVE", "SUSPENDED", "BANNED", "DEACTIVATED"])], validateRequest, adminController.updateUserStatus);
@@ -51,21 +81,22 @@ router.post(
 router.post("/users/:id/unblock", users, adminController.unblockUser);
 router.delete("/users/:id", requireSuperAdmin, adminController.deleteUser);
 router.get("/kyc-queue", kycReview, adminController.getKycQueue);
-router.post("/kyc/:id/approve", kycReview, adminController.approveKyc);
-router.post("/kyc/:id/reject", kycReview, [body("reason").optional().isString()], sanitizeInput, validateRequest, adminController.rejectKyc);
+router.post("/kyc/:id/approve", requireSectionAction("KYC", "APPROVE"), adminController.approveKyc);
+router.post("/kyc/:id/reject", requireSectionAction("KYC", "REJECT"), [body("reason").optional().isString()], sanitizeInput, validateRequest, adminController.rejectKyc);
 router.get("/walking-partners", partnersManage, adminController.getWalkingPartners);
-router.post("/walking-partners/:id/approve", partnersManage, adminController.approveWalkingPartner);
-router.post("/walking-partners/:id/reject", partnersManage, [body("reason").optional().isString()], sanitizeInput, validateRequest, adminController.rejectWalkingPartner);
+router.post("/walking-partners/:id/approve", requireSectionAction("PARTNERS", "APPROVE"), adminController.approveWalkingPartner);
+router.post("/walking-partners/:id/reject", requireSectionAction("PARTNERS", "REJECT"), [body("reason").optional().isString()], sanitizeInput, validateRequest, adminController.rejectWalkingPartner);
 router.get("/bookings", bookingsView, adminController.getBookings);
 router.get("/bookings/:id", bookingsView, adminController.getBookingDetail);
 router.get("/withdrawals", withdrawalsManage, adminController.getWithdrawalRequests);
-router.post("/withdrawals/:id/approve", withdrawalsManage, adminController.approveWithdrawal);
-router.post("/withdrawals/:id/reject", withdrawalsManage, [body("reason").optional().isString()], sanitizeInput, validateRequest, adminController.rejectWithdrawal);
+router.post("/withdrawals/:id/approve", requireSectionAction("WITHDRAWALS", "APPROVE"), adminController.approveWithdrawal);
+router.post("/withdrawals/:id/reject", requireSectionAction("WITHDRAWALS", "REJECT"), [body("reason").optional().isString()], sanitizeInput, validateRequest, adminController.rejectWithdrawal);
 router.get("/reports", reportsManage, adminController.getReports);
-router.post("/reports/:id/resolve", reportsManage, [body("note").optional().isString()], sanitizeInput, validateRequest, adminController.resolveReport);
-router.get("/admins", requireSuperAdmin, adminController.getAdminAccounts);
+router.post("/reports/:id/resolve", requireSectionAction("REPORTS", "APPROVE"), [body("note").optional().isString()], sanitizeInput, validateRequest, adminController.resolveReport);
+router.get("/admins", adminMgmtView, adminController.getAdminAccounts);
 router.post("/admins", requireSuperAdmin, adminController.createAdminAccount);
 router.patch("/admins/:userId", requireSuperAdmin, adminController.updateAdminAccount);
+router.post("/admins/:userId/reset-password", requireSuperAdmin, adminController.resetAdminPassword);
 router.get("/audit-logs", auditView, adminController.getAuditLogs);
 router.post("/notifications", notificationsSend, [body("userId").notEmpty(), body("title").notEmpty(), body("body").notEmpty()], sanitizeInput, validateRequest, adminController.sendNotification);
 
@@ -81,27 +112,27 @@ router.get("/services", revenueView, adminController.getServices);
 router.get("/chat-reports", reportsManage, adminController.getChatReports);
 router.post("/chat-reports/:id/resolve", reportsManage, adminController.resolveChatReport);
 router.get("/bookings/:id/logs", bookingsView, adminController.getBookingLogs);
-router.post("/pricing", pricingManage, [body("key").notEmpty(), body("value").notEmpty()], sanitizeInput, validateRequest, adminController.createPricingConfig);
-router.put("/pricing/:id", pricingManage, adminController.updatePricingConfig);
-router.delete("/pricing/:id", pricingManage, adminController.deletePricingConfig);
+router.post("/pricing", pricingEdit, [body("key").notEmpty(), body("value").notEmpty()], sanitizeInput, validateRequest, adminController.createPricingConfig);
+router.put("/pricing/:id", pricingEdit, adminController.updatePricingConfig);
+router.delete("/pricing/:id", pricingEdit, adminController.deletePricingConfig);
 
 // Coupons
 router.get("/coupons", couponsManage, adminController.getCoupons);
-router.post("/coupons", couponsManage, [body("code").notEmpty(), body("discountType").isIn(["PERCENTAGE", "FIXED"]), body("discountValue").isFloat({ gt: 0 }), body("validFrom").notEmpty(), body("validTo").notEmpty()], sanitizeInput, validateRequest, adminController.createCoupon);
-router.put("/coupons/:id", couponsManage, adminController.updateCoupon);
-router.delete("/coupons/:id", couponsManage, adminController.deleteCoupon);
+router.post("/coupons", couponsEdit, [body("code").notEmpty(), body("discountType").isIn(["PERCENTAGE", "FIXED"]), body("discountValue").isFloat({ gt: 0 }), body("validFrom").notEmpty(), body("validTo").notEmpty()], sanitizeInput, validateRequest, adminController.createCoupon);
+router.put("/coupons/:id", couponsEdit, adminController.updateCoupon);
+router.delete("/coupons/:id", couponsEdit, adminController.deleteCoupon);
 
-// Service Areas
+// Service Areas (System Settings)
 router.get("/service-areas", areasManage, adminController.getServiceAreas);
-router.post("/service-areas", areasManage, [body("name").notEmpty(), body("city").notEmpty()], sanitizeInput, validateRequest, adminController.createServiceArea);
-router.put("/service-areas/:id", areasManage, adminController.updateServiceArea);
-router.delete("/service-areas/:id", areasManage, adminController.deleteServiceArea);
+router.post("/service-areas", areasEdit, [body("name").notEmpty(), body("city").notEmpty()], sanitizeInput, validateRequest, adminController.createServiceArea);
+router.put("/service-areas/:id", areasEdit, adminController.updateServiceArea);
+router.delete("/service-areas/:id", areasEdit, adminController.deleteServiceArea);
 
-// Campaigns
+// Campaigns (Offers)
 router.get("/campaigns", campaignsManage, adminController.getCampaigns);
-router.post("/campaigns", campaignsManage, [body("name").notEmpty(), body("discountType").isIn(["PERCENTAGE", "FIXED"]), body("discountValue").isFloat({ gt: 0 }), body("startDate").notEmpty(), body("endDate").notEmpty()], sanitizeInput, validateRequest, adminController.createCampaign);
-router.put("/campaigns/:id", campaignsManage, adminController.updateCampaign);
-router.delete("/campaigns/:id", campaignsManage, adminController.deleteCampaign);
+router.post("/campaigns", requireSectionAction("OFFERS", "EDIT"), [body("name").notEmpty(), body("discountType").isIn(["PERCENTAGE", "FIXED"]), body("discountValue").isFloat({ gt: 0 }), body("startDate").notEmpty(), body("endDate").notEmpty()], sanitizeInput, validateRequest, adminController.createCampaign);
+router.put("/campaigns/:id", requireSectionAction("OFFERS", "EDIT"), adminController.updateCampaign);
+router.delete("/campaigns/:id", requireSectionAction("OFFERS", "DELETE"), adminController.deleteCampaign);
 
 // Revenue & Analytics
 router.get("/payments", paymentsView, adminController.getPayments);

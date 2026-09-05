@@ -156,7 +156,7 @@ export function VerificationPage() {
               <div className="flex-1">
                 <h3 className="font-bold text-emerald-700 dark:text-emerald-400 text-sm">You're verified!</h3>
                 <p className="text-sm text-emerald-600 dark:text-emerald-300 mt-1">
-                  All features are unlocked. Taking you to your dashboardâ€¦
+                  All features are unlocked. Taking you to your dashboard…
                 </p>
                 <Link to="/dashboard" className="btn-primary btn-sm mt-3 inline-flex">
                   Go to Dashboard <ArrowRight className="w-3 h-3" />

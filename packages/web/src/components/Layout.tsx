@@ -3,7 +3,7 @@ import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
 import {
   Home, User, Wallet, Users, Sun, Moon, Menu, X, Bell,
   MapPin, LogOut, Calendar, Settings, Shield, Info, LayoutDashboard,
-  ClipboardList, Search
+  ClipboardList, Search, QrCode
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { isClerkConfigured } from '../lib/clerkAuth';
@@ -46,6 +46,7 @@ const adminNav = [
   { to: '/admin/users', icon: Users, label: 'Users' },
   { to: '/admin/partners', icon: Users, label: 'Partners' },
   { to: '/admin/payments', icon: Wallet, label: 'Payments' },
+  { to: '/admin/upi-verification', icon: QrCode, label: 'UPI Verify' },
   { to: '/admin/live-tracking', icon: MapPin, label: 'Live' },
   { to: '/admin/reports', icon: Shield, label: 'Reports' },
 ];
@@ -67,7 +68,7 @@ export function Layout() {
   const [, setMobileMenuOpen] = useState(false);
 
   const navItems = activeRole === 'PARTNER' ? partnerNav
-    : ['ADMIN', 'SUPER_ADMIN', 'MODERATOR', 'SUPPORT', 'FINANCE'].includes(activeRole) ? adminNav
+    : ['ADMIN', 'SUPER_ADMIN', 'MODERATOR', 'SUPPORT', 'FINANCE', 'SUPPORT_ADMIN', 'FINANCE_ADMIN', 'KYC_ADMIN', 'MARKETING_ADMIN', 'PARTNER_ADMIN'].includes(activeRole) ? adminNav
     : userNav;
 
   useEffect(() => {

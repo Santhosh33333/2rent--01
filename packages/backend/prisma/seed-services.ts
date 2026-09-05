@@ -10,6 +10,21 @@ async function main(): Promise<void> {
   let created = 0;
   let skipped = 0;
 
+  // Canonical platform fee (single source of truth). Upserted so a stale "1" seed
+  // can never re-introduce the 1%-vs-10% pricing split. Per-service rows below are
+  // left untouched when they already exist, to preserve admin pricing overrides.
+  await prisma.pricingConfig.upsert({
+    where: { key: "PLATFORM_FEE_PERCENT" },
+    update: { value: "10", isActive: true },
+    create: {
+      key: "PLATFORM_FEE_PERCENT",
+      value: "10",
+      description: "Platform commission percentage charged on every booking",
+      category: "USER",
+      isActive: true,
+    },
+  });
+
   for (const svc of SERVICE_CATALOG) {
     const p = svc.pricing;
     const rows: { key: string; value: string; description: string }[] = [

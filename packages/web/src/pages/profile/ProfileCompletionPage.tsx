@@ -31,9 +31,9 @@ const STEPS = [
 ]
 
 const GENDER_OPTIONS = [
-  { value: 'MALE' as const, label: 'Male', emoji: 'ðŸ‘¨' },
-  { value: 'FEMALE' as const, label: 'Female', emoji: 'ðŸ‘©' },
-  { value: 'OTHER' as const, label: 'Other', emoji: 'ðŸ§‘' },
+  { value: 'MALE' as const, label: 'Male', emoji: '👨' },
+  { value: 'FEMALE' as const, label: 'Female', emoji: '👩' },
+  { value: 'OTHER' as const, label: 'Other', emoji: '🧑' },
 ]
 
 export function ProfileCompletionPage() {
@@ -334,27 +334,27 @@ export function ProfileCompletionPage() {
                         <div className="glass-card-sm p-5 space-y-3 text-sm">
                           <div className="flex justify-between items-center">
                             <span className="text-surface-500">Name</span>
-                            <span className="font-semibold text-surface-900 dark:text-white">{watch('fullName') || 'â€”'}</span>
+                            <span className="font-semibold text-surface-900 dark:text-white">{watch('fullName') || '—'}</span>
                           </div>
                           <div className="h-px bg-surface-200 dark:bg-surface-700" />
                           <div className="flex justify-between items-center">
                             <span className="text-surface-500">Bio</span>
-                            <span className="font-semibold text-surface-900 dark:text-white truncate max-w-[180px]">{watch('bio') || 'â€”'}</span>
+                            <span className="font-semibold text-surface-900 dark:text-white truncate max-w-[180px]">{watch('bio') || '—'}</span>
                           </div>
                           <div className="h-px bg-surface-200 dark:bg-surface-700" />
                           <div className="flex justify-between items-center">
                             <span className="text-surface-500">City</span>
-                            <span className="font-semibold text-surface-900 dark:text-white">{watch('city') || 'â€”'}</span>
+                            <span className="font-semibold text-surface-900 dark:text-white">{watch('city') || '—'}</span>
                           </div>
                           <div className="h-px bg-surface-200 dark:bg-surface-700" />
                           <div className="flex justify-between items-center">
                             <span className="text-surface-500">Country</span>
-                            <span className="font-semibold text-surface-900 dark:text-white">{watch('country') || 'â€”'}</span>
+                            <span className="font-semibold text-surface-900 dark:text-white">{watch('country') || '—'}</span>
                           </div>
                           <div className="h-px bg-surface-200 dark:bg-surface-700" />
                           <div className="flex justify-between items-center">
                             <span className="text-surface-500">Gender</span>
-                            <span className="font-semibold text-surface-900 dark:text-white">{watch('gender') || 'â€”'}</span>
+                            <span className="font-semibold text-surface-900 dark:text-white">{watch('gender') || '—'}</span>
                           </div>
                         </div>
                       </div>

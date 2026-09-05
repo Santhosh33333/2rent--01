@@ -76,7 +76,10 @@ export async function createOrder(req: AuthedRequest, res: Response): Promise<vo
 
 export async function verifyPayment(req: AuthedRequest, res: Response): Promise<void> {
   try {
-    const { razorpayOrderId, razorpayPaymentId, razorpaySignature, amount } = req.body
+    const razorpayOrderId = req.body.razorpayOrderId ?? req.body.razorpay_order_id
+    const razorpayPaymentId = req.body.razorpayPaymentId ?? req.body.razorpay_payment_id
+    const razorpaySignature = req.body.razorpaySignature ?? req.body.razorpay_signature
+    const amount = req.body.amount
 
     const userId = req.user!.userId
 
@@ -107,19 +110,23 @@ export async function verifyPayment(req: AuthedRequest, res: Response): Promise<
       return
     }
 
-    // Fetch payment details from Razorpay to verify amount/capture status.
-    // The HMAC above is already cryptographic proof the payment is genuine;
-    // if the details API hiccups, fall back to the signed order data rather
-    // than failing a legitimate payment.
-    let paymentDetails: { status: string; amount: number | string } | null = null
+    // Fetch payment details from Razorpay to verify capture status and amount.
+    // The HMAC authenticates the callback, but it does not prove that funds
+    // were captured. Keep the order retryable when the provider is unavailable.
+    let paymentDetails: { status: string; amount: number | string } | null
     try {
       paymentDetails = await razorpayService.fetchPayment(razorpayPaymentId)
-      if (!paymentDetails || paymentDetails.status !== "captured") {
+      if (!paymentDetails) {
+        sendError(res, "Payment verification is temporarily unavailable. Please retry.", 503, "PAYMENT_VERIFICATION_UNAVAILABLE")
+        return
+      }
+      if (paymentDetails.status !== "captured") {
         sendError(res, "Payment not captured.", 400, "PAYMENT_NOT_CAPTURED")
         return
       }
     } catch {
-      paymentDetails = null // trust signature + stored order amount below
+      sendError(res, "Payment verification is temporarily unavailable. Please retry.", 503, "PAYMENT_VERIFICATION_UNAVAILABLE")
+      return
     }
 
     // Find wallet
@@ -148,8 +155,7 @@ export async function verifyPayment(req: AuthedRequest, res: Response): Promise<
       return
     }
 
-    // When Razorpay details are unavailable, the signed PaymentOrder amount is authoritative.
-    const amountInRupees = paymentDetails ? Number(paymentDetails.amount) / 100 : Number(paymentOrder.amount)
+    const amountInRupees = Number(paymentDetails.amount) / 100
 
     if (paymentOrder.type !== "TOPUP") {
       sendError(res, "Invalid order type.", 400, "INVALID_ORDER_TYPE")

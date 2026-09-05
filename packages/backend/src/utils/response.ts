@@ -7,8 +7,9 @@ export function sendSuccess<T>(res: Response, data?: T, message?: string, status
   return res.status(statusCode).json(body);
 }
 
-export function sendError(res: Response, message: string, statusCode = 400, error?: string): Response {
+export function sendError(res: Response, message: string, statusCode = 400, error?: string, _data?: unknown, extra?: Record<string, unknown>): Response {
   const body: ApiResponse = { success: false, message, error };
+  if (extra) body.extra = extra;
   return res.status(statusCode).json(body);
 }
 

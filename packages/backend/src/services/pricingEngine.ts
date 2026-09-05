@@ -3,7 +3,7 @@ import { prisma } from "../config/database";
 // Default pricing constants
 const DEFAULT_BASE_FEE = 50; // ₹50 for first 30 minutes
 const DEFAULT_PER_MINUTE_AFTER_30 = 2; // ₹2 per additional minute
-const DEFAULT_PLATFORM_FEE_PERCENT = 10; // 10% platform fee (matches booking engine default)
+const DEFAULT_PLATFORM_FEE_PERCENT = 10; // 10% platform fee (single canonical default)
 const DEFAULT_PEAK_HOUR_MULTIPLIER = 1.5;
 const DEFAULT_FESTIVAL_MULTIPLIER = 2.0;
 const DEFAULT_RAIN_SURCHARGE = 20; // ₹20 flat
@@ -94,6 +94,7 @@ export async function calculatePrice(options: PriceCalculationOptions): Promise<
     rainSurcharge,
     nightCharge,
     waitingChargePerMin,
+    distancePerKm,
   ] = await Promise.all([
     getConfig("BASE_FEE", DEFAULT_BASE_FEE),
     getConfig("PER_MINUTE_AFTER_30", DEFAULT_PER_MINUTE_AFTER_30),
@@ -103,6 +104,7 @@ export async function calculatePrice(options: PriceCalculationOptions): Promise<
     getConfig("RAIN_SURCHARGE", DEFAULT_RAIN_SURCHARGE),
     getConfig("NIGHT_CHARGE", DEFAULT_NIGHT_CHARGE),
     getConfig("WAITING_CHARGE_PER_MIN", DEFAULT_WAITING_CHARGE_PER_MIN),
+    getConfig("DISTANCE_PER_KM", 2),
   ]);
 
   // Base fare: first 30 minutes = ₹50
@@ -129,14 +131,14 @@ export async function calculatePrice(options: PriceCalculationOptions): Promise<
   // Night charge
   const nightChargeAmount = isNight ? nightCharge : 0;
 
-  // Distance charge (if applicable)
-  const distanceCharge = distanceKm * 2; // ₹2 per km
+  // Distance charge (if applicable) — rate is admin-configurable (DISTANCE_PER_KM)
+  const distanceCharge = distanceKm * distancePerKm;
 
   // Subtotal before fees and discounts
   const subtotal = baseFare + timeCharge + waitingCharge + peakCharge + festivalCharge + rainSurchargeAmount + nightChargeAmount + distanceCharge;
 
-  // Platform fee (1% of subtotal)
-  const platformFee = Math.round((subtotal * platformFeePercent) / 100 * 100) / 100;
+   // Platform fee (admin-configurable PLATFORM_FEE_PERCENT, default 10%)
+   const platformFee = Math.round((subtotal * platformFeePercent) / 100 * 100) / 100;
 
   // Coupon discount
   let couponDiscount = 0;

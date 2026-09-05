@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import {
   LayoutDashboard, Users, ShieldCheck, Handshake,
-  Banknote, Flag, ScrollText, ArrowLeft, Settings, Percent, CalendarCheck, Wallet, Radio, Users2, CalendarDays, Layers, ShieldAlert
+  Banknote, Flag, ScrollText, ArrowLeft, Settings, Percent, CalendarCheck, Wallet, Radio, Users2, CalendarDays, Layers, ShieldAlert, QrCode
 } from 'lucide-react'
 import { RoleSwitcher } from '../../components/RoleSwitcher'
 
@@ -20,6 +20,7 @@ export function AdminPortalPage() {
     { path: '/admin/services', title: 'Services', desc: 'Partner ecosystem & pricing', icon: Layers },
     { path: '/admin/chat-reports', title: 'Chat Reports', desc: 'Messaging safety moderation', icon: ShieldAlert },
     { path: '/admin/payments', title: 'Payment Center', desc: 'Transactions & cash stats', icon: Banknote },
+    { path: '/admin/upi-verification', title: 'UPI Verification', desc: 'Verify manual UPI payments', icon: QrCode },
     { path: '/admin/reports', title: 'Reports', desc: 'Review user reports', icon: Flag },
     { path: '/admin/audit-logs', title: 'Audit Logs', desc: 'System activity logs', icon: ScrollText },
     { path: '/admin/pricing', title: 'Pricing & Fees', desc: 'User & partner fee control', icon: Percent },

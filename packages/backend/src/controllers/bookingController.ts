@@ -10,6 +10,7 @@ import { dispatchBooking, onBookingClaimed } from "../services/dispatchService"
 import { SERVICE_KEYS } from "../services/serviceCatalog"
 import { logBookingTransition } from "../services/bookingLogService"
 import { buildReferralRewardService } from "./referralController"
+import { env } from "../config/env"
 
 const settleReferralReward = buildReferralRewardService()
 
@@ -279,6 +280,7 @@ export async function initiatePayment(req: AuthedRequest, res: Response): Promis
       res,
       {
         orderId: razorpayOrder.id,
+        key: env.RAZORPAY_KEY_ID,
         amount: Number(razorpayOrder.amount) / 100,
         currency: razorpayOrder.currency,
         bookingId: id,
@@ -298,7 +300,9 @@ export async function initiatePayment(req: AuthedRequest, res: Response): Promis
 export async function verifyPayment(req: AuthedRequest, res: Response): Promise<void> {
   try {
     const { id } = req.params
-    const { razorpayPaymentId, razorpayOrderId, razorpaySignature } = req.body
+    const razorpayPaymentId = req.body.razorpayPaymentId ?? req.body.razorpay_payment_id
+    const razorpayOrderId = req.body.razorpayOrderId ?? req.body.razorpay_order_id
+    const razorpaySignature = req.body.razorpaySignature ?? req.body.razorpay_signature
 
     if (!razorpayPaymentId || !razorpayOrderId || !razorpaySignature) {
       sendError(res, "Missing payment details.", 400, "MISSING_PAYMENT_DETAILS")
@@ -497,6 +501,122 @@ export async function verifyPayment(req: AuthedRequest, res: Response): Promise<
   } catch (err: any) {
     console.error("Payment verification error:", err)
     sendError(res, "Failed to verify payment.", 500, "PAYMENT_VERIFICATION_ERROR")
+  }
+}
+
+// ============================================================================
+// MANUAL UPI / QR PAYMENT (temporary flow for personal UPI accounts)
+// ============================================================================
+
+// Returns the platform-configured UPI QR the user must pay externally.
+export async function getUpiDetails(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const booking = await prisma.booking.findUnique({ where: { id } });
+    if (!booking) {
+      sendError(res, "Booking not found.", 404, "BOOKING_NOT_FOUND");
+      return;
+    }
+    if (booking.userId !== req.user!.userId) {
+      sendError(res, "Unauthorized.", 403, "FORBIDDEN");
+      return;
+    }
+
+    const [upiId, name, qr] = await Promise.all([
+      prisma.pricingConfig.findUnique({ where: { key: "UPI_ID" } }),
+      prisma.pricingConfig.findUnique({ where: { key: "UPI_ACCOUNT_NAME" } }),
+      prisma.pricingConfig.findUnique({ where: { key: "UPI_QR_URL" } }),
+    ]);
+
+    if (!upiId?.value) {
+      sendError(res, "UPI payment is not configured by the admin yet.", 503, "UPI_NOT_CONFIGURED");
+      return;
+    }
+
+    sendSuccess(
+      res,
+      {
+        upiId: upiId.value,
+        accountName: name?.value ?? null,
+        qrUrl: qr?.value ?? null,
+        amount: booking.estimatedAmount,
+        currency: "INR",
+        bookingId: id,
+        referenceNote: `RB${id.slice(0, 8).toUpperCase()}`,
+      },
+      "Scan the QR, pay externally, then enter the UTR/reference number."
+    );
+  } catch (err: any) {
+    console.error("getUpiDetails error:", err);
+    sendError(res, "Failed to load UPI details.", 500, "INTERNAL_ERROR");
+  }
+}
+
+// User submits the external UPI reference; booking waits for admin verification.
+// Never auto-confirms — admin verifies against the bank statement first.
+export async function submitUpiReference(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const referenceNumber = (req.body.referenceNumber ?? "").toString().trim();
+    if (!referenceNumber || referenceNumber.length < 6) {
+      sendError(res, "Enter a valid UTR / reference number (min 6 chars).", 400, "INVALID_REFERENCE");
+      return;
+    }
+
+    const booking = await prisma.booking.findUnique({ where: { id } });
+    if (!booking) {
+      sendError(res, "Booking not found.", 404, "BOOKING_NOT_FOUND");
+      return;
+    }
+    if (booking.userId !== req.user!.userId) {
+      sendError(res, "Unauthorized.", 403, "FORBIDDEN");
+      return;
+    }
+    if (booking.paymentStatus !== "VERIFICATION_PENDING") {
+      sendError(res, "This booking is not awaiting UPI verification.", 400, "INVALID_STATUS");
+      return;
+    }
+
+    // Prevent the same reference being reused for another booking (fraud guard).
+    const duplicate = await prisma.upiPayment.findFirst({
+      where: { referenceNumber, status: { in: ["VERIFICATION_PENDING", "VERIFIED", "REQUEST_INFO"] } },
+    });
+    if (duplicate) {
+      sendError(res, "This reference number is already used for another booking.", 409, "DUPLICATE_REFERENCE");
+      return;
+    }
+
+    const wallet = await prisma.wallet.findUnique({ where: { userId: req.user!.userId } });
+    await prisma.upiPayment.create({
+      data: {
+        bookingId: id,
+        userId: req.user!.userId,
+        amount: booking.estimatedAmount ?? 0,
+        currency: "INR",
+        referenceNumber,
+        status: "VERIFICATION_PENDING",
+        metadata: JSON.stringify({ serviceType: booking.serviceType }),
+      },
+    });
+    await prisma.booking.update({
+      where: { id },
+      data: { paymentStatus: "VERIFICATION_PENDING", paymentMethod: "UPI_MANUAL" },
+    });
+    await prisma.auditLog.create({
+      data: {
+        actorId: req.user!.userId,
+        actorType: "USER",
+        action: "UPI_REFERENCE_SUBMITTED",
+        entityType: "Booking",
+        entityId: id,
+        metadata: JSON.stringify({ referenceNumber, walletId: wallet?.id ?? null }),
+      },
+    });
+
+    sendSuccess(res, { status: "VERIFICATION_PENDING" }, "Reference submitted. Admin will verify the payment.");
+  } catch (err: any) {
+    console.error("submitUpiReference error:", err);
+    sendError(res, "Failed to submit UPI reference.", 500, "INTERNAL_ERROR");
   }
 }
 
@@ -1244,10 +1364,10 @@ export async function getPriceEstimate(req: AuthedRequest, res: Response): Promi
 export async function selectPaymentMethod(req: AuthedRequest, res: Response): Promise<void> {
   try {
     const { id } = req.params;
-    const { paymentMethod } = req.body; // 'ONLINE' | 'CASH'
+    const { paymentMethod } = req.body; // 'ONLINE' | 'CASH' | 'UPI_MANUAL'
 
-    if (!['ONLINE', 'CASH'].includes(paymentMethod)) {
-      sendError(res, 'Payment method must be ONLINE or CASH.', 400, 'VALIDATION_ERROR');
+    if (!['ONLINE', 'CASH', 'UPI_MANUAL'].includes(paymentMethod)) {
+      sendError(res, 'Payment method must be ONLINE, CASH or UPI_MANUAL.', 400, 'VALIDATION_ERROR');
       return;
     }
 
@@ -1276,7 +1396,7 @@ export async function selectPaymentMethod(req: AuthedRequest, res: Response): Pr
       },
       data: {
         notes: newNotes,
-        paymentStatus: paymentMethod === 'CASH' ? 'PENDING_CASH' : booking.paymentStatus as any,
+        paymentStatus: paymentMethod === 'CASH' ? 'PENDING_CASH' : paymentMethod === 'UPI_MANUAL' ? 'VERIFICATION_PENDING' : booking.paymentStatus as any,
         status: paymentMethod === 'CASH' ? 'OTP_GENERATED' : undefined,
       },
     });

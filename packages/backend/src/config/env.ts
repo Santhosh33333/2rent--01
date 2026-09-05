@@ -1,4 +1,5 @@
 import { z } from "zod";
+import crypto from "crypto";
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -10,8 +11,9 @@ const envSchema = z.object({
   // Redis (Bull queues + rate limiter) — optional in dev
   REDIS_URL: z.string().default("redis://localhost:6379"),
 
-  // JWT
-  JWT_SECRET: z.string().default("dev_jwt_secret_minimum_32_characters_2026"),
+  // JWT — MUST be provided in production. In development a strong random secret is
+  // generated at boot so a missing var never falls back to a known/guessable value.
+  JWT_SECRET: z.string().optional(),
   JWT_ACCESS_SECRET: z.string().optional(),
   JWT_REFRESH_SECRET: z.string().optional(),
   JWT_ACCESS_EXPIRY: z.string().default("15m"),
@@ -117,6 +119,43 @@ export const env = parsed.data as RuntimeEnv;
 
 env.isProduction = env.NODE_ENV === "production";
 env.isDevelopment = env.NODE_ENV === "development";
+
+// JWT secret: never a known static fallback.
+if (!env.JWT_SECRET) {
+  if (env.isProduction) {
+    throw new Error("JWT_SECRET is required in production. Set a strong secret in the environment.");
+  }
+  env.JWT_SECRET = crypto.randomBytes(32).toString("hex");
+}
+
+// Production secret gates — fail fast (or loudly warn) on insecure config so a
+// deployment can never silently run with placeholder/guessable secrets.
+if (env.isProduction) {
+  const placeholders = ["", "placeholder", "changeme", "dev", "test"];
+  const isPlaceholder = (v: string | undefined) => !v || placeholders.includes(v.trim().toLowerCase());
+
+  // Razorpay webhook signature verification is only as strong as this secret.
+  // A placeholder here lets anyone forge payment callbacks.
+  if (isPlaceholder(env.RAZORPAY_WEBHOOK_SECRET) || env.RAZORPAY_WEBHOOK_SECRET === "webhook_secret_placeholder") {
+    throw new Error(
+      "RAZORPAY_WEBHOOK_SECRET is required in production and must be the real webhook secret (not the placeholder).",
+    );
+  }
+
+  // SMTP: OTP email + transactional notifications won't be delivered without it.
+  if (isPlaceholder(env.SMTP_HOST) || isPlaceholder(env.SMTP_USER) || isPlaceholder(env.SMTP_PASS)) {
+    console.warn(
+      "[env] WARNING: SMTP is not fully configured in production — email OTP and notifications will NOT be delivered.",
+    );
+  }
+
+  // Firebase push/phone auth secrets must be real in production.
+  if (isPlaceholder(env.FIREBASE_PRIVATE_KEY) && isPlaceholder(process.env.FIREBASE_SERVICE_ACCOUNT)) {
+    console.warn(
+      "[env] WARNING: Firebase credentials are not configured in production — push notifications and phone auth will be limited.",
+    );
+  }
+}
 
 export const isProduction = env.NODE_ENV === "production";
 export const isDevelopment = env.NODE_ENV === "development";

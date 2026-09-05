@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RentBuddy Admin Console</title>
+<style>
+  :root { --bg:#0f172a; --panel:#1e293b; --panel2:#273449; --txt:#e2e8f0; --muted:#94a3b8; --pri:#6366f1; --ok:#22c55e; --bad:#ef4444; --warn:#f59e0b; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif; background:var(--bg); color:var(--txt); }
+  header { background:var(--panel); padding:14px 22px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #334155; }
+  header h1 { font-size:18px; margin:0; letter-spacing:.3px; }
+  .wrap { display:flex; min-height:calc(100vh - 54px); }
+  nav { width:230px; background:var(--panel); border-right:1px solid #334155; padding:14px 0; }
+  nav button { display:block; width:100%; text-align:left; background:none; border:0; color:var(--muted); padding:12px 22px; font-size:14px; cursor:pointer; }
+  nav button:hover { background:var(--panel2); color:var(--txt); }
+  nav button.active { background:var(--panel2); color:#fff; border-left:3px solid var(--pri); }
+  main { flex:1; padding:24px 28px; overflow:auto; }
+  .card { background:var(--panel); border:1px solid #334155; border-radius:10px; padding:18px; margin-bottom:18px; }
+  h2 { margin:0 0 12px; font-size:16px; }
+  label { display:block; font-size:12px; color:var(--muted); margin:10px 0 4px; }
+  input,select,textarea { width:100%; padding:9px 11px; border-radius:7px; border:1px solid #475569; background:#0b1220; color:var(--txt); font-size:14px; }
+  button.act { background:var(--pri); color:#fff; border:0; padding:9px 16px; border-radius:7px; cursor:pointer; font-size:13px; margin-top:8px; }
+  button.act:hover { filter:brightness(1.1); }
+  button.ghost { background:#334155; }
+  button.danger { background:var(--bad); }
+  .row { display:flex; gap:10px; flex-wrap:wrap; }
+  .row > div { flex:1; min-width:200px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th,td { text-align:left; padding:8px 10px; border-bottom:1px solid #334155; }
+  th { color:var(--muted); font-weight:600; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:20px; font-size:11px; background:#334155; color:var(--txt); }
+  .ok { background:rgba(34,197,94,.15); color:var(--ok); }
+  .bad { background:rgba(239,68,68,.15); color:var(--bad); }
+  .muted { color:var(--muted); font-size:13px; }
+  .login { max-width:380px; margin:8vh auto; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:6px; font-size:11px; background:#334155; margin:2px; }
+  .hidden { display:none; }
+  .toast { position:fixed; bottom:18px; right:18px; background:var(--panel2); border:1px solid #475569; padding:12px 16px; border-radius:8px; font-size:13px; max-width:360px; }
+  pre { background:#0b1220; padding:10px; border-radius:7px; overflow:auto; font-size:12px; }
+  #twofaBox { border:1px dashed #475569; padding:12px; border-radius:8px; margin-top:10px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>RentBuddy Admin Console</h1>
+  <div id="who" class="muted"></div>
+</header>
+
+<div id="loginView" class="login">
+  <div class="card">
+    <h2>Admin Sign-in</h2>
+    <label>Email</label><input id="lemail" type="email" value="support@rentbuddy.app" />
+    <label>Password</label><input id="lpass" type="password" value="Support@1234" />
+    <button class="act" id="loginBtn" style="width:100%">Sign in</button>
+    <div id="twofaBox" class="hidden">
+      <label>OTP (sent to your registered email)</label><input id="lcode" placeholder="123456" />
+      <button class="act" id="twofaBtn" style="width:100%">Verify</button>
+    </div>
+    <div id="loginErr" class="bad" style="margin-top:10px"></div>
+  </div>
+</div>
+
+<div id="appView" class="wrap hidden">
+  <nav id="nav"></nav>
+  <main id="content"></main>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script>
+const API = "/api";
+let TOKEN = localStorage.getItem("rb_admin_token") || "";
+let PROFILE = null;
+let CHALLENGE = null;
+
+function toast(msg, ok=true){ const t=document.getElementById("toast"); t.textContent=msg; t.className="toast"+(ok?" ok":" bad"); t.classList.remove("hidden"); setTimeout(()=>t.classList.add("hidden"),3200); }
+function esc(s){ return String(s??"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+
+async function api(method, path, body){
+  const opt={ method, headers:{ "Content-Type":"application/json" } };
+  if(TOKEN) opt.headers["Authorization"]="Bearer "+TOKEN;
+  if(body!==undefined) opt.body=JSON.stringify(body);
+  const r=await fetch(API+path, opt);
+  let data=null; try{ data=await r.json(); }catch{}
+  return { status:r.status, data };
+}
+function hasPerm(section, action){ return PROFILE && Array.isArray(PROFILE.permissions) && PROFILE.permissions.includes(section+"."+action); }
+
+// ---------- AUTH ----------
+async function doLogin(){
+  const email=document.getElementById("lemail").value, password=document.getElementById("lpass").value;
+  const { status, data }=await api("POST","/auth/login",{ email, password });
+  if(status===200){ TOKEN=data.data.accessToken; localStorage.setItem("rb_admin_token",TOKEN); CHALLENGE=null; await enterApp(); }
+  else if(status===401 && data?.extra?.challengeToken){ CHALLENGE=data.extra.challengeToken; document.getElementById("twofaBox").classList.remove("hidden"); const dev=data?.extra?.devOtp; if(dev){ document.getElementById("lcode").value=dev; toast("Dev OTP auto-filled: "+dev); } else { toast("Enter the OTP sent to your email"); } }
+  else { document.getElementById("loginErr").textContent=data?.message||"Login failed"; }
+}
+async function doTwofa(){
+  const code=document.getElementById("lcode").value;
+  const { status, data }=await api("POST","/auth/admin/otp/verify",{ challengeToken:CHALLENGE, code });
+  if(status===200){ TOKEN=data.data.accessToken; localStorage.setItem("rb_admin_token",TOKEN); CHALLENGE=null; document.getElementById("twofaBox").classList.add("hidden"); await enterApp(); }
+  else document.getElementById("loginErr").textContent=data?.message||"OTP failed";
+}
+
+async function enterApp(){
+  const { status, data }=await api("GET","/admin/profile");
+  if(status!==200){ TOKEN=""; localStorage.removeItem("rb_admin_token"); location.reload(); return; }
+  PROFILE=data.data;
+  document.getElementById("loginView").classList.add("hidden");
+  document.getElementById("appView").classList.remove("hidden");
+  document.getElementById("who").textContent=`${PROFILE.user.email} · ${PROFILE.adminRole}`;
+  buildNav();
+  show("overview");
+}
+
+function navItem(id,label,section){
+  const show = !section || hasPerm(section,"VIEW");
+  return `<button data-tab="${id}" class="${show?"":"hidden"}">${label}</button>`;
+}
+function buildNav(){
+  document.getElementById("nav").innerHTML =
+    navItem("overview","Overview") +
+    navItem("security","Security") +
+    navItem("credit","Credit Ledger","WALLETS") +
+    navItem("offers","Offers","OFFERS") +
+    navItem("approvals","Approvals") +
+    navItem("admins","Admins","ADMIN_MANAGEMENT") +
+    `<button data-tab="logout" class="ghost">Sign out</button>`;
+  document.querySelectorAll("#nav button").forEach(b=>b.onclick=()=>{
+    const t=b.dataset.tab; if(t==="logout"){ TOKEN=""; localStorage.removeItem("rb_admin_token"); location.reload(); return; } show(t);
+  });
+}
+
+const tabs={};
+function show(id){
+  document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("active",b.dataset.tab===id));
+  const c=document.getElementById("content");
+  if(tabs[id]){ c.innerHTML=tabs[id]; afterShow(id); return; }
+  const map={
+    overview:overviewHTML, security:securityHTML, credit:creditHTML, offers:offersHTML, approvals:approvalsHTML, admins:adminsHTML
+  };
+  c.innerHTML=(map[id]||"<div class='card'>N/A</div>")();
+  afterShow(id);
+}
+function afterShow(id){
+  const h={
+    overview:loadOverview, security:loadSecurity, credit:loadCredit, offers:loadOffers, approvals:loadApprovals, admins:loadAdmins
+  };
+  if(h[id]) h[id]();
+  bindForms(id);
+}
+
+// ---------- OVERVIEW ----------
+function overviewHTML(){ return `<div class="card"><h2>Overview</h2><div id="ovBody" class="muted">Loading…</div></div>`; }
+async function loadOverview(){
+  const p=PROFILE;
+  document.getElementById("ovBody").innerHTML=`
+    <p><b>Role:</b> <span class="badge">${esc(p.adminRole)}</span> &nbsp; <b>Status:</b> ${esc(p.user.status)}</p>
+    <p><b>Effective permissions:</b> ${p.permissions.length} (enforced server-side)</p>
+    <div>${p.permissions.map(x=>`<span class="pill">${esc(x)}</span>`).join("")}</div>`;
+}
+
+// ---------- SECURITY ----------
+function securityHTML(){ return `
+  <div class="card"><h2>My Access Security</h2>
+    <div id="secBody" class="muted">Loading…</div>
+  </div>
+  <div class="card"><h2>Active Sessions</h2><div id="sessBody" class="muted">Loading…</div></div>`;
+}
+async function loadSecurity(){
+  const { data }=await api("GET","/admin/security/me");
+  const s=data.data;
+  document.getElementById("secBody").innerHTML=`
+    <div class="row">
+      <div><label>Email OTP</label><span class="badge ok">REQUIRED AT LOGIN</span></div>
+      <div><label>OTP email</label><span class="badge">${esc(s.emailHint||'n/a')}</span></div>
+      <div><label>Login alerts</label><input id="saAlerts" type="checkbox" ${s.loginAlertsEnabled?'checked':''} style="width:auto"/></div>
+      <div><label>Concurrent session limit</label><input id="saLimit" type="number" min="1" max="20" value="${s.sessionLimit}"/></div>
+    </div>
+    <label>IP allowlist (one per line; empty = allow all)</label>
+    <textarea id="saIps" rows="3">${(s.ipAllowList||[]).join("\\n")}</textarea>
+    <button class="act" id="secSave">Save security settings</button>`;
+  const { data:sx }=await api("GET","/admin/security/sessions");
+  document.getElementById("sessBody").innerHTML=`<table><tr><th>IP</th><th>UA</th><th>Created</th><th></th></tr>${
+    (sx.data.sessions||[]).map(ss=>`<tr><td>${esc(ss.ipAddress)}</td><td class="muted">${esc((ss.userAgent||'').slice(0,40))}</td><td class="muted">${esc(ss.createdAt)}</td><td><button class="act danger" onclick="revoke('${ss.id}')">Revoke</button></td></tr>`).join("")
+  }</table>`;
+}
+async function revoke(id){ const {status}=await api("DELETE","/admin/security/sessions/"+id); toast(status===200?"Session revoked":"Failed"); loadSecurity(); }
+
+// ---------- CREDIT ----------
+function creditHTML(){ const canCreate=hasPerm("WALLETS","CREATE"); return `
+  <div class="card"><h2>Promotional Credit</h2>
+    ${canCreate?`<div class="row"><div><label>Target user ID</label><input id="cUid"/></div><div><label>Amount (₹)</label><input id="cAmt" type="number"/></div></div>
+    <label>Reason</label><input id="cReason"/><label>Credit type</label><input id="cType" value="PROMOTIONAL_CREDIT"/>
+    <button class="act" id="cGrant">Grant (≥5000 goes to 2-step approval)</button>`:`<p class="muted">Your role cannot grant credit.</p>`}
+  </div>
+  <div class="card"><h2>Ledger</h2><div id="cLedger" class="muted">Loading…</div></div>`; }
+async function loadCredit(){
+  const { status, data }=await api("GET","/admin/credit/ledger");
+  if(status!==200){ document.getElementById("cLedger").innerHTML="<span class='bad'>No access</span>"; return; }
+  const rows=data.data.rows||[];
+  document.getElementById("cLedger").innerHTML=`<table><tr><th>User</th><th>Type</th><th>Amount</th><th>Balance</th><th>Status</th></tr>${
+    rows.slice(0,50).map(r=>`<tr><td>${esc(r.userId.slice(0,8))}</td><td>${esc(r.type)}</td><td>${r.amount}</td><td>${r.balanceAfter}</td><td>${esc(r.status)}</td></tr>`).join("")
+  }</table>`;
+}
+
+// ---------- OFFERS ----------
+function offersHTML(){ const canCreate=hasPerm("OFFERS","CREATE"), canApprove=hasPerm("OFFERS","APPROVE"); return `
+  <div class="card"><h2>Offers</h2>
+    ${canCreate?`<div class="row"><div><label>Code</label><input id="oCd"/></div><div><label>Title</label><input id="oTt"/></div><div><label>Type</label><input id="oTy" value="PERCENTAGE"/></div></div>
+    <label>Value</label><input id="oVal" type="number"/><button class="act" id="oCreate">Create (DRAFT)</button>`:`<p class="muted">Your role cannot create offers.</p>`}
+    ${canApprove?`<p class="muted">You can Preview/Activate offers below.</p>`:``}
+  </div>
+  <div class="card"><h2>Offer list</h2><div id="oList" class="muted">Loading…</div></div>`; }
+async function loadOffers(){
+  const { status, data }=await api("GET","/admin/offers");
+  if(status!==200){ document.getElementById("oList").innerHTML="<span class='bad'>No access</span>"; return; }
+  const rows=data.data||[];
+  document.getElementById("oList").innerHTML=`<table><tr><th>Code</th><th>Title</th><th>Status</th><th>${hasPerm("OFFERS","APPROVE")?'Actions':''}</th></tr>${
+    rows.map(o=>`<tr><td>${esc(o.code)}</td><td>${esc(o.title)}</td><td><span class="badge">${esc(o.status)}</span></td><td>${
+      hasPerm("OFFERS","APPROVE")?`<button class="act" onclick="offerStatus('${o.id}','PREVIEW')">Preview</button> <button class="act" onclick="offerStatus('${o.id}','ACTIVE')">Activate</button>`:``
+    }</td></tr>`).join("")
+  }</table>`;
+}
+async function offerStatus(id,st){ const {status}=await api("POST","/admin/offers/"+id+"/status",{status:st}); toast(status===200?"Offer "+st:"Failed "+status); loadOffers(); }
+
+// ---------- APPROVALS ----------
+function approvalsHTML(){ return `<div class="card"><h2>Two-step Approval Queue</h2><div id="aList" class="muted">Loading…</div></div>`; }
+async function loadApprovals(){
+  const { status, data }=await api("GET","/admin/approvals");
+  if(status!==200){ document.getElementById("aList").innerHTML="<span class='bad'>No access</span>"; return; }
+  const rows=data.data||[];
+  document.getElementById("aList").innerHTML=`<table><tr><th>Type</th><th>Reason</th><th>Status</th><th>${PROFILE.adminRole==='SUPER_ADMIN'?'Review':''}</th></tr>${
+    rows.map(r=>`<tr><td>${esc(r.type)}</td><td>${esc(r.reason||'')}</td><td><span class="badge">${esc(r.status)}</span></td><td>${
+      PROFILE.adminRole==='SUPER_ADMIN'&&r.status==='PENDING'?`<button class="act" onclick="review('${r.id}','APPROVE')">Approve</button> <button class="act danger" onclick="review('${r.id}','REJECT')">Reject</button>`:``
+    }</td></tr>`).join("")
+  }</table>`;
+}
+async function review(id,dec){ const {status}=await api("POST","/admin/approvals/"+id+"/review",{decision:dec}); toast(status===200?"Reviewed":"Failed "+status); loadApprovals(); }
+
+// ---------- ADMINS (Super) ----------
+function adminsHTML(){ return `<div class="card"><h2>Admin Accounts</h2><div id="admList" class="muted">Loading…</div></div>
+  <div class="card"><h2>Create admin</h2>
+    <div class="row"><div><label>Email</label><input id="aEmail"/></div><div><label>Phone</label><input id="aPhone"/></div><div><label>Full name</label><input id="aName"/></div></div>
+    <div class="row"><div><label>Password</label><input id="aPass" type="password"/></div><div><label>Role</label><select id="aRole"><option>SUPPORT_ADMIN</option><option>FINANCE_ADMIN</option><option>KYC_ADMIN</option><option>MARKETING_ADMIN</option><option>PARTNER_ADMIN</option></select></div></div>
+    <button class="act" id="aCreate">Create</button>
+  </div>`; }
+async function loadAdmins(){
+  if(!hasPerm("ADMIN_MANAGEMENT","VIEW")){ document.getElementById("admList").innerHTML="<span class='bad'>No access</span>"; return; }
+  const { status, data }=await api("GET","/admin/admins");
+  if(status!==200){ document.getElementById("admList").innerHTML="<span class='bad'>No access</span>"; return; }
+  const rows=data.data.items||data.data||[];
+  document.getElementById("admList").innerHTML=`<table><tr><th>Email</th><th>Role</th><th>Status</th><th>Security</th></tr>${
+    rows.map(u=>`<tr><td>${esc(u.email)}</td><td><span class="badge">${esc(u.role)}</span></td><td>${esc(u.status)}</td><td><button class="act ghost" onclick="admSec('${u.id}')">Manage</button></td></tr>`).join("")
+  }</table>`;
+}
+async function admSec(id){
+  const { data }=await api("GET","/admin/admins/"+id+"/security"); const s=data.data;
+  const ip=(s.ipAllowList||[]).join("\\n");
+  const html=`<div class="card"><h2>Admin security — ${esc(id)}</h2>
+    <div class="row"><div><label>Session limit</label><input id="msLimit" type="number" value="${s.sessionLimit}"/></div>
+    <div><label>Login alerts</label><input id="msAlerts" type="checkbox" ${s.loginAlertsEnabled?'checked':''} style="width:auto"/></div>
+    <div><label>Require password rotation</label><input id="msRot" type="checkbox" ${s.requirePasswordRotation?'checked':''} style="width:auto"/></div></div>
+    <label>IP allowlist</label><textarea id="msIps" rows="3">${ip}</textarea>
+    <label>Status</label><select id="msStatus"><option ${s.status==='ACTIVE'?'selected':''}>ACTIVE</option><option ${s.status==='SUSPENDED'?'selected':''}>SUSPENDED</option><option ${s.status==='DISABLED'?'selected':''}>DISABLED</option></select>
+    <button class="act" onclick="saveAdmSec('${id}')">Save</button>
+    <button class="act danger" onclick="resetMfa('${id}')">Reset MFA</button>
+  </div>`;
+  document.getElementById("content").insertAdjacentHTML("beforeend", html);
+}
+async function saveAdmSec(id){
+  const body={ sessionLimit:Number(document.getElementById("msLimit").value), loginAlertsEnabled:document.getElementById("msAlerts").checked, requirePasswordRotation:document.getElementById("msRot").checked, ipAllowList:document.getElementById("msIps").value.split("\\n").map(x=>x.trim()).filter(Boolean), status:document.getElementById("msStatus").value };
+  const {status}=await api("PATCH","/admin/admins/"+id+"/security",body); toast(status===200?"Saved":"Failed "+status); loadAdmins();
+}
+async function resetMfa(id){ const {status}=await api("POST","/admin/admins/"+id+"/mfa-reset"); toast(status===200?"MFA reset":"Failed"); }
+
+// ---------- FORM BINDING ----------
+function bindForms(id){
+  if(id==="overview") return;
+  const map={
+    security:()=>{
+      document.getElementById("secSave")?.addEventListener("click",async()=>{
+        const body={ sessionLimit:Number(document.getElementById("saLimit").value), loginAlertsEnabled:document.getElementById("saAlerts").checked, ipAllowList:document.getElementById("saIps").value.split("\\n").map(x=>x.trim()).filter(Boolean) };
+        const {status}=await api("PATCH","/admin/security/me",body); toast(status===200?"Saved":"Failed "+status); loadSecurity();
+      });
+    },
+    credit:()=>{
+      document.getElementById("cGrant")?.addEventListener("click",async()=>{
+        const body={ userId:document.getElementById("cUid").value, amount:Number(document.getElementById("cAmt").value), reason:document.getElementById("cReason").value, creditType:document.getElementById("cType").value };
+        const {status,data}=await api("POST","/admin/credit/grant",body); toast(status===201?(data.data?.approvalId?"Sent for approval":"Granted"):"Failed "+status); loadCredit();
+      });
+    },
+    offers:()=>{
+      document.getElementById("oCreate")?.addEventListener("click",async()=>{
+        const body={ code:document.getElementById("oCd").value, title:document.getElementById("oTt").value, type:document.getElementById("oTy").value, value:Number(document.getElementById("oVal").value) };
+        const {status,data}=await api("POST","/admin/offers",body); toast(status===201?"Created DRAFT":"Failed "+status); loadOffers();
+      });
+    },
+    admins:()=>{
+      document.getElementById("aCreate")?.addEventListener("click",async()=>{
+        const body={ email:document.getElementById("aEmail").value, phone:document.getElementById("aPhone").value, fullName:document.getElementById("aName").value, password:document.getElementById("aPass").value, role:document.getElementById("aRole").value };
+        const {status}=await api("POST","/admin/admins",body); toast(status===201?"Admin created":"Failed "+status); loadAdmins();
+      });
+    }
+  };
+  if(map[id]) map[id]();
+}
+
+// expose for inline handlers
+window.revoke=revoke; window.offerStatus=offerStatus; window.review=review; window.admSec=admSec; window.saveAdmSec=saveAdmSec; window.resetMfa=resetMfa;
+
+// ---------- BOOT ----------
+document.getElementById("loginBtn").onclick=doLogin;
+document.getElementById("twofaBtn").onclick=doTwofa;
+if(TOKEN){ enterApp(); }
+</script>
+</body>
+</html>

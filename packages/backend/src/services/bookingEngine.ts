@@ -8,7 +8,7 @@ import { notifyBookingStatusChange } from "../controllers/notificationController
 // All real rates come from the admin-controlled PricingConfig table, scoped per
 // service. catalogDefaults() supplies the per-service fallback when no admin row
 // exists — the backend NEVER hardcodes a fare.
-const DEFAULT_PLATFORM_FEE_PERCENT = 1;
+const DEFAULT_PLATFORM_FEE_PERCENT = 10;
 const DEFAULT_PER_MINUTE_PRICE = 2;
 export const PRICING_VERSION_KEY = "PRICING_VERSION";
 
@@ -421,14 +421,21 @@ export async function createBooking(
 
   // Cash bookings are paid peer-to-peer: the user is NOT debited up front and the
   // platform does not hold escrow. Online/wallet bookings are debited immediately
-  // (escrow) and settled/refunded on completion or expiry.
-  let isCash = false;
+  // (escrow) and settled/refunded on completion or expiry. Manual UPI bookings are
+  // held at PAYMENT_PENDING / VERIFICATION_PENDING until an admin verifies the
+  // external UPI reference against the bank statement — escrow is debited only then.
+  let payMethod = "ONLINE";
   try {
     const n = data.notes ? JSON.parse(data.notes) : {};
-    isCash = n.paymentMethod === "CASH";
+    if (n.paymentMethod === "CASH" || n.paymentMethod === "UPI_MANUAL") {
+      payMethod = n.paymentMethod;
+    }
   } catch {
     // ignore malformed notes
   }
+  const isCash = payMethod === "CASH";
+  const isUpi = payMethod === "UPI_MANUAL";
+  const skipDebit = isCash || isUpi;
 
   const result = await prisma.$transaction(async (tx) => {
     let wallet = await tx.wallet.findUnique({ where: { userId } });
@@ -436,7 +443,7 @@ export async function createBooking(
       wallet = await tx.wallet.create({ data: { userId } });
     }
 
-    if (!isCash) {
+    if (!skipDebit) {
       if (Number(wallet.balance) < pricing.estimatedAmount) {
         const err: any = new Error(
           `Insufficient wallet balance. You need ₹${pricing.estimatedAmount} — please top up first.`
@@ -456,9 +463,10 @@ export async function createBooking(
         id: crypto.randomUUID(),
         userId,
         serviceType: data.serviceType,
-        status: "PARTNER_SEARCHING",
-        paymentStatus: isCash ? "PENDING_CASH" : "PAID",
-        paymentVerifiedAt: isCash ? null : new Date(),
+        status: skipDebit ? "PAYMENT_PENDING" : "PARTNER_SEARCHING",
+        paymentStatus: isCash ? "PENDING_CASH" : isUpi ? "VERIFICATION_PENDING" : "PAID",
+        paymentVerifiedAt: skipDebit ? null : new Date(),
+        paymentMethod: payMethod,
         finalAmount: pricing.estimatedAmount,
         startLocation: data.startLocation,
         endLocation: data.endLocation,
@@ -481,7 +489,7 @@ export async function createBooking(
       },
     });
 
-    if (!isCash) {
+    if (!skipDebit) {
       await tx.transaction.create({
         data: {
           userId,

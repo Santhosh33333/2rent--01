@@ -54,6 +54,19 @@ const STEPS = [
   { label: 'Confirm', icon: CheckCircle },
 ]
 
+function formatDuration(min: number): string {
+  if (!min || min <= 0) return '—'
+  const days = Math.floor(min / (24 * 60))
+  const rem = min % (24 * 60)
+  const hours = Math.floor(rem / 60)
+  const mins = rem % 60
+  const parts: string[] = []
+  if (days > 0) parts.push(`${days}d`)
+  if (hours > 0) parts.push(`${hours}h`)
+  if (mins > 0 && days === 0) parts.push(`${mins}m`)
+  return parts.join(' ') || '0m'
+}
+
 export function CreateBookingPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -89,9 +102,18 @@ export function CreateBookingPage() {
     itemDescription: '',
   })
   const [createdBookingId, setCreatedBookingId] = useState<string | null>(null)
+  const [durationMode, setDurationMode] = useState<'HOURS' | 'DAYS'>('HOURS')
+  const [durationValue, setDurationValue] = useState('1')
 
   const updateBooking = (data: Partial<BookingData>) => {
     setBooking((prev) => ({ ...prev, ...data }))
+  }
+
+  const applyDuration = (mode: 'HOURS' | 'DAYS', val: string) => {
+    const n = Number(val)
+    if (!Number.isFinite(n) || n <= 0) return
+    const mins = mode === 'HOURS' ? Math.round(n * 60) : Math.round(n * 24 * 60)
+    updateBooking({ duration: String(mins) })
   }
 
   // Fetch the server-computed price estimate so the displayed total always
@@ -378,25 +400,57 @@ export function CreateBookingPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-2">Duration</label>
-                <div className="relative">
-                  <Timer className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-surface-400" />
-                  <select
-                    value={booking.duration}
-                    onChange={(e) => updateBooking({ duration: e.target.value })}
-                    className="input pl-12 py-3.5"
-                  >
-                    <option value="15">15 minutes</option>
-                    <option value="30">30 minutes</option>
-                    <option value="45">45 minutes</option>
-                    <option value="60">1 hour</option>
-                    <option value="90">1.5 hours</option>
-                    <option value="120">2 hours</option>
-                  </select>
+                <div className="flex gap-2 mb-3">
+                  {(['HOURS', 'DAYS'] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => { setDurationMode(m); applyDuration(m, durationValue) }}
+                      className={`flex-1 py-2.5 rounded-xl border text-sm font-semibold transition-all ${
+                        durationMode === m
+                          ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/10 text-primary-600 dark:text-primary-400'
+                          : 'border-surface-200 dark:border-surface-700 text-surface-500'
+                      }`}
+                    >
+                      {m === 'HOURS' ? 'Hours' : 'Days'}
+                    </button>
+                  ))}
                 </div>
+                <div className="flex flex-wrap gap-2">
+                  {(durationMode === 'HOURS' ? [1, 2, 3, 4, 6, 8, 12, 24] : [1, 2, 3, 5, 7]).map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => { setDurationValue(String(v)); applyDuration(durationMode, String(v)) }}
+                      className={`px-3 py-2 rounded-xl border text-sm font-medium transition-all ${
+                        Number(durationValue) === v
+                          ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/10 text-primary-600 dark:text-primary-400'
+                          : 'border-surface-200 dark:border-surface-700 text-surface-600 dark:text-surface-300'
+                      }`}
+                    >
+                      {v}
+                      {durationMode === 'HOURS' ? 'h' : 'd'}
+                    </button>
+                  ))}
+                </div>
+                <div className="relative mt-3">
+                  <Timer className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-surface-400" />
+                  <input
+                    type="number"
+                    min={1}
+                    value={durationValue}
+                    onChange={(e) => { setDurationValue(e.target.value); applyDuration(durationMode, e.target.value) }}
+                    placeholder={`Custom (${durationMode === 'HOURS' ? 'hours' : 'days'})`}
+                    className="input pl-12 py-3.5"
+                  />
+                </div>
+                <p className="text-xs text-surface-500 mt-1.5">
+                  Total duration: {formatDuration(Number(booking.duration) || 0)}
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-2">
-                  Distance (km) <span className="text-surface-400">Â· optional, used for per-km pricing</span>
+                  Distance (km) <span className="text-surface-400">· optional, used for per-km pricing</span>
                 </label>
                 <div className="relative">
                   <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-surface-400" />
@@ -488,7 +542,7 @@ export function CreateBookingPage() {
                   </div>
                   {estimate.timeCharge > 0 && (
                     <div className="flex justify-between items-center p-3 rounded-xl bg-surface-50 dark:bg-surface-800/50">
-                      <span className="text-sm text-surface-600 dark:text-surface-400">Time Charge ({booking.duration} min)</span>
+                      <span className="text-sm text-surface-600 dark:text-surface-400">Time Charge ({formatDuration(Number(booking.duration) || 0)})</span>
                       <span className="text-sm font-semibold text-surface-900 dark:text-white">₹{estimate.timeCharge.toLocaleString('en-IN')}</span>
                     </div>
                   )}
@@ -541,7 +595,7 @@ export function CreateBookingPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-surface-500">Duration</span>
-                    <span className="text-sm font-medium text-surface-900 dark:text-white">{booking.duration} min</span>
+                    <span className="text-sm font-medium text-surface-900 dark:text-white">{formatDuration(Number(booking.duration) || 0)}</span>
                   </div>
                   <div className="h-px bg-surface-200 dark:bg-surface-700" />
                   <div className="flex justify-between">
@@ -551,13 +605,13 @@ export function CreateBookingPage() {
                   <div className="flex justify-between pt-1">
                     <span className="text-sm text-surface-500">Wallet balance</span>
                     <span className={`text-sm font-semibold ${insufficientBalance ? 'text-danger-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                      {walletBalance === null ? 'â€¦' : `₹${walletBalance.toLocaleString('en-IN')}`}
+                      {walletBalance === null ? '…' : `₹${walletBalance.toLocaleString('en-IN')}`}
                     </span>
                   </div>
                   {insufficientBalance && (
                     <div className="rounded-xl border border-danger-200 dark:border-danger-800/40 bg-danger-50 dark:bg-danger-500/10 p-3 mt-1">
                       <p className="text-xs text-danger-600 dark:text-danger-300 font-medium mb-2">
-                        Top-up required â€” your wallet needs ₹{(total - (walletBalance ?? 0)).toLocaleString('en-IN')} more to book.
+                        Top-up required — your wallet needs ₹{(total - (walletBalance ?? 0)).toLocaleString('en-IN')} more to book.
                       </p>
                       <button
                         type="button"

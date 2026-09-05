@@ -50,7 +50,7 @@ export function AdminWalkingPartnersPage() {
           p.providesWalking === true || p.providesWalking === 'true' ? 'WALKING' : null,
           p.providesCarry === true || p.providesCarry === 'true' ? 'CARRY_BUDDY' : null,
         ].filter(Boolean) as string[],
-        bankAccount: [p.bankAccountName, p.bankAccountNumber, p.bankIfsc].filter(Boolean).join(' Â· ') || p.bankAccount || '',
+        bankAccount: [p.bankAccountName, p.bankAccountNumber, p.bankIfsc].filter(Boolean).join(' · ') || p.bankAccount || '',
         upiId: p.upiId || '',
         createdAt: p.createdAt,
       })))

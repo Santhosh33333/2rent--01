@@ -154,10 +154,10 @@ export function RegisterPage() {
                     >
                       <div className="flex items-center justify-between">
                         <div>
-                          <div className="font-semibold">Iâ€™m a User</div>
+                          <div className="font-semibold">I'm a User</div>
                           <div className="text-sm opacity-75">Book services, discover local help, and manage my account</div>
                         </div>
-                        <div className="text-xl">ðŸ‘¤</div>
+                        <div className="text-xl">👤</div>
                       </div>
                     </button>
 
@@ -172,10 +172,10 @@ export function RegisterPage() {
                     >
                       <div className="flex items-center justify-between">
                         <div>
-                          <div className="font-semibold">Iâ€™m a Partner</div>
+                          <div className="font-semibold">I'm a Partner</div>
                           <div className="text-sm opacity-75">Offer services, accept work, and get paid securely</div>
                         </div>
-                        <div className="text-xl">ðŸ¤</div>
+                        <div className="text-xl">🤝</div>
                       </div>
                     </button>
                   </div>
@@ -270,17 +270,17 @@ export function RegisterPage() {
                     <div className="h-px bg-surface-200 dark:bg-surface-700" />
                     <div className="flex justify-between items-center">
                       <span className="text-surface-500">Name</span>
-                      <span className="font-semibold text-surface-900 dark:text-white">{watch('name') || 'â€”'}</span>
+                      <span className="font-semibold text-surface-900 dark:text-white">{watch('name') || '—'}</span>
                     </div>
                     <div className="h-px bg-surface-200 dark:bg-surface-700" />
                     <div className="flex justify-between items-center">
                       <span className="text-surface-500">Email</span>
-                      <span className="font-semibold text-surface-900 dark:text-white">{watch('email') || 'â€”'}</span>
+                      <span className="font-semibold text-surface-900 dark:text-white">{watch('email') || '—'}</span>
                     </div>
                     <div className="h-px bg-surface-200 dark:bg-surface-700" />
                     <div className="flex justify-between items-center">
                       <span className="text-surface-500">Phone</span>
-                      <span className="font-semibold text-surface-900 dark:text-white">{watch('phone') || 'â€”'}</span>
+                      <span className="font-semibold text-surface-900 dark:text-white">{watch('phone') || '—'}</span>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
@@ -332,7 +332,7 @@ export function RegisterPage() {
                   to="/sign-up"
                   className="w-full py-3 rounded-xl border border-surface-300 dark:border-surface-600 text-sm font-semibold text-surface-700 dark:text-surface-200 hover:border-primary-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors flex items-center justify-center"
                 >
-                  Sign up with Clerk&nbsp;Â·&nbsp;Google, OTP & more
+                  Sign up with Clerk&nbsp;·&nbsp;Google, OTP & more
                 </Link>
               </div>
             )}

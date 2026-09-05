@@ -156,10 +156,10 @@ export function KycStep5EmergencyContact() {
         <GlassCard variant="elevated" padding="lg" className="bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500">
           <h3 className="font-bold text-green-900 dark:text-green-300 mb-3">Why we need this:</h3>
           <ul className="space-y-2 text-sm text-green-800 dark:text-green-200">
-            <li>â€¢ To contact in case of emergency or safety concerns</li>
-            <li>â€¢ Your emergency contact will only be contacted with your permission</li>
-            <li>â€¢ This information is encrypted and securely stored</li>
-            <li>â€¢ You can update this anytime from your profile</li>
+            <li>• To contact in case of emergency or safety concerns</li>
+            <li>• Your emergency contact will only be contacted with your permission</li>
+            <li>• This information is encrypted and securely stored</li>
+            <li>• You can update this anytime from your profile</li>
           </ul>
         </GlassCard>
       </AnimatedPage>

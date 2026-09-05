@@ -6,12 +6,16 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
+    "typecheck": "tsc --noEmit",
     "start": "node dist/src/server.js",
-    "test": "ts-node tests/integration.test.ts",
+    "test": "tsx tests/integration.test.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev --name init",
     "prisma:studio": "prisma studio",
     "prisma:seed": "tsx prisma/seed.ts",
+    "seed:admins": "tsx prisma/seed-admins.ts",
+    "test:rbac": "tsx tests/admin-rbac.test.ts",
+    "test:security": "tsx tests/admin-security.test.ts",
     "seed:services": "tsx prisma/seed-services.ts",
     "lint": "eslint src --ext .ts"
   },

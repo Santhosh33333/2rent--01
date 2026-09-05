@@ -123,6 +123,7 @@ export function AdminAdminsPage() {
   const [editing, setEditing] = useState<AdminAccount | null>(null)
   const [editPerms, setEditPerms] = useState<string[]>([])
   const [savingPerms, setSavingPerms] = useState(false)
+  const [resetPw, setResetPw] = useState<{ email: string; newPassword: string } | null>(null)
 
   const load = async () => {
     setLoading(true)
@@ -200,6 +201,21 @@ export function AdminAdminsPage() {
       toast.error(getErrorMessage(err, 'Failed to update access'))
     } finally {
       setSavingPerms(false)
+    }
+  }
+
+  const resetPassword = async (acc: AdminAccount) => {
+    if (busyId) return
+    setBusyId(acc.id)
+    try {
+      const res = await adminApi.resetAdminPassword(acc.id)
+      const d = res.data?.data || res.data
+      setResetPw({ email: acc.email, newPassword: d?.newPassword || '' })
+      toast.success(`Password reset for ${acc.email}`)
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to reset password'))
+    } finally {
+      setBusyId(null)
     }
   }
 
@@ -373,6 +389,13 @@ export function AdminAdminsPage() {
                       <KeyRound className="w-3.5 h-3.5" /> Access
                     </button>
                     <button
+                      onClick={() => resetPassword(acc)}
+                      disabled={busyId === acc.id}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-900/40 text-amber-300 hover:bg-amber-900/60 text-xs font-bold transition disabled:opacity-50"
+                    >
+                      <KeyRound className="w-3.5 h-3.5" /> Reset PW
+                    </button>
+                    <button
                       onClick={() => toggleStatus(acc)}
                       disabled={busyId === acc.id}
                       className={`px-4 py-2 rounded-lg text-xs font-bold transition ${
@@ -390,6 +413,27 @@ export function AdminAdminsPage() {
           )}
         </div>
       </div>
+
+      {resetPw && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setResetPw(null)}>
+          <div className="w-full max-w-sm rounded-2xl bg-gray-900 border border-gray-700 p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-white">New password</h3>
+            <p className="text-sm text-gray-400">Share this securely with <span className="text-white">{resetPw.email}</span>. It replaces their old password immediately.</p>
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-gray-950 border border-gray-800">
+              <code className="flex-1 text-emerald-300 text-sm break-all">{resetPw.newPassword}</code>
+              <button
+                onClick={() => { navigator.clipboard?.writeText(resetPw.newPassword); toast.success('Copied') }}
+                className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-semibold transition"
+              >
+                Copy
+              </button>
+            </div>
+            <button onClick={() => setResetPw(null)} className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition">
+              Done
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

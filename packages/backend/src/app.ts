@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express, { Application, Request, Response, NextFunction } from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -21,6 +22,7 @@ import communityRoutes from "./routes/communityRoutes";
 import eventRoutes from "./routes/eventRoutes";
 import messageRoutes from "./routes/messageRoutes";
 import adminRoutes from "./routes/adminRoutes";
+import adminRbacRoutes from "./routes/adminRbacRoutes";
 import pricingRoutes from "./routes/pricingRoutes";
 import notificationRoutes from "./routes/notificationRoutes";
 import settingsRoutes from "./routes/settingsRoutes";
@@ -106,6 +108,15 @@ export function createApp(): http.Server {
     res.status(200).json({ success: true, data: { status: "ok", timestamp: new Date().toISOString() } });
   });
 
+  // Self-contained admin console (static SPA served from the backend).
+  app.use("/admin-console", (req, res, next) => {
+    if (req.method === "GET" && !req.path.includes(".") && req.path !== "/") {
+      // SPA fallback to index.html for client-side routes.
+      req.url = "/";
+    }
+    next();
+  }, express.static(path.resolve(process.cwd(), "public/admin")));
+
   app.use("/api/auth", authRoutes);
   app.use("/api/users", userRoutes);
   app.use("/api/verification", verificationRoutes);
@@ -116,6 +127,7 @@ export function createApp(): http.Server {
   app.use("/api/events", eventRoutes);
   app.use("/api/messages", messageRoutes);
   app.use("/api/admin", adminRoutes);
+  app.use("/api/admin", adminRbacRoutes);
   app.use("/api/pricing", pricingRoutes);
   app.use("/api/notifications", notificationRoutes);
   app.use("/api/settings", settingsRoutes);

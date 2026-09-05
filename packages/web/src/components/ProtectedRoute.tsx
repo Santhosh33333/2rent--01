@@ -15,6 +15,11 @@ const ROLE_DASHBOARDS: Record<string, string> = {
   MODERATOR: '/admin/dashboard',
   SUPPORT: '/admin/dashboard',
   FINANCE: '/admin/dashboard',
+  SUPPORT_ADMIN: '/admin/dashboard',
+  FINANCE_ADMIN: '/admin/dashboard',
+  KYC_ADMIN: '/admin/dashboard',
+  MARKETING_ADMIN: '/admin/dashboard',
+  PARTNER_ADMIN: '/admin/dashboard',
 }
 
 export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {

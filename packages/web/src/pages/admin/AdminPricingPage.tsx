@@ -150,7 +150,7 @@ export function AdminPricingPage() {
               <Percent className="w-6 h-6 text-indigo-600" /> Pricing &amp; Fees
             </h1>
             <p className="text-sm text-slate-500 mt-1">
-              Server engines read these values on every calculation â€” changes apply immediately.
+              Server engines read these values on every calculation — changes apply immediately.
             </p>
           </div>
           <Link to="/admin/portal" className="flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900">
@@ -188,7 +188,7 @@ export function AdminPricingPage() {
                       {rows.map((cfg) => (
                         <tr key={cfg.id} className={cfg.isActive ? '' : 'opacity-50'}>
                           <td className="px-5 py-3 font-mono text-xs text-slate-800">{cfg.key}</td>
-                          <td className="px-3 py-3 text-slate-500">{cfg.description ?? 'â€”'}</td>
+                          <td className="px-3 py-3 text-slate-500">{cfg.description ?? '—'}</td>
                           <td className="px-3 py-3">
                             <input
                               type="number"
@@ -275,7 +275,7 @@ export function AdminPricingPage() {
                     <div className="text-2xl font-bold text-slate-900">
                       ₹{simResult.totals?.userPays?.toLocaleString('en-IN')}
                       <span className="text-sm font-normal text-slate-500 ml-2">
-                        for {simResult.durationMinutes} min Â· {simResult.distanceKm} km Â· {simResult.serviceType}
+                        for {simResult.durationMinutes} min · {simResult.distanceKm} km · {simResult.serviceType}
                       </span>
                     </div>
                     <dl className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
