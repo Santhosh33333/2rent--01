@@ -126,8 +126,8 @@ export async function uploadProfilePhoto(req: AuthedRequest, res: Response): Pro
       data: { avatarUrl },
     });
     sendSuccess(res, { avatarUrl }, "Profile photo uploaded.", 200);
-  } catch (err) {
-    sendError(res, "Failed to upload photo.", 500, "INTERNAL_ERROR");
+  } catch (err: any) {
+    sendError(res, err?.message || "Failed to upload photo.", 500, "INTERNAL_ERROR");
   }
 }
 
