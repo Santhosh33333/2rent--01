@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../../lib/auth'
 
 export function SplashPage() {
   const navigate = useNavigate()
+  const { user, loading: authLoading } = useAuth()
   const [fadeOut, setFadeOut] = useState(false)
 
   useEffect(() => {
-    const token = localStorage.getItem('token')
+    if (authLoading) return
+
     const onboardingComplete = localStorage.getItem('onboarding_complete')
     const profileComplete = localStorage.getItem('profile_complete') === 'true'
 
@@ -15,11 +18,18 @@ export function SplashPage() {
       setTimeout(() => {
         if (!onboardingComplete) {
           navigate('/onboarding', { replace: true })
-        } else if (token) {
-          if (profileComplete) {
-            navigate('/dashboard', { replace: true })
-          } else {
+        } else if (user) {
+          const role = user.activeRole || user.role || 'USER'
+          if (role === 'USER' && !user.city && !profileComplete) {
             navigate('/profile/complete', { replace: true })
+          } else {
+            const ROLE_DASHBOARDS: Record<string, string> = {
+              USER: '/dashboard',
+              PARTNER: '/partner/dashboard',
+              ADMIN: '/admin/dashboard',
+              SUPER_ADMIN: '/admin/dashboard',
+            }
+            navigate(ROLE_DASHBOARDS[role.toUpperCase()] || '/dashboard', { replace: true })
           }
         } else {
           navigate('/account-type', { replace: true })
@@ -28,7 +38,7 @@ export function SplashPage() {
     }, 2000)
 
     return () => clearTimeout(timer)
-  }, [navigate])
+  }, [user, authLoading, navigate])
 
   return (
     <>

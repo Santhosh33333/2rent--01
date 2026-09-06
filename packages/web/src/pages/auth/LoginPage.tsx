@@ -27,7 +27,7 @@ function getDashboardForUser(user: any): string {
 
 export function LoginPage() {
   const navigate = useNavigate()
-  const { user, login, completeLogin } = useAuth()
+  const { user, loading: authLoading, login, completeLogin } = useAuth()
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
@@ -49,17 +49,14 @@ export function LoginPage() {
   }, [])
 
   useEffect(() => {
-    if (user) {
-      const role = user.activeRole || user.role || 'USER'
-      // Only USER-role accounts use the shared completion page; other roles go
-      // straight to their own dashboard (the completion page is USER-scoped).
-      if (role === 'USER' && !user.city && localStorage.getItem('profile_complete') !== 'true') {
-        navigate('/profile/complete', { replace: true })
-      } else {
-        navigate(getDashboardForUser(user), { replace: true })
-      }
+    if (authLoading || !user) return
+    const role = user.activeRole || user.role || 'USER'
+    if (role === 'USER' && !user.city && localStorage.getItem('profile_complete') !== 'true') {
+      navigate('/profile/complete', { replace: true })
+    } else {
+      navigate(getDashboardForUser(user), { replace: true })
     }
-  }, [user, navigate])
+  }, [user, authLoading, navigate])
 
   const handleGoogleCredential = useCallback(async (credential: string) => {
     setGoogleLoading(true)
@@ -166,6 +163,12 @@ export function LoginPage() {
       </div>
 
       <div className="relative w-full max-w-md m-auto">
+        {authLoading ? (
+          <div className="flex flex-col items-center gap-4 py-20">
+            <div className="w-10 h-10 rounded-full border-2 border-primary-200 dark:border-primary-800 border-t-primary-500 animate-spin" />
+            <p className="text-sm text-surface-500 animate-pulse">Loading...</p>
+          </div>
+        ) : (
         <AnimatedPage>
           <div className="text-center mb-10">
             <img
@@ -429,7 +432,8 @@ export function LoginPage() {
               Create one
             </Link>
           </p>
-        </AnimatedPage>
+          </AnimatedPage>
+        )}
       </div>
     </div>
   )

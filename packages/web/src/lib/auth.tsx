@@ -153,10 +153,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
     try {
-      const res = await api.get('/users/profile')
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 10000)
+      const res = await api.get('/users/profile', { signal: controller.signal as any })
+      clearTimeout(timeoutId)
       const p = res.data?.data || res.data
       if (p && p.id) {
-        const u = buildUserFromPayload(p, user?.name)
+        const u = buildUserFromPayload(p)
         localStorage.setItem('user', JSON.stringify(u))
         setUser(u)
       }
@@ -170,7 +173,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
     }
-  }, [user?.name])
+  }, [])
 
   useEffect(() => {
     const token = localStorage.getItem('token')

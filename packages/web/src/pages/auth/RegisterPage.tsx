@@ -32,7 +32,7 @@ const steps = [
 ]
 
 export function RegisterPage() {
-  const { register: registerUser, user } = useAuth()
+  const { register: registerUser, user, loading: authLoading } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const [step, setStep] = useState(1)
@@ -43,12 +43,10 @@ export function RegisterPage() {
   )
 
   useEffect(() => {
-    if (user) {
-      const role = user.activeRole || user.role || 'USER'
-      // USER accounts complete the shared profile; PARTNER goes to its own surface
-      navigate(role === 'USER' ? '/profile/complete' : '/partner/dashboard', { replace: true })
-    }
-  }, [user, navigate])
+    if (authLoading || !user) return
+    const role = user.activeRole || user.role || 'USER'
+    navigate(role === 'USER' ? '/profile/complete' : '/partner/dashboard', { replace: true })
+  }, [user, authLoading, navigate])
 
   const { register, handleSubmit, watch, trigger, formState: { errors } } = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
