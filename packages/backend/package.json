@@ -5,7 +5,7 @@
   "description": "RentBuddy Backend API",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "prisma generate && tsc --stack-size=8192",
+    "build": "prisma generate && tsc",
     "typecheck": "tsc --noEmit",
     "start": "node dist/src/server.js",
     "test": "vitest run",
