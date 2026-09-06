@@ -14,6 +14,7 @@ export interface AuthenticatedUser {
   email: string;
   role?: UserRole;
   activeRole?: UserRole;
+  impersonatorId?: string;
 }
 
 export interface AuthedRequest extends Request {

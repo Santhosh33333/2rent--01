@@ -182,14 +182,21 @@ export function App() {
               <Route path="/communities/:id" element={<CommunityDetailPage />} />
               <Route path="/events" element={<EventsPage />} />
               <Route path="/events/:id" element={<EventDetailPage />} />
-              <Route path="/messages" element={<MessagesPage />} />
-              <Route path="/messages/:userId" element={<ConversationPage />} />
               <Route path="/notifications" element={<NotificationsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/settings/privacy" element={<PrivacyPage />} />
               <Route path="/settings/privacy/privacy-policy" element={<PrivacyPolicyPage />} />
               <Route path="/settings/privacy/terms" element={<TermsOfServicePage />} />
               <Route path="/search" element={<SearchPage />} />
+            </Route>
+          </Route>
+
+          {/* Messaging is shared across USER / PARTNER / admin surfaces: a partner
+              who accepts a job can chat directly with the booking's customer. */}
+          <Route element={<ProtectedRoute allowedRoles={['USER', 'PARTNER', 'ADMIN', 'SUPER_ADMIN', 'MODERATOR', 'SUPPORT', 'FINANCE', 'SUPPORT_ADMIN', 'FINANCE_ADMIN', 'KYC_ADMIN', 'MARKETING_ADMIN', 'PARTNER_ADMIN']} />}>
+            <Route element={<Layout />}>
+              <Route path="/messages" element={<MessagesPage />} />
+              <Route path="/messages/:userId" element={<ConversationPage />} />
             </Route>
           </Route>
 

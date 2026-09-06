@@ -1,10 +1,11 @@
 import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
-import { ArrowLeft, Search, ChevronLeft, ChevronRight, Ban, Unlock, Trash2, Loader2, X, FileDown, Crown, UserMinus } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { ArrowLeft, Search, ChevronLeft, ChevronRight, Ban, Unlock, Trash2, Loader2, X, FileDown, Crown, UserMinus, Eye } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { adminApi } from '../../lib/api'
 import { exportTableToPdf } from '../../lib/pdfExport'
+import { useAuth } from '../../lib/auth'
 
 interface User {
   id: string
@@ -21,6 +22,8 @@ interface User {
 type BlockMode = 'days' | 'years' | 'permanent'
 
 export function AdminUsersPage() {
+  const { impersonate, user: currentAdmin } = useAuth()
+  const navigate = useNavigate()
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -35,6 +38,7 @@ export function AdminUsersPage() {
   const [blockYears, setBlockYears] = useState('1')
   const [blockReason, setBlockReason] = useState('')
   const [busy, setBusy] = useState(false)
+  const [impersonateBusy, setImpersonateBusy] = useState<string | null>(null)
 
   const fetchUsers = async () => {
     setLoading(true)
@@ -130,6 +134,23 @@ export function AdminUsersPage() {
       toast.error(getErrorMessage(err, 'Failed to delete user'))
     } finally {
       setBusy(false)
+    }
+  }
+
+  const doImpersonate = async (user: User) => {
+    if (user.id === currentAdmin?.id) {
+      toast.error('This is your own account.')
+      return
+    }
+    setImpersonateBusy(user.id)
+    try {
+      const u = await impersonate(user.id)
+      toast.success(`Now viewing ${u.name || u.email}'s account`)
+      navigate(u.activeRole === 'PARTNER' ? '/partner/dashboard' : '/dashboard', { replace: true })
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to start impersonation'))
+    } finally {
+      setImpersonateBusy(null)
     }
   }
 
@@ -313,7 +334,14 @@ export function AdminUsersPage() {
                                   Suspended until {new Date(user.suspendedUntil).toLocaleString('en-IN')}
                                 </p>
                               )}
-                              <div className="col-span-2 sm:col-span-4 flex flex-wrap gap-2 pt-1">
+<div className="col-span-2 sm:col-span-4 flex flex-wrap gap-2 pt-1">
+                                <button
+                                  onClick={() => doImpersonate(user)}
+                                  disabled={impersonateBusy !== null}
+                                  className="flex items-center gap-1.5 px-3 py-2 bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition"
+                                >
+                                  {impersonateBusy === user.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Eye className="w-3.5 h-3.5" />} Login as
+                                </button>
                                 {user.status === 'SUSPENDED' ? (
                                   <button
                                     onClick={() => doUnblock(user)}

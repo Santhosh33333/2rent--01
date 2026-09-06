@@ -24,6 +24,11 @@ interface User {
   avatarUrl?: string
 }
 
+interface ImpersonationInfo {
+  userName: string
+  userEmail: string
+}
+
 interface AuthContextType {
   user: User | null
   loading: boolean
@@ -33,6 +38,9 @@ interface AuthContextType {
   logout: () => void
   updateUser: (data: Partial<User>) => void
   refreshProfile: () => Promise<void>
+  impersonating: ImpersonationInfo | null
+  impersonate: (userId: string) => Promise<User>
+  stopImpersonation: () => Promise<void>
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -74,6 +82,44 @@ function clearSessionData(): void {
   // not session state.
   localStorage.removeItem('onboarding_complete')
   localStorage.removeItem('profile_complete')
+  localStorage.removeItem('impersonating')
+  sessionStorage.removeItem('rb_admin_session')
+}
+
+interface SavedAdminSession {
+  token: string
+  refreshToken: string
+  user: string
+}
+
+function loadImpersonationInfo(): ImpersonationInfo | null {
+  try {
+    const raw = localStorage.getItem('impersonating')
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    return parsed?.userName && parsed?.userEmail ? { userName: parsed.userName, userEmail: parsed.userEmail } : null
+  } catch {
+    return null
+  }
+}
+
+function saveAdminSession(): boolean {
+  const token = localStorage.getItem('token')
+  const refreshToken = localStorage.getItem('refreshToken')
+  const user = localStorage.getItem('user')
+  if (!token) return false
+  sessionStorage.setItem('rb_admin_session', JSON.stringify({ token, refreshToken, user }))
+  return true
+}
+
+function restoreAdminSession(): SavedAdminSession | null {
+  try {
+    const raw = sessionStorage.getItem('rb_admin_session')
+    if (!raw) return null
+    return JSON.parse(raw) as SavedAdminSession
+  } catch {
+    return null
+  }
 }
 
 function isDemoSessionToken(value: string | null): boolean {
@@ -144,6 +190,7 @@ async function restoreSessionFromRefreshToken(): Promise<User | null> {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(() => loadUser())
   const [loading, setLoading] = useState(true)
+  const [impersonating, setImpersonating] = useState<ImpersonationInfo | null>(() => loadImpersonationInfo())
 
   const refreshProfile = useCallback(async () => {
     const token = localStorage.getItem('token')
@@ -221,11 +268,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email
     )
 
+    localStorage.removeItem('impersonating')
     localStorage.setItem('token', accessToken)
     localStorage.setItem('refreshToken', refreshToken)
     localStorage.setItem('user', JSON.stringify(u))
     localStorage.setItem('activeRole', u.activeRole || u.role || 'USER')
     setUser(u)
+    setImpersonating(null)
   }
 
   const completeLogin = (
@@ -243,6 +292,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       (apiUser?.email as string) || 'user@rentbuddy.local'
     )
+    localStorage.removeItem('impersonating')
     localStorage.setItem('token', accessToken)
     localStorage.setItem('refreshToken', refreshToken)
     localStorage.setItem('user', JSON.stringify(u))
@@ -310,6 +360,69 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Tear down the realtime socket so the session doesn't stay alive server-side
     disconnectGlobalSocket()
     setUser(null)
+    setImpersonating(null)
+  }
+
+  const impersonate = async (targetUserId: string): Promise<User> => {
+    if (!saveAdminSession()) {
+      throw new Error('No active session to impersonate from.')
+    }
+    const response = await api.post(`/admin/users/${targetUserId}/impersonate`)
+    const payload = response.data?.data || response.data
+    const success = response.data?.success !== false
+    if (!success || !payload?.accessToken) {
+      throw new Error(payload?.message || payload?.error || 'Impersonation failed')
+    }
+
+    const apiUser = payload.user || {}
+    const u = buildUserFromPayload(
+      {
+        ...apiUser,
+        email: apiUser?.email || 'viewer@rentbuddy.local',
+        id: apiUser?.id || `user-${Date.now()}`,
+        role: apiUser?.role || 'USER',
+        activeRole: apiUser?.activeRole || apiUser?.role || 'USER',
+        accountType: apiUser?.accountType || apiUser?.userType || apiUser?.activeRole || apiUser?.role || 'USER',
+      },
+      apiUser?.fullName as string | undefined
+    )
+
+    localStorage.clear()
+    localStorage.setItem('token', payload.accessToken)
+    localStorage.setItem('refreshToken', payload.refreshToken)
+    localStorage.setItem('user', JSON.stringify(u))
+    localStorage.setItem('activeRole', u.activeRole || u.role || 'USER')
+    const info: ImpersonationInfo = {
+      userName: u.fullName || u.name || 'this user',
+      userEmail: u.email,
+    }
+    localStorage.setItem('impersonating', JSON.stringify(info))
+    disconnectGlobalSocket()
+    setUser(u)
+    setImpersonating(info)
+    return u
+  }
+
+  const stopImpersonation = async () => {
+    const saved = restoreAdminSession()
+    clearSessionData()
+    if (!saved) {
+      disconnectGlobalSocket()
+      setUser(null)
+      return
+    }
+    localStorage.setItem('token', saved.token)
+    if (saved.refreshToken) localStorage.setItem('refreshToken', saved.refreshToken)
+    if (saved.user) localStorage.setItem('user', saved.user)
+    disconnectGlobalSocket()
+    try {
+      const parsed = JSON.parse(saved.user) as User
+      localStorage.setItem('activeRole', parsed.activeRole || parsed.role || 'USER')
+      setUser(parsed)
+    } catch {
+      setUser(null)
+    }
+    setImpersonating(null)
   }
 
   const updateUser = (data: Partial<User>) => {
@@ -321,7 +434,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, completeLogin, register, logout, updateUser, refreshProfile }}>
+    <AuthContext.Provider value={{ user, loading, login, completeLogin, register, logout, updateUser, refreshProfile, impersonating, impersonate, stopImpersonation }}>
       {children}
     </AuthContext.Provider>
   )

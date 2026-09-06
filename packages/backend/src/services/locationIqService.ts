@@ -251,7 +251,24 @@ export async function reverseGeocode(
   });
 
   const url = `${BASE_URL}/reverse.php?${params.toString()}`;
-  const r = await fetchWithRetry(url);
+  let r: any;
+  try {
+    r = await fetchWithRetry(url);
+  } catch {
+    // Reversing a coordinate is never worth blocking the user. If the
+    // geocoder is unavailable (bad key, quota, network), degrade gracefully
+    // to a coordinate label instead of surfacing an error toast.
+    return {
+      placeId: "placeholder",
+      licence: "",
+      osmType: "node",
+      osmId: "0",
+      lat,
+      lon,
+      displayName: `${lat.toFixed(4)}, ${lon.toFixed(4)}`,
+      address: { country: "IN" },
+    };
+  }
 
   return {
     placeId: r.place_id,

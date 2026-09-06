@@ -5,15 +5,36 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
-import { User, Mail, Phone, Lock, Eye, EyeOff, ArrowRight, ArrowLeft, Check, Sparkles } from 'lucide-react'
+import { User, Mail, Phone, Lock, Eye, EyeOff, ArrowRight, ArrowLeft, Check, Sparkles, Cake } from 'lucide-react'
 import { useAuth } from '../../lib/auth'
 import { api } from '../../lib/api'
 import { isClerkConfigured } from '../../lib/clerkAuth'
 import { AnimatedPage } from '../../components/AnimatedPage'
 
+function ageFrom(dob: string): number {
+  const birth = new Date(dob)
+  if (isNaN(birth.getTime())) return -1
+  const today = new Date()
+  let age = today.getFullYear() - birth.getFullYear()
+  const m = today.getMonth() - birth.getMonth()
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--
+  return age
+}
+
+const GENDERS = [
+  { value: 'MALE', label: 'Male', icon: '👨' },
+  { value: 'FEMALE', label: 'Female', icon: '👩' },
+  { value: 'OTHER', label: 'Other', icon: '🧑' },
+]
+
+const MAX_DOB = new Date()
+MAX_DOB.setFullYear(MAX_DOB.getFullYear() - 18)
+
 const registerSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
   email: z.string().email('Invalid email address'),
+  gender: z.string().min(1, 'Please select your gender'),
+  dateOfBirth: z.string().min(1, 'Date of birth is required'),
   phone: z.string().min(10, 'Phone number must be at least 10 digits'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   confirmPassword: z.string(),
@@ -22,6 +43,9 @@ const registerSchema = z.object({
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ["confirmPassword"],
+}).refine((data) => ageFrom(data.dateOfBirth) >= 18, {
+  message: 'You must be 18 or older to create an account',
+  path: ["dateOfBirth"],
 })
 
 type RegisterForm = z.infer<typeof registerSchema>
@@ -29,8 +53,9 @@ type RegisterForm = z.infer<typeof registerSchema>
 const steps = [
   { id: 1, title: 'Account Type', subtitle: 'Choose how you want to use RentBuddy' },
   { id: 2, title: 'Personal Info', subtitle: 'Your name and email' },
-  { id: 3, title: 'Security', subtitle: 'Phone & password' },
-  { id: 4, title: 'Confirm', subtitle: 'Review & agree' },
+  { id: 3, title: 'About You', subtitle: 'Gender & date of birth' },
+  { id: 4, title: 'Security', subtitle: 'Phone & password' },
+  { id: 5, title: 'Confirm', subtitle: 'Review & agree' },
 ]
 
 export function RegisterPage() {
@@ -50,7 +75,7 @@ export function RegisterPage() {
     navigate(role === 'USER' ? '/profile/complete' : '/partner/dashboard', { replace: true })
   }, [user, authLoading, navigate])
 
-  const { register, handleSubmit, watch, trigger, formState: { errors } } = useForm<RegisterForm>({
+  const { register, handleSubmit, watch, trigger, setValue, formState: { errors } } = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
     mode: 'onChange',
   })
@@ -62,7 +87,8 @@ export function RegisterPage() {
       return
     }
     if (step === 2) fields = ['name', 'email']
-    if (step === 3) fields = ['phone', 'password', 'confirmPassword']
+    if (step === 3) fields = ['gender', 'dateOfBirth']
+    if (step === 4) fields = ['phone', 'password', 'confirmPassword']
     const valid = await trigger(fields)
     if (valid) setStep(step + 1)
   }
@@ -79,8 +105,8 @@ export function RegisterPage() {
         password: data.password,
         accountType,
         role: accountType,
-        dateOfBirth: '2000-01-01',
-        gender: 'MALE',
+        dateOfBirth: data.dateOfBirth,
+        gender: data.gender || 'OTHER',
       })
       // If the user signed up with a valid referral code, link them as soon as
       // the account exists. Non-fatal on failure (e.g. invalid/unused code).
@@ -237,6 +263,62 @@ export function RegisterPage() {
               {step === 3 && (
                 <>
                   <div>
+                    <label className="label">Gender</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {GENDERS.map((g) => (
+                        <button
+                          key={g.value}
+                          type="button"
+                          onClick={() => setValue('gender', g.value, { shouldValidate: true })}
+                          className={`rounded-xl border px-2 py-3 text-center transition ${
+                            watch('gender') === g.value
+                              ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-950/30 dark:text-primary-300'
+                              : 'border-surface-200 bg-white text-surface-700 hover:border-primary-200 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-200'
+                          }`}
+                        >
+                          <div className="text-xl mb-1">{g.icon}</div>
+                          <div className="text-xs font-semibold truncate">{g.label}</div>
+                        </button>
+                      ))}
+                    </div>
+                    {errors.gender && <p className="mt-2 text-xs text-danger-500 font-medium">{errors.gender.message}</p>}
+                  </div>
+                  <div>
+                    <label htmlFor="dateOfBirth" className="label">Date of Birth</label>
+                    <div className="relative">
+                      <Cake className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-surface-400" />
+                      <input
+                        {...register('dateOfBirth')}
+                        type="date"
+                        id="dateOfBirth"
+                        max={MAX_DOB.toISOString().split('T')[0]}
+                        className="input pl-11"
+                      />
+                    </div>
+                    {errors.dateOfBirth ? (
+                      <p className="mt-2 text-xs text-danger-500 font-medium">{errors.dateOfBirth.message}</p>
+                    ) : (
+                      <p className="mt-2 text-xs text-surface-500">You must be 18 or older to create an account.</p>
+                    )}
+                  </div>
+                  <div className="flex gap-3">
+                    <button type="button" onClick={() => setStep(2)} className="btn-outline flex-1">
+                      <ArrowLeft className="w-4 h-4" />
+                      Back
+                    </button>
+                    <button type="button" onClick={handleNext} className="btn-gradient flex-1 group">
+                      <span className="flex items-center justify-center gap-2">
+                        Continue
+                        <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                      </span>
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {step === 4 && (
+                <>
+                  <div>
                     <label htmlFor="phone" className="label">Phone Number</label>
                     <div className="relative">
                       <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-surface-400" />
@@ -264,7 +346,7 @@ export function RegisterPage() {
                     {errors.confirmPassword && <p className="mt-2 text-xs text-danger-500 font-medium">{errors.confirmPassword.message}</p>}
                   </div>
                   <div className="flex gap-3">
-                    <button type="button" onClick={() => setStep(2)} className="btn-outline flex-1">
+                    <button type="button" onClick={() => setStep(3)} className="btn-outline flex-1">
                       <ArrowLeft className="w-4 h-4" />
                       Back
                     </button>
@@ -278,7 +360,7 @@ export function RegisterPage() {
                 </>
               )}
 
-              {step === 4 && (
+              {step === 5 && (
                 <>
                   <div className="glass-card-sm p-5 space-y-4 text-sm">
                     <div className="flex justify-between items-center">
@@ -294,6 +376,18 @@ export function RegisterPage() {
                     <div className="flex justify-between items-center">
                       <span className="text-surface-500">Email</span>
                       <span className="font-semibold text-surface-900 dark:text-white">{watch('email') || '—'}</span>
+                    </div>
+                    <div className="h-px bg-surface-200 dark:bg-surface-700" />
+                    <div className="flex justify-between items-center">
+                      <span className="text-surface-500">Gender</span>
+                      <span className="font-semibold text-surface-900 dark:text-white">
+                        {GENDERS.find(g => g.value === watch('gender'))?.label || '—'}
+                      </span>
+                    </div>
+                    <div className="h-px bg-surface-200 dark:bg-surface-700" />
+                    <div className="flex justify-between items-center">
+                      <span className="text-surface-500">Date of Birth</span>
+                      <span className="font-semibold text-surface-900 dark:text-white">{watch('dateOfBirth') || '—'}</span>
                     </div>
                     <div className="h-px bg-surface-200 dark:bg-surface-700" />
                     <div className="flex justify-between items-center">
@@ -317,7 +411,7 @@ export function RegisterPage() {
                   </div>
                   {errors.terms && <p className="text-xs text-danger-500 font-medium">{errors.terms.message}</p>}
                   <div className="flex gap-3">
-                    <button type="button" onClick={() => setStep(3)} className="btn-outline flex-1">
+                    <button type="button" onClick={() => setStep(4)} className="btn-outline flex-1">
                       <ArrowLeft className="w-4 h-4" />
                       Back
                     </button>

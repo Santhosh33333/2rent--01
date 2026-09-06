@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from "uuid";
 import { createHash, createPublicKey, verify as cryptoVerify } from "crypto";
 import { prisma } from "../config/database";
 import { env } from "../config/env";
-import { generateAccessToken, generateRefreshToken, verifyRefreshToken } from "../utils/jwt";
+import { generateAccessToken, generateRefreshToken, generateImpersonationAccessToken, verifyRefreshToken } from "../utils/jwt";
 import { generateOTP, hashOTP, verifyOTP, sendOTP } from "../utils/otp";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
@@ -70,6 +70,28 @@ async function createUserSession(userId: string, req: Request): Promise<{ access
       ],
     },
   });
+  await prisma.session.create({
+    data: {
+      userId,
+      refreshToken,
+      ipAddress: req.ip ?? req.socket.remoteAddress ?? null,
+      userAgent: req.headers["user-agent"] ?? null,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  return { accessToken, refreshToken };
+}
+
+export async function createImpersonationSession(
+  userId: string,
+  impersonatorId: string,
+  req: Request
+): Promise<{ accessToken: string; refreshToken: string }> {
+  const email = (await prisma.user.findUnique({ where: { id: userId }, select: { email: true } }))?.email ?? "";
+  const accessToken = generateImpersonationAccessToken({ userId, email }, impersonatorId);
+  const refreshToken = generateRefreshToken(userId, impersonatorId);
+
   await prisma.session.create({
     data: {
       userId,
@@ -168,6 +190,25 @@ export async function register(req: Request, res: Response): Promise<void> {
     }
     if (fullName && fullName.length > 100) {
       sendError(res, "Full name must be 100 characters or less.", 400, "VALIDATION_ERROR");
+      return;
+    }
+    if (!dateOfBirth) {
+      sendError(res, "Date of birth is required.", 400, "VALIDATION_ERROR");
+      return;
+    }
+    const birthDate = new Date(dateOfBirth);
+    if (isNaN(birthDate.getTime())) {
+      sendError(res, "Invalid date of birth.", 400, "VALIDATION_ERROR");
+      return;
+    }
+    const ageMs = Date.now() - birthDate.getTime();
+    const ageYears = ageMs / (365.25 * 24 * 60 * 60 * 1000);
+    if (ageYears < 18) {
+      sendError(res, "You must be 18 or older to create an account.", 400, "VALIDATION_ERROR");
+      return;
+    }
+    if (new Date(dateOfBirth) > new Date()) {
+      sendError(res, "Date of birth cannot be in the future.", 400, "VALIDATION_ERROR");
       return;
     }
 
@@ -708,8 +749,10 @@ export async function refreshToken(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const accessToken = generateAccessToken({ userId: user.id, email: user.email });
-    const newRefreshToken = generateRefreshToken(user.id);
+const accessToken = payload.impersonatorId
+      ? generateImpersonationAccessToken({ userId: user.id, email: user.email }, payload.impersonatorId)
+      : generateAccessToken({ userId: user.id, email: user.email });
+    const newRefreshToken = generateRefreshToken(user.id, payload.impersonatorId);
     await prisma.session.update({ where: { id: session.id }, data: { refreshToken: newRefreshToken, expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) } });
 
     sendSuccess(res, { accessToken, refreshToken: newRefreshToken }, "Token refreshed.");

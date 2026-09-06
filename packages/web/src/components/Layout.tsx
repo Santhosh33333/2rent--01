@@ -8,6 +8,7 @@ import {
 import { useAuth } from '../lib/auth';
 import { isClerkConfigured } from '../lib/clerkAuth';
 import { UserButton, useUser } from '@clerk/clerk-react';
+import { ImpersonationBanner } from './ImpersonationBanner';
 
 function ClerkUserButton() {
   const { isSignedIn } = useUser();
@@ -118,6 +119,16 @@ export function Layout() {
     : ['ADMIN', 'SUPER_ADMIN', 'MODERATOR', 'SUPPORT', 'FINANCE', 'SUPPORT_ADMIN', 'FINANCE_ADMIN', 'KYC_ADMIN', 'MARKETING_ADMIN', 'PARTNER_ADMIN'].includes(activeRole) ? adminNav
     : userNav;
 
+  // SUPER_ADMIN-only privileges: admin-account management and audit logs sit in
+  // their own nav section so they're never confused with everyday admin tasks.
+  const isSuperAdmin = String(user?.role || '').toUpperCase() === 'SUPER_ADMIN' || activeRole === 'SUPER_ADMIN';
+  const superAdminNav = isSuperAdmin
+    ? [
+        { to: '/admin/admins', icon: User, label: 'Admin Accounts' },
+        { to: '/admin/audit-logs', icon: ClipboardList, label: 'Audit Logs' },
+      ]
+    : [];
+
   // On phones the bottom bar holds up to 5 slots. If the role has more items
   // (admin: 7), show the first 4 + a "More" button whose drawer holds the rest —
   // otherwise all items are shy of the 390px width. Desktop keeps all links in
@@ -138,6 +149,7 @@ export function Layout() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-violet-50/20 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
+      <ImpersonationBanner />
       {/* Header */}
       <header className="sticky top-0 z-50 backdrop-blur-xl bg-white/80 dark:bg-gray-950/80 border-b border-gray-200/50 dark:border-gray-800/50 pt-[env(safe-area-inset-top)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -226,6 +238,27 @@ export function Layout() {
                     >
                       <Icon className="w-4 h-4" />
                       {label}
+                    </Link>
+                  ))}
+                  <div className="h-px bg-gray-200 dark:bg-gray-800 my-2" />
+                </>
+              )}
+              {superAdminNav.length > 0 && (
+                <>
+                  <p className="px-3 pt-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-purple-500">Super Admin</p>
+                  {superAdminNav.map(({ to, icon: Icon, label }) => (
+                    <Link
+                      key={to}
+                      to={to}
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition ${
+                        location.pathname === to
+                          ? 'bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 font-medium'
+                          : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+                      }`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      {label}
+                      <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 font-medium">SUPER</span>
                     </Link>
                   ))}
                   <div className="h-px bg-gray-200 dark:bg-gray-800 my-2" />

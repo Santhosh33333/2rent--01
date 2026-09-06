@@ -87,20 +87,25 @@ export function LocationInput({ label, value, onChange, placeholder, required, o
     setLocating(true)
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
+        const { latitude, longitude } = pos.coords
         try {
           const res = await api.get('/location/reverse', {
-            params: { lat: pos.coords.latitude, lon: pos.coords.longitude },
+            params: { lat: latitude, lon: longitude },
           })
           const result = res.data?.data?.result
-          if (result?.displayName) {
+          if (result?.displayName && !String(result.displayName).startsWith(String(latitude).slice(0, 5))) {
             skipNextSearch.current = true
             onChange(result.displayName as string)
             toast.success('Current location detected')
+          } else if (result?.displayName) {
+            onChange(result.displayName as string)
+            toast.success('Current location coordinates detected')
           } else {
             toast.error('Could not resolve your address')
           }
         } catch {
-          toast.error('Could not look up your address')
+          onChange(`${latitude.toFixed(4)}, ${longitude.toFixed(4)}`)
+          toast.success('Current location coordinates detected')
         } finally {
           setLocating(false)
         }

@@ -4,12 +4,13 @@ import { prisma } from "../config/database";
 import { sendError } from "../utils/response";
 import { AuthedRequest, AuthenticatedUser, UserRole } from "./authTypes";
 
-export function verifyToken(token: string): { userId: string; email: string; role?: string } | null {
+export function verifyToken(token: string): { userId: string; email: string; role?: string; impersonatorId?: string } | null {
   try {
     const payload = verifyAccessToken(token);
     return {
       userId: payload.userId,
       email: payload.email,
+      impersonatorId: payload.impersonatorId,
     };
   } catch {
     return null;
@@ -53,11 +54,22 @@ export async function authenticateToken(req: AuthedRequest, res: Response, next:
       email: user.email,
       role: user.role as UserRole,
       activeRole: (user.activeRole as UserRole) || (user.role as UserRole),
+      impersonatorId: payload.impersonatorId,
     };
     next();
   } catch (err) {
     sendError(res, "Invalid or expired token.", 401, "INVALID_TOKEN");
   }
+}
+
+// Admin-tier guards refuse impersonation sessions: an admin looking through a
+// member's account must never be able to exercise admin powers with that token.
+export function requireNotImpersonating(req: AuthedRequest, res: Response, next: NextFunction): void {
+  if (req.user?.impersonatorId) {
+    sendError(res, "Admin actions are unavailable while impersonating a user.", 403, "IMPERSONATION_FORBIDDEN");
+    return;
+  }
+  next();
 }
 
 export function requireRole(...roles: string[]) {
@@ -112,6 +124,10 @@ export async function requireWalkingPartner(req: AuthedRequest, res: Response, n
 
 export async function requireAdmin(req: AuthedRequest, res: Response, next: NextFunction): Promise<void> {
   try {
+    if (req.user?.impersonatorId) {
+      sendError(res, "Admin actions are unavailable while impersonating a user.", 403, "IMPERSONATION_FORBIDDEN");
+      return;
+    }
     if (!req.user?.activeRole || !ADMIN_ROLES.includes(req.user.activeRole)) {
       sendError(res, "Admin access required.", 403, "FORBIDDEN");
       return;
@@ -170,6 +186,10 @@ export async function requireKycVerified(req: AuthedRequest, res: Response, next
 
 export async function requireSuperAdmin(req: AuthedRequest, res: Response, next: NextFunction): Promise<void> {
   try {
+    if (req.user?.impersonatorId) {
+      sendError(res, "Admin actions are unavailable while impersonating a user.", 403, "IMPERSONATION_FORBIDDEN");
+      return;
+    }
     if (!req.user?.activeRole || req.user.activeRole !== "SUPER_ADMIN") {
       sendError(res, "Super admin access required.", 403, "FORBIDDEN");
       return;
@@ -185,6 +205,10 @@ const ADMIN_ROLES = ["SUPER_ADMIN", "ADMIN", "MODERATOR", "SUPPORT", "FINANCE", 
 export function requirePermission(permission: string) {
   return async (req: AuthedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
+      if (req.user?.impersonatorId) {
+        sendError(res, "Admin actions are unavailable while impersonating a user.", 403, "IMPERSONATION_FORBIDDEN");
+        return;
+      }
       const activeRole = req.user?.activeRole;
       if (!activeRole || !ADMIN_ROLES.includes(activeRole)) {
         sendError(res, "Admin access required.", 403, "FORBIDDEN");

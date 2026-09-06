@@ -5,6 +5,7 @@ import { prisma } from "../config/database";
 import { SERVICE_CATALOG, isServiceEnabled } from "../services/serviceCatalog";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
+import { createImpersonationSession } from "./authController";
 import { env } from "../config/env";
 import * as bookingEngine from "../services/bookingEngine";
 import { PRICING_VERSION_KEY } from "../services/bookingEngine";
@@ -129,8 +130,74 @@ export async function getUserById(req: AuthedRequest, res: Response): Promise<vo
       return;
     }
     sendSuccess(res, user, "User retrieved.");
-  } catch (err) {
+} catch (err) {
     sendError(res, "Failed to retrieve user.", 500, "INTERNAL_ERROR");
+  }
+}
+
+export async function impersonateUser(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const targetId = req.params.userId;
+    const actor = req.user!;
+    if (!targetId) {
+      sendError(res, "User id is required.", 400, "VALIDATION_ERROR");
+      return;
+    }
+    if (targetId === actor.userId) {
+      sendError(res, "You cannot impersonate your own account.", 400, "VALIDATION_ERROR");
+      return;
+    }
+
+    const target = await prisma.user.findUnique({
+      where: { id: targetId },
+      select: { id: true, email: true, fullName: true, role: true, activeRole: true, status: true, avatarUrl: true },
+    });
+    if (!target) {
+      sendError(res, "User not found.", 404, "USER_NOT_FOUND");
+      return;
+    }
+    if (target.status !== "ACTIVE") {
+      sendError(res, "Cannot impersonate an inactive account.", 403, "FORBIDDEN");
+      return;
+    }
+
+    const ADMIN_ROLES = ["SUPER_ADMIN", "ADMIN", "MODERATOR", "SUPPORT", "FINANCE", "SUPPORT_ADMIN", "FINANCE_ADMIN", "KYC_ADMIN", "MARKETING_ADMIN", "PARTNER_ADMIN"];
+    const targetIsAdmin = ADMIN_ROLES.includes(target.role || "");
+    // Only SUPER_ADMIN may impersonate another admin account; regular admins
+    // can only step into user or partner accounts.
+    if (actor.activeRole !== "SUPER_ADMIN" && targetIsAdmin) {
+      sendError(res, "Only a super admin can impersonate an admin account.", 403, "FORBIDDEN");
+      return;
+    }
+
+    const { accessToken, refreshToken } = await createImpersonationSession(targetId, actor.userId, req);
+
+    await prisma.auditLog.create({
+      data: {
+        actorId: actor.userId,
+        actorType: "ADMIN",
+        action: "IMPERSONATE_START",
+        entityType: "User",
+        entityId: targetId,
+        metadata: JSON.stringify({ targetEmail: target.email, targetRole: target.role }),
+      },
+    });
+
+    sendSuccess(res, {
+      accessToken,
+      refreshToken,
+      user: {
+        id: target.id,
+        email: target.email,
+        fullName: target.fullName,
+        role: target.role,
+        activeRole: target.activeRole || target.role || "USER",
+        avatarUrl: target.avatarUrl,
+        impersonatorId: actor.userId,
+      },
+    }, "Impersonation started. You are now viewing this account.");
+} catch (err) {
+    sendError(res, "Failed to start impersonation.", 500, "INTERNAL_ERROR");
   }
 }
 

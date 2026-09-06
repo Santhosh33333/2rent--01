@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { MapPin, Clock, Navigation, KeyRound, CheckCircle, Loader2, ArrowLeft, Timer, Receipt } from 'lucide-react'
+import { MapPin, Clock, Navigation, KeyRound, CheckCircle, Loader2, ArrowLeft, Timer, Receipt, MessageCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { api, partnerApi, bookingApi } from '../../lib/api'
 import { AnimatedPage } from '../../components/AnimatedPage'
@@ -19,7 +19,7 @@ interface Job {
   estimatedAmount?: number
   finalAmount?: number
   partnerEarning?: number
-  user?: { fullName?: string }
+  user?: { id?: string; fullName?: string }
   partnerLocation?: { latitude: number; longitude: number } | null
 }
 
@@ -132,7 +132,18 @@ export function PartnerJobDetailPage() {
               <p className="flex items-center gap-2"><MapPin className="w-4 h-4 text-emerald-500" /> {job.startLocation}</p>
               <p className="flex items-center gap-2"><Clock className="w-4 h-4 text-sky-500" /> {new Date(job.scheduledAt).toLocaleString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
               {job.durationMinutes ? <p className="text-surface-500">Estimated duration: {job.durationMinutes} min</p> : null}
-              {job.user?.fullName ? <p className="text-surface-500">Customer: {job.user.fullName}</p> : null}
+              {job.user?.fullName ? (
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-surface-500">Customer: {job.user.fullName}</p>
+                  <button
+                    onClick={() => job.user?.id && navigate(`/messages/${job.user.id}`, { state: { name: job.user.fullName } })}
+                    disabled={!job.user?.id}
+                    className="btn-outline btn-sm flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5" /> Message
+                  </button>
+                </div>
+              ) : null}
               {tracking?.etaMinutesEstimate != null && phase === 'TRAVELLING' && (
                 <p className="text-surface-500">ETA: ~{tracking.etaMinutesEstimate} min</p>
               )}

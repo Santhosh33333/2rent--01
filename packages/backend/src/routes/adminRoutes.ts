@@ -65,6 +65,7 @@ router.put(
 router.get("/users", users, adminController.getUsers);
 router.get("/users/:id", users, adminController.getUserById);
 router.put("/users/:id/status", users, [body("status").isIn(["ACTIVE", "SUSPENDED", "BANNED", "DEACTIVATED"])], validateRequest, adminController.updateUserStatus);
+router.post("/users/:id/impersonate", users, adminController.impersonateUser);
 router.post(
   "/users/:id/block",
   users,

@@ -7,12 +7,14 @@ interface AccessTokenPayload {
   userId: string;
   email: string;
   type: "access";
+  impersonatorId?: string;
 }
 
 interface RefreshTokenPayload {
   userId: string;
   type: "refresh";
   jti: string;
+  impersonatorId?: string;
 }
 
 interface TwoFactorChallengePayload {
@@ -35,11 +37,24 @@ export function generateAccessToken(user: AuthPayload): string {
   });
 }
 
-export function generateRefreshToken(userId: string): string {
+export function generateImpersonationAccessToken(user: AuthPayload, impersonatorId: string): string {
+  const payload: AccessTokenPayload = {
+    userId: user.userId,
+    email: user.email,
+    type: "access",
+    impersonatorId,
+  };
+  return jwt.sign(payload, accessSecret, {
+    expiresIn: env.JWT_ACCESS_EXPIRY as jwt.SignOptions["expiresIn"],
+  });
+}
+
+export function generateRefreshToken(userId: string, impersonatorId?: string): string {
   const payload: RefreshTokenPayload = {
     userId,
     type: "refresh",
     jti: crypto.randomUUID(),
+    ...(impersonatorId ? { impersonatorId } : {}),
   };
   return jwt.sign(payload, refreshSecret, {
     expiresIn: env.JWT_REFRESH_EXPIRY as jwt.SignOptions["expiresIn"],
