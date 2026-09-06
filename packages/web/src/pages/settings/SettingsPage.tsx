@@ -5,6 +5,7 @@ import toast from 'react-hot-toast'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
 import { api } from '../../lib/api'
+import { useTheme } from '../../lib/themeContext'
 
 interface Settings {
   theme: string
@@ -77,22 +78,37 @@ export function SettingsPage() {
   const [settings, setSettings] = useState<Settings>(defaultSettings)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const { setTheme } = useTheme()
 
   useEffect(() => {
-    api.get('/settings').then(r => { setSettings(r.data.data); setLoading(false) }).catch(() => setLoading(false))
+    api.get('/settings').then(r => {
+      const data = r.data.data
+      setSettings(data); setLoading(false)
+      // Honor a previously saved explicit theme on reload.
+      if (data?.theme === 'light') setTheme('light')
+      else if (data?.theme === 'dark') setTheme('dark')
+    }).catch(() => setLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const update = (key: keyof Settings, value: any) => setSettings(prev => ({ ...prev, [key]: value }))
 
   const applyTheme = (theme: string) => {
     update('theme', theme)
+    // Drive the app-wide ThemeProvider so the change is instant everywhere,
+    // mirrors the system preference for "system", and persists to the same
+    // localStorage key the provider reads on boot (fixes lost theme on reload).
+    if (theme === 'light') setTheme('light')
+    else if (theme === 'dark') setTheme('dark')
+    else if (theme === 'system') setTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+  }
+
+  const applyFontSize = (size: string) => {
+    update('fontSize', size)
     const root = document.documentElement
-    if (theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-      root.classList.add('dark')
-    } else {
-      root.classList.remove('dark')
-    }
-    localStorage.setItem('rentbuddy-theme', theme)
+    if (size === 'small' || size === 'large') root.dataset.fontSize = size
+    else delete root.dataset.fontSize
+    localStorage.setItem('rentbuddy-font-size', size)
   }
 
   const handleSave = async () => {
@@ -137,7 +153,7 @@ export function SettingsPage() {
           <SettingRow icon={Type} label="Font Size" description="Adjust text size">
             <div className="flex gap-1">
               {fontSizes.map(f => (
-                <button key={f.value} onClick={() => update('fontSize', f.value)} className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${settings.fontSize === f.value ? 'bg-primary-500 text-white' : 'bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400'}`}>
+                <button key={f.value} onClick={() => applyFontSize(f.value)} className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${settings.fontSize === f.value ? 'bg-primary-500 text-white' : 'bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400'}`}>
                   {f.label}
                 </button>
               ))}

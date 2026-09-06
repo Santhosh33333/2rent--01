@@ -15,10 +15,21 @@
     -webkit-tap-highlight-color: transparent;
   }
 
+  html[data-font-size='small'] {
+    font-size: 93.75%; /* 15px base */
+  }
+  html[data-font-size='large'] {
+    font-size: 106.25%; /* 17px base */
+  }
+
   body {
     @apply bg-surface-50 text-surface-900 dark:bg-surface-950 dark:text-surface-100;
     transition: background-color 0.4s cubic-bezier(0.16, 1, 0.3, 1), color 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-    overflow-x: hidden;
+    overflow-x: clip;
+  }
+
+  #root {
+    overflow-x: clip;
   }
 
   ::-webkit-scrollbar {
@@ -277,6 +288,34 @@
   }
   .text-gradient-cool {
     @apply bg-gradient-to-r from-cyan-500 to-blue-500 bg-clip-text text-transparent;
+  }
+}
+
+/* ===== MOBILE / SMALL-SCREEN TUNING ===== */
+/* Bigger tap targets and legible type on phones. Landed behind the desktop
+   classes by declaring after the component layer so `lg:` variants still win
+   when they exist. */
+@media (max-width: 640px) {
+  .btn {
+    @apply min-h-[44px] px-5 py-3 text-sm;
+  }
+  .btn-lg {
+    @apply min-h-[52px] px-6 py-4 text-base;
+  }
+  .btn-sm {
+    @apply min-h-[38px] px-3.5 text-xs;
+  }
+  .btn-icon {
+    @apply p-3;
+  }
+  .input {
+    @apply min-h-[48px] px-4 py-3 text-base;
+  }
+  .label {
+    @apply text-sm mb-1.5;
+  }
+  .nav-item {
+    @apply py-2.5;
   }
 }
 

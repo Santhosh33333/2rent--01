@@ -3,7 +3,7 @@ import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
 import {
   Home, User, Wallet, Users, Sun, Moon, Menu, X, Bell,
   MapPin, LogOut, Calendar, Settings, Shield, Info, LayoutDashboard,
-  ClipboardList, Search, QrCode
+  ClipboardList, Search, QrCode, MoreHorizontal
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { isClerkConfigured } from '../lib/clerkAuth';
@@ -118,6 +118,14 @@ export function Layout() {
     : ['ADMIN', 'SUPER_ADMIN', 'MODERATOR', 'SUPPORT', 'FINANCE', 'SUPPORT_ADMIN', 'FINANCE_ADMIN', 'KYC_ADMIN', 'MARKETING_ADMIN', 'PARTNER_ADMIN'].includes(activeRole) ? adminNav
     : userNav;
 
+  // On phones the bottom bar holds up to 5 slots. If the role has more items
+  // (admin: 7), show the first 4 + a "More" button whose drawer holds the rest —
+  // otherwise all items are shy of the 390px width. Desktop keeps all links in
+  // the hamburger drawer regardless.
+  const bottomNavItems = navItems.length > 5 ? navItems.slice(0, 4) : navItems;
+  const hasMoreNav = navItems.length > 5;
+  const drawerNavItems = hasMoreNav ? navItems.slice(4) : [];
+
   useEffect(() => {
     setSidebarOpen(false);
     setMobileMenuOpen(false);
@@ -131,7 +139,7 @@ export function Layout() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-violet-50/20 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
       {/* Header */}
-      <header className="sticky top-0 z-50 backdrop-blur-xl bg-white/80 dark:bg-gray-950/80 border-b border-gray-200/50 dark:border-gray-800/50">
+      <header className="sticky top-0 z-50 backdrop-blur-xl bg-white/80 dark:bg-gray-950/80 border-b border-gray-200/50 dark:border-gray-800/50 pt-[env(safe-area-inset-top)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             {/* Left */}
@@ -203,6 +211,26 @@ export function Layout() {
             </div>
 
             <nav className="space-y-1">
+              {drawerNavItems.length > 0 && (
+                <>
+                  <p className="px-3 pt-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Menu</p>
+                  {drawerNavItems.map(({ to, icon: Icon, label }) => (
+                    <Link
+                      key={to}
+                      to={to}
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition ${
+                        location.pathname === to
+                          ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 font-medium'
+                          : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+                      }`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      {label}
+                    </Link>
+                  ))}
+                  <div className="h-px bg-gray-200 dark:bg-gray-800 my-2" />
+                </>
+              )}
               {sidebarLinks.map(({ to, icon: Icon, label }) => (
                 <Link
                   key={to}
@@ -247,14 +275,14 @@ export function Layout() {
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 inset-x-0 bg-white/90 dark:bg-gray-950/90 backdrop-blur-xl border-t border-gray-200/50 dark:border-gray-800/50 z-40 lg:hidden pb-[env(safe-area-inset-bottom)]">
-        <div className="flex items-center justify-around h-16 px-2 overflow-x-auto">
-          {navItems.map(({ to, icon: Icon, label }) => {
+        <div className="flex items-center justify-around h-16 px-2">
+          {bottomNavItems.map(({ to, icon: Icon, label }) => {
             const isActive = location.pathname === to || location.pathname.startsWith(to.split('/').slice(0, -1).join('/') + '/');
             return (
               <Link
                 key={to}
                 to={to}
-                className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all min-w-[60px] ${
+                className={`flex flex-col items-center justify-center gap-0.5 rounded-xl transition-all min-w-[60px] h-full flex-1 ${
                   isActive
                     ? 'text-indigo-600 dark:text-indigo-400'
                     : 'text-gray-400 dark:text-gray-500'
@@ -263,10 +291,21 @@ export function Layout() {
                 <div className={`p-1 rounded-xl transition ${isActive ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}>
                   <Icon className="w-5 h-5" />
                 </div>
-                <span className="text-[10px] font-medium">{label}</span>
+                <span className="text-[10px] font-medium leading-none">{label}</span>
               </Link>
             );
           })}
+          {hasMoreNav && (
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className={`flex flex-col items-center justify-center gap-0.5 rounded-xl transition-all min-w-[60px] h-full flex-1 text-gray-400 dark:text-gray-500`}
+            >
+              <div className="p-1 rounded-xl">
+                <MoreHorizontal className="w-5 h-5" />
+              </div>
+              <span className="text-[10px] font-medium leading-none">More</span>
+            </button>
+          )}
         </div>
       </nav>
     </div>
