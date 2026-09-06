@@ -2,24 +2,29 @@ FROM node:20-slim
 
 WORKDIR /app
 
-# Copy only package files first for layer caching
-COPY packages/backend/package.json packages/backend/package-lock.json* ./
-COPY package.json package-lock.json* tsconfig.base.json* ./
-
-# Install all dependencies at root level (monorepo)
-RUN npm install
-
-# Copy backend source
+# Copy the entire backend directory
 COPY packages/backend/ ./packages/backend/
 
+# Copy root package.json for workspaces
+COPY package.json package-lock.json* ./
+
+# Install dependencies
+WORKDIR /app/packages/backend
+RUN npm install
+
 # Generate Prisma client
-RUN cd packages/backend && npx prisma generate
+RUN npx prisma generate
+
+# Copy full monorepo source needed for build
+WORKDIR /app
+COPY packages/web/package.json* ./packages/web/ 2>/dev/null || true
 
 # Build TypeScript
-RUN cd packages/backend && npm run build
+WORKDIR /app/packages/backend
+RUN npm run build
 
 # Expose port
 EXPOSE 5000
 
 # Start
-CMD ["sh", "-c", "cd packages/backend && npx prisma migrate deploy && node dist/src/server.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/src/server.js"]
