@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../lib/auth'
 
@@ -123,7 +123,7 @@ export function SplashPage() {
             <div className="w-24 h-24 flex items-center justify-center">
               <img
                 src="/logo-mark.svg"
-                alt="RentBuddy logo"
+                alt="Sidebud logo"
                 className="w-full h-full relative z-10 drop-shadow-2xl"
                 style={{ animation: 'float-gentle 4s ease-in-out infinite' }}
               />
@@ -149,7 +149,7 @@ export function SplashPage() {
           </div>
 
           <h1 className="text-4xl font-bold font-display tracking-tight stagger-brand">
-            <span className="text-gradient">RentBuddy</span>
+            <span className="text-gradient">Sidebud</span>
           </h1>
           <p className="text-surface-500 mt-3 text-sm tracking-wide stagger-tagline">
             Trust-based social connections

@@ -1,4 +1,4 @@
-import { getErrorMessage } from '../../lib/error'
+﻿import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, ChevronLeft, ChevronRight, Check, X, FileDown } from 'lucide-react'
@@ -113,13 +113,13 @@ export function AdminWithdrawalsPage() {
                 rows: withdrawals.map((w) => [
                   w.userName || '-',
                   w.userEmail || '-',
-                  `₹${w.amount}`,
+                  `â‚¹${w.amount}`,
                   w.method || '-',
                   w.accountDetail || '-',
                   w.status || '-',
                   w.createdAt ? new Date(w.createdAt).toLocaleString('en-IN') : '-',
                 ]),
-                fileName: `rentbuddy-withdrawals-${new Date().toISOString().slice(0, 10)}`,
+                fileName: `Sidebud-withdrawals-${new Date().toISOString().slice(0, 10)}`,
                 landscape: true,
               })
             }
@@ -190,7 +190,7 @@ export function AdminWithdrawalsPage() {
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          <span className="text-white font-semibold">₹{Number(w.amount || 0).toLocaleString('en-IN')}</span>
+                          <span className="text-white font-semibold">â‚¹{Number(w.amount || 0).toLocaleString('en-IN')}</span>
                         </td>
                         <td className="px-4 py-3">
                           <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${statusBadge(w.status)}`}>

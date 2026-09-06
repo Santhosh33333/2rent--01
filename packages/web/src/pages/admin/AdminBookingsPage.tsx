@@ -1,4 +1,4 @@
-import { getErrorMessage } from '../../lib/error'
+﻿import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, ChevronLeft, ChevronRight, FileDown } from 'lucide-react'
@@ -66,8 +66,8 @@ export function AdminBookingsPage() {
           id: b.id,
           userName: b.user?.fullName || b.userName || 'Unknown',
           userEmail: b.user?.email || '',
-          partnerName: b.partner?.user?.fullName || b.partnerName || '—',
-          serviceType: b.serviceType || '—',
+          partnerName: b.partner?.user?.fullName || b.partnerName || 'â€”',
+          serviceType: b.serviceType || 'â€”',
           status: b.status,
           paymentStatus: b.paymentStatus,
           refundStatus: b.refundStatus,
@@ -116,7 +116,7 @@ export function AdminBookingsPage() {
                   b.refundStatus || '-',
                   b.createdAt ? new Date(b.createdAt).toLocaleString('en-IN') : '-',
                 ]),
-                fileName: `rentbuddy-bookings-${new Date().toISOString().slice(0, 10)}`,
+                fileName: `Sidebud-bookings-${new Date().toISOString().slice(0, 10)}`,
                 landscape: true,
               })
             }
@@ -193,7 +193,7 @@ export function AdminBookingsPage() {
                         <td className="px-4 py-3 text-gray-400 text-xs">{b.refundStatus || '-'}</td>
                         <td className="px-4 py-3">
                           <span className="text-white font-semibold">
-                            ₹{Number(b.finalAmount || b.estimatedAmount || 0).toLocaleString('en-IN')}
+                            â‚¹{Number(b.finalAmount || b.estimatedAmount || 0).toLocaleString('en-IN')}
                           </span>
                         </td>
                         <td className="px-4 py-3">

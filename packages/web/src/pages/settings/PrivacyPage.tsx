@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Eye, MapPin, Lock, Smartphone, Globe, AlertTriangle,
@@ -134,7 +134,7 @@ export function PrivacyPage() {
             <button onClick={() => navigate('/settings/privacy/terms')} className="w-full flex items-center justify-between p-4 rounded-2xl hover:bg-surface-50 dark:hover:bg-surface-800/50 transition-colors group">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-violet-50 dark:bg-violet-500/10 flex items-center justify-center"><FileText className="w-5 h-5 text-violet-500" /></div>
-                <div className="text-left"><p className="text-sm font-medium text-surface-900 dark:text-white">Terms of Service</p><p className="text-xs text-surface-500">Rules for using RentBuddy</p></div>
+                <div className="text-left"><p className="text-sm font-medium text-surface-900 dark:text-white">Terms of Service</p><p className="text-xs text-surface-500">Rules for using Sidebud</p></div>
               </div>
               <ChevronRight className="w-4 h-4 text-surface-400 group-hover:text-primary-500" />
             </button>

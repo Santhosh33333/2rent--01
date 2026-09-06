@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+﻿import { Request, Response } from "express";
 import crypto from "crypto";
 import { verifyClerkToken } from "../services/clerkService";
 import { prisma } from "../config/database";
@@ -57,7 +57,7 @@ export async function clerkSync(req: Request, res: Response): Promise<void> {
       user = await prisma.user.create({
         data: {
           clerkId,
-          email: email || `clerk-${clerkId}@rentbuddy.app`,
+          email: email || `clerk-${clerkId}@Sidebud.app`,
           phone: phone || `+91${clerkId.slice(0, 10)}`,
           passwordHash,
           fullName: fullName.trim() || "User",

@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight, ChevronRight, GripVertical, Search, SlidersHorizontal, Sparkles } from 'lucide-react'
 import { DISCOVERY_CATEGORIES, QUICK_ACTIONS, type DiscoveryCategoryKey } from '../../lib/discoveryData'
 
-const STORAGE_KEY = 'rentbuddy.discovery-order'
+const STORAGE_KEY = 'Sidebud.discovery-order'
 
 export function DiscoveryHubPage() {
   const [query, setQuery] = useState('')
@@ -101,8 +101,8 @@ export function DiscoveryHubPage() {
                 <p className="mt-1 text-xs text-surface-500">{category.summary}</p>
               </div>
               <div className="flex items-center gap-1">
-                <button onClick={() => moveCategory(customOrder.indexOf(category.key), -1)} className="rounded-lg bg-surface-100 px-2 py-1 text-xs dark:bg-surface-700">↑</button>
-                <button onClick={() => moveCategory(customOrder.indexOf(category.key), 1)} className="rounded-lg bg-surface-100 px-2 py-1 text-xs dark:bg-surface-700">↓</button>
+                <button onClick={() => moveCategory(customOrder.indexOf(category.key), -1)} className="rounded-lg bg-surface-100 px-2 py-1 text-xs dark:bg-surface-700">â†‘</button>
+                <button onClick={() => moveCategory(customOrder.indexOf(category.key), 1)} className="rounded-lg bg-surface-100 px-2 py-1 text-xs dark:bg-surface-700">â†“</button>
                 <Link to={`/discover/${category.key}`} className="ml-2 inline-flex items-center gap-1 rounded-lg bg-primary-600 px-2.5 py-1.5 text-xs font-medium text-white">
                   Open <ArrowRight className="w-3 h-3" />
                 </Link>

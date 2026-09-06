@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
+﻿import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 import { api } from './api'
 import { disconnectGlobalSocket } from '../hooks/useSocket'
 import type { RegisterInput } from '../types/api'
@@ -51,8 +51,8 @@ function buildUserFromPayload(payload: Record<string, unknown>, fallbackName?: s
   const accountType = normalizeRole((payload?.accountType || payload?.userType || payload?.activeRole || payload?.role || 'USER') as string)
   return {
     id: (payload?.id as string) || `local-${Date.now()}`,
-    email: (payload?.email as string) || fallbackName || 'user@rentbuddy.local',
-    name: (payload?.fullName as string) || (payload?.name as string) || fallbackName || 'RentBuddy User',
+    email: (payload?.email as string) || fallbackName || 'user@Sidebud.local',
+    name: (payload?.fullName as string) || (payload?.name as string) || fallbackName || 'Sidebud User',
     phone: payload?.phone as string,
     role,
     activeRole: normalizeRole((payload?.activeRole || payload?.role || role) as string),
@@ -62,7 +62,7 @@ function buildUserFromPayload(payload: Record<string, unknown>, fallbackName?: s
     kycStatus: payload?.kycStatus as string,
     kycRejectionReason: (payload?.kycRejectionReason as string) ?? null,
     partnerStatus: (payload?.partnerStatus as string) ?? null,
-    fullName: (payload?.fullName as string) || (payload?.name as string) || fallbackName || 'RentBuddy User',
+    fullName: (payload?.fullName as string) || (payload?.name as string) || fallbackName || 'Sidebud User',
     city: payload?.city as string,
     bio: payload?.bio as string,
     country: payload?.country as string,
@@ -78,7 +78,7 @@ function clearSessionData(): void {
   localStorage.removeItem('user')
   localStorage.removeItem('activeRole')
   // Routing-state flags must not leak to the next user on a shared device.
-  // NOTE: 'theme' / UI prefs intentionally persist — they are device settings,
+  // NOTE: 'theme' / UI prefs intentionally persist â€” they are device settings,
   // not session state.
   localStorage.removeItem('onboarding_complete')
   localStorage.removeItem('profile_complete')
@@ -284,13 +284,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const u = buildUserFromPayload(
       {
         ...(apiUser || {}),
-        email: (apiUser?.email as string) || 'user@rentbuddy.local',
+        email: (apiUser?.email as string) || 'user@Sidebud.local',
         id: (apiUser?.id as string) || `user-${Date.now()}`,
         role: (apiUser?.role as string) || 'USER',
         activeRole: (apiUser?.activeRole as string) || (apiUser?.role as string) || 'USER',
         accountType: (apiUser?.accountType as string) || (apiUser?.userType as string) || (apiUser?.activeRole as string) || (apiUser?.role as string) || 'USER',
       },
-      (apiUser?.email as string) || 'user@rentbuddy.local'
+      (apiUser?.email as string) || 'user@Sidebud.local'
     )
     localStorage.removeItem('impersonating')
     localStorage.setItem('token', accessToken)
@@ -378,7 +378,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const u = buildUserFromPayload(
       {
         ...apiUser,
-        email: apiUser?.email || 'viewer@rentbuddy.local',
+        email: apiUser?.email || 'viewer@Sidebud.local',
         id: apiUser?.id || `user-${Date.now()}`,
         role: apiUser?.role || 'USER',
         activeRole: apiUser?.activeRole || apiUser?.role || 'USER',

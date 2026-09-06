@@ -111,7 +111,7 @@ export function AdminDashboardPage() {
       title: 'Platform Overview',
       columns: ['Metric', 'Value', 'Details'],
       rows: stats.map((s) => [s.label, s.value, s.sub]),
-      fileName: `rentbuddy-dashboard-${new Date().toISOString().slice(0, 10)}`,
+      fileName: `Sidebud-dashboard-${new Date().toISOString().slice(0, 10)}`,
     })
   }
 

@@ -1,4 +1,4 @@
-import { jsPDF } from 'jspdf'
+﻿import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
 export interface PdfExportOptions {
@@ -16,7 +16,7 @@ export function exportTableToPdf({ title, subtitle, columns, rows, fileName, lan
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(15)
-  doc.text('RentBuddy Admin', 40, 40)
+  doc.text('Sidebud Admin', 40, 40)
   doc.setFontSize(11)
   doc.text(title, 40, 58)
   doc.setFont('helvetica', 'normal')

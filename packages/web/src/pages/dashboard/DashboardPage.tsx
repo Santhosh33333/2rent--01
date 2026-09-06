@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import {
   Users, Calendar, MessageCircle, Wallet, MapPin, Heart,
   Footprints, ArrowRight, TrendingUp, Star, ChevronRight, Home
@@ -73,7 +73,7 @@ export function DashboardPage() {
   }
 
   const quickStats = [
-    { label: 'Wallet', value: `₹${walletBalance.toLocaleString('en-IN')}`, icon: Wallet, color: 'from-primary-500 to-primary-600' },
+    { label: 'Wallet', value: `â‚¹${walletBalance.toLocaleString('en-IN')}`, icon: Wallet, color: 'from-primary-500 to-primary-600' },
     { label: 'Friends', value: stats.friends, icon: Users, color: 'from-sky-500 to-blue-600' },
     { label: 'Communities', value: stats.communities, icon: Heart, color: 'from-pink-500 to-rose-600' },
     { label: 'Events', value: stats.events, icon: Calendar, color: 'from-amber-500 to-orange-600' },
@@ -236,7 +236,7 @@ export function DashboardPage() {
                   <div className="w-16 h-16 mx-auto rounded-2xl bg-surface-100 dark:bg-surface-800 flex items-center justify-center mb-4">
                     <Home className="w-8 h-8 text-surface-400" />
                   </div>
-                  <h3 className="font-bold text-surface-900 dark:text-surface-100 mb-1 font-display">Welcome to RentBuddy</h3>
+                  <h3 className="font-bold text-surface-900 dark:text-surface-100 mb-1 font-display">Welcome to Sidebud</h3>
                   <p className="text-sm text-surface-500 dark:text-surface-400 mb-5">Start exploring to see your activity here</p>
                   <Link to="/walking-requests" className="btn-primary btn-sm">
                     <Footprints className="w-4 h-4" />
@@ -257,7 +257,7 @@ export function DashboardPage() {
                 <Wallet className="w-5 h-5 text-white/80" />
                 <span className="text-sm font-medium text-white/80">Wallet Balance</span>
               </div>
-              <p className="text-3xl font-bold font-display">₹{walletBalance.toLocaleString('en-IN')}</p>
+              <p className="text-3xl font-bold font-display">â‚¹{walletBalance.toLocaleString('en-IN')}</p>
               <div className="flex gap-2 mt-4">
                 <Link to="/wallet/withdraw" className="flex-1 text-center py-2.5 rounded-xl bg-white/15 hover:bg-white/25 text-xs font-semibold transition-colors">
                   Withdraw

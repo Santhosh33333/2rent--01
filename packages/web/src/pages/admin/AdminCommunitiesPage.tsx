@@ -1,4 +1,4 @@
-import { getErrorMessage } from '../../lib/error'
+﻿import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, ChevronLeft, ChevronRight, Users2, FileDown } from 'lucide-react'
@@ -38,7 +38,7 @@ export function AdminCommunitiesPage() {
           city: c.city,
           privacy: c.privacy,
           memberCount: Number(c.memberCount ?? c._count?.members ?? 0),
-          ownerName: c.owner?.fullName || '—',
+          ownerName: c.owner?.fullName || 'â€”',
           createdAt: c.createdAt,
         })),
       )
@@ -81,7 +81,7 @@ export function AdminCommunitiesPage() {
                   c.ownerName || '-',
                   c.createdAt ? new Date(c.createdAt).toLocaleDateString('en-IN') : '-',
                 ]),
-                fileName: `rentbuddy-communities-${new Date().toISOString().slice(0, 10)}`,
+                fileName: `Sidebud-communities-${new Date().toISOString().slice(0, 10)}`,
                 landscape: true,
               })
             }

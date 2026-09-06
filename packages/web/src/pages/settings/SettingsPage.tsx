@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Sun, Moon, Monitor, Bell, Shield, Smartphone, Type, WifiOff, Save, Loader2, Eye, Clock } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -108,7 +108,7 @@ export function SettingsPage() {
     const root = document.documentElement
     if (size === 'small' || size === 'large') root.dataset.fontSize = size
     else delete root.dataset.fontSize
-    localStorage.setItem('rentbuddy-font-size', size)
+    localStorage.setItem('Sidebud-font-size', size)
   }
 
   const handleSave = async () => {
@@ -160,7 +160,7 @@ export function SettingsPage() {
             </div>
           </SettingRow>
 
-          {/* Language is English-only — no selector shown. */}
+          {/* Language is English-only â€” no selector shown. */}
 
           {/* Notifications */}
           <h2 className="text-xs font-semibold text-surface-400 uppercase tracking-wider mb-3 mt-8">Notifications</h2>

@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom'
+﻿import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Shield, FileText, Heart, ChevronRight, Lock, Scale, Mail, Globe } from 'lucide-react'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
@@ -13,9 +13,9 @@ export function AboutPage() {
     { icon: FileText, label: 'Terms & Conditions', desc: 'Read our terms of service', action: () => navigate('/about/terms') },
     { icon: Shield, label: 'Privacy Policy', desc: 'How we protect your data', action: () => navigate('/about/privacy') },
     { icon: Lock, label: 'Data Safety', desc: 'How your data is collected and used', action: () => navigate('/about/data-safety') },
-    { icon: Scale, label: 'Community Guidelines', desc: 'Rules for using RentBuddy', action: () => navigate('/about/community-guidelines') },
-    { icon: Mail, label: 'Contact Us', desc: 'support@rentbuddy.app', action: () => window.location.href = 'mailto:support@rentbuddy.app' },
-    { icon: Globe, label: 'Website', desc: 'www.rentbuddy.app', action: () => window.open('https://www.rentbuddy.app', '_blank') },
+    { icon: Scale, label: 'Community Guidelines', desc: 'Rules for using Sidebud', action: () => navigate('/about/community-guidelines') },
+    { icon: Mail, label: 'Contact Us', desc: 'support@Sidebud.app', action: () => window.location.href = 'mailto:support@Sidebud.app' },
+    { icon: Globe, label: 'Website', desc: 'www.Sidebud.app', action: () => window.open('https://www.Sidebud.app', '_blank') },
   ]
 
   return (
@@ -29,10 +29,10 @@ export function AboutPage() {
         <GlassCard variant="elevated" padding="lg" className="text-center">
           <img
             src="/logo-mark.svg"
-            alt="RentBuddy logo"
+            alt="Sidebud logo"
             className="w-20 h-20 mx-auto rounded-3xl shadow-xl shadow-primary-500/30 mb-4"
           />
-          <h1 className="text-2xl font-bold font-display text-surface-900 dark:text-white">RentBuddy</h1>
+          <h1 className="text-2xl font-bold font-display text-surface-900 dark:text-white">Sidebud</h1>
           <p className="text-sm text-surface-500 mt-1">Trust-based social platform</p>
           <div className="flex items-center justify-center gap-4 mt-3 text-xs text-surface-400">
             <span>Version {APP_VERSION}</span>
@@ -76,7 +76,7 @@ export function AboutPage() {
       <AnimatedPage delay={300}>
         <p className="text-center text-xs text-surface-400 py-4">
           Made with <Heart className="w-3 h-3 inline text-danger-500" /> in India
-          <br />© 2026 RentBuddy. All rights reserved.
+          <br />Â© 2026 Sidebud. All rights reserved.
         </p>
       </AnimatedPage>
     </div>

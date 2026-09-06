@@ -124,7 +124,7 @@ export function AdminPaymentsPage() {
       const a = document.createElement('a')
       a.href = url
       const stamp = new Date().toISOString().slice(0, 10)
-      const parts = ['rentbuddy-payments', stamp]
+      const parts = ['Sidebud-payments', stamp]
       if (statusFilter) parts.push(statusFilter.toLowerCase())
       if (typeFilter) parts.push(typeFilter.toLowerCase())
       if (search.trim()) parts.push('search')
@@ -231,7 +231,7 @@ export function AdminPaymentsPage() {
                   r.status || '-',
                   r.booking?.serviceType || '-',
                 ]),
-                fileName: `rentbuddy-payments-${new Date().toISOString().slice(0, 10)}${statusFilter ? `-${statusFilter.toLowerCase()}` : ''}${typeFilter ? `-${typeFilter.toLowerCase()}` : ''}`,
+                fileName: `Sidebud-payments-${new Date().toISOString().slice(0, 10)}${statusFilter ? `-${statusFilter.toLowerCase()}` : ''}${typeFilter ? `-${typeFilter.toLowerCase()}` : ''}`,
                 landscape: true,
               })
             }

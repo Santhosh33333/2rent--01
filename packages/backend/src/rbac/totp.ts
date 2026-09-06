@@ -1,4 +1,4 @@
-import crypto from "crypto";
+﻿import crypto from "crypto";
 
 const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
@@ -42,7 +42,7 @@ export function generateTotpSecret(): string {
   return base32Encode(crypto.randomBytes(20));
 }
 
-export function buildOtpAuthUrl(secret: string, account: string, issuer = "RentBuddy"): string {
+export function buildOtpAuthUrl(secret: string, account: string, issuer = "Sidebud"): string {
   const label = encodeURIComponent(`${issuer}:${account}`);
   return `otpauth://totp/${label}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30`;
 }

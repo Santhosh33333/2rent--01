@@ -1,4 +1,4 @@
-import "dotenv/config";
+﻿import "dotenv/config";
 import { createApp } from "./app";
 import { env } from "./config/env";
 import { prisma, testConnection, disconnect } from "./config/database";
@@ -61,7 +61,7 @@ async function main(): Promise<void> {
 
   if (!dbAvailable) {
     console.error(
-      "\n❌ CRITICAL: Could not connect to the database after multiple attempts.\n" +
+      "\nâŒ CRITICAL: Could not connect to the database after multiple attempts.\n" +
       "   The server will NOT start in 'no DB' mode. Verify PostgreSQL is running\n" +
       "   (e.g. Start-Service postgresql-x64-17) and DATABASE_URL is correct, then restart.\n"
     );
@@ -77,7 +77,7 @@ async function main(): Promise<void> {
 
   // Realtime + push fan-out for EVERY in-app notification row (spec: OTP and
   // arrival alerts must reach the user live, not sit silently in the DB).
-  // Installed once on the shared singleton — covers all creators, so no
+  // Installed once on the shared singleton â€” covers all creators, so no
   // call site can forget to emit. Never throws into the write path.
   prisma.$use(async (params, next) => {
     const result = await next(params);
@@ -110,7 +110,7 @@ async function main(): Promise<void> {
   startReminderSweeper();
 
   server.listen(env.PORT, () => {
-    console.log(`RentBuddy API server listening on port ${env.PORT} [${env.NODE_ENV}]`);
+    console.log(`Sidebud API server listening on port ${env.PORT} [${env.NODE_ENV}]`);
   });
 
   const shutdown = async (signal: string): Promise<void> => {

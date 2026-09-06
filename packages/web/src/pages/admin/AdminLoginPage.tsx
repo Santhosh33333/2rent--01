@@ -104,7 +104,7 @@ export function AdminLoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full px-4 py-3 rounded-xl bg-surface-900 border border-surface-700 text-white placeholder:text-surface-600 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition"
-              placeholder="admin@rentbuddy.app"
+              placeholder="admin@Sidebud.app"
             />
           </div>
           <div>

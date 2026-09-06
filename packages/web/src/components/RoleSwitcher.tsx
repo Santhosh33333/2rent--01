@@ -60,7 +60,7 @@ export function RoleSwitcher() {
     <div className="relative">
       <button
         onClick={() => { setIsOpen(!isOpen); setMessage(null) }}
-        className="flex items-center gap-2 px-3 py-2 rounded-xl bg-glass hover:bg-glass-elevated transition-all duration-200 text-sm font-medium"
+        className="flex items-center gap-2 px-3 py-2 rounded-xl bg-surface-100 dark:bg-surface-800 hover:bg-surface-200 dark:hover:bg-surface-700 transition-all duration-200 text-sm font-medium"
         disabled={switching}
       >
         <span className="text-base">{currentMeta.icon}</span>
@@ -75,9 +75,9 @@ export function RoleSwitcher() {
       {isOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          <div className="absolute top-full left-0 mt-2 w-80 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-            <div className="p-3 border-b border-gray-100 dark:border-gray-800">
-              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Switch Role</p>
+          <div className="absolute top-full left-0 mt-2 w-80 max-w-[calc(100vw-2rem)] bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-700 rounded-2xl shadow-2xl z-50 overflow-hidden animate-fade-in duration-200">
+            <div className="p-3 border-b border-surface-100 dark:border-surface-800">
+              <p className="text-xs font-semibold text-surface-500 dark:text-surface-400 uppercase tracking-wider">Switch Role</p>
             </div>
 
             {message && (
@@ -106,20 +106,20 @@ export function RoleSwitcher() {
                       disabled={switching}
                       className={`w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all ${
                         isActive
-                          ? 'bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-700'
-                          : 'hover:bg-gray-50 dark:hover:bg-gray-800'
+                          ? 'bg-primary-50 dark:bg-primary-900/30 border border-primary-200 dark:border-primary-700'
+                          : 'hover:bg-surface-50 dark:hover:bg-surface-800'
                       }`}
                     >
                       <span className="text-xl">{meta.icon}</span>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-gray-900 dark:text-white">{meta.label}</span>
-                          {isActive && <Check className="w-3.5 h-3.5 text-indigo-500" />}
+                          <span className="text-sm font-medium text-surface-900 dark:text-surface-50">{meta.label}</span>
+                          {isActive && <Check className="w-3.5 h-3.5 text-primary-500" />}
                         </div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{meta.description}</p>
+                        <p className="text-xs text-surface-500 dark:text-surface-400 truncate">{meta.description}</p>
                       </div>
                       {isActive ? (
-                        <span className="text-xs text-indigo-500 font-medium">Active</span>
+                        <span className="text-xs text-primary-500 font-medium">Active</span>
                       ) : (
                         <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
                           Switch <ArrowRight className="w-3 h-3" />

@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+﻿import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import { v4 as uuidv4 } from "uuid";
 import { createHash, createPublicKey, verify as cryptoVerify } from "crypto";
@@ -118,11 +118,11 @@ async function recordLogin(userId: string, req: Request): Promise<void> {
 }
 
 function firebasePlaceholderEmail(uid: string): string {
-  return `${uid}@users.noreply.rentbuddy.app`;
+  return `${uid}@users.noreply.Sidebud.app`;
 }
 
 function firebasePlaceholderPhone(uid: string): string {
-  const digest = createHash("sha256").update(`rentbuddy-firebase-phone:${uid}`).digest("hex");
+  const digest = createHash("sha256").update(`Sidebud-firebase-phone:${uid}`).digest("hex");
   const digits = BigInt(`0x${digest.slice(0, 16)}`).toString().padStart(10, "0").slice(-10);
   return `+910${digits}`;
 }
@@ -314,7 +314,7 @@ export async function login(req: Request, res: Response): Promise<void> {
     }
 
     // Admin-tier accounts must always resolve their session role from the
-    // stored account type — never from a stale activeRole left over from a
+    // stored account type â€” never from a stale activeRole left over from a
     // previous regular-user session.
     let effectiveActiveRole = user.activeRole || user.role;
     if (isAdminRole(user.role) && effectiveActiveRole !== user.role) {
@@ -413,7 +413,7 @@ export async function sendPhoneOTP(req: Request, res: Response): Promise<void> {
         sendError(res, "Failed to send OTP.", 500, "INTERNAL_ERROR");
         return;
       }
-      // Dev fallback: Firebase unavailable/misconfigured — deliver OTP locally so
+      // Dev fallback: Firebase unavailable/misconfigured â€” deliver OTP locally so
       // the flow remains testable. In production this would be a real misconfig.
       const otp = setOtp(`phone:${phone}`);
       sendOTP(otp, { phone });
@@ -567,7 +567,7 @@ export async function googleSignIn(req: Request, res: Response): Promise<void> {
       user = await prisma.$transaction(async (tx) => {
         const u = await tx.user.create({
           data: {
-            email: email || `google-${uid}@rentbuddy.app`,
+            email: email || `google-${uid}@Sidebud.app`,
             phone: phone_number || `+91${uid.slice(0, 10)}`,
             passwordHash,
             fullName: name || "Google User",
@@ -623,7 +623,7 @@ async function verifyAppleIdentityToken(idToken: string): Promise<{ sub: string;
   return { sub: payload.sub, email: payload.email };
 }
 
-// Apple Sign-In — real OIDC verification, env-gated.
+// Apple Sign-In â€” real OIDC verification, env-gated.
 export async function appleSignIn(req: AuthedRequest, res: Response): Promise<void> {
   try {
     if (!env.APPLE_CLIENT_ID) {
@@ -655,7 +655,7 @@ export async function appleSignIn(req: AuthedRequest, res: Response): Promise<vo
       user = await prisma.$transaction(async (tx) => {
         const u = await tx.user.create({
           data: {
-            email: claims.email || `apple-${appleId}@rentbuddy.app`,
+            email: claims.email || `apple-${appleId}@Sidebud.app`,
             phone: `apple_${appleId.replace(/[^a-zA-Z0-9]/g, "")}`,
             passwordHash,
             fullName: fullName || "Apple User",
@@ -768,7 +768,7 @@ export async function forgotPassword(req: Request, res: Response): Promise<void>
     if (user) {
       const otp = setOtp(`reset:${user.id}`);
       sendOTP(otp, { email });
-      // Never return the OTP or userId in the HTTP response — logging only,
+      // Never return the OTP or userId in the HTTP response â€” logging only,
       // and the response is IDENTICAL for existing/unknown accounts to prevent
       // account enumeration.
       if (process.env.NODE_ENV !== "production") {
@@ -821,7 +821,7 @@ export async function verifyEmail(req: Request, res: Response): Promise<void> {
     }
     const record = getOtp(`email:${userId}`);
     if (!record) {
-      // Do NOT auto-send OTP here — that enables email bombing via unauthenticated
+      // Do NOT auto-send OTP here â€” that enables email bombing via unauthenticated
       // requests. User must call /auth/resend-otp to request a new code.
       sendError(res, "No active OTP found. Please request a new code.", 400, "OTP_EXPIRED");
       return;
@@ -856,7 +856,7 @@ export async function verifyMobile(req: Request, res: Response): Promise<void> {
     }
     const record = getOtp(`mobile:${userId}`);
     if (!record) {
-      // Do NOT auto-send OTP here — that enables SMS bombing via unauthenticated
+      // Do NOT auto-send OTP here â€” that enables SMS bombing via unauthenticated
       // requests. User must call /auth/resend-otp to request a new code.
       sendError(res, "No active OTP found. Please request a new code.", 400, "OTP_EXPIRED");
       return;

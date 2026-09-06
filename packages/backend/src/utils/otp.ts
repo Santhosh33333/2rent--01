@@ -1,4 +1,4 @@
-import crypto from "crypto";
+﻿import crypto from "crypto";
 import { sendOTPEmail } from "../services/emailService";
 
 const OTP_LENGTH = 6;
@@ -33,7 +33,7 @@ async function sendSMS(phone: string, message: string): Promise<void> {
   const fromNumber = process.env.TWILIO_FROM_NUMBER;
 
   if (!accountSid || !authToken || !fromNumber) {
-    throw new Error("Twilio not configured — set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER");
+    throw new Error("Twilio not configured â€” set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER");
   }
 
   const twilio = (await import("twilio")).default;
@@ -52,12 +52,12 @@ export async function sendOTP(otp: string, channel: OtpChannel): Promise<void> {
   }
   if (channel.phone) {
     try {
-      await sendSMS(channel.phone, `Your RentBuddy verification code is: ${otp}. It expires in 10 minutes. Do not share this code.`);
+      await sendSMS(channel.phone, `Your Sidebud verification code is: ${otp}. It expires in 10 minutes. Do not share this code.`);
     } catch (err) {
       console.error(`[OTP] SMS delivery failed for ${channel.phone}:`, err);
       // In dev, log the OTP so developers can test without Twilio
       if (process.env.NODE_ENV !== "production") {
-        console.log(`[OTP] Dev fallback — SMS OTP for ${channel.phone}: ${otp}`);
+        console.log(`[OTP] Dev fallback â€” SMS OTP for ${channel.phone}: ${otp}`);
       }
     }
   }

@@ -1,4 +1,4 @@
-import { createTransport } from "nodemailer";
+﻿import { createTransport } from "nodemailer";
 import { env } from "../config/env";
 
 let transporter: ReturnType<typeof createTransport> | null = null;
@@ -7,7 +7,7 @@ function getTransporter() {
   if (transporter) return transporter;
 
   if (!env.SMTP_HOST || !env.SMTP_USER || !env.SMTP_PASS) {
-    console.warn("[EMAIL] SMTP not configured — emails will be logged only");
+    console.warn("[EMAIL] SMTP not configured â€” emails will be logged only");
     return null;
   }
 
@@ -24,10 +24,10 @@ function getTransporter() {
 export async function sendEmail(to: string, subject: string, html: string, text?: string): Promise<boolean> {
   const tx = getTransporter();
   if (!tx) {
-    // Never log email bodies (they may contain OTPs / PII) — especially in
+    // Never log email bodies (they may contain OTPs / PII) â€” especially in
     // production, where that would leak secrets to the console/log aggregator.
     if (env.isProduction) {
-      console.warn("[EMAIL] SMTP not configured — email not delivered (suppressed from logs for PII safety).");
+      console.warn("[EMAIL] SMTP not configured â€” email not delivered (suppressed from logs for PII safety).");
       return false;
     }
     console.log(`[EMAIL] (dev) To: ${to} | Subject: ${subject}`);
@@ -51,10 +51,10 @@ export async function sendEmail(to: string, subject: string, html: string, text?
 }
 
 export async function sendOTPEmail(email: string, otp: string, purpose = "verification"): Promise<boolean> {
-  const subject = `Your RentBuddy ${purpose} code`;
+  const subject = `Your Sidebud ${purpose} code`;
   const html = `
     <div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:20px">
-      <h2 style="color:#10b981">RentBuddy</h2>
+      <h2 style="color:#10b981">Sidebud</h2>
       <p>Your ${purpose} code is:</p>
       <div style="font-size:32px;font-weight:bold;letter-spacing:4px;color:#111;background:#f3f4f6;padding:16px;border-radius:8px;text-align:center">${otp}</div>
       <p style="color:#6b7280;font-size:14px">This code expires in ${env.OTP_EXPIRY_MINUTES} minutes. Do not share it with anyone.</p>

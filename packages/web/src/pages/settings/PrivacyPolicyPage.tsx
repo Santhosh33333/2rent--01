@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom'
+﻿import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Shield } from 'lucide-react'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
@@ -73,7 +73,7 @@ export function PrivacyPolicyPage() {
 
             <section>
               <h2 className="text-lg font-bold font-display text-surface-900 dark:text-white mb-3">10. Contact Us</h2>
-              <p className="text-sm leading-relaxed">For privacy-related inquiries, contact us at privacy@rentbuddy.app or through the in-app support channel.</p>
+              <p className="text-sm leading-relaxed">For privacy-related inquiries, contact us at privacy@Sidebud.app or through the in-app support channel.</p>
             </section>
           </div>
         </GlassCard>

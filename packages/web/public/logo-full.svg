@@ -1,34 +1,34 @@
 <svg width="1120" height="288" viewBox="0 0 1120 288" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="rbfTile" x1="30" y1="20" x2="266" y2="272" gradientUnits="userSpaceOnUse">
+    <linearGradient id="sbfTile" x1="30" y1="20" x2="266" y2="272" gradientUnits="userSpaceOnUse">
       <stop stop-color="#6366F1"/>
-      <stop offset="0.52" stop-color="#8B5CF6"/>
-      <stop offset="1" stop-color="#EC4899"/>
+      <stop offset="0.5" stop-color="#8B5CF6"/>
+      <stop offset="1" stop-color="#F97316"/>
     </linearGradient>
-    <linearGradient id="rbfInner" x1="86" y1="66" x2="208" y2="200" gradientUnits="userSpaceOnUse">
+    <linearGradient id="sbfInner" x1="86" y1="66" x2="208" y2="200" gradientUnits="userSpaceOnUse">
       <stop stop-color="#4F46E5"/>
-      <stop offset="1" stop-color="#DB2777"/>
+      <stop offset="1" stop-color="#EA580C"/>
     </linearGradient>
-    <linearGradient id="rbfText" x1="300" y1="60" x2="1100" y2="230" gradientUnits="userSpaceOnUse">
+    <linearGradient id="sbfText" x1="300" y1="60" x2="1100" y2="230" gradientUnits="userSpaceOnUse">
       <stop stop-color="#4F46E5"/>
       <stop offset="0.55" stop-color="#7C3AED"/>
-      <stop offset="1" stop-color="#DB2777"/>
+      <stop offset="1" stop-color="#EA580C"/>
     </linearGradient>
   </defs>
 
   <!-- mark -->
   <g transform="translate(16 16) scale(0.5)">
-    <rect width="512" height="512" rx="116" fill="url(#rbfTile)"/>
+    <rect width="512" height="512" rx="116" fill="url(#sbfTile)"/>
     <circle cx="118" cy="92" r="150" fill="#FFFFFF" opacity="0.08"/>
-    <path d="M78 446 Q158 500 252 456" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round" stroke-dasharray="0.1 30" opacity="0.9"/>
-    <circle cx="78" cy="446" r="13" fill="#FFFFFF"/>
-    <path d="M256 74 C167 74 106 139 106 222 C106 297 171 353 223 397 Q243 414 254 432 C266 415 283 400 301 385 C351 344 406 292 406 222 C406 139 345 74 256 74 Z" fill="#FFFFFF"/>
-    <circle cx="213" cy="184" r="33" fill="url(#rbfInner)"/>
-    <circle cx="299" cy="184" r="33" fill="url(#rbfInner)"/>
-    <rect x="173" y="228" width="82" height="114" rx="39" fill="url(#rbfInner)" transform="rotate(-9 214 285)"/>
-    <rect x="257" y="228" width="82" height="114" rx="39" fill="url(#rbfInner)" transform="rotate(9 298 285)"/>
+    <path d="M120 392 Q256 460 392 392" stroke="#FFFFFF" stroke-width="12" stroke-linecap="round" fill="none" opacity="0.9"/>
+    <path d="M176 96 a44 44 0 1 1 88 0 a44 44 0 1 1 -88 0 Z" fill="#FFFFFF"/>
+    <path d="M132 292 a56 56 0 0 1 56 -56 h52 a56 56 0 0 1 56 56 v120 h-164 Z" fill="#FFFFFF"/>
+    <path d="M300 116 a42 42 0 1 1 84 0 a42 42 0 1 1 -84 0 Z" fill="#FFFFFF"/>
+    <path d="M272 300 a48 48 0 0 1 48 -48 h56 a48 48 0 0 1 48 48 v112 h-152 Z" fill="#FFFFFF"/>
+    <path d="M376 60 c-4 -8 -14 -8 -18 0 c-2 5 1 10 4 13 c2 3 5 5 5 5 c0 0 3 -2 5 -5 c3 -3 6 -8 4 -13 Z" fill="#FFD7A0"/>
+    <path d="M96 300 c-3 -7 -12 -7 -15 0 c-2 4 1 8 3 11 c2 2 4 4 4 4 c0 0 2 -2 4 -4 c2 -3 4 -7 4 -11 Z" fill="#FFFFFF" opacity="0.9"/>
   </g>
 
   <!-- wordmark -->
-  <text x="304" y="196" font-family="'Plus Jakarta Sans','Inter',system-ui,sans-serif" font-size="152" font-weight="800" letter-spacing="-6" fill="url(#rbfText)">Rent<tspan font-weight="700">Buddy</tspan></text>
+  <text x="304" y="196" font-family="'Plus Jakarta Sans','Inter',system-ui,sans-serif" font-size="152" font-weight="800" letter-spacing="-6" fill="url(#sbfText)">Side<tspan font-weight="700">bud</tspan></text>
 </svg>

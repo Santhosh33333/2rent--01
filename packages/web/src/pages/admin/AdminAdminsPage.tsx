@@ -263,7 +263,7 @@ export function AdminAdminsPage() {
                     a.role === 'SUPER_ADMIN' ? 'FULL ACCESS' : (a.permissions ?? []).length === 0 ? 'NO ACCESS' : `${(a.permissions ?? []).length} perms`,
                     a.status || '-',
                   ]),
-                  fileName: `rentbuddy-admins-${new Date().toISOString().slice(0, 10)}`,
+                  fileName: `Sidebud-admins-${new Date().toISOString().slice(0, 10)}`,
                   landscape: true,
                 })
               }

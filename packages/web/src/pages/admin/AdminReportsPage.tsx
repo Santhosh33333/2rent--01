@@ -1,4 +1,4 @@
-import { getErrorMessage } from '../../lib/error'
+﻿import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, ChevronLeft, ChevronRight, CheckCircle, FileDown } from 'lucide-react'
@@ -105,7 +105,7 @@ export function AdminReportsPage() {
                   r.status || '-',
                   r.createdAt ? new Date(r.createdAt).toLocaleString('en-IN') : '-',
                 ]),
-                fileName: `rentbuddy-reports-${new Date().toISOString().slice(0, 10)}`,
+                fileName: `Sidebud-reports-${new Date().toISOString().slice(0, 10)}`,
                 landscape: true,
               })
             }

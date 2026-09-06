@@ -303,10 +303,23 @@
     @apply min-h-[52px] px-6 py-4 text-base;
   }
   .btn-sm {
-    @apply min-h-[38px] px-3.5 text-xs;
+    @apply min-h-[40px] px-4 text-xs;
+  }
+  .btn-xs {
+    @apply min-h-[34px] px-3;
+  }
+  .btn-ghost,
+  .btn-outline,
+  .btn-secondary,
+  .btn-glass,
+  .btn-danger {
+    @apply min-h-[44px];
   }
   .btn-icon {
     @apply p-3;
+  }
+  .btn-icon-lg {
+    @apply p-3.5;
   }
   .input {
     @apply min-h-[48px] px-4 py-3 text-base;
@@ -316,6 +329,10 @@
   }
   .nav-item {
     @apply py-2.5;
+  }
+  /* Keep micro-badges crisp but big enough to read/fat-finger on the go */
+  .badge {
+    @apply min-h-[24px] px-2.5 text-xs;
   }
 }
 

@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+﻿import { Link } from 'react-router-dom'
 import {
   LayoutDashboard, Users, ShieldCheck, Handshake,
   Banknote, Flag, ScrollText, ArrowLeft, Settings, Percent, CalendarCheck, Wallet, Radio, Users2, CalendarDays, Layers, ShieldAlert, QrCode
@@ -36,7 +36,7 @@ export function AdminPortalPage() {
           </Link>
           <div className="flex-1">
             <h1 className="text-2xl font-bold text-white">Admin Portal</h1>
-            <p className="text-gray-400 text-sm mt-1">Manage your RentBuddy platform</p>
+            <p className="text-gray-400 text-sm mt-1">Manage your Sidebud platform</p>
           </div>
           {/* Switch between admin / user / partner account views */}
           <RoleSwitcher />

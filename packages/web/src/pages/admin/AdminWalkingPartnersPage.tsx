@@ -165,7 +165,7 @@ export function AdminWalkingPartnersPage() {
                   (p.services || []).join(', ') || '-',
                   p.createdAt ? new Date(p.createdAt).toLocaleDateString('en-IN') : '-',
                 ]),
-                fileName: `rentbuddy-partners-${new Date().toISOString().slice(0, 10)}`,
+                fileName: `Sidebud-partners-${new Date().toISOString().slice(0, 10)}`,
                 landscape: true,
               })
             }

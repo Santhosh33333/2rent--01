@@ -78,7 +78,7 @@ export function AdminAuditLogsPage() {
                   `${l.entityType || '-'}:${l.entityId || '-'}`,
                   l.details || '-',
                 ]),
-                fileName: `rentbuddy-audit-logs-${new Date().toISOString().slice(0, 10)}`,
+                fileName: `Sidebud-audit-logs-${new Date().toISOString().slice(0, 10)}`,
                 landscape: true,
               })
             }

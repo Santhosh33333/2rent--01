@@ -1,5 +1,5 @@
-/**
- * RENTBUDDY — Advanced Admin RBAC
+﻿/**
+ * Sidebud â€” Advanced Admin RBAC
  * -------------------------------------------------------------
  * The platform follows a strict trust chain:
  *
@@ -86,7 +86,7 @@ export const SUPER_ADMIN_ROLE = "SUPER_ADMIN";
 /**
  * Delegated admin role templates.
  * Each template maps a section to the list of actions the role may perform.
- * These are the DEFAULTS — Super Admin can narrow or widen them per account via
+ * These are the DEFAULTS â€” Super Admin can narrow or widen them per account via
  * the `permissions` override stored on AdminUser.
  *
  * The matrices below are intentionally tight so the FINAL SECURITY TEST passes:
@@ -157,7 +157,7 @@ export function permissionsForRole(roleName: string): string[] {
   return expandTemplate(template);
 }
 
-/** Every (section, action) pair — useful for UI checkboxes & documentation. */
+/** Every (section, action) pair â€” useful for UI checkboxes & documentation. */
 export function allPermissionPairs(): { section: Section; action: Action; token: string }[] {
   const out: { section: Section; action: Action; token: string }[] = [];
   for (const section of SECTIONS) {

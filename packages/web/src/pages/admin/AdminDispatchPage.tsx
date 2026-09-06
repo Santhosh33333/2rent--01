@@ -1,4 +1,4 @@
-import { getErrorMessage } from '../../lib/error'
+﻿import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, ChevronLeft, ChevronRight, Radio, FileDown } from 'lucide-react'
@@ -45,7 +45,7 @@ export function AdminDispatchPage() {
           id: b.id,
           userName: b.user?.fullName || 'Unknown',
           partnerName: b.partner?.user?.fullName || null,
-          serviceType: b.serviceType || '—',
+          serviceType: b.serviceType || 'â€”',
           status: b.status,
           offersSent: b._count?.dispatchRequests ?? 0,
           createdAt: b.createdAt,
@@ -101,7 +101,7 @@ export function AdminDispatchPage() {
                   String(r.offersSent),
                   r.createdAt ? new Date(r.createdAt).toLocaleString('en-IN') : '-',
                 ]),
-                fileName: `rentbuddy-dispatch-${new Date().toISOString().slice(0, 10)}`,
+                fileName: `Sidebud-dispatch-${new Date().toISOString().slice(0, 10)}`,
                 landscape: true,
               })
             }

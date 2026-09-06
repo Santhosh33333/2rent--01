@@ -156,7 +156,7 @@ export function AdminKycPage() {
         [e.emergencyContactName, e.emergencyContactPhone].filter(Boolean).join(' · ') || '-',
         e.updatedAt ? new Date(e.updatedAt).toLocaleString('en-IN') : '-',
       ]),
-      fileName: `rentbuddy-kyc-${statusFilter.toLowerCase()}-${new Date().toISOString().slice(0, 10)}`,
+      fileName: `Sidebud-kyc-${statusFilter.toLowerCase()}-${new Date().toISOString().slice(0, 10)}`,
       landscape: true,
     })
   }

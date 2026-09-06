@@ -1,4 +1,4 @@
-import { getErrorMessage } from '../../lib/error'
+﻿import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Search, ChevronLeft, ChevronRight, Ban, Unlock, Trash2, Loader2, X, FileDown, Crown, UserMinus, Eye } from 'lucide-react'
@@ -208,7 +208,7 @@ export function AdminUsersPage() {
                   (u.status || '-') + (u.suspendedUntil ? ` (until ${new Date(u.suspendedUntil).toLocaleDateString('en-IN')})` : ''),
                   u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-IN') : '-',
                 ]),
-                fileName: `rentbuddy-users-${new Date().toISOString().slice(0, 10)}`,
+                fileName: `Sidebud-users-${new Date().toISOString().slice(0, 10)}`,
                 landscape: true,
               })
             }

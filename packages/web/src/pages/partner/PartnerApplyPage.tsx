@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Footprints, Package, CheckCircle, ArrowLeft, ArrowRight, Loader2, CreditCard, FileText, AlertTriangle
@@ -212,16 +212,16 @@ export function PartnerApplyPage() {
               <h2 className="section-title">Terms & Agreement</h2>
               <div className="p-4 rounded-xl bg-surface-50 dark:bg-surface-800/50 max-h-60 overflow-y-auto">
                 <div className="space-y-3 text-sm text-surface-600 dark:text-surface-400">
-                  <p>By becoming a RentBuddy Partner, you agree to:</p>
+                  <p>By becoming a Sidebud Partner, you agree to:</p>
                   <ul className="list-disc list-inside space-y-1 ml-2">
                     <li>Provide reliable and timely service to users</li>
                     <li>Maintain professional conduct at all times</li>
                     <li>Follow all safety guidelines and procedures</li>
                     <li>Keep your profile and documents up to date</li>
                     <li>Accept payments through the platform only</li>
-                    <li>Comply with RentBuddy's partner code of conduct</li>
+                    <li>Comply with Sidebud's partner code of conduct</li>
                   </ul>
-                  <p className="mt-4">RentBuddy reserves the right to suspend partners who violate these terms.</p>
+                  <p className="mt-4">Sidebud reserves the right to suspend partners who violate these terms.</p>
                 </div>
               </div>
               <label className="flex items-start gap-3 cursor-pointer p-3 rounded-xl hover:bg-surface-50 dark:hover:bg-surface-800/50 transition-colors">

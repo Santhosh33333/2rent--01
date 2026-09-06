@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
 import {
   Home, User, Wallet, Users, Sun, Moon, Menu, X, Bell,
@@ -130,7 +130,7 @@ export function Layout() {
     : [];
 
   // On phones the bottom bar holds up to 5 slots. If the role has more items
-  // (admin: 7), show the first 4 + a "More" button whose drawer holds the rest —
+  // (admin: 7), show the first 4 + a "More" button whose drawer holds the rest â€”
   // otherwise all items are shy of the 390px width. Desktop keeps all links in
   // the hamburger drawer regardless.
   const bottomNavItems = navItems.length > 5 ? navItems.slice(0, 4) : navItems;
@@ -148,24 +148,25 @@ export function Layout() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-violet-50/20 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
+    <div className="min-h-screen bg-gradient-to-br from-surface-50 via-surface-100/60 to-surface-100/30 dark:from-surface-950 dark:via-surface-950 dark:to-surface-950">
       <ImpersonationBanner />
       {/* Header */}
-      <header className="sticky top-0 z-50 backdrop-blur-xl bg-white/80 dark:bg-gray-950/80 border-b border-gray-200/50 dark:border-gray-800/50 pt-[env(safe-area-inset-top)]">
+      <header className="sticky top-0 z-50 backdrop-blur-xl bg-white/80 dark:bg-surface-950/80 border-b border-surface-200/50 dark:border-surface-800/50 pt-[env(safe-area-inset-top)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             {/* Left */}
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setSidebarOpen(true)}
-                className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition lg:hidden"
+                className="p-2 rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 transition btn-icon lg:hidden"
+                aria-label="Open menu"
               >
                 <Menu className="w-5 h-5" />
               </button>
               <Link to="/dashboard" className="flex items-center gap-2.5">
-                <img src="/logo-mark.svg" alt="RentBuddy logo" className="w-9 h-9 rounded-xl shadow-md shadow-primary-500/25" />
-                <span className="text-lg font-extrabold font-display tracking-tight bg-gradient-to-r from-indigo-600 via-violet-600 to-pink-500 bg-clip-text text-transparent hidden sm:block">
-                  RentBuddy
+                <img src="/logo-mark.svg" alt="Sidebud logo" className="w-9 h-9 rounded-xl shadow-md shadow-primary-500/25" />
+                <span className="text-lg font-extrabold font-display tracking-tight bg-gradient-to-r from-primary-600 via-violet-600 to-accent-500 bg-clip-text text-transparent hidden sm:block">
+                  Sidebud
                 </span>
               </Link>
             </div>
@@ -174,26 +175,28 @@ export function Layout() {
             <RoleSwitcher />
 
             {/* Right */}
-            <div className="flex items-center gap-2">
-              <Link to="/search" className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition hidden sm:block" title="Search">
+            <div className="flex items-center gap-1 sm:gap-2">
+              <Link to="/search" className="btn-icon rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 transition hidden sm:block" title="Search" aria-label="Search">
                 <Search className="w-5 h-5" />
               </Link>
               <button
                 onClick={toggleTheme}
-                className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+                className="btn-icon rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 transition"
                 title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+                aria-label="Toggle theme"
               >
-                {theme === 'dark' ? <Sun className="w-5 h-5 text-yellow-500" /> : <Moon className="w-5 h-5 text-gray-600" />}
+                {theme === 'dark' ? <Sun className="w-5 h-5 text-yellow-500" /> : <Moon className="w-5 h-5 text-surface-600" />}
               </button>
-              <Link to="/notifications" className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition relative">
+              <Link to="/notifications" className="btn-icon rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 transition relative" aria-label="Notifications">
                 <Bell className="w-5 h-5" />
                 <UnreadBadge />
               </Link>
               <button
                 onClick={() => setSidebarOpen(true)}
-                className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition hidden lg:block"
+                className="btn-icon rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 transition hidden lg:block"
+                aria-label="Open profile menu"
               >
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-sm font-bold">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-violet-600 flex items-center justify-center text-surface-100 text-sm font-bold">
                   {user?.name?.charAt(0) || 'U'}
                 </div>
               </button>
@@ -205,19 +208,19 @@ export function Layout() {
       {/* Sidebar */}
       {sidebarOpen && (
         <>
-          <div className="fixed inset-0 bg-black/50 z-50 lg:hidden" onClick={() => setSidebarOpen(false)} />
-          <div className="fixed inset-y-0 left-0 w-72 bg-white dark:bg-gray-900 z-50 shadow-2xl p-4 overflow-y-auto animate-in slide-in-from-left duration-200">
+          <div className="fixed inset-0 bg-surface-900/60 dark:bg-black/60 z-50 lg:hidden" onClick={() => setSidebarOpen(false)} />
+          <div className="fixed inset-y-0 left-0 w-72 max-w-[85vw] bg-white dark:bg-surface-900 z-50 shadow-2xl p-4 overflow-y-auto animate-slide-in-left duration-200">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white font-bold">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-violet-600 flex items-center justify-center text-surface-100 font-bold">
                   {user?.name?.charAt(0) || 'U'}
                 </div>
-                <div>
-                  <p className="font-semibold text-sm">{user?.name}</p>
-                  <p className="text-xs text-gray-500">{user?.email}</p>
+                <div className="min-w-0">
+                  <p className="font-semibold text-sm truncate">{user?.name}</p>
+                  <p className="text-xs text-surface-500 truncate">{user?.email}</p>
                 </div>
               </div>
-              <button onClick={() => setSidebarOpen(false)} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800">
+              <button onClick={() => setSidebarOpen(false)} className="btn-icon rounded-lg hover:bg-surface-100 dark:hover:bg-surface-800" aria-label="Close menu">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -225,35 +228,35 @@ export function Layout() {
             <nav className="space-y-1">
               {drawerNavItems.length > 0 && (
                 <>
-                  <p className="px-3 pt-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Menu</p>
+                  <p className="px-3 pt-1 pb-1 text-xs font-semibold uppercase tracking-wide text-surface-400">Menu</p>
                   {drawerNavItems.map(({ to, icon: Icon, label }) => (
                     <Link
                       key={to}
                       to={to}
-                      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition ${
+                      className={`flex items-center gap-3 px-3 py-3 rounded-xl text-sm transition ${
                         location.pathname === to
-                          ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 font-medium'
-                          : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+                          ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 font-medium'
+                          : 'text-surface-600 dark:text-surface-400 hover:bg-surface-50 dark:hover:bg-surface-800'
                       }`}
                     >
                       <Icon className="w-4 h-4" />
                       {label}
                     </Link>
                   ))}
-                  <div className="h-px bg-gray-200 dark:bg-gray-800 my-2" />
+                  <div className="h-px bg-surface-200 dark:bg-surface-800 my-2" />
                 </>
               )}
               {superAdminNav.length > 0 && (
                 <>
-                  <p className="px-3 pt-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-purple-500">Super Admin</p>
+                  <p className="px-3 pt-1 pb-1 text-xs font-semibold uppercase tracking-wide text-purple-500">Super Admin</p>
                   {superAdminNav.map(({ to, icon: Icon, label }) => (
                     <Link
                       key={to}
                       to={to}
-                      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition ${
+                      className={`flex items-center gap-3 px-3 py-3 rounded-xl text-sm transition ${
                         location.pathname === to
                           ? 'bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 font-medium'
-                          : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+                          : 'text-surface-600 dark:text-surface-400 hover:bg-surface-50 dark:hover:bg-surface-800'
                       }`}
                     >
                       <Icon className="w-4 h-4" />
@@ -261,17 +264,17 @@ export function Layout() {
                       <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 font-medium">SUPER</span>
                     </Link>
                   ))}
-                  <div className="h-px bg-gray-200 dark:bg-gray-800 my-2" />
+                  <div className="h-px bg-surface-200 dark:bg-surface-800 my-2" />
                 </>
               )}
               {sidebarLinks.map(({ to, icon: Icon, label }) => (
                 <Link
                   key={to}
                   to={to}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition ${
+                  className={`flex items-center gap-3 px-3 py-3 rounded-xl text-sm transition ${
                     location.pathname === to
-                      ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 font-medium'
-                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+                      ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 font-medium'
+                      : 'text-surface-600 dark:text-surface-400 hover:bg-surface-50 dark:hover:bg-surface-800'
                   }`}
                 >
                   <Icon className="w-4 h-4" />
@@ -280,11 +283,11 @@ export function Layout() {
               ))}
             </nav>
 
-            <hr className="my-4 border-gray-200 dark:border-gray-800" />
+            <hr className="my-4 border-surface-200 dark:border-surface-800" />
 
             <button
               onClick={handleLogout}
-              className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition"
+              className="flex items-center gap-3 w-full px-3 py-3 rounded-xl text-sm text-danger-500 hover:bg-danger-50 dark:hover:bg-danger-500/10 transition"
             >
               <LogOut className="w-4 h-4" />
               Sign Out
@@ -307,36 +310,37 @@ export function Layout() {
       </main>
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 inset-x-0 bg-white/90 dark:bg-gray-950/90 backdrop-blur-xl border-t border-gray-200/50 dark:border-gray-800/50 z-40 lg:hidden pb-[env(safe-area-inset-bottom)]">
-        <div className="flex items-center justify-around h-16 px-2">
+      <nav className="fixed bottom-0 inset-x-0 bg-white/90 dark:bg-surface-950/90 backdrop-blur-xl border-t border-surface-200/50 dark:border-surface-800/50 z-40 lg:hidden pb-[env(safe-area-inset-bottom)]">
+        <div className="flex items-stretch justify-around h-16 px-2">
           {bottomNavItems.map(({ to, icon: Icon, label }) => {
-            const isActive = location.pathname === to || location.pathname.startsWith(to.split('/').slice(0, -1).join('/') + '/');
+            const isActive = location.pathname === to || location.pathname.startsWith(`${to}/`);
             return (
               <Link
                 key={to}
                 to={to}
-                className={`flex flex-col items-center justify-center gap-0.5 rounded-xl transition-all min-w-[60px] h-full flex-1 ${
+                className={`flex flex-col items-center justify-center gap-0.5 rounded-xl transition-all min-w-0 flex-1 ${
                   isActive
-                    ? 'text-indigo-600 dark:text-indigo-400'
-                    : 'text-gray-400 dark:text-gray-500'
+                    ? 'text-primary-600 dark:text-primary-400'
+                    : 'text-surface-400 dark:text-surface-500'
                 }`}
               >
-                <div className={`p-1 rounded-xl transition ${isActive ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}>
+                <div className={`p-1 rounded-xl transition ${isActive ? 'bg-primary-50 dark:bg-primary-900/30' : ''}`}>
                   <Icon className="w-5 h-5" />
                 </div>
-                <span className="text-[10px] font-medium leading-none">{label}</span>
+                <span className="text-[11px] font-semibold leading-none">{label}</span>
               </Link>
             );
           })}
           {hasMoreNav && (
             <button
               onClick={() => setSidebarOpen(true)}
-              className={`flex flex-col items-center justify-center gap-0.5 rounded-xl transition-all min-w-[60px] h-full flex-1 text-gray-400 dark:text-gray-500`}
+              className={`flex flex-col items-center justify-center gap-0.5 rounded-xl transition-all min-w-0 flex-1 text-surface-400 dark:text-surface-500`}
+              aria-label="More menu"
             >
               <div className="p-1 rounded-xl">
                 <MoreHorizontal className="w-5 h-5" />
               </div>
-              <span className="text-[10px] font-medium leading-none">More</span>
+              <span className="text-[11px] font-semibold leading-none">More</span>
             </button>
           )}
         </div>

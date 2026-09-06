@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom'
+﻿import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, FileText, Shield, Lock, Scale } from 'lucide-react'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
@@ -18,19 +18,19 @@ export function TermsPage() {
             <div><h1 className="text-2xl font-bold font-display text-surface-900 dark:text-white !mb-0">Terms & Conditions</h1><p className="text-xs text-surface-500 !mt-1">Effective Date: July 19, 2026</p></div>
           </div>
           <div className="space-y-6 text-sm text-surface-600 dark:text-surface-400 leading-relaxed">
-            <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">1. Acceptance of Terms</h2><p>By accessing or using RentBuddy ("the App"), you agree to be bound by these Terms & Conditions. If you do not agree, do not use the App.</p></section>
-            <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">2. Eligibility</h2><p>You must be at least 18 years old to use RentBuddy. By using the App, you represent that you meet this age requirement and have the legal capacity to enter into these Terms.</p></section>
+            <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">1. Acceptance of Terms</h2><p>By accessing or using Sidebud ("the App"), you agree to be bound by these Terms & Conditions. If you do not agree, do not use the App.</p></section>
+            <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">2. Eligibility</h2><p>You must be at least 18 years old to use Sidebud. By using the App, you represent that you meet this age requirement and have the legal capacity to enter into these Terms.</p></section>
             <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">3. Account Registration</h2><p>You must provide accurate and complete information during registration. You are responsible for maintaining the confidentiality of your account credentials. You must notify us immediately of any unauthorized use of your account.</p></section>
             <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">4. User Conduct</h2><p>You agree not to: harass, bully, or abuse other users; share inappropriate, offensive, or illegal content; impersonate any person or entity; attempt to gain unauthorized access to other accounts or systems; use the App for any illegal purpose; or engage in commercial solicitation without authorization.</p></section>
-            <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">5. Walking Partner Services</h2><p>Walking Partner services are provided by independent individuals. RentBuddy facilitates connections but is not a party to any agreement between users and walking partners. Users should exercise caution and use the OTP verification system for safety.</p></section>
+            <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">5. Walking Partner Services</h2><p>Walking Partner services are provided by independent individuals. Sidebud facilitates connections but is not a party to any agreement between users and walking partners. Users should exercise caution and use the OTP verification system for safety.</p></section>
             <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">6. Payment Terms</h2><p>All payments are processed through our secure payment system. Platform fees are deducted as configured. Withdrawal requests are subject to approval. Refund requests are handled on a case-by-case basis.</p></section>
-            <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">7. Privacy</h2><p>Your use of RentBuddy is also governed by our Privacy Policy. Please review it to understand our practices regarding your personal data.</p></section>
-            <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">8. Intellectual Property</h2><p>All content, trademarks, and intellectual property on RentBuddy are owned by or licensed to us. You may not reproduce, distribute, or create derivative works without our written consent.</p></section>
-            <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">9. Limitation of Liability</h2><p>RentBuddy is provided "as is" without warranties of any kind. We are not liable for any indirect, incidental, special, or consequential damages arising from your use of the App.</p></section>
+            <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">7. Privacy</h2><p>Your use of Sidebud is also governed by our Privacy Policy. Please review it to understand our practices regarding your personal data.</p></section>
+            <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">8. Intellectual Property</h2><p>All content, trademarks, and intellectual property on Sidebud are owned by or licensed to us. You may not reproduce, distribute, or create derivative works without our written consent.</p></section>
+            <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">9. Limitation of Liability</h2><p>Sidebud is provided "as is" without warranties of any kind. We are not liable for any indirect, incidental, special, or consequential damages arising from your use of the App.</p></section>
             <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">10. Termination</h2><p>We reserve the right to suspend or terminate your account at any time for violation of these Terms or for any other reason at our sole discretion.</p></section>
             <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">11. Governing Law</h2><p>These Terms are governed by the laws of India. Any disputes shall be subject to the exclusive jurisdiction of courts in India.</p></section>
             <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">12. Changes to Terms</h2><p>We may update these Terms from time to time. Continued use of the App after changes constitutes acceptance of the updated Terms.</p></section>
-            <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">13. Contact</h2><p>For questions about these Terms, contact us at support@rentbuddy.app</p></section>
+            <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">13. Contact</h2><p>For questions about these Terms, contact us at support@Sidebud.app</p></section>
           </div>
         </GlassCard>
       </AnimatedPage>
@@ -59,9 +59,9 @@ export function PrivacyPolicyPage() {
             <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">4. Data Security</h2><p>We implement industry-standard security measures including encryption, secure servers, access controls, and regular security audits. However, no method of transmission over the Internet is 100% secure.</p></section>
             <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">5. Data Retention</h2><p>We retain your information for as long as your account is active or as needed to provide services. After account deletion, we retain certain data for legal and operational purposes for up to 90 days.</p></section>
             <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">6. Your Rights</h2><p>You have the right to: access your personal data, correct inaccurate data, request deletion of your data, export your data, opt out of notifications, and disable location sharing. You can exercise these rights through the App settings or by contacting us.</p></section>
-            <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">7. Children's Privacy</h2><p>RentBuddy is not intended for users under 18 years of age. We do not knowingly collect information from children under 18.</p></section>
+            <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">7. Children's Privacy</h2><p>Sidebud is not intended for users under 18 years of age. We do not knowingly collect information from children under 18.</p></section>
             <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">8. Location Data</h2><p>We collect and process location data only when you actively use location-dependent features (e.g., live walk tracking, nearby people). You can disable location sharing at any time through Settings.</p></section>
-            <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">9. Contact Us</h2><p>For privacy-related inquiries, contact our Data Protection Officer at privacy@rentbuddy.app</p></section>
+            <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">9. Contact Us</h2><p>For privacy-related inquiries, contact our Data Protection Officer at privacy@Sidebud.app</p></section>
           </div>
         </GlassCard>
       </AnimatedPage>
@@ -137,7 +137,7 @@ export function DataSafetyPage() {
             </section>
             <section>
               <h2 className="text-lg font-semibold text-surface-900 dark:text-white">Data Deletion</h2>
-              <p className="mt-2">Users can delete their account and all associated data at any time through Settings → Privacy → Delete Account. Data is permanently deleted within 90 days.</p>
+              <p className="mt-2">Users can delete their account and all associated data at any time through Settings â†’ Privacy â†’ Delete Account. Data is permanently deleted within 90 days.</p>
             </section>
           </div>
         </GlassCard>
@@ -164,7 +164,7 @@ export function CommunityGuidelinesPage() {
             <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">Be Respectful</h2><p>Treat all users with respect and dignity. Harassment, bullying, hate speech, discrimination, and personal attacks are strictly prohibited.</p></section>
             <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">Stay Safe</h2><p>Always use the OTP verification system for walks. Meet in public places. Share your live location with trusted contacts. Use the SOS feature in emergencies. Trust your instincts.</p></section>
             <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">Be Honest</h2><p>Maintain accurate profile information. Do not impersonate others. Do not create fake accounts. Verified profiles build trust in our community.</p></section>
-            <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">No Illegal Activity</h2><p>RentBuddy must not be used for any illegal activities including but not limited to: theft, fraud, drug use, violence, or any activity that violates Indian law.</p></section>
+            <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">No Illegal Activity</h2><p>Sidebud must not be used for any illegal activities including but not limited to: theft, fraud, drug use, violence, or any activity that violates Indian law.</p></section>
             <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">Protect Privacy</h2><p>Do not share other users' personal information without consent. Do not record or photograph others without their permission. Respect everyone's right to privacy.</p></section>
             <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">Report Issues</h2><p>If you encounter inappropriate behavior, safety concerns, or rule violations, please report them immediately. You can block users who make you uncomfortable.</p></section>
             <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">Consequences</h2><p>Violation of these guidelines may result in warnings, temporary suspension, or permanent account termination. Severe violations will be reported to law enforcement.</p></section>
