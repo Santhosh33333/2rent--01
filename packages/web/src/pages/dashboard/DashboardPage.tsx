@@ -53,8 +53,8 @@ export function DashboardPage() {
           bookings: walkingItems ? walkingItems.length : (walkingData?.count ?? 0),
           unreadMessages: statsData?.unreadMessages ?? 0,
         })
-      } catch {
-        // fallback
+      } catch (err) {
+        console.error('Dashboard fetch error:', err)
       } finally {
         setLoading(false)
       }

@@ -57,8 +57,8 @@ export function HomePage() {
           const d = walletRes.value.data?.data || walletRes.value.data
           setWallet({ balance: d?.balance ?? 0 })
         }
-      } catch {
-        // silent
+      } catch (err) {
+        console.error('Home page fetch error:', err)
       } finally {
         setLoading(false)
       }

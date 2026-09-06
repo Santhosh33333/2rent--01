@@ -61,8 +61,9 @@ export function CommunitiesPage() {
         await api.post(`/communities/${id}/join`)
       }
       setList(list.map(c => c.id === id ? { ...c, joined: !c.joined, members: c.joined ? c.members - 1 : c.members + 1 } : c))
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to toggle join:', err)
+      toast.error(err?.response?.data?.message || 'Failed to join community')
     } finally {
       setJoining(null)
     }

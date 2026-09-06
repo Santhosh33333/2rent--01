@@ -117,6 +117,8 @@ export function NotificationsPage() {
       await api.post(`/notifications/${id}/read`)
     } catch (error) {
       console.error('Mark as read failed:', error)
+      toast.error('Failed to mark as read')
+      retry()
     }
   }
 
@@ -127,6 +129,8 @@ export function NotificationsPage() {
       await api.post('/notifications/mark-all-read')
     } catch (error) {
       console.error('Mark all as read failed:', error)
+      toast.error('Failed to mark all as read')
+      retry()
     }
   }
 
@@ -136,6 +140,8 @@ export function NotificationsPage() {
       await api.delete('/notifications/clear-read')
     } catch (error) {
       console.error('Clear read failed:', error)
+      toast.error('Failed to clear read notifications')
+      retry()
     }
   }
 
@@ -147,6 +153,8 @@ export function NotificationsPage() {
       await api.delete(`/notifications/${id}`)
     } catch (error) {
       console.error('Delete failed:', error)
+      toast.error('Failed to delete notification')
+      retry()
     }
   }
 

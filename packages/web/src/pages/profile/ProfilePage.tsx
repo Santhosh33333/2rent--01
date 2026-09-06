@@ -24,6 +24,7 @@ export function ProfilePage() {
   const [uploading, setUploading] = useState(false)
   const [profileStats, setProfileStats] = useState<{ walksCompleted?: number; eventsJoined?: number; averageRating?: number; joinedYear?: number } | null>(null)
   const [verificationStatus, setVerificationStatus] = useState<Record<string, unknown> | null>(null)
+  const [statsLoading, setStatsLoading] = useState(true)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const { register, handleSubmit, formState: { errors } } = useForm({
@@ -35,8 +36,23 @@ export function ProfilePage() {
   })
 
   useEffect(() => {
-    api.get('/users/profile/stats').then(r => setProfileStats(r.data.data)).catch(() => {})
-    api.get('/verification/status').then(r => setVerificationStatus(r.data.data)).catch(() => {})
+    let cancelled = false
+    setStatsLoading(true)
+    Promise.allSettled([
+      api.get('/users/profile/stats'),
+      api.get('/verification/status'),
+    ]).then(([statsRes, verRes]) => {
+      if (cancelled) return
+      if (statsRes.status === 'fulfilled') {
+        setProfileStats(statsRes.value.data?.data || statsRes.value.data)
+      }
+      if (verRes.status === 'fulfilled') {
+        setVerificationStatus(verRes.value.data?.data || verRes.value.data)
+      }
+    }).catch(() => {}).finally(() => {
+      if (!cancelled) setStatsLoading(false)
+    })
+    return () => { cancelled = true }
   }, [])
 
   const onSubmit = async (data: { name?: string; email?: string; phone?: string; bio?: string; city?: string; country?: string; gender?: string }) => {
@@ -87,10 +103,10 @@ export function ProfilePage() {
   const initials = user?.name?.split(' ').map((n: string) => n[0]).join('').toUpperCase() || '?'
 
   const stats = [
-    { label: 'Walks', value: profileStats?.walksCompleted ?? '—', icon: MapPin, gradient: 'from-emerald-500 to-emerald-600' },
-    { label: 'Events', value: profileStats?.eventsJoined ?? '—', icon: Calendar, gradient: 'from-violet-500 to-violet-600' },
-    { label: 'Rating', value: profileStats?.averageRating ?? '—', icon: Award, gradient: 'from-amber-500 to-amber-600' },
-    { label: 'Joined', value: profileStats?.joinedYear ?? '—', icon: Clock, gradient: 'from-blue-500 to-blue-600' },
+    { label: 'Walks', value: statsLoading ? '...' : (profileStats?.walksCompleted ?? '—'), icon: MapPin, gradient: 'from-emerald-500 to-emerald-600' },
+    { label: 'Events', value: statsLoading ? '...' : (profileStats?.eventsJoined ?? '—'), icon: Calendar, gradient: 'from-violet-500 to-violet-600' },
+    { label: 'Rating', value: statsLoading ? '...' : (profileStats?.averageRating ?? '—'), icon: Award, gradient: 'from-amber-500 to-amber-600' },
+    { label: 'Joined', value: statsLoading ? '...' : (profileStats?.joinedYear ?? '—'), icon: Clock, gradient: 'from-blue-500 to-blue-600' },
   ]
 
   return (
