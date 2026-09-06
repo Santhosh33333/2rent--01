@@ -1,10 +1,10 @@
 import { Response } from "express";
-import fs from "fs";
 import { prisma } from "../config/database";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
 import { emitToUser } from "../services/socketService";
-import { chatUpload, classifyChatFile, resolveChatMedia } from "../services/chatUploadService";
+import { chatUpload, classifyChatFile, resolveChatMedia, type ResolvedChatMedia } from "../services/chatUploadService";
+import { readBlob, removeBlob } from "../services/blobStorage";
 
 // ============================================================================
 // CONVERSATION HELPERS
@@ -41,14 +41,14 @@ export async function sendMessage(req: AuthedRequest, res: Response): Promise<vo
 
     // Media messages carry the file; text messages carry content. The caption
     // on a media message is optional.
-    let resolvedMedia: { abs: string; kind: string } | null = null;
+    let resolvedMedia: ResolvedChatMedia | null = null;
     if (type === "IMAGE" || type === "VOICE") {
       resolvedMedia = resolveChatMedia(typeof mediaUrl === "string" ? mediaUrl : null);
       if (!resolvedMedia) {
         sendError(res, "Upload the file first, then send with its mediaUrl.", 400, "MEDIA_REQUIRED");
         return;
       }
-      const actual = classifyChatFile(resolvedMedia.abs.split(/[\\/]/).pop() ?? "");
+      const actual = classifyChatFile(resolvedMedia.filename);
       if ((type === "IMAGE" && actual !== "IMAGE") || (type === "VOICE" && actual !== "VOICE")) {
         sendError(res, "Media type does not match messageType.", 400, "MEDIA_MISMATCH");
         return;
@@ -454,8 +454,10 @@ export async function uploadMedia(req: AuthedRequest, res: Response): Promise<vo
             }
             const kind = classifyChatFile(file.filename);
             if (!kind) {
+              // Uploaded blobs live in Postgres — nothing on disk to remove, and
+              // dropping the DB row keeps storage clean.
               try {
-                fs.unlinkSync(file.path);
+                await removeBlob(file.path as string);
               } catch { /* best effort */ }
               sendError(res, "Only images and voice notes are allowed.", 400, "INVALID_FILE");
               return;
@@ -511,9 +513,15 @@ export async function getMedia(req: AuthedRequest, res: Response): Promise<void>
       sendError(res, "File is no longer available.", 410, "FILE_GONE");
       return;
     }
+    const media = await readBlob(message.mediaUrl);
+    if (!media) {
+      sendError(res, "File is no longer available.", 410, "FILE_GONE");
+      return;
+    }
     res.setHeader("Content-Type", resolved.mime);
     res.setHeader("Cache-Control", "private, max-age=86400");
-    fs.createReadStream(resolved.abs).pipe(res);
+    res.setHeader("Content-Length", String(media.size));
+    res.end(media.data);
   } catch {
     if (!res.headersSent) sendError(res, "Failed to load media.", 500, "INTERNAL_ERROR");
   }
@@ -539,12 +547,9 @@ export async function deleteMessage(req: AuthedRequest, res: Response): Promise<
       data: { status: "DELETED", content: "[deleted]", mediaUrl: null },
     });
 
-    // Remove the attachment from disk so deleted media is really gone.
+    // Remove the attachment from storage so deleted media is really gone.
     if (message.mediaUrl) {
-      const resolved = resolveChatMedia(message.mediaUrl);
-      if (resolved) {
-        fs.unlink(resolved.abs, () => {});
-      }
+      await removeBlob(message.mediaUrl);
     }
 
     // Tell the recipient so their view updates immediately instead of on next poll.

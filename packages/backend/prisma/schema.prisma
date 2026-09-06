@@ -1743,3 +1743,18 @@ model IdempotencyKey {
   @@index([userId])
 }
 
+// Uploaded files (avatars, KYC documents, chat media) stored as BYTEA so they
+// survive ephemeral host redeploys (Render wipes local disk). Key mirrors the
+// public URL, e.g. "private/<uuid>.jpg", "chat/<uuid>.mp3", "<uuid>.png".
+model UploadedFile {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  filename  String
+  mimeType  String
+  size      Int
+  data      Bytes
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+

@@ -1,38 +1,11 @@
 import multer from "multer";
 import path from "path";
-import fs from "fs";
-import { randomUUID } from "crypto";
 import { env } from "../config/env";
+import { blobStorageEngine } from "./blobUpload";
 
-const uploadDir = path.resolve(process.cwd(), env.UPLOAD_DIR);
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    cb(null, uploadDir);
-  },
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `${randomUUID()}${ext}`);
-  },
-});
-
-const privateUploadDir = path.join(uploadDir, "private");
-if (!fs.existsSync(privateUploadDir)) {
-  fs.mkdirSync(privateUploadDir, { recursive: true });
-}
-
-const privateStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    cb(null, privateUploadDir);
-  },
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `${randomUUID()}${ext}`);
-  },
-});
+// uploads are persisted in Postgres (UploadedFile) — never on ephemeral disk.
+const storage = blobStorageEngine("public");
+const privateStorage = blobStorageEngine("private");
 
 const imageFilter = (_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
   const allowed = /jpeg|jpg|png|webp|gif/;
@@ -53,7 +26,7 @@ export const upload = multer({
   },
 });
 
-// KYC documents land under uploads/private and are only served through the
+// KYC documents live under uploads/private and are only served through the
 // authenticated access guard in middleware/fileAccess.ts — never publicly.
 export const privateUpload = multer({
   storage: privateStorage,
@@ -78,5 +51,5 @@ export const uploadFields = multer({
 ]);
 
 export function getUploadUrl(filename: string): string {
-  return `/${env.UPLOAD_DIR}/${filename}`;
+  return `/uploads/${filename}`;
 }

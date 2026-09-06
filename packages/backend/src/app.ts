@@ -9,6 +9,7 @@ import http from "http";
 import { env } from "./config/env";
 import { generalRateLimiter } from "./middleware/rateLimiter";
 import { requireDocumentAccess } from "./middleware/fileAccess";
+import { blobFileHandler } from "./middleware/blobHandler";
 import { idempotencyMiddleware } from "./middleware/idempotency";
 import { sendError } from "./utils/response";
 
@@ -46,6 +47,10 @@ import referralRoutes from "./routes/referralRoutes";
 
 export function createApp(): http.Server {
   const app = express();
+  // Render runs behind its own proxy; without this express treats every request
+  // as coming from the single proxy IP, so per-IP rate limits apply to ALL users
+  // at once. Trusting the nearest proxy lets req.ip resolve the real client.
+  app.set("trust proxy", 1);
   const allowedOrigins = (env.CORS_ORIGIN || "http://localhost:5173")
     .split(",")
     .map((value) => value.trim())
@@ -93,12 +98,9 @@ export function createApp(): http.Server {
   app.use(generalRateLimiter);
 
   // KYC documents under uploads/private require ownership or an admin role;
-  // everything else (e.g. avatars) remains publicly served static content.
-  app.use("/uploads", requireDocumentAccess, express.static(path.resolve(process.cwd(), env.UPLOAD_DIR), {
-    maxAge: "7d",
-    etag: true,
-    lastModified: true,
-  }));
+  // everything else (e.g. avatars) is publicly served. Files are stored in
+  // Postgres (UploadedFile) so they survive ephemeral-host redeploys.
+  app.use("/uploads", requireDocumentAccess, blobFileHandler);
 
   app.use((_req: Request, res: Response, next: NextFunction) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
