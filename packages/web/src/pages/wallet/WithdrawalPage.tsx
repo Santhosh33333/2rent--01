@@ -12,7 +12,9 @@ type Method = 'BANK_TRANSFER' | 'UPI'
 
 interface FormData {
   amount: string
-  accountDetail: string
+  accountNumber: string
+  ifsc: string
+  upiId: string
 }
 
 export function WithdrawalPage() {
@@ -24,7 +26,7 @@ export function WithdrawalPage() {
   const [method, setMethod] = useState<Method>('BANK_TRANSFER')
 
   const { register, handleSubmit, watch, formState: { errors } } = useForm<FormData>({
-    defaultValues: { amount: '', accountDetail: '' },
+    defaultValues: { amount: '', accountNumber: '', ifsc: '', upiId: '' },
   })
 
   const amountValue = watch('amount')
@@ -33,7 +35,7 @@ export function WithdrawalPage() {
     const fetchBalance = async () => {
       try {
         const res = await api.get('/wallet')
-        setBalance(res.data.balance ?? 0)
+        setBalance(res.data.data?.balance ?? res.data.balance ?? 0)
       } catch {
         toast.error('Failed to fetch wallet balance')
       } finally {
@@ -46,10 +48,13 @@ export function WithdrawalPage() {
   const onSubmit = async (data: FormData) => {
     setLoading(true)
     try {
+      const accountDetail = method === 'BANK_TRANSFER'
+        ? { accountNumber: data.accountNumber, ifsc: data.ifsc }
+        : { upiId: data.upiId }
       await api.post('/wallet/withdraw', {
         amount: Number(data.amount),
         method,
-        accountDetail: data.accountDetail,
+        accountDetail,
       })
       setSuccess(true)
       toast.success('Withdrawal request submitted successfully')
@@ -165,20 +170,43 @@ export function WithdrawalPage() {
               <label className="label">
                 {method === 'BANK_TRANSFER' ? 'Bank Account Details' : 'UPI ID'}
               </label>
-              <div className="relative">
-                {method === 'BANK_TRANSFER' ? (
-                  <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
-                ) : (
-                  <CreditCard className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
-                )}
-                <input
-                  {...register('accountDetail', { required: 'This field is required' })}
-                  type="text"
-                  className="input pl-11"
-                  placeholder={method === 'BANK_TRANSFER' ? 'Account No + IFSC' : 'your@upi'}
-                />
-              </div>
-              {errors.accountDetail && <p className="mt-1 text-sm text-danger-500">{errors.accountDetail.message}</p>}
+              {method === 'BANK_TRANSFER' ? (
+                <div className="space-y-3">
+                  <div className="relative">
+                    <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
+                    <input
+                      {...register('accountNumber', { required: 'Account number is required' })}
+                      type="text"
+                      className="input pl-11"
+                      placeholder="Account Number"
+                    />
+                  </div>
+                  {errors.accountNumber && <p className="mt-1 text-sm text-danger-500">{errors.accountNumber.message}</p>}
+                  <div className="relative">
+                    <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
+                    <input
+                      {...register('ifsc', { required: 'IFSC code is required' })}
+                      type="text"
+                      className="input pl-11"
+                      placeholder="IFSC Code"
+                    />
+                  </div>
+                  {errors.ifsc && <p className="mt-1 text-sm text-danger-500">{errors.ifsc.message}</p>}
+                </div>
+              ) : (
+                <>
+                  <div className="relative">
+                    <CreditCard className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
+                    <input
+                      {...register('upiId', { required: 'UPI ID is required' })}
+                      type="text"
+                      className="input pl-11"
+                      placeholder="your@upi"
+                    />
+                  </div>
+                  {errors.upiId && <p className="mt-1 text-sm text-danger-500">{errors.upiId.message}</p>}
+                </>
+              )}
             </div>
 
             <div className="flex gap-3 pt-2">

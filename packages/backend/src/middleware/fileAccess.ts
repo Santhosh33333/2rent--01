@@ -7,7 +7,10 @@ import { sendError } from "../utils/response";
 const PRIVATE_PREFIX = "/private/";
 // multer writes files as "<uuid><ext>"; restrict to that shape to block traversal.
 const FILENAME_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpe?g|png|webp|gif)$/i;
-const PRIVILEGED_ROLES = ["SUPER_ADMIN", "ADMIN", "MODERATOR", "SUPPORT"];
+const PRIVILEGED_ROLES = [
+  "SUPER_ADMIN", "ADMIN", "MODERATOR", "SUPPORT", "FINANCE",
+  "SUPPORT_ADMIN", "FINANCE_ADMIN", "KYC_ADMIN", "MARKETING_ADMIN", "PARTNER_ADMIN",
+];
 
 function runAuthenticate(req: Request, res: Response): Promise<void> {
   return new Promise((resolve) => {

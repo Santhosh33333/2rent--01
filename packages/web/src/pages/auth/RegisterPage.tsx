@@ -7,6 +7,7 @@ import { z } from 'zod'
 import toast from 'react-hot-toast'
 import { User, Mail, Phone, Lock, Eye, EyeOff, ArrowRight, ArrowLeft, Check, Sparkles } from 'lucide-react'
 import { useAuth } from '../../lib/auth'
+import { api } from '../../lib/api'
 import { isClerkConfigured } from '../../lib/clerkAuth'
 import { AnimatedPage } from '../../components/AnimatedPage'
 
@@ -16,6 +17,7 @@ const registerSchema = z.object({
   phone: z.string().min(10, 'Phone number must be at least 10 digits'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   confirmPassword: z.string(),
+  referralCode: z.string().optional(),
   terms: z.boolean().refine(val => val === true, 'You must accept the terms and conditions'),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
@@ -68,6 +70,7 @@ export function RegisterPage() {
   const onSubmit = async (data: RegisterForm) => {
     try {
       setLoading(true)
+      const isReferral = data.referralCode && data.referralCode.trim().length > 0
       await registerUser({
         fullName: data.name,
         name: data.name,
@@ -79,6 +82,15 @@ export function RegisterPage() {
         dateOfBirth: '2000-01-01',
         gender: 'MALE',
       })
+      // If the user signed up with a valid referral code, link them as soon as
+      // the account exists. Non-fatal on failure (e.g. invalid/unused code).
+      if (isReferral) {
+        try {
+          await api.post('/referrals/apply', { code: data.referralCode!.trim() })
+        } catch {
+          /* best-effort — invalid codes are simply ignored */
+        }
+      }
       toast.success('Registration successful!')
       navigate(accountType === 'USER' ? '/profile/complete' : '/partner/dashboard', { replace: true })
     } catch (err: unknown) {
@@ -204,6 +216,14 @@ export function RegisterPage() {
                       <input {...register('email')} type="email" id="email" className="input pl-11" placeholder="you@example.com" />
                     </div>
                     {errors.email && <p className="mt-2 text-xs text-danger-500 font-medium">{errors.email.message}</p>}
+                  </div>
+                  <div>
+                    <label htmlFor="referralCode" className="label">Referral Code <span className="text-surface-400 font-normal">(optional)</span></label>
+                    <div className="relative">
+                      <Sparkles className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-surface-400" />
+                      <input {...register('referralCode')} type="text" id="referralCode" className="input pl-11 uppercase" placeholder="RB-XXXXXXXX" />
+                    </div>
+                    <p className="mt-2 text-xs text-surface-500">Enter a friend's code to earn a sign-up reward on both sides.</p>
                   </div>
                   <button type="button" onClick={handleNext} className="btn-gradient w-full btn-lg group">
                     <span className="flex items-center justify-center gap-2">
