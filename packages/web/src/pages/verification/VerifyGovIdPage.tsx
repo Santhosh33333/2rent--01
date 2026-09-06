@@ -9,10 +9,11 @@ import { GlassCard } from '../../components/GlassCard'
 import { AuthImage } from '../../components/AuthImage'
 
 const GOV_ID_TYPES = [
+  { value: 'AADHAAR', label: 'Aadhaar Card' },
   { value: 'PASSPORT', label: 'Passport' },
-  { value: 'DRIVERS_LICENSE', label: "Driver's License" },
-  { value: 'NATIONAL_ID', label: 'National ID' },
-  { value: 'OTHER', label: 'Other' },
+  { value: 'DRIVING_LICENSE', label: "Driving License" },
+  { value: 'VOTER_ID', label: 'Voter ID' },
+  { value: 'PAN', label: 'PAN Card' },
 ] as const
 
 type OverallStatus = 'UNVERIFIED' | 'PENDING' | 'VERIFIED' | 'REJECTED'
@@ -35,10 +36,10 @@ export function VerifyGovIdPage() {
         const res = await api.get('/verification/status')
         if (res.data.success) {
           const data = res.data.data
-          setGovIdUrl(data.govIdUrl || null)
-          setSubmittedGovIdType(data.govIdType || null)
+          setGovIdUrl(data.govIdUrl || data.documents?.govIdUrl || null)
+          setSubmittedGovIdType(data.govIdType || data.documents?.govIdType || null)
           setOverallStatus(data.status || 'UNVERIFIED')
-          if (data.govIdType) setGovIdType(data.govIdType)
+          if (data.govIdType || data.documents?.govIdType) setGovIdType(data.govIdType || data.documents?.govIdType)
         }
       } catch {
       } finally {

@@ -115,7 +115,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   }, [refreshRoles])
 
   const isPartner = activeRole === 'PARTNER'
-  const isAdmin = ['ADMIN', 'SUPER_ADMIN', 'MODERATOR', 'SUPPORT', 'FINANCE'].includes(activeRole)
+  const isAdmin = ['ADMIN', 'SUPER_ADMIN', 'MODERATOR', 'SUPPORT', 'FINANCE', 'SUPPORT_ADMIN', 'FINANCE_ADMIN', 'KYC_ADMIN', 'MARKETING_ADMIN', 'PARTNER_ADMIN'].includes(activeRole)
   const isUser = activeRole === 'USER'
 
   return (

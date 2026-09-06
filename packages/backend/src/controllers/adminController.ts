@@ -1824,4 +1824,112 @@ export async function resetAdminPassword(req: AuthedRequest, res: Response): Pro
   }
 }
 
+// ============================================================================
+// PROMOTE USER TO SUPER_ADMIN (or any role) — SUPER_ADMIN only
+// ============================================================================
+
+const ALL_ASSIGNABLE_ROLES = ["SUPER_ADMIN", "ADMIN", "MODERATOR", "SUPPORT", "FINANCE", "SUPPORT_ADMIN", "FINANCE_ADMIN", "KYC_ADMIN", "MARKETING_ADMIN", "PARTNER_ADMIN"];
+
+export async function promoteUserRole(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const { userId } = req.params;
+    const { role } = req.body;
+
+    if (!role || !ALL_ASSIGNABLE_ROLES.includes(role)) {
+      sendError(res, `Role must be one of: ${ALL_ASSIGNABLE_ROLES.join(", ")}.`, 400, "INVALID_ROLE");
+      return;
+    }
+
+    const target = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true, role: true, fullName: true } });
+    if (!target) {
+      sendError(res, "User not found.", 404, "NOT_FOUND");
+      return;
+    }
+
+    // Prevent self-demotion
+    if (userId === req.user!.userId && role !== "SUPER_ADMIN") {
+      sendError(res, "Cannot change your own role to a lower level.", 403, "FORBIDDEN");
+      return;
+    }
+
+    const oldRole = target.role;
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: userId }, data: { role, activeRole: role } });
+
+      // Ensure the admin role template exists
+      const adminRole = await tx.adminRole.findUnique({ where: { name: role } });
+      if (!adminRole) {
+        await tx.adminRole.create({ data: { name: role, displayName: role.charAt(0) + role.slice(1).toLowerCase().replace(/_/g, " "), permissions: JSON.stringify([]), isSystem: true } });
+      }
+
+      // Upsert AdminUser record
+      const ar = await tx.adminRole.findUnique({ where: { name: role } });
+      if (ar) {
+        await tx.adminUser.upsert({ where: { userId }, update: { roleId: ar.id }, create: { userId, roleId: ar.id } });
+      }
+
+      await tx.auditLog.create({
+        data: {
+          actorId: req.user!.userId,
+          actorType: "ADMIN",
+          action: "USER_ROLE_PROMOTED",
+          entityType: "User",
+          entityId: userId,
+          metadata: JSON.stringify({ from: oldRole, to: role }),
+        },
+      });
+    });
+
+    sendSuccess(res, { userId, email: target.email, fullName: target.fullName, from: oldRole, to: role }, `User promoted to ${role}.`);
+  } catch (err) {
+    console.error("promoteUserRole error:", err);
+    sendError(res, "Failed to promote user.", 500, "INTERNAL_ERROR");
+  }
+}
+
+export async function demoteUserRole(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const { userId } = req.params;
+    const { role } = req.body;
+    const targetRole = role || "USER";
+
+    if (!["USER", "PARTNER"].includes(targetRole)) {
+      sendError(res, "Demotion target must be USER or PARTNER.", 400, "INVALID_ROLE");
+      return;
+    }
+
+    const target = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true, role: true, fullName: true } });
+    if (!target) {
+      sendError(res, "User not found.", 404, "NOT_FOUND");
+      return;
+    }
+    if (target.role === "SUPER_ADMIN") {
+      sendError(res, "Cannot demote a SUPER_ADMIN.", 403, "FORBIDDEN");
+      return;
+    }
+
+    const oldRole = target.role;
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: userId }, data: { role: targetRole, activeRole: targetRole } });
+      // Remove admin record
+      await tx.adminUser.deleteMany({ where: { userId } });
+      await tx.auditLog.create({
+        data: {
+          actorId: req.user!.userId,
+          actorType: "ADMIN",
+          action: "USER_ROLE_DEMOTED",
+          entityType: "User",
+          entityId: userId,
+          metadata: JSON.stringify({ from: oldRole, to: targetRole }),
+        },
+      });
+    });
+
+    sendSuccess(res, { userId, email: target.email, fullName: target.fullName, from: oldRole, to: targetRole }, `User demoted to ${targetRole}.`);
+  } catch (err) {
+    console.error("demoteUserRole error:", err);
+    sendError(res, "Failed to demote user.", 500, "INTERNAL_ERROR");
+  }
+}
+
 

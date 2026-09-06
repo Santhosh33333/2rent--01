@@ -152,12 +152,32 @@ function validateCoordinates(lat: number, lon: number): void {
   }
 }
 
+function isPlaceholderKey(): boolean {
+  return !API_KEY || API_KEY.includes("placeholder") || API_KEY === "pk_dev_placeholder";
+}
+
 export async function forwardGeocode(
   address: string,
   options?: { countryCodes?: string; limit?: number }
 ): Promise<GeocodingResult[]> {
   if (!address || address.trim().length < 2) {
     throw new Error("Address must be at least 2 characters");
+  }
+  if (isPlaceholderKey()) {
+    // Return a basic fallback result so the app doesn't break without LocationIQ
+    return [{
+      placeId: "placeholder",
+      licence: "",
+      osmType: "node",
+      osmId: "0",
+      lat: 0,
+      lon: 0,
+      displayName: address,
+      address: { city: address, country: "IN" },
+      boundingbox: [],
+      type: "result",
+      importance: 1,
+    }];
   }
 
   const params = new URLSearchParams({
@@ -208,6 +228,19 @@ export async function reverseGeocode(
 ): Promise<ReverseResult> {
   validateCoordinates(lat, lon);
 
+  if (isPlaceholderKey()) {
+    return {
+      placeId: "placeholder",
+      licence: "",
+      osmType: "node",
+      osmId: "0",
+      lat,
+      lon,
+      displayName: `${lat.toFixed(4)}, ${lon.toFixed(4)}`,
+      address: { country: "IN" },
+    };
+  }
+
   const params = new URLSearchParams({
     key: API_KEY,
     lat: String(lat),
@@ -249,6 +282,10 @@ export async function autocomplete(
 ): Promise<AutocompleteResult[]> {
   if (!query || query.trim().length < 2) {
     throw new Error("Query must be at least 2 characters");
+  }
+
+  if (isPlaceholderKey()) {
+    return [];
   }
 
   const params = new URLSearchParams({

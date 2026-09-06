@@ -1,7 +1,7 @@
 import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, Search, ChevronLeft, ChevronRight, Ban, Unlock, Trash2, Loader2, X, FileDown } from 'lucide-react'
+import { ArrowLeft, Search, ChevronLeft, ChevronRight, Ban, Unlock, Trash2, Loader2, X, FileDown, Crown, UserMinus } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { adminApi } from '../../lib/api'
 import { exportTableToPdf } from '../../lib/pdfExport'
@@ -133,6 +133,35 @@ export function AdminUsersPage() {
     }
   }
 
+  const doPromote = async (user: User) => {
+    const role = window.prompt('Promote to role (SUPER_ADMIN, ADMIN, MODERATOR, SUPPORT, FINANCE):', 'ADMIN')
+    if (!role) return
+    setBusy(true)
+    try {
+      await adminApi.promoteUser(user.id, role.toUpperCase())
+      toast.success(`${user.name || 'User'} promoted to ${role.toUpperCase()}`)
+      fetchUsers()
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to promote user'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const doDemote = async (user: User) => {
+    if (!window.confirm(`Demote ${user.name || user.email} back to USER?`)) return
+    setBusy(true)
+    try {
+      await adminApi.demoteUser(user.id, 'USER')
+      toast.success(`${user.name || 'User'} demoted to USER`)
+      fetchUsers()
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to demote user'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="bg-gray-950 p-4 sm:p-6 rounded-3xl">
       <div className="max-w-5xl mx-auto">
@@ -222,6 +251,7 @@ export function AdminUsersPage() {
                       <th className="px-4 py-3 text-gray-400 text-xs font-medium uppercase">Name</th>
                       <th className="px-4 py-3 text-gray-400 text-xs font-medium uppercase">Email</th>
                       <th className="px-4 py-3 text-gray-400 text-xs font-medium uppercase">Phone</th>
+                      <th className="px-4 py-3 text-gray-400 text-xs font-medium uppercase">Role</th>
                       <th className="px-4 py-3 text-gray-400 text-xs font-medium uppercase">Status</th>
                       <th className="px-4 py-3 text-gray-400 text-xs font-medium uppercase">Created</th>
                     </tr>
@@ -246,6 +276,9 @@ export function AdminUsersPage() {
                               </div>
                               <div className="flex items-center gap-4">
                                 <span className="hidden sm:block text-gray-400 text-xs">{user.phone || '-'}</span>
+                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${user.role && user.role !== 'USER' ? 'bg-purple-900/30 text-purple-400' : 'bg-gray-700 text-gray-400'}`}>
+                                  {user.role || 'USER'}
+                                </span>
                                 <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${statusBadge(user.status)}`}>
                                   {user.status}
                                 </span>
@@ -305,6 +338,24 @@ export function AdminUsersPage() {
                                 >
                                   <Trash2 className="w-3.5 h-3.5" /> Delete
                                 </button>
+                                {(!user.role || user.role === 'USER') && (
+                                  <button
+                                    onClick={() => doPromote(user)}
+                                    disabled={busy}
+                                    className="flex items-center gap-1.5 px-3 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition"
+                                  >
+                                    <Crown className="w-3.5 h-3.5" /> Promote
+                                  </button>
+                                )}
+                                {user.role && user.role !== 'USER' && user.role !== 'SUPER_ADMIN' && (
+                                  <button
+                                    onClick={() => doDemote(user)}
+                                    disabled={busy}
+                                    className="flex items-center gap-1.5 px-3 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition"
+                                  >
+                                    <UserMinus className="w-3.5 h-3.5" /> Demote
+                                  </button>
+                                )}
                               </div>
                             </div>
                           )}

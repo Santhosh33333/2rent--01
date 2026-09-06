@@ -99,6 +99,8 @@ router.get("/admins", adminMgmtView, adminController.getAdminAccounts);
 router.post("/admins", requireSuperAdmin, adminController.createAdminAccount);
 router.patch("/admins/:userId", requireSuperAdmin, adminController.updateAdminAccount);
 router.post("/admins/:userId/reset-password", requireSuperAdmin, adminController.resetAdminPassword);
+router.post("/users/:userId/promote", requireSuperAdmin, [body("role").notEmpty()], sanitizeInput, validateRequest, adminController.promoteUserRole);
+router.post("/users/:userId/demote", requireSuperAdmin, adminController.demoteUserRole);
 router.get("/audit-logs", auditView, adminController.getAuditLogs);
 router.post("/notifications", notificationsSend, [body("userId").notEmpty(), body("title").notEmpty(), body("body").notEmpty()], sanitizeInput, validateRequest, adminController.sendNotification);
 

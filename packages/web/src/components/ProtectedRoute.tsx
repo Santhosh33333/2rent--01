@@ -7,6 +7,8 @@ interface ProtectedRouteProps {
   allowedRoles?: string[]
 }
 
+const ALL_ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN', 'MODERATOR', 'SUPPORT', 'FINANCE', 'SUPPORT_ADMIN', 'FINANCE_ADMIN', 'KYC_ADMIN', 'MARKETING_ADMIN', 'PARTNER_ADMIN']
+
 const ROLE_DASHBOARDS: Record<string, string> = {
   USER: '/dashboard',
   PARTNER: '/partner/dashboard',
@@ -42,19 +44,24 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     return <Navigate to="/login" state={{ from: location }} replace />
   }
 
+  const effectiveRole = activeRole || user.activeRole || user.role || 'USER'
+  const isAdminUser = ALL_ADMIN_ROLES.includes(effectiveRole)
+
+  // Admin bypasses ALL gates — full access to everything.
+  if (isAdminUser) {
+    return children ? <>{children}</> : <Outlet />
+  }
+
   const profileComplete = localStorage.getItem('profile_complete') === 'true' || Boolean(user.city)
   const isProfileRoute = location.pathname === '/profile/complete'
   const isAuthRoute = ['/login', '/register', '/forgot-password', '/verify-email', '/verify-mobile', '/onboarding'].includes(location.pathname)
 
-  // Only USER-surface routes enforce the shared completion page. The page is
-  // mounted under the USER layout — forcing PARTNER/ADMIN there creates an
-  // infinite redirect loop with the role check below.
+  // Only USER-surface routes enforce the shared completion page.
   if (!profileComplete && !isProfileRoute && !isAuthRoute && (!activeRole || activeRole === 'USER')) {
     return <Navigate to="/profile/complete" replace />
   }
 
   // ---- KYC GATE (USER surface): no features until admin-approved KYC ----
-  // Backend issues "VERIFIED" (legacy data may carry "APPROVED").
   const kycOk = user.kycStatus === 'VERIFIED' || user.kycStatus === 'APPROVED'
   if ((!activeRole || activeRole === 'USER') && !kycOk) {
     const kycAllowedPrefixes = ['/verification', '/profile', '/settings', '/notifications']
@@ -65,13 +72,13 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   }
 
   // Check if user has access to this route based on their active role
-  if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(activeRole)) {
-    const dashboard = ROLE_DASHBOARDS[activeRole] || '/dashboard'
+  if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(effectiveRole)) {
+    const dashboard = ROLE_DASHBOARDS[effectiveRole] || '/dashboard'
     return <Navigate to={dashboard} replace />
   }
 
   // ---- PARTNER GATE: partner surfaces stay locked until admin approval ----
-  if (activeRole === 'PARTNER' && location.pathname.startsWith('/partner') && location.pathname !== '/partner/pending') {
+  if (effectiveRole === 'PARTNER' && (location.pathname.startsWith('/partner') || location.pathname.startsWith('/carry')) && location.pathname !== '/partner/pending') {
     if (user.partnerStatus !== 'APPROVED') {
       return <Navigate to="/partner/pending" replace />
     }
