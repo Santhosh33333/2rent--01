@@ -218,6 +218,12 @@ export async function register(req: Request, res: Response): Promise<void> {
     const otp = setOtp(`email:${user.id}`);
     sendOTP(otp, { email: user.email });
 
+    // If a phone was provided, also issue a mobile OTP so verifyMobile works.
+    if (user.phone) {
+      const mobileOtp = setOtp(`mobile:${user.id}`);
+      sendOTP(mobileOtp, { phone: user.phone });
+    }
+
     const { accessToken, refreshToken } = await createUserSession(user.id, req);
 
     const responseUser = {
@@ -757,8 +763,17 @@ export async function resetPassword(req: Request, res: Response): Promise<void> 
 export async function verifyEmail(req: Request, res: Response): Promise<void> {
   try {
     const { userId, otp } = req.body;
+    if (!userId) {
+      sendError(res, "User ID is required.", 400, "MISSING_USER_ID");
+      return;
+    }
     if (!otp) {
       sendError(res, "OTP is required.", 400, "MISSING_OTP");
+      return;
+    }
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+    if (!user) {
+      sendError(res, "User not found.", 404, "USER_NOT_FOUND");
       return;
     }
     const record = getOtp(`email:${userId}`);
@@ -783,8 +798,17 @@ export async function verifyEmail(req: Request, res: Response): Promise<void> {
 export async function verifyMobile(req: Request, res: Response): Promise<void> {
   try {
     const { userId, otp } = req.body;
+    if (!userId) {
+      sendError(res, "User ID is required.", 400, "MISSING_USER_ID");
+      return;
+    }
     if (!otp) {
       sendError(res, "OTP is required.", 400, "MISSING_OTP");
+      return;
+    }
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+    if (!user) {
+      sendError(res, "User not found.", 404, "USER_NOT_FOUND");
       return;
     }
     const record = getOtp(`mobile:${userId}`);
@@ -849,7 +873,7 @@ export async function verifyPassword(req: Request, res: Response): Promise<void>
 // ============================================================================
 
 const SWITCHABLE_ROLES = ["USER", "PARTNER"];
-const ADMIN_TIER_ROLES_SWITCH = ["SUPER_ADMIN", "ADMIN", "MODERATOR", "SUPPORT", "FINANCE"];
+const ADMIN_TIER_ROLES_SWITCH = ["SUPER_ADMIN", "ADMIN", "MODERATOR", "SUPPORT", "FINANCE", "SUPPORT_ADMIN", "FINANCE_ADMIN", "KYC_ADMIN", "MARKETING_ADMIN", "PARTNER_ADMIN"];
 
 export async function switchRole(req: AuthedRequest, res: Response): Promise<void> {
   try {

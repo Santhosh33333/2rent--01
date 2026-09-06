@@ -285,10 +285,9 @@ export async function reportPost(req: AuthedRequest, res: Response): Promise<voi
     const dupe = await prisma.report.findFirst({
       where: {
         reporterId: req.user!.userId,
-        targetId: post.authorId,
+        targetId: postId,
         targetType: "COMMUNITY_POST",
         status: "PENDING",
-        description: { contains: postId },
       },
     });
     if (dupe) {
@@ -298,7 +297,7 @@ export async function reportPost(req: AuthedRequest, res: Response): Promise<voi
     const report = await prisma.report.create({
       data: {
         reporterId: req.user!.userId,
-        targetId: post.authorId,
+        targetId: postId,
         targetType: "COMMUNITY_POST",
         reason: String(reason).trim().slice(0, 200),
         description: JSON.stringify({
@@ -338,10 +337,9 @@ export async function reportComment(req: AuthedRequest, res: Response): Promise<
     const dupe = await prisma.report.findFirst({
       where: {
         reporterId: req.user!.userId,
-        targetId: comment.authorId,
+        targetId: commentId,
         targetType: "COMMUNITY_COMMENT",
         status: "PENDING",
-        description: { contains: commentId },
       },
     });
     if (dupe) {
@@ -351,7 +349,7 @@ export async function reportComment(req: AuthedRequest, res: Response): Promise<
     const report = await prisma.report.create({
       data: {
         reporterId: req.user!.userId,
-        targetId: comment.authorId,
+        targetId: commentId,
         targetType: "COMMUNITY_COMMENT",
         reason: String(reason).trim().slice(0, 200),
         description: JSON.stringify({

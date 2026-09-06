@@ -339,11 +339,15 @@ export async function finalizeBookingPrice(
     surchargeOverride,
     waitingCharge
   );
-  const platformFee = fare.platformFee;
   const computedFinal = fare.estimatedAmount;
 
   const deposited = Number.isFinite(booking.estimatedAmount) ? Number(booking.estimatedAmount) : 0;
   const finalAmount = Math.min(computedFinal, deposited || computedFinal);
+
+  // Recompute the platform fee off the CAPPED final amount so the partner isn't
+  // charged a fee proportional to money they were never paid.
+  const platFeePercent = Number.isFinite(fare.platformFeePercent) ? fare.platformFeePercent : DEFAULT_PLATFORM_FEE_PERCENT;
+  const platformFee = round2(finalAmount * (platFeePercent / 100));
 
   let refunded = 0;
   let extraDebited = 0;
@@ -364,7 +368,23 @@ export async function finalizeBookingPrice(
         },
       });
     } else if (finalAmount > deposited) {
+      // Actual duration exceeded the estimate: debit the overage from the user's
+      // wallet. If the balance can't cover it, the wallet goes into a small
+      // negative (owed) position so the shortfall is recovered on the next top-up.
       extraDebited = Math.round((finalAmount - deposited) * 100) / 100;
+      const wallet = await tx.wallet.upsert({ where: { userId: booking.userId }, update: {}, create: { userId: booking.userId } });
+      await tx.wallet.update({ where: { userId: booking.userId }, data: { balance: { decrement: extraDebited } } });
+      await tx.transaction.create({
+        data: {
+          userId: booking.userId,
+          walletId: wallet.id,
+          bookingId: booking.id,
+          type: "DEBIT",
+          amount: extraDebited,
+          status: "SUCCESS",
+          description: "Booking overage charge (actual duration)",
+        },
+      });
     }
   }
 

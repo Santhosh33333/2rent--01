@@ -29,7 +29,7 @@ export async function getMyRoles(req: AuthedRequest, res: Response): Promise<voi
       approvedRoles.push("PARTNER");
     }
 
-    const adminRoles = ["ADMIN", "SUPER_ADMIN", "MODERATOR", "SUPPORT", "FINANCE"];
+    const adminRoles = ["ADMIN", "SUPER_ADMIN", "MODERATOR", "SUPPORT", "FINANCE", "SUPPORT_ADMIN", "FINANCE_ADMIN", "KYC_ADMIN", "MARKETING_ADMIN", "PARTNER_ADMIN"];
     if (adminRoles.includes(user.role || "")) approvedRoles.push(user.role!);
 
     sendSuccess(res, {
@@ -76,7 +76,7 @@ export async function switchRole(req: AuthedRequest, res: Response): Promise<voi
       allowedRoles.push("PARTNER");
     }
 
-    const adminRoles = ["ADMIN", "SUPER_ADMIN", "MODERATOR", "SUPPORT", "FINANCE"];
+    const adminRoles = ["ADMIN", "SUPER_ADMIN", "MODERATOR", "SUPPORT", "FINANCE", "SUPPORT_ADMIN", "FINANCE_ADMIN", "KYC_ADMIN", "MARKETING_ADMIN", "PARTNER_ADMIN"];
     const isAdminTier = adminRoles.includes(user.role || "");
     if (isAdminTier) allowedRoles.push(user.role!);
 

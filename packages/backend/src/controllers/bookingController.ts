@@ -439,6 +439,7 @@ export async function verifyPayment(req: AuthedRequest, res: Response): Promise<
         where: { id, userId: req.user!.userId, status: "PAYMENT_INITIATED", razorpayOrderId },
         data: {
           status: "PARTNER_SEARCHING",
+          paymentStatus: "PAID",
           paymentVerifiedAt: new Date(),
           finalAmount: amount,
           razorpayPaymentId,
@@ -691,10 +692,29 @@ export async function acceptBooking(req: AuthedRequest, res: Response): Promise<
       return;
     }
 
+    // SELF-BOOKING PREVENTION: a user cannot accept their own booking.
+    if (booking.userId === req.user!.userId) {
+      sendError(res, "You cannot accept your own booking.", 400, "SELF_BOOKING_NOT_ALLOWED");
+      return;
+    }
+
+    // PARTNER BUSY LOCK: partners stuck in an active job cannot grab more work.
+    const activeJob = await prisma.booking.findFirst({
+      where: {
+        partnerId: partner.id,
+        status: { in: ["PARTNER_ACCEPTED", "OTP_GENERATED", "OTP_VERIFIED", "IN_PROGRESS", "ARRIVED", "GOING_TO_JOB", "COMPLETION_REQUESTED"] },
+      },
+      select: { id: true },
+    });
+    if (activeJob) {
+      sendError(res, "You already have an active job. Finish it before accepting a new one.", 409, "PARTNER_BUSY");
+      return;
+    }
+
     // Atomic claim: only the FIRST partner to accept wins. Concurrent acceptors
     // get count=0 and a conflict response instead of silently overwriting.
     const claimed = await prisma.booking.updateMany({
-      where: { id, status: "PARTNER_SEARCHING", partnerId: null },
+      where: { id, status: { in: ["PARTNER_SEARCHING", "PAYMENT_SUCCESSFUL"] }, partnerId: null },
       data: {
         partnerId: partner.id,
         status: "PARTNER_ACCEPTED",
@@ -1026,6 +1046,8 @@ export async function completeBooking(req: AuthedRequest, res: Response): Promis
 
       grossEarnings = settled.finalAmount;
       netEarnings = settled.partnerEarning;
+      commissionFee = settled.platformFee;
+      commissionPercent = grossEarnings > 0 ? Math.round((settled.platformFee / grossEarnings) * 100) : 0;
 
       // Cash bookings are paid peer-to-peer; never credit the platform wallet.
       let bNotes: Record<string, any> = {};
@@ -1065,12 +1087,26 @@ export async function completeBooking(req: AuthedRequest, res: Response): Promis
         where: { userId: partner.userId },
         update: {
           lifetimeEarnings: { increment: netEarnings },
+          todayEarnings: { increment: netEarnings },
+          weeklyEarnings: { increment: netEarnings },
+          monthlyEarnings: { increment: netEarnings },
+          pendingEarnings: { increment: netEarnings },
+          withdrawableBalance: { increment: netEarnings },
           completedJobs: { increment: 1 },
+          commissionDeduction: { increment: commissionFee },
+          lastEarningAt: new Date(),
         },
         create: {
           userId: partner.userId,
           lifetimeEarnings: netEarnings,
+          todayEarnings: netEarnings,
+          weeklyEarnings: netEarnings,
+          monthlyEarnings: netEarnings,
+          pendingEarnings: netEarnings,
+          withdrawableBalance: netEarnings,
           completedJobs: 1,
+          commissionDeduction: commissionFee,
+          lastEarningAt: new Date(),
         },
       });
 
@@ -1692,6 +1728,7 @@ export async function selectPaymentMethod(req: AuthedRequest, res: Response): Pr
 
     // Atomic latch: only the first selectPaymentMethod call wins
     const newNotes = JSON.stringify({ ...existingNotes, paymentMethod });
+    const alreadyPaid = (booking as any).paymentStatus === 'PAID';
     const claimed = await prisma.booking.updateMany({
       where: {
         id,
@@ -1700,8 +1737,8 @@ export async function selectPaymentMethod(req: AuthedRequest, res: Response): Pr
       },
       data: {
         notes: newNotes,
-        paymentStatus: paymentMethod === 'CASH' ? 'PENDING_CASH' : paymentMethod === 'UPI_MANUAL' ? 'VERIFICATION_PENDING' : booking.paymentStatus as any,
-        status: paymentMethod === 'CASH' ? 'OTP_GENERATED' : undefined,
+        paymentStatus: alreadyPaid ? booking.paymentStatus as any : paymentMethod === 'CASH' ? 'PENDING_CASH' : paymentMethod === 'UPI_MANUAL' ? 'VERIFICATION_PENDING' : 'PAYMENT_PENDING',
+        status: alreadyPaid ? undefined : paymentMethod === 'CASH' ? 'OTP_GENERATED' : paymentMethod === 'ONLINE' ? 'PAYMENT_PENDING' : undefined,
       },
     });
 

@@ -48,7 +48,8 @@ export async function preventDuplicateBooking(req: Request, res: Response, next:
  */
 export async function preventDuplicatePayment(req: Request, res: Response, next: NextFunction) {
   try {
-    const { bookingId, razorpayPaymentId } = req.body ?? {};
+    const { razorpayPaymentId } = req.body ?? {};
+    const bookingId = (req.params ? req.params.id : undefined) || (req.body ? req.body.bookingId : undefined);
 
     if (!bookingId) {
       return next();

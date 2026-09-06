@@ -21,12 +21,6 @@ router.use(authenticateToken)
 router.get('/', getNotifications)
 
 /**
- * Mark a specific notification as read
- * POST /notifications/:id/read
- */
-router.post('/:id/read', markAsRead)
-
-/**
  * Mark all unread notifications as read
  * POST /notifications/mark-all-read
  */
@@ -39,15 +33,23 @@ router.post('/mark-all-read', markAllAsRead)
 router.post('/device', registerDevice)
 
 /**
- * Delete a specific notification
- * DELETE /notifications/:id
+ * Mark a specific notification as read
+ * POST /notifications/:id/read
  */
-router.delete('/:id', deleteNotification)
+router.post('/:id/read', markAsRead)
 
 /**
  * Clear all read notifications
  * DELETE /notifications/clear-read
+ * NOTE: Must be declared BEFORE /:id so Express doesn't match "clear-read"
+ * as a notification id parameter.
  */
 router.delete('/clear-read', clearReadNotifications)
+
+/**
+ * Delete a specific notification
+ * DELETE /notifications/:id
+ */
+router.delete('/:id', deleteNotification)
 
 export default router

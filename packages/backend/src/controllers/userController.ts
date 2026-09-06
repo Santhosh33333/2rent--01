@@ -47,7 +47,7 @@ export async function getProfile(req: AuthedRequest, res: Response): Promise<voi
         kycStatus: verification?.status ?? "NOT_STARTED",
         kycRejectionReason: verification?.rejectionReason ?? null,
         partnerStatus: partner?.status ?? null,
-        isVerified: verification?.status === "APPROVED",
+        isVerified: verification?.status === "APPROVED" || verification?.status === "VERIFIED",
       },
       "Profile retrieved."
     );

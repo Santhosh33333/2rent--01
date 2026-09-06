@@ -1245,12 +1245,12 @@ export async function getRevenueAnalytics(_req: AuthedRequest, res: Response): P
     ]);
 
     sendSuccess(res, {
-      todayRevenue: todayRevenue._sum.netAmount || 0,
-      weeklyRevenue: weeklyRevenue._sum.netAmount || 0,
-      monthlyRevenue: monthlyRevenue._sum.netAmount || 0,
-      totalRevenue: totalRevenue._sum.netAmount || 0,
+      todayPartnerEarnings: todayRevenue._sum.netAmount || 0,
+      weeklyPartnerEarnings: weeklyRevenue._sum.netAmount || 0,
+      monthlyPartnerEarnings: monthlyRevenue._sum.netAmount || 0,
+      totalPartnerEarnings: totalRevenue._sum.netAmount || 0,
       totalPlatformFees: totalPlatformFees._sum.platformFee || 0,
-      totalPartnerEarnings: totalPartnerEarnings._sum.lifetimeEarnings || 0,
+      totalLifetimePartnerEarnings: totalPartnerEarnings._sum.lifetimeEarnings || 0,
       totalCompletedJobs,
     }, "Revenue analytics retrieved.");
   } catch (err) {

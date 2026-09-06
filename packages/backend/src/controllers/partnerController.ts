@@ -201,7 +201,7 @@ export async function acceptBooking(req: AuthedRequest, res: Response): Promise<
 
     // Atomic claim: first accepting partner wins; concurrent acceptors conflict.
     const claimed = await prisma.booking.updateMany({
-      where: { id, status: "PARTNER_SEARCHING", partnerId: null },
+      where: { id, status: { in: ["PARTNER_SEARCHING", "PAYMENT_SUCCESSFUL"] }, partnerId: null },
       data: {
         partnerId: partner.id,
         status: "PARTNER_ACCEPTED",
@@ -771,6 +771,23 @@ export async function toggleAvailability(req: AuthedRequest, res: Response): Pro
     }
 
     const { isAvailable } = req.body;
+
+    // Don't allow going available while the partner has an active job — they
+    // would receive new dispatches they can't accept (siege of PARTNER_BUSY).
+    if (isAvailable) {
+      const activeJob = await prisma.booking.findFirst({
+        where: {
+          partnerId: partner.id,
+          status: { in: ["PARTNER_ACCEPTED", "OTP_GENERATED", "OTP_VERIFIED", "IN_PROGRESS", "ARRIVED", "GOING_TO_JOB"] },
+        },
+        select: { id: true },
+      });
+      if (activeJob) {
+        sendError(res, "You have an active job. Finish it before going available.", 409, "PARTNER_BUSY");
+        return;
+      }
+    }
+
     const updated = await prisma.partner.update({
       where: { id: partner.id },
       data: { isAvailable },
