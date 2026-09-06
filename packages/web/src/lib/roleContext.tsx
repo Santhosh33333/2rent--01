@@ -10,6 +10,11 @@ export type UserRole =
   | 'FINANCE'
   | 'SUPER_ADMIN'
   | 'ADMIN'
+  | 'SUPPORT_ADMIN'
+  | 'FINANCE_ADMIN'
+  | 'KYC_ADMIN'
+  | 'MARKETING_ADMIN'
+  | 'PARTNER_ADMIN'
 
 export interface RoleInfo {
   label: string
@@ -26,6 +31,11 @@ export const ROLE_META: Record<string, RoleInfo> = {
   MODERATOR: { label: 'Moderator', icon: '🛡️', color: '#f97316', description: 'Content moderation' },
   SUPPORT: { label: 'Support', icon: '🎧', color: '#14b8a6', description: 'Help & support' },
   FINANCE: { label: 'Finance', icon: '💰', color: '#10b981', description: 'Financial management' },
+  SUPPORT_ADMIN: { label: 'Support Admin', icon: '🎧', color: '#06b6d4', description: 'Support management' },
+  FINANCE_ADMIN: { label: 'Finance Admin', icon: '💎', color: '#059669', description: 'Finance management' },
+  KYC_ADMIN: { label: 'KYC Admin', icon: '🪪', color: '#8b5cf6', description: 'KYC verification' },
+  MARKETING_ADMIN: { label: 'Marketing Admin', icon: '📣', color: '#f59e0b', description: 'Marketing campaigns' },
+  PARTNER_ADMIN: { label: 'Partner Admin', icon: '🤝', color: '#16a34a', description: 'Partner management' },
 }
 
 interface RoleContextType {

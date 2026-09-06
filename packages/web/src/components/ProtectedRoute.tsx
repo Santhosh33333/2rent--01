@@ -9,6 +9,8 @@ interface ProtectedRouteProps {
 
 const ALL_ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN', 'MODERATOR', 'SUPPORT', 'FINANCE', 'SUPPORT_ADMIN', 'FINANCE_ADMIN', 'KYC_ADMIN', 'MARKETING_ADMIN', 'PARTNER_ADMIN']
 
+const SUPER_ADMIN_ONLY_PREFIXES = ['/admin/admins', '/admin/audit-logs', '/admin/settings']
+
 const ROLE_DASHBOARDS: Record<string, string> = {
   USER: '/dashboard',
   PARTNER: '/partner/dashboard',
@@ -46,11 +48,28 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
 
   const effectiveRole = activeRole || user.activeRole || user.role || 'USER'
   const isAdminUser = ALL_ADMIN_ROLES.includes(effectiveRole)
+  const isSuperAdmin = effectiveRole === 'SUPER_ADMIN'
+  const isAdminRoute = location.pathname.startsWith('/admin')
 
-  // Admin bypasses ALL gates — full access to everything.
+  // ---- ADMIN ROLE GATING (Issue 1 fix) ----
+  // Admins bypass profile/KYC gates on USER routes, but on admin routes
+  // we still enforce allowedRoles and SUPER_ADMIN-only routes.
   if (isAdminUser) {
+    if (isAdminRoute) {
+      // Enforce SUPER_ADMIN-only routes
+      const needsSuperAdmin = SUPER_ADMIN_ONLY_PREFIXES.some((p) => location.pathname.startsWith(p))
+      if (needsSuperAdmin && !isSuperAdmin) {
+        return <Navigate to="/admin/dashboard" replace />
+      }
+      // Enforce allowedRoles on admin routes
+      if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(effectiveRole)) {
+        return <Navigate to="/admin/dashboard" replace />
+      }
+    }
     return children ? <>{children}</> : <Outlet />
   }
+
+  // ---- NON-ADMIN: USER-SURFACE GATES ----
 
   const profileComplete = localStorage.getItem('profile_complete') === 'true' || Boolean(user.city)
   const isProfileRoute = location.pathname === '/profile/complete'

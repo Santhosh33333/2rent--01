@@ -228,5 +228,5 @@ export const adminApi = {
 
 // Account role switching (USER <-> PARTNER), backend-enforced
 export const authRoleApi = {
-  switchRole: (role: 'USER' | 'PARTNER') => api.post('/auth/switch-role', { role }),
+  switchRole: (role: string) => api.post('/auth/switch-role', { role }),
 }

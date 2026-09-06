@@ -165,7 +165,7 @@ export function CreateBookingPage() {
       case 1: return !!booking.serviceType
       case 2: return !!booking.pickupLocation
       case 3: return !!booking.date && !!booking.time
-      case 4: return booking.serviceType === 'WALKING' || true
+      case 4: return true
       case 5: return true
       case 6: return true
       default: return true

@@ -20,7 +20,7 @@ const ADMIN_ROLES = [
 
 export function AdminLoginPage() {
   const navigate = useNavigate()
-  const { completeLogin } = useAuth()
+  const { completeLogin, logout } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -39,7 +39,13 @@ export function AdminLoginPage() {
         throw new Error('Invalid admin credentials.')
       }
       completeLogin(payload)
-      await afterLogin()
+      const ok = await afterLogin()
+      if (!ok) {
+        // Role check failed — don't leave the user stuck on an admin page,
+        // clear the session so they can sign in via the normal flow instead.
+        logout()
+        navigate('/login', { replace: true })
+      }
     } catch (err: unknown) {
       const msg = getErrorMessage(err, 'Invalid admin credentials.')
       setError(msg)
@@ -48,16 +54,22 @@ export function AdminLoginPage() {
     }
   }
 
-  const afterLogin = async () => {
-    const userRes = await api.get('/users/profile')
-    const user = userRes.data?.data || {}
-    const role = String(user.activeRole || user.role || 'USER').toUpperCase()
-    if (!ADMIN_ROLES.includes(role)) {
-      setError('This account does not have admin access. Use the regular sign-in instead.')
-      return
+  const afterLogin = async (): Promise<boolean> => {
+    try {
+      const userRes = await api.get('/users/profile')
+      const user = userRes.data?.data || {}
+      const role = String(user.activeRole || user.role || 'USER').toUpperCase()
+      if (!ADMIN_ROLES.includes(role)) {
+        setError('This account does not have admin access. Use the regular sign-in instead.')
+        return false
+      }
+      localStorage.setItem('activeRole', role)
+      navigate('/admin/dashboard', { replace: true })
+      return true
+    } catch {
+      setError('Failed to verify admin access. Please try again.')
+      return false
     }
-    localStorage.setItem('activeRole', role)
-    navigate('/admin/dashboard', { replace: true })
   }
 
   return (
