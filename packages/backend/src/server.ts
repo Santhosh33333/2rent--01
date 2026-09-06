@@ -59,13 +59,41 @@ async function main(): Promise<void> {
     }
   }
 
-  if (!dbAvailable) {
+if (!dbAvailable) {
     console.error(
-      "\nâŒ CRITICAL: Could not connect to the database after multiple attempts.\n" +
+      "\nâ\x9DŒ CRITICAL: Could not connect to the database after multiple attempts.\n" +
       "   The server will NOT start in 'no DB' mode. Verify PostgreSQL is running\n" +
       "   (e.g. Start-Service postgresql-x64-17) and DATABASE_URL is correct, then restart.\n"
     );
     process.exit(1);
+  }
+
+  // Runtime schema reconciliation. The UploadedFile table (Postgres blob
+  // storage) was added via migration, but one production DB recorded the
+  // migration without applying the DDL, so uploads 500'd ("table does not
+  // exist"). Create it idempotently at boot to match the migration exactly.
+  try {
+    await prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "UploadedFile" (
+        "id" TEXT NOT NULL,
+        "key" TEXT NOT NULL,
+        "filename" TEXT NOT NULL,
+        "mimeType" TEXT NOT NULL,
+        "size" INTEGER NOT NULL,
+        "data" BYTEA NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "UploadedFile_pkey" PRIMARY KEY ("id")
+      )`
+    );
+    await prisma.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS "UploadedFile_key_key" ON "UploadedFile"("key")`
+    );
+    await prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS "UploadedFile_createdAt_idx" ON "UploadedFile"("createdAt")`
+    );
+    console.log("Schema reconciliation: UploadedFile ensured.");
+  } catch (err) {
+    console.warn("Schema reconciliation warning:", (err as Error)?.message);
   }
 
   initializeFirebase();
