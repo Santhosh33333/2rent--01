@@ -101,7 +101,7 @@ export function AdminUpiVerificationPage() {
   }
 
   return (
-    <div className="min-h-screen bg-surface-50 dark:bg-surface-950 p-4 md:p-6">
+    <div className="bg-surface-50 dark:bg-surface-950 p-4 md:p-6">
       <div className="max-w-5xl mx-auto">
         <h1 className="text-2xl font-display font-bold text-surface-900 dark:text-white flex items-center gap-2">
           <QrCode className="w-6 h-6 text-primary" /> UPI Verification

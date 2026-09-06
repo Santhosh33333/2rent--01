@@ -603,8 +603,62 @@ export async function getBookingById(bookingId: string) {
   return booking;
 }
 
-export async function cancelBooking(bookingId: string, cancelledBy: "USER" | "PARTNER", reason?: string) {
-  const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
+/** Shared wallet-credit writer for fee-bearing cancellations. Returns true when a refund was posted. */
+async function postCancellationRefund(
+  bookingId: string,
+  userId: string,
+  gross: number,
+  fee: number,
+  type: "PARTIAL",
+  description: string,
+  cancelledBy: "USER" | "PARTNER",
+  reason?: string
+): Promise<boolean> {
+  const refundAmount = Math.max(0, Math.round((gross - fee) * 100) / 100);
+  if (refundAmount <= 0) return false;
+  await prisma.$transaction(async (tx) => {
+    const wallet = await tx.wallet.upsert({
+      where: { userId },
+      create: { userId, balance: refundAmount },
+      update: { balance: { increment: refundAmount } },
+    });
+    await tx.transaction.create({
+      data: {
+        userId,
+        walletId: wallet.id,
+        bookingId,
+        type: "REFUND",
+        amount: refundAmount,
+        status: "SUCCESS",
+        description,
+      },
+    });
+    await tx.refundLog.create({
+      data: {
+        bookingId,
+        userId,
+        amount: refundAmount,
+        reason: reason || "Cancelled by " + cancelledBy,
+        type,
+        status: "COMPLETED",
+        initiatedBy: cancelledBy,
+        completedAt: new Date(),
+      },
+    });
+    await tx.booking.update({
+      where: { id: bookingId },
+      data: {
+        refundStatus: "REFUND_COMPLETED",
+        refundAmount,
+        refundInitiatedAt: new Date(),
+        refundCompletedAt: new Date(),
+      },
+    });
+  });
+  return true;
+}
+
+export async function cancelBooking(bookingId: string, cancelledBy: "USER" | "PARTNER", reason?: string) {  const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
   if (!booking) throw new Error("Booking not found");
 
   // Idempotency: already-terminal bookings must never re-cancel or re-refund
@@ -625,7 +679,11 @@ export async function cancelBooking(bookingId: string, cancelledBy: "USER" | "PA
   });
 
   let refundProcessed = false;
-  const refundableStatuses = ["PAYMENT_PENDING", "PAYMENT_INITIATED", "PAYMENT_SUCCESSFUL", "PARTNER_SEARCHING", "OTP_GENERATED", "EXPIRED"];
+  // Full-refund stages: user paid but no partner commitment exists yet.
+  // NOTE: OTP_GENERATED is intentionally NOT here — once the start code is
+  // issued the partner has committed (often arrived), so the admin-configured
+  // cancellation fee applies (spec 99).
+  const refundableStatuses = ["PAYMENT_PENDING", "PAYMENT_INITIATED", "PAYMENT_SUCCESSFUL", "PARTNER_SEARCHING", "EXPIRED"];
   const partialRefundStatuses = ["PARTNER_ACCEPTED"];
 
   if (claimed.count !== 1) {
@@ -681,53 +739,24 @@ export async function cancelBooking(bookingId: string, cancelledBy: "USER" | "PA
       refundProcessed = true;
     }
   } else if (partialRefundStatuses.includes(booking.status) && !booking.otpGeneratedAt) {
-    // Admin-configurable cancellation fee is deducted from the refund (Part 14).
-    const cancelFee = await getConfig("CANCELLATION_FEE_USER", 0);
+    // Accepted but start code not yet issued: standard cancellation fee.
+    const cancelFee = await getServiceConfig(booking.serviceType, "CANCELLATION_FEE_USER", await getConfig("CANCELLATION_FEE_USER", 0));
     const gross = booking.finalAmount ?? booking.estimatedAmount ?? 0;
-    const refundAmount = Math.max(0, Math.round((gross - cancelFee) * 100) / 100);
-    if (refundAmount > 0) {
-      await prisma.$transaction(async (tx) => {
-        const wallet = await tx.wallet.upsert({
-          where: { userId: booking.userId },
-          create: { userId: booking.userId, balance: refundAmount },
-          update: { balance: { increment: refundAmount } },
-        });
-        await tx.transaction.create({
-          data: {
-            userId: booking.userId,
-            walletId: wallet.id,
-            bookingId,
-            type: "REFUND",
-            amount: refundAmount,
-            status: "SUCCESS",
-            description: `Partial cancellation refund - ${cancelledBy}`,
-          },
-        });
-        await tx.refundLog.create({
-          data: {
-            bookingId,
-            userId: booking.userId,
-            amount: refundAmount,
-            reason: reason || "Cancelled by " + cancelledBy,
-            type: "PARTIAL",
-            status: "COMPLETED",
-            initiatedBy: cancelledBy,
-            completedAt: new Date(),
-          },
-        });
-        await tx.booking.update({
-          where: { id: bookingId },
-          data: {
-            refundStatus: "REFUND_COMPLETED",
-            refundAmount,
-            refundInitiatedAt: new Date(),
-            refundCompletedAt: new Date(),
-          },
-        });
-      });
-      refundProcessed = true;
-    }
+    refundProcessed = await postCancellationRefund(bookingId, booking.userId, gross, cancelFee, "PARTIAL", `Partial cancellation refund - ${cancelledBy}`, cancelledBy, reason);
+  } else if (
+    booking.status === "OTP_GENERATED" ||
+    (booking.status === "PARTNER_ACCEPTED" && !!booking.otpGeneratedAt)
+  ) {
+    // Start code issued (partner committed / may have arrived): the higher
+    // stage-aware fee applies. Falls back to the standard fee when unset —
+    // always admin-configured, never hardcoded (spec 99).
+    const standardFee = await getConfig("CANCELLATION_FEE_USER", 0);
+    const cancelFee = await getServiceConfig(booking.serviceType, "CANCELLATION_FEE_STARTED", standardFee);
+    const gross = booking.finalAmount ?? booking.estimatedAmount ?? 0;
+    refundProcessed = await postCancellationRefund(bookingId, booking.userId, gross, cancelFee, "PARTIAL", `Late cancellation refund - ${cancelledBy}`, cancelledBy, reason);
   }
+  // IN_PROGRESS / COMPLETION_REQUESTED: the job has started — no refund.
+  // Settlement for work done happens only through completion.
 
   const updatedBooking = await prisma.booking.findUnique({
     where: { id: bookingId },
@@ -736,8 +765,72 @@ export async function cancelBooking(bookingId: string, cancelledBy: "USER" | "PA
   return { booking: updatedBooking ?? booking, refundProcessed };
 }
 
-export async function processTimeoutBookings() {
-  const timeouts = await prisma.bookingTimeout.findMany({
+/**
+ * Upcoming-job reminders: accepted jobs starting within the next 30 minutes
+ * get one reminder each (user + partner). The sent marker lives in notes so
+ * no schema change is needed; the claim filter makes it once-only even with
+ * overlapping sweeper runs.
+ */
+export async function sendUpcomingReminders(now: Date = new Date()): Promise<number> {
+  const windowEnd = new Date(now.getTime() + 30 * 60_000);
+  const due = await prisma.booking.findMany({
+    where: {
+      status: { in: ["PARTNER_ACCEPTED", "OTP_GENERATED"] },
+      scheduledAt: { gte: now, lte: windowEnd },
+      NOT: { notes: { contains: "reminderSentAt" } },
+    },
+    select: { id: true, userId: true, partnerId: true, serviceType: true, scheduledAt: true, notes: true },
+    take: 50,
+  });
+
+  let sent = 0;
+  for (const booking of due) {
+    try {
+      let notes: Record<string, any> = {};
+      try {
+        notes = booking.notes ? JSON.parse(booking.notes) : {};
+      } catch {
+        notes = {};
+      }
+      if (notes.reminderSentAt) continue;
+      notes.reminderSentAt = now.toISOString();
+      const claimed = await prisma.booking.updateMany({
+        where: { id: booking.id, status: { in: ["PARTNER_ACCEPTED", "OTP_GENERATED"] }, NOT: { notes: { contains: "reminderSentAt" } } },
+        data: { notes: JSON.stringify(notes) },
+      });
+      if (claimed.count !== 1) continue;
+
+      const when = new Date(booking.scheduledAt).toLocaleString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+      await prisma.notification.create({
+        data: {
+          userId: booking.userId,
+          title: "Your job starts soon",
+          body: `Your ${booking.serviceType} booking starts at ${when}. Your partner has been notified.`,
+          data: JSON.stringify({ bookingId: booking.id, type: "JOB_REMINDER" }),
+        },
+      });
+      if (booking.partnerId) {
+        const partner = await prisma.partner.findUnique({ where: { id: booking.partnerId }, select: { userId: true } });
+        if (partner) {
+          await prisma.notification.create({
+            data: {
+              userId: partner.userId,
+              title: "Upcoming job starts soon",
+              body: `Your assigned job starts at ${when}. Open it and tap Go to Job when the window opens.`,
+              data: JSON.stringify({ bookingId: booking.id, type: "JOB_REMINDER" }),
+            },
+          });
+        }
+      }
+      sent += 1;
+    } catch (err) {
+      console.error(`[REMINDER] Failed for booking ${booking.id}:`, (err as Error)?.message ?? err);
+    }
+  }
+  return sent;
+}
+
+export async function processTimeoutBookings() {  const timeouts = await prisma.bookingTimeout.findMany({
     where: {
       isProcessed: false,
       timeoutAt: { lte: new Date() },

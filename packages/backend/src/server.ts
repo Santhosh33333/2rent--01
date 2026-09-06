@@ -3,12 +3,16 @@ import { createApp } from "./app";
 import { env } from "./config/env";
 import { prisma, testConnection, disconnect } from "./config/database";
 import { initializeFirebase } from "./services/notificationService";
+import { sendPushNotification } from "./services/notificationService";
 import { initializeFirebaseAuth } from "./services/firebaseAuthService";
 import { initializeSocket } from "./services/socketService";
-import { processTimeoutBookings } from "./services/bookingEngine";
+import { emitToUser } from "./services/socketService";
+import { processTimeoutBookings, sendUpcomingReminders } from "./services/bookingEngine";
 
 const TIMEOUT_SWEEP_INTERVAL_MS = 30_000;
+const REMINDER_SWEEP_INTERVAL_MS = 60_000;
 let timeoutSweeper: ReturnType<typeof setInterval> | null = null;
+let reminderSweeper: ReturnType<typeof setInterval> | null = null;
 
 function startTimeoutSweeper(): void {
   // Recovers bookings stuck in PARTNER_SEARCHING/PARTNER_ASSIGNED past their
@@ -19,6 +23,16 @@ function startTimeoutSweeper(): void {
     );
   }, TIMEOUT_SWEEP_INTERVAL_MS);
   timeoutSweeper.unref?.();
+}
+
+function startReminderSweeper(): void {
+  // Upcoming-job reminders (accepted jobs starting within 30 min), once each.
+  reminderSweeper = setInterval(() => {
+    sendUpcomingReminders().catch((err) =>
+      console.error("[REMINDER] Sweeper run failed:", err)
+    );
+  }, REMINDER_SWEEP_INTERVAL_MS);
+  reminderSweeper.unref?.();
 }
 
 async function main(): Promise<void> {
@@ -61,7 +75,39 @@ async function main(): Promise<void> {
 
   const io = initializeSocket(server);
 
+  // Realtime + push fan-out for EVERY in-app notification row (spec: OTP and
+  // arrival alerts must reach the user live, not sit silently in the DB).
+  // Installed once on the shared singleton — covers all creators, so no
+  // call site can forget to emit. Never throws into the write path.
+  prisma.$use(async (params, next) => {
+    const result = await next(params);
+    if (params.model === "Notification" && params.action === "create") {
+      try {
+        const n = result as { id: string; userId: string; title: string; body: string; data?: string | null };
+        if (n?.userId) {
+          emitToUser(n.userId, "notification", { id: n.id, title: n.title, body: n.body, data: n.data });
+          let pushData: Record<string, string> | undefined;
+          try {
+            const parsed = n.data ? JSON.parse(n.data) : null;
+            if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+              pushData = Object.fromEntries(
+                Object.entries(parsed as Record<string, unknown>).map(([k, v]) => [k, String(v ?? "")])
+              );
+            }
+          } catch {
+            pushData = undefined;
+          }
+          void sendPushNotification(n.userId, n.title, n.body, pushData);
+        }
+      } catch (err) {
+        console.error("[NOTIFY] fan-out failed:", err);
+      }
+    }
+    return result;
+  });
+
   startTimeoutSweeper();
+  startReminderSweeper();
 
   server.listen(env.PORT, () => {
     console.log(`RentBuddy API server listening on port ${env.PORT} [${env.NODE_ENV}]`);
@@ -71,6 +117,9 @@ async function main(): Promise<void> {
     console.log(`\nReceived ${signal}. Shutting down gracefully...`);
     if (timeoutSweeper) {
       clearInterval(timeoutSweeper);
+    }
+    if (reminderSweeper) {
+      clearInterval(reminderSweeper);
     }
     server.close(() => {
       console.log("HTTP server closed.");

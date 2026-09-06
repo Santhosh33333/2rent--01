@@ -81,7 +81,22 @@ export async function getCommunities(req: AuthedRequest, res: Response): Promise
       memberCount: item._count.members,
     }));
 
-    sendSuccess(res, { items: itemsWithMemberCount, page, limit, total });
+    // Attach the viewer's membership so Join/Leave toggles reflect reality.
+    const ids = items.map((i) => i.id);
+    const mine = ids.length
+      ? await prisma.communityMember.findMany({
+          where: { communityId: { in: ids }, userId: req.user!.userId },
+          select: { communityId: true },
+        })
+      : [];
+    const mineSet = new Set(mine.map((m) => m.communityId));
+    const shaped = itemsWithMemberCount.map((item: any) => ({
+      ...item,
+      isMember: mineSet.has(item.id) || item.ownerId === req.user!.userId,
+      isOwner: item.ownerId === req.user!.userId,
+    }));
+
+    sendSuccess(res, { items: shaped, page, limit, total });
   } catch (err: any) {
     sendError(res, "Failed to retrieve communities.", 500, "INTERNAL_ERROR");
   }
@@ -142,9 +157,13 @@ export async function updateCommunity(req: AuthedRequest, res: Response): Promis
       return;
     }
 
-    // Only owner can update
-    if (community.ownerId !== req.user!.userId) {
-      sendError(res, "Only community owner can update.", 403, "FORBIDDEN");
+    // Only owner or ADMIN can update (spec 105)
+    const membership = await prisma.communityMember.findUnique({
+      where: { communityId_userId: { communityId: id, userId: req.user!.userId } },
+    });
+    const isOwner = community.ownerId === req.user!.userId;
+    if (!isOwner && membership?.role !== "ADMIN") {
+      sendError(res, "Only community owner or admin can update.", 403, "FORBIDDEN");
       return;
     }
 
@@ -319,13 +338,33 @@ export async function getCommunityMembers(req: AuthedRequest, res: Response): Pr
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 20;
 
+    // Privacy: member emails are never exposed; private communities only
+    // show members to members.
+    const community = await prisma.community.findUnique({ where: { id }, select: { id: true, privacy: true } });
+    if (!community) {
+      sendError(res, "Community not found.", 404, "COMMUNITY_NOT_FOUND");
+      return;
+    }
+    if (community.privacy === "PRIVATE") {
+      const self = await prisma.communityMember.findUnique({
+        where: { communityId_userId: { communityId: id, userId: req.user!.userId } },
+      });
+      if (!self && community) {
+        const ownerCheck = await prisma.community.findUnique({ where: { id }, select: { ownerId: true } });
+        if (ownerCheck?.ownerId !== req.user!.userId) {
+          sendError(res, "This is a private community.", 403, "FORBIDDEN");
+          return;
+        }
+      }
+    }
+
     const [items, total] = await Promise.all([
       prisma.communityMember.findMany({
         where: { communityId: id },
         orderBy: { role: "desc" },
         skip: (page - 1) * limit,
         take: limit,
-        include: { user: { select: { id: true, fullName: true, avatarUrl: true, email: true } } },
+        include: { user: { select: { id: true, fullName: true, avatarUrl: true } } },
       }),
       prisma.communityMember.count({ where: { communityId: id } }),
     ]);

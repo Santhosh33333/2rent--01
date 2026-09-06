@@ -9,6 +9,7 @@ import http from "http";
 import { env } from "./config/env";
 import { generalRateLimiter } from "./middleware/rateLimiter";
 import { requireDocumentAccess } from "./middleware/fileAccess";
+import { idempotencyMiddleware } from "./middleware/idempotency";
 import { sendError } from "./utils/response";
 
 import authRoutes from "./routes/authRoutes";
@@ -121,7 +122,6 @@ export function createApp(): http.Server {
   app.use("/api/users", userRoutes);
   app.use("/api/verification", verificationRoutes);
   app.use("/api/walking-partner", walkingPartnerRoutes);
-  app.use("/api/wallet", walletRoutes);
   app.use("/api/walking-requests", walkingRequestRoutes);
   app.use("/api/communities", communityRoutes);
   app.use("/api/events", eventRoutes);
@@ -141,8 +141,9 @@ export function createApp(): http.Server {
   app.use("/api/location", locationRoutes);
   app.use("/api/chat-requests", chatRequestRoutes);
   app.use("/api/privacy", privacyRoutes);
-  app.use("/api/payments", paymentRoutes);
-app.use("/api/bookings", bookingRoutes);
+  app.use("/api/payments", idempotencyMiddleware, paymentRoutes);
+  app.use("/api/bookings", idempotencyMiddleware, bookingRoutes);
+  app.use("/api/wallet", idempotencyMiddleware, walletRoutes);
 app.use("/api/partner", partnerRoutes);
 app.use("/api/discovery", discoveryRoutes);
   // Public service catalog (Expanded Partner Ecosystem) — registered BEFORE the

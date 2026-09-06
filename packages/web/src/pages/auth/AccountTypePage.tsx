@@ -111,7 +111,7 @@ export function AccountTypePage() {
         </div>
       </div>
 
-      <div className="p-6 pb-10">
+      <div className="sticky bottom-0 p-6 pb-10 bg-surface-50 dark:bg-surface-950 border-t border-surface-200/50 dark:border-surface-800/50">
         <div className="max-w-md mx-auto">
           <button
             onClick={handleContinue}

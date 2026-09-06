@@ -8,6 +8,15 @@ import * as bookingEngine from "../services/bookingEngine";
 import { expireStaleSearches, onBookingClaimed, markDispatchesViewed } from "../services/dispatchService";
 import { notifyBookingStatusChange } from "../controllers/notificationController";
 import { buildReferralRewardService } from "./referralController";
+import { ensureConversation } from "./messageController";
+import {
+  isExpired,
+  OTP_MAX_ATTEMPTS,
+  parseNotes,
+  verifyOtpHash,
+  verifyStartOtp,
+} from "../services/jobWorkflowService";
+import { checkAcceptStorm, checkInstantCompletion, checkOtpAbuse } from "../services/aiMonitorService";
 
 const settleReferralReward = buildReferralRewardService();
 
@@ -189,6 +198,25 @@ export async function acceptBooking(req: AuthedRequest, res: Response): Promise<
     void onBookingClaimed(id, req.user!.userId);
     void notifyBookingStatusChange(booking.id, booking.userId, "PARTNER_ACCEPTED");
 
+    // Anomaly watch (admin review only, never auto-punish).
+    void checkAcceptStorm(req.user!.userId);
+
+    // Open the User <-> assigned Partner conversation immediately so chat
+    // works from the moment of acceptance (spec 102). Best-effort.
+    void (async () => {
+      try {
+        await ensureConversation(booking.userId, req.user!.userId);
+        await prisma.notification.create({
+          data: {
+            userId: booking.userId,
+            title: "Partner assigned",
+            body: "Your partner accepted. You can now chat from Messages.",
+            data: JSON.stringify({ bookingId: id, type: "CHAT_READY" }),
+          },
+        });
+      } catch { /* never block accept */ }
+    })();
+
     const updated = await prisma.booking.findUnique({
       where: { id },
       include: { partner: { select: { id: true, userId: true } } },
@@ -259,16 +287,31 @@ export async function generateOTP(req: AuthedRequest, res: Response): Promise<vo
       return;
     }
 
-    // Cryptographically random 6-digit OTP (CSPRNG), hashed at rest
+    // Cryptographically random 6-digit OTP (CSPRNG), hashed at rest.
+    // This is the START code: the user shares it in person on arrival and
+    // the partner enters it to start the job (spec 90). Stored hashed in
+    // BOTH the legacy column and the workflow notes record (attempts/expiry).
     const otp = String(crypto.randomInt(100000, 1000000));
     const otpHash = crypto.createHash("sha256").update(otp).digest("hex");
+    const now = new Date();
+
+    const existingNotes = parseNotes(booking.notes);
+    existingNotes.startOtp = {
+      hash: otpHash,
+      expiresAt: new Date(now.getTime() + 15 * 60_000).toISOString(),
+      attempts: 0,
+      verifiedAt: null,
+    };
+    if (!existingNotes.trip) existingNotes.trip = { phase: "NOT_STARTED" };
 
     const claimed = await prisma.booking.updateMany({
       where: { id, partnerId: partner.id, status: { in: ["PARTNER_ACCEPTED", "OTP_GENERATED"] } },
       data: {
         otp: otpHash,
-        otpGeneratedAt: new Date(),
+        otpGeneratedAt: now,
+        otpVerifiedAt: null,
         status: "OTP_GENERATED",
+        notes: JSON.stringify(existingNotes),
       },
     });
 
@@ -277,18 +320,18 @@ export async function generateOTP(req: AuthedRequest, res: Response): Promise<vo
       return;
     }
 
-    // The OTP goes to the USER (who confirms service delivery) — never to the
-    // partner requesting it.
+    // The OTP goes to the USER (who reads it out in person on arrival) —
+    // never to the partner requesting it.
     await prisma.notification.create({
       data: {
         userId: booking.userId,
-        title: "Service Verification Code",
-        body: `Your verification code is ${otp}. Share it with your partner only after the service is done.`,
+        title: "Service Start Code",
+        body: `Your start code is ${otp}. Share it with your partner in person when they arrive. Never share it in chat.`,
         data: JSON.stringify({ bookingId: id, type: "BOOKING_OTP" }),
       },
     });
 
-    sendSuccess(res, undefined, "OTP generated and sent to the customer.");
+    sendSuccess(res, undefined, "Start code generated and sent to the customer.");
   } catch (err) {
     sendError(res, "Failed to generate OTP.", 500, "INTERNAL_ERROR");
   }
@@ -305,59 +348,18 @@ export async function verifyOTP(req: AuthedRequest, res: Response): Promise<void
       return;
     }
 
-    const booking = await prisma.booking.findUnique({ where: { id } });
-    if (!booking) {
-      sendError(res, "Booking not found.", 404, "BOOKING_NOT_FOUND");
-      return;
-    }
+    // Single enforced entry into IN_PROGRESS: verified START OTP inside the
+    // scheduled time window (spec 84/90). Direct starts are rejected there.
+    await verifyStartOtp(id, req.user!.userId, String(submittedOtp ?? "").trim());
 
-    if (booking.partnerId !== partner.id) {
-      sendError(res, "Unauthorized.", 403, "FORBIDDEN");
-      return;
-    }
+    void notifyBookingStatusChange(id, (await prisma.booking.findUnique({ where: { id }, select: { userId: true } }))?.userId ?? "", "IN_PROGRESS");
 
-    if (booking.status !== "OTP_GENERATED" || !booking.otp || !booking.otpGeneratedAt) {
-      sendError(res, "No active OTP for this booking.", 400, "INVALID_OTP");
-      return;
-    }
-
-    // OTP expires 10 minutes after generation
-    const otpAgeMs = Date.now() - new Date(booking.otpGeneratedAt).getTime();
-    if (otpAgeMs > 10 * 60 * 1000) {
-      sendError(res, "OTP expired. Ask the customer for a new code.", 400, "OTP_EXPIRED");
-      return;
-    }
-
-    // Timing-safe hash comparison
-    const submittedHash = crypto.createHash("sha256").update(String(submittedOtp)).digest("hex");
-    const a = Buffer.from(submittedHash, "hex");
-    const b = Buffer.from(booking.otp, "hex");
-    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
-      sendError(res, "Invalid OTP.", 400, "INVALID_OTP");
-      return;
-    }
-
-    // Conditional transition + single-use: clears the OTP so it cannot replay
-    const claimed = await prisma.booking.updateMany({
-      where: { id, partnerId: partner.id, status: "OTP_GENERATED", otp: booking.otp },
-      data: {
-        otpVerifiedAt: new Date(),
-        startedAt: new Date(),
-        otp: null,
-        status: "IN_PROGRESS",
-      },
-    });
-
-    if (claimed.count !== 1) {
-      sendError(res, "Invalid OTP.", 400, "INVALID_OTP");
-      return;
-    }
-
-    void notifyBookingStatusChange(booking.id, booking.userId, "IN_PROGRESS");
-
-    sendSuccess(res, undefined, "OTP verified.");
-  } catch (err) {
-    sendError(res, "Failed to verify OTP.", 500, "INTERNAL_ERROR");
+    sendSuccess(res, undefined, "OTP verified. Job started.");
+  } catch (err: any) {
+    const code = err?.code ?? "INTERNAL_ERROR";
+    const status = err?.status ?? (code === "BOOKING_NOT_FOUND" ? 404 : code === "FORBIDDEN" ? 403 : code === "INTERNAL_ERROR" ? 500 : 409);
+    if (code === "INTERNAL_ERROR") console.error("[verifyOTP]", err?.message);
+    sendError(res, err?.message || "Failed to verify OTP.", status, code);
   }
 }
 
@@ -382,9 +384,45 @@ export async function completeBooking(req: AuthedRequest, res: Response): Promis
       return;
     }
 
-    if (booking.status !== "IN_PROGRESS") {
-      sendError(res, "Booking is not in progress.", 400, "INVALID_STATUS");
+    if (booking.status === "COMPLETED") {
+      sendSuccess(res, booking, "Booking already completed.");
       return;
+    }
+
+    // Completion requires the request-then-code flow (spec 94/95): the
+    // partner must have requested completion and must enter the user's
+    // completion code. Direct IN_PROGRESS -> COMPLETED is rejected.
+    if (booking.status !== "COMPLETION_REQUESTED") {
+      sendError(res, "Request completion first and enter the user's completion code. Direct completion is not allowed.", 409, "COMPLETION_OTP_REQUIRED");
+      return;
+    }
+    const gateNotes = parseNotes(booking.notes);
+    if (!gateNotes.completionOtp?.hash && !gateNotes.completionOtp?.verifiedAt) {
+      sendError(res, "No active completion code. Ask the user to generate it.", 409, "COMPLETION_OTP_REQUIRED");
+      return;
+    }
+    if (!gateNotes.completionOtp?.verifiedAt) {
+      const code = String(req.body.completionOtp ?? "").trim();
+      if (!code) {
+        sendError(res, "Enter the completion code from the user.", 400, "COMPLETION_OTP_REQUIRED");
+        return;
+      }
+      if (isExpired(gateNotes.completionOtp?.expiresAt, new Date())) {
+        sendError(res, "Completion code expired. Ask the user for a new one.", 410, "OTP_EXPIRED");
+        return;
+      }
+      if ((gateNotes.completionOtp?.attempts ?? 0) >= OTP_MAX_ATTEMPTS) {
+        sendError(res, "Too many wrong attempts. Ask the user for a new code.", 429, "OTP_LOCKED");
+        return;
+      }
+      if (!verifyOtpHash(code, gateNotes.completionOtp!.hash!)) {
+        gateNotes.completionOtp!.attempts = (gateNotes.completionOtp!.attempts ?? 0) + 1;
+        await prisma.booking.update({ where: { id }, data: { notes: JSON.stringify(gateNotes) } });
+        void checkOtpAbuse(id, "COMPLETION", gateNotes.completionOtp!.attempts ?? 0);
+        sendError(res, "Invalid completion code. Try again.", 400, "INVALID_OTP");
+        return;
+      }
+      gateNotes.completionOtp!.verifiedAt = new Date().toISOString();
     }
 
     // Cash bookings are settled peer-to-peer: the user pays the partner directly,
@@ -404,12 +442,14 @@ export async function completeBooking(req: AuthedRequest, res: Response): Promis
     let settled: any = null;
 
     const result = await prisma.$transaction(async (tx) => {
-      // Atomic claim: only the assigned partner, only once
+      // Atomic claim: only the assigned partner, only once, only from the
+      // requested-completion state with a verified code.
       const claimed = await tx.booking.updateMany({
-        where: { id, partnerId: partner.id, status: "IN_PROGRESS" },
+        where: { id, partnerId: partner.id, status: "COMPLETION_REQUESTED" },
         data: {
           status: "COMPLETED",
           completedAt: now,
+          notes: JSON.stringify(gateNotes),
         },
       });
 
@@ -510,7 +550,7 @@ export async function completeBooking(req: AuthedRequest, res: Response): Promis
     });
 
     if (!result) {
-      sendError(res, "Booking is not in progress or not assigned to you.", 400, "INVALID_STATUS");
+      sendError(res, "Completion code verification is required. Request completion first.", 400, "COMPLETION_OTP_REQUIRED");
       return;
     }
 
@@ -528,6 +568,9 @@ export async function completeBooking(req: AuthedRequest, res: Response): Promis
     // Referral rewards unlock on the referee's first completed booking — this is the
     // real completion path partners use, so settle here (claim-guarded, idempotent).
     void settleReferralReward(booking.userId);
+
+    // Anomaly watch: implausibly fast jobs flagged for admin review only.
+    void checkInstantCompletion(id);
 
     sendSuccess(res, responsePayload, "Booking completed.");
   } catch (err) {
@@ -548,7 +591,10 @@ export async function getPartnerBookings(req: AuthedRequest, res: Response): Pro
     const limit = Number(req.query.limit) || 20;
 
     const where: any = { partnerId: partner.id };
-    if (status) where.status = status;
+    if (status) {
+      const list = String(status).split(",").map((s) => s.trim()).filter(Boolean);
+      where.status = list.length > 1 ? { in: list } : list[0] ?? status;
+    }
 
     const [items, total] = await Promise.all([
       prisma.booking.findMany({
@@ -586,44 +632,55 @@ export async function getPerformance(req: AuthedRequest, res: Response): Promise
     const startOfWeek = new Date(now); startOfWeek.setDate(now.getDate() - now.getDay()); startOfWeek.setHours(0, 0, 0, 0);
     const startOfMonth = new Date(now); startOfMonth.setDate(1); startOfMonth.setHours(0, 0, 0, 0);
 
-    // Fetch all completed bookings for this partner
-    const allCompleted = await prisma.booking.findMany({
-      where: { partnerId: partner.id, status: "COMPLETED" },
-      select: { id: true, partnerEarning: true, completedAt: true },
-      orderBy: { completedAt: "asc" },
-    });
-
     const allCancelled = await prisma.booking.count({ where: { partnerId: partner.id, status: "CANCELLED" } });
 
-    // Today / week / month earnings
-    const todayEarnings = allCompleted
-      .filter(b => b.completedAt && b.completedAt >= startOfToday)
-      .reduce((s, b) => s + (b.partnerEarning ?? 0), 0);
-    const weeklyEarnings = allCompleted
-      .filter(b => b.completedAt && b.completedAt >= startOfWeek)
-      .reduce((s, b) => s + (b.partnerEarning ?? 0), 0);
-    const monthlyEarnings = allCompleted
-      .filter(b => b.completedAt && b.completedAt >= startOfMonth)
-      .reduce((s, b) => s + (b.partnerEarning ?? 0), 0);
+    // Use DB aggregates instead of fetching all rows
+    const [todayAgg, weekAgg, monthAgg] = await Promise.all([
+      prisma.booking.aggregate({
+        where: { partnerId: partner.id, status: "COMPLETED", completedAt: { gte: startOfToday } },
+        _sum: { partnerEarning: true },
+        _count: true,
+      }),
+      prisma.booking.aggregate({
+        where: { partnerId: partner.id, status: "COMPLETED", completedAt: { gte: startOfWeek } },
+        _sum: { partnerEarning: true },
+        _count: true,
+      }),
+      prisma.booking.aggregate({
+        where: { partnerId: partner.id, status: "COMPLETED", completedAt: { gte: startOfMonth } },
+        _sum: { partnerEarning: true },
+        _count: true,
+      }),
+    ]);
 
-    // Today / week jobs
-    const todayJobs = allCompleted.filter(b => b.completedAt && b.completedAt >= startOfToday).length;
-    const weeklyJobs = allCompleted.filter(b => b.completedAt && b.completedAt >= startOfWeek).length;
+    const todayEarnings = Number(todayAgg._sum.partnerEarning ?? 0);
+    const weeklyEarnings = Number(weekAgg._sum.partnerEarning ?? 0);
+    const monthlyEarnings = Number(monthAgg._sum.partnerEarning ?? 0);
+    const todayJobs = todayAgg._count;
+    const weeklyJobs = weekAgg._count;
 
-    // Build last-7-months bar chart data
+    // Build last-7-months bar chart data using DB aggregates
     const monthlyJobCounts: number[] = [];
     const monthlyEarningsList: number[] = [];
     const monthLabels: string[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(now);
-      d.setMonth(d.getMonth() - i);
-      const y = d.getFullYear(); const m = d.getMonth();
-      const start = new Date(y, m, 1);
-      const end = new Date(y, m + 1, 0, 23, 59, 59);
-      const jobsInMonth = allCompleted.filter(b => b.completedAt && b.completedAt >= start && b.completedAt <= end);
-      monthlyJobCounts.push(jobsInMonth.length);
-      monthlyEarningsList.push(jobsInMonth.reduce((s, b) => s + (b.partnerEarning ?? 0), 0));
-      monthLabels.push(d.toLocaleString("default", { month: "short" }));
+    const monthAggregates = await Promise.all(
+      Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(now);
+        d.setMonth(d.getMonth() - (6 - i));
+        const y = d.getFullYear(); const m = d.getMonth();
+        const start = new Date(y, m, 1);
+        const end = new Date(y, m + 1, 0, 23, 59, 59);
+        return prisma.booking.aggregate({
+          where: { partnerId: partner.id, status: "COMPLETED", completedAt: { gte: start, lte: end } },
+          _sum: { partnerEarning: true },
+          _count: true,
+        }).then((agg) => ({ count: agg._count, earnings: Number(agg._sum.partnerEarning ?? 0), label: d.toLocaleString("default", { month: "short" }) }));
+      })
+    );
+    for (const m of monthAggregates) {
+      monthlyJobCounts.push(m.count);
+      monthlyEarningsList.push(m.earnings);
+      monthLabels.push(m.label);
     }
 
     // Completion rate

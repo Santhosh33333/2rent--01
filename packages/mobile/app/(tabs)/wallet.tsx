@@ -30,7 +30,7 @@ export default function Wallet() {
       {txQ.isLoading ? <Text style={styles.sub}>Loading…</Text> : null}
       <FlatList
         data={txns}
-        keyExtractor={(t) => t.id ?? Math.random().toString()}
+        keyExtractor={(t, index) => t.id ?? `w-${index}`}
         renderItem={({ item }) => (
           <Card>
             <View style={styles.row}>

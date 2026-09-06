@@ -44,11 +44,30 @@ export function DiscoverPage() {
         ])
         if (eventsRes.status === 'fulfilled') {
           const raw = eventsRes.value.data?.data || eventsRes.value.data || []
-          setEvents(Array.isArray(raw) ? raw : (raw.items || []))
+          const items = Array.isArray(raw) ? raw : (raw.items || [])
+          // Normalize backend shape (title/startTime/attendeeCount) to view shape.
+          setEvents(items.map((ev: any) => ({
+            id: ev.id,
+            name: ev.title || ev.name || 'Event',
+            date: ev.startTime || ev.date,
+            location: ev.location ?? 'TBA',
+            description: ev.description ?? '',
+            category: ev.category,
+            attendees: ev.attendeeCount ?? ev.attendees ?? 0,
+          })))
         }
         if (communitiesRes.status === 'fulfilled') {
           const raw = communitiesRes.value.data?.data || communitiesRes.value.data || []
-          setCommunities(Array.isArray(raw) ? raw : (raw.items || []))
+          const items = Array.isArray(raw) ? raw : (raw.items || [])
+          // Normalize backend shape (memberCount) to view shape.
+          setCommunities(items.map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            members: c.memberCount ?? c._count?.members ?? 0,
+            description: c.description || '',
+            category: c.category,
+            location: c.city ?? c.location,
+          })))
         }
       } catch {
         // silent
@@ -60,13 +79,14 @@ export function DiscoverPage() {
   }, [])
 
   const filteredEvents = events.filter(e => {
-    const matchesSearch = e.name.toLowerCase().includes(search.toLowerCase()) || (e.location || '').toLowerCase().includes(search.toLowerCase())
-    const isUpcoming = new Date(e.date) >= new Date()
+    const matchesSearch = (e.name || '').toLowerCase().includes(search.toLowerCase()) || (e.location || '').toLowerCase().includes(search.toLowerCase())
+    const eventTime = new Date(e.date).getTime()
+    const isUpcoming = Number.isFinite(eventTime) && eventTime >= Date.now()
     return matchesSearch && isUpcoming && (category === 'all' || category === 'events')
   }).slice(0, 5)
 
   const filteredCommunities = communities.filter(c => {
-    const matchesSearch = c.name.toLowerCase().includes(search.toLowerCase()) || c.description.toLowerCase().includes(search.toLowerCase())
+    const matchesSearch = (c.name || '').toLowerCase().includes(search.toLowerCase()) || (c.description || '').toLowerCase().includes(search.toLowerCase())
     return matchesSearch && (category === 'all' || category === 'communities')
   }).slice(0, 5)
 

@@ -39,13 +39,14 @@ export function CarryBuddyProfilePage() {
   const [error, setError] = useState<string | null>(null)
   const [togglingAvailability, setTogglingAvailability] = useState(false)
 
-  useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const [profileRes, reviewsRes] = await Promise.allSettled([
-          api.get('/carry-buddy/profile'),
-          api.get('/carry-buddy/reviews'),
-        ])
+  const fetchProfile = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const [profileRes, reviewsRes] = await Promise.allSettled([
+        api.get('/carry-buddy/profile'),
+        api.get('/carry-buddy/reviews'),
+      ])
 
         if (profileRes.status === 'fulfilled') {
           const d = profileRes.value.data?.data ?? profileRes.value.data ?? {}
@@ -84,9 +85,11 @@ export function CarryBuddyProfilePage() {
       } catch {
         setError('Failed to load profile')
       } finally {
-        setLoading(false)
-      }
+      setLoading(false)
     }
+  }
+
+  useEffect(() => {
     fetchProfile()
   }, [user])
 
@@ -133,7 +136,7 @@ export function CarryBuddyProfilePage() {
         <div className="empty-state-icon"><AlertTriangle className="w-10 h-10 text-danger-400" /></div>
         <h3 className="empty-state-title">Failed to load profile</h3>
         <p className="empty-state-desc">{error}</p>
-        <button onClick={() => window.location.reload()} className="btn-primary mt-6">Retry</button>
+        <button onClick={fetchProfile} className="btn-primary mt-6">Retry</button>
       </div>
     )
   }

@@ -26,6 +26,7 @@ interface BookingData {
   distance: string
   itemType: string
   itemDescription: string
+  sameGenderOnly: boolean
 }
 
 interface PriceEstimate {
@@ -100,6 +101,7 @@ export function CreateBookingPage() {
     distance: '',
     itemType: '',
     itemDescription: '',
+    sameGenderOnly: false,
   })
   const [createdBookingId, setCreatedBookingId] = useState<string | null>(null)
   const [durationMode, setDurationMode] = useState<'HOURS' | 'DAYS'>('HOURS')
@@ -171,7 +173,7 @@ export function CreateBookingPage() {
   }
 
   const handleSubmit = async () => {
-    // Booking window: now â†’ +2 months (mirrors backend enforcement)
+    // Booking window: now → +2 months (mirrors backend enforcement)
     const scheduledAt = new Date(`${booking.date}T${booking.time}:00`)
     if (!booking.date || !booking.time || Number.isNaN(scheduledAt.getTime())) {
       toast.error('Please choose a valid date and time.')
@@ -208,6 +210,7 @@ export function CreateBookingPage() {
         itemType: booking.itemType || undefined,
         itemDescription: booking.itemDescription || undefined,
         notes: booking.itemDescription || undefined,
+        sameGenderOnly: booking.sameGenderOnly || undefined,
       })
       const data = res.data?.data || res.data
       const id = data?.id || data?.bookingId
@@ -497,6 +500,18 @@ export function CreateBookingPage() {
                   />
                 </div>
               </div>
+              <label className="flex items-start gap-3 p-3 rounded-xl bg-surface-50 dark:bg-surface-800/50 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={booking.sameGenderOnly}
+                  onChange={(e) => updateBooking({ sameGenderOnly: e.target.checked })}
+                  className="mt-1 w-4 h-4 accent-primary-600"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-surface-700 dark:text-surface-300">Same-gender partner only</span>
+                  <span className="block text-xs text-surface-500 mt-0.5">Only partners of your gender will be matched. Enforced by our system.</span>
+                </span>
+              </label>
             </div>
           )}
 
@@ -516,6 +531,18 @@ export function CreateBookingPage() {
                   />
                 </div>
               </div>
+              <label className="flex items-start gap-3 p-3 rounded-xl bg-surface-50 dark:bg-surface-800/50 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={booking.sameGenderOnly}
+                  onChange={(e) => updateBooking({ sameGenderOnly: e.target.checked })}
+                  className="mt-1 w-4 h-4 accent-primary-600"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-surface-700 dark:text-surface-300">Same-gender partner only</span>
+                  <span className="block text-xs text-surface-500 mt-0.5">Only partners of your gender will be matched. Enforced by our system.</span>
+                </span>
+              </label>
             </div>
           )}
 
@@ -532,7 +559,7 @@ export function CreateBookingPage() {
                   {estimate.surgeApplied && (
                     <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800">
                       <span className="text-sm font-medium text-amber-700 dark:text-amber-400">
-                        Peak pricing applies Ã—{estimate.surgeMultiplier ?? 1}
+                        Peak pricing applies ×{estimate.surgeMultiplier ?? 1}
                       </span>
                     </div>
                   )}

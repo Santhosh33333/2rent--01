@@ -35,29 +35,30 @@ export function CarryBuddyJobsPage() {
   const [error, setError] = useState<string | null>(null)
   const [acceptingId, setAcceptingId] = useState<string | null>(null)
 
-  useEffect(() => {
-    const fetchJobs = async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        const endpoint = activeTab === 'available'
-          ? '/carry-buddy/requests'
-          : '/carry-buddy/my-requests'
-        const res = await api.get(endpoint)
-        const root = res.data
-        const data = (Array.isArray(root) ? root : (root?.data?.items ?? root?.data ?? [])) || []
-        const filtered = activeTab === 'completed'
-          ? data.filter((j: CarryJob) => j.status === 'completed')
-          : activeTab === 'active'
-          ? data.filter((j: CarryJob) => j.status === 'active' || j.status === 'in_progress')
-          : data.filter((j: CarryJob) => j.status === 'pending' || j.status === 'available')
-        setJobs(filtered)
-      } catch {
-        setError('Failed to load jobs')
-      } finally {
-        setLoading(false)
-      }
+  const fetchJobs = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const endpoint = activeTab === 'available'
+        ? '/carry-buddy/requests'
+        : '/carry-buddy/my-requests'
+      const res = await api.get(endpoint)
+      const root = res.data
+      const data = (Array.isArray(root) ? root : (root?.data?.items ?? root?.data ?? [])) || []
+      const filtered = activeTab === 'completed'
+        ? data.filter((j: CarryJob) => j.status === 'completed')
+        : activeTab === 'active'
+        ? data.filter((j: CarryJob) => j.status === 'active' || j.status === 'in_progress')
+        : data.filter((j: CarryJob) => j.status === 'pending' || j.status === 'available')
+      setJobs(filtered)
+    } catch {
+      setError('Failed to load jobs')
+    } finally {
+      setLoading(false)
     }
+  }
+
+  useEffect(() => {
     fetchJobs()
   }, [activeTab])
 
@@ -94,7 +95,7 @@ export function CarryBuddyJobsPage() {
         <div className="empty-state-icon"><AlertTriangle className="w-10 h-10 text-danger-400" /></div>
         <h3 className="empty-state-title">Failed to load jobs</h3>
         <p className="empty-state-desc">{error}</p>
-        <button onClick={() => window.location.reload()} className="btn-primary mt-6">Retry</button>
+        <button onClick={fetchJobs} className="btn-primary mt-6">Retry</button>
       </div>
     )
   }

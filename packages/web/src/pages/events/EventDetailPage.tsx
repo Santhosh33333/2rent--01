@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   Calendar, MapPin, Users, ArrowLeft, Loader2, AlertTriangle,
-  Clock, Share2, CheckCircle, XCircle, Sparkles,
-  MessageCircle
+  Clock, CheckCircle, XCircle, Sparkles,
+  MapPinned, Share2
 } from 'lucide-react'
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
@@ -29,6 +29,8 @@ export function EventDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [rsvping, setRsvping] = useState(false)
+  const [checkingIn, setCheckingIn] = useState(false)
+  const [checkedIn, setCheckedIn] = useState(false)
 
   useEffect(() => {
     const fetchEvent = async () => {
@@ -136,7 +138,23 @@ export function EventDetailPage() {
         <div className="h-32 bg-gradient-to-br from-primary-500/20 via-accent-500/10 to-surface-100 dark:from-primary-900/20 dark:via-accent-900/10 dark:to-surface-900 relative">
           <div className="absolute inset-0 bg-grid opacity-20" />
           <div className="absolute top-4 right-4 flex gap-2">
-            <button className="w-9 h-9 rounded-xl bg-white/80 dark:bg-surface-800/80 backdrop-blur-sm flex items-center justify-center text-surface-600 dark:text-surface-400 hover:bg-white dark:hover:bg-surface-700 transition-colors">
+            <button
+              onClick={async () => {
+                const url = window.location.href
+                try {
+                  if (navigator.share) {
+                    await navigator.share({ title: event?.name || 'Event', url })
+                  } else {
+                    await navigator.clipboard.writeText(url)
+                    toast.success('Event link copied')
+                  }
+                } catch {
+                  /* user dismissed the share sheet */
+                }
+              }}
+              title="Share this event"
+              className="w-9 h-9 rounded-xl bg-white/80 dark:bg-surface-800/80 backdrop-blur-sm flex items-center justify-center text-surface-600 dark:text-surface-400 hover:bg-white dark:hover:bg-surface-700 transition-colors"
+            >
               <Share2 className="w-4 h-4" />
             </button>
           </div>
@@ -245,9 +263,28 @@ export function EventDetailPage() {
                 <><CheckCircle className="w-4 h-4" /> RSVP Now</>
               )}
             </button>
-            <button className="px-4 py-3 rounded-xl bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 hover:bg-surface-200 dark:hover:bg-surface-700 transition-colors">
-              <MessageCircle className="w-4 h-4" />
+            {event.rsvp && (
+              <button
+                onClick={async () => {
+                setCheckingIn(true)
+                try {
+                  await api.post(`/events/${id}/checkin`)
+                  setCheckedIn(true)
+                  toast.success('Checked in. Enjoy the event!')
+                } catch (e: any) {
+                  toast.error(e?.response?.data?.message || 'Check-in failed')
+                } finally {
+                  setCheckingIn(false)
+                }
+              }}
+              disabled={checkingIn || checkedIn}
+              title="Check in to this event"
+              className="px-4 py-3 rounded-xl bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 hover:bg-surface-200 dark:hover:bg-surface-700 transition-colors disabled:opacity-50 flex items-center gap-2 text-sm font-medium"
+            >
+              {checkingIn ? <Loader2 className="w-4 h-4 animate-spin" /> : <MapPinned className="w-4 h-4" />}
+              {checkedIn ? 'Checked In' : 'Check In'}
             </button>
+            )}
           </div>
 
           {/* RSVP Status */}
@@ -255,7 +292,7 @@ export function EventDetailPage() {
             <div className="mt-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 flex items-center gap-2">
               <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />
               <p className="text-xs text-emerald-700 dark:text-emerald-300">
-                You're going! We'll send you a reminder before the event.
+                {checkedIn ? "You're checked in. Enjoy the event!" : "You're going! We'll send you a reminder before the event."}
               </p>
             </div>
           )}

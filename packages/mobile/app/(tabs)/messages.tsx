@@ -27,7 +27,7 @@ export default function Messages() {
       <Title>Messages</Title>
       <FlatList
         data={convos}
-        keyExtractor={(c) => c.id ?? Math.random().toString()}
+        keyExtractor={(c, index) => c.id ?? `m-${index}`}
         renderItem={({ item }) => (
           <Card onPress={() => router.push(`/chat/${item.id}`)}>
             <Text style={styles.name}>{otherName(item)}</Text>

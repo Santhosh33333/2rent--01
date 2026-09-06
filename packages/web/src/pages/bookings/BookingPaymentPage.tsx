@@ -31,7 +31,15 @@ interface BookingData {
   }
 }
 
-type PaymentMethod = 'ONLINE' | 'CASH' | null
+type PaymentMethod = 'ONLINE' | 'CASH' | 'UPI_MANUAL' | null
+
+interface UpiDetails {
+  upiId: string
+  accountName?: string | null
+  qrUrl?: string | null
+  amount: number
+  referenceNote?: string
+}
 
 export function BookingPaymentPage() {
   const { id } = useParams<{ id: string }>()
@@ -42,12 +50,15 @@ export function BookingPaymentPage() {
   const [confirming, setConfirming] = useState(false)
   const [paying, setPaying] = useState(false)
   const [done, setDone] = useState(false)
-  const [doneType, setDoneType] = useState<'ONLINE' | 'CASH' | null>(null)
+  const [doneType, setDoneType] = useState<'ONLINE' | 'CASH' | 'UPI_MANUAL' | null>(null)
+  const [upiInfo, setUpiInfo] = useState<UpiDetails | null>(null)
+  const [upiRef, setUpiRef] = useState('')
+  const [upiSubmitting, setUpiSubmitting] = useState(false)
 
   useEffect(() => {
     if (!id) return
     api.get(`/bookings/${id}`)
-      .then(res => {
+      .then(async (res) => {
         const d = res.data?.data || res.data
         setBooking(d)
         // If payment method already chosen
@@ -56,9 +67,27 @@ export function BookingPaymentPage() {
         }
         if (d?.paymentStatus === 'PAID') { setDone(true); setDoneType('ONLINE') }
         if (d?.paymentStatus === 'CASH_RECEIVED' || d?.paymentStatus === 'PENDING_CASH') { setDone(true); setDoneType('CASH') }
+        if (d?.paymentStatus === 'VERIFICATION_PENDING') { setDone(true); setDoneType('UPI_MANUAL') }
+        if (d?.paymentStatus === 'REJECTED') {
+          // Admin rejected the reference — let the user submit a new one.
+          setSelected('UPI_MANUAL')
+          try {
+            const u = await api.get(`/bookings/${id}/upi-details`)
+            const info = u.data?.data || u.data
+            if (info?.upiId) setUpiInfo(info)
+          } catch {}
+          toast.error('Your previous UPI reference was rejected. Please pay again and submit the new reference.')
+        }
       })
       .catch(() => toast.error('Failed to load booking'))
       .finally(() => setLoading(false))
+    // Manual UPI is offered only when the admin configured it (else hidden).
+    api.get(`/bookings/${id}/upi-details`)
+      .then((res) => {
+        const u = res.data?.data || res.data
+        if (u?.upiId) setUpiInfo(u)
+      })
+      .catch(() => {})
   }, [id])
 
   const amount = booking?.estimatedAmount ?? booking?.finalAmount ?? 0
@@ -77,6 +106,9 @@ export function BookingPaymentPage() {
         setDone(true)
         setDoneType('CASH')
         toast.success('Cash payment confirmed!')
+      } else if (selected === 'UPI_MANUAL') {
+        // Show the QR panel below; the booking waits for admin verification.
+        toast.success('Pay on the UPI ID below, then submit your reference number.')
       } else {
         // Proceed to Razorpay
         setPaying(true)
@@ -132,12 +164,14 @@ export function BookingPaymentPage() {
             <CheckCircle className="w-10 h-10 text-white" />
           </div>
           <h1 className="text-2xl font-bold font-display text-surface-900 dark:text-white mb-2">
-            {doneType === 'ONLINE' ? 'Payment Successful!' : 'Booking Confirmed!'}
+            {doneType === 'ONLINE' ? 'Payment Successful!' : doneType === 'UPI_MANUAL' ? 'Reference Submitted!' : 'Booking Confirmed!'}
           </h1>
           <p className="text-surface-500 dark:text-surface-400 mb-2">
             {doneType === 'ONLINE'
               ? `₹${amount.toLocaleString('en-IN')} paid. Searching for partner...`
-              : `Pay ₹${amount.toLocaleString('en-IN')} directly to ${partnerName} after the service.`}
+              : doneType === 'UPI_MANUAL'
+                ? 'Admin will verify your payment against the bank statement, then partner matching starts.'
+                : `Pay ₹${amount.toLocaleString('en-IN')} directly to ${partnerName} after the service.`}
           </p>
           {doneType === 'CASH' && (
             <div className="my-4 p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30">
@@ -184,7 +218,7 @@ export function BookingPaymentPage() {
                   <span className="text-xs text-surface-500 ml-1">{partnerRating.toFixed(1)}</span>
                 </div>
               )}
-              <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 font-medium">âœ“ Partner has accepted your request</p>
+              <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 font-medium">✓ Partner has accepted your request</p>
             </div>
             <div className="flex items-center gap-1 text-xs text-surface-500 bg-surface-100 dark:bg-surface-800 px-2 py-1 rounded-lg">
               <Clock className="w-3 h-3" /> ~15 min
@@ -266,6 +300,73 @@ export function BookingPaymentPage() {
               <p className="text-xs text-amber-700 dark:text-amber-400"><span className="font-semibold">Note:</span> Pay ₹{amount.toLocaleString('en-IN')} directly to your partner after the service. The partner will confirm cash receipt.</p>
             </div>
           )}
+
+          {upiInfo && (
+            <button
+              onClick={() => setSelected('UPI_MANUAL')}
+              className={`relative w-full mt-3 p-4 rounded-2xl border-2 text-left transition-all duration-200 ${selected === 'UPI_MANUAL' ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/10 shadow-lg shadow-sky-500/10' : 'border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-900 hover:border-sky-300'}`}
+            >
+              {selected === 'UPI_MANUAL' && <div className="absolute top-2.5 right-2.5 w-5 h-5 rounded-full bg-sky-500 flex items-center justify-center"><CheckCircle className="w-3.5 h-3.5 text-white" /></div>}
+              <p className="font-bold text-surface-900 dark:text-white text-sm">Pay to UPI ID</p>
+              <p className="text-xs text-surface-500 mt-1">Pay externally to {upiInfo.upiId}, then submit your UTR / reference number. Admin verifies before matching.</p>
+            </button>
+          )}
+
+          {selected === 'UPI_MANUAL' && upiInfo && (
+            <div className="mt-3 p-4 rounded-2xl bg-surface-50 dark:bg-surface-800/50 border border-surface-200 dark:border-surface-700 space-y-3">
+              <div className="flex justify-between text-sm">
+                <span className="text-surface-500">Pay to UPI ID</span>
+                <span className="font-bold text-surface-900 dark:text-white">{upiInfo.upiId}</span>
+              </div>
+              {upiInfo.accountName && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-surface-500">Account</span>
+                  <span className="font-medium text-surface-900 dark:text-white">{upiInfo.accountName}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-sm">
+                <span className="text-surface-500">Amount</span>
+                <span className="font-bold">₹{(upiInfo.amount ?? amount).toLocaleString('en-IN')}</span>
+              </div>
+              {upiInfo.qrUrl && (
+                <img src={upiInfo.qrUrl} alt="UPI QR code" className="w-48 h-48 mx-auto rounded-xl bg-white p-2" />
+              )}
+              {upiInfo.referenceNote && (
+                <p className="text-xs text-surface-500 text-center">Add note while paying: <span className="font-bold">{upiInfo.referenceNote}</span></p>
+              )}
+              <div className="flex gap-2">
+                <input
+                  value={upiRef}
+                  onChange={(e) => setUpiRef(e.target.value)}
+                  placeholder="UTR / reference number (min 6 chars)"
+                  className="input flex-1"
+                />
+                <button
+                  onClick={async () => {
+                    if (upiRef.trim().length < 6) {
+                      toast.error('Enter a valid UTR / reference number (min 6 chars).')
+                      return
+                    }
+                    setUpiSubmitting(true)
+                    try {
+                      await api.post(`/bookings/${id}/upi-reference`, { referenceNumber: upiRef.trim() })
+                      setDone(true)
+                      setDoneType('UPI_MANUAL')
+                      toast.success('Reference submitted. Admin will verify.')
+                    } catch (e: any) {
+                      toast.error(e?.response?.data?.message || 'Failed to submit reference.')
+                    } finally {
+                      setUpiSubmitting(false)
+                    }
+                  }}
+                  disabled={upiSubmitting}
+                  className="btn-gradient px-4 disabled:opacity-50"
+                >
+                  {upiSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Submit'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </AnimatedPage>
 
@@ -282,12 +383,14 @@ export function BookingPaymentPage() {
             <><CreditCard className="w-5 h-5" /> Pay ₹{amount.toLocaleString('en-IN')} Online</>
           ) : selected === 'CASH' ? (
             <><Banknote className="w-5 h-5" /> Confirm Cash Booking</>
+          ) : selected === 'UPI_MANUAL' ? (
+            'Continue with UPI'
           ) : (
             'Select a payment method'
           )}
         </button>
         <p className="text-xs text-center text-surface-400 mt-2">
-          {selected === 'ONLINE' ? '🔒 Secured by Razorpay' : selected === 'CASH' ? '📝 Transaction will be recorded' : 'Choose online or cash to continue'}
+          {selected === 'ONLINE' ? '🔒 Secured by Razorpay' : selected === 'CASH' ? '📝 Transaction will be recorded' : selected === 'UPI_MANUAL' ? '🧾 Verified by admin against the bank statement' : 'Choose online, UPI or cash to continue'}
         </p>
       </AnimatedPage>
     </div>

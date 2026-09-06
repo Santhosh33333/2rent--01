@@ -1,8 +1,10 @@
 import { Response } from "express";
+import fs from "fs";
 import { prisma } from "../config/database";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
 import { emitToUser } from "../services/socketService";
+import { chatUpload, classifyChatFile, resolveChatMedia } from "../services/chatUploadService";
 
 // ============================================================================
 // CONVERSATION HELPERS
@@ -29,9 +31,33 @@ const USER_SELECT = { id: true, fullName: true, avatarUrl: true } as const;
 
 export async function sendMessage(req: AuthedRequest, res: Response): Promise<void> {
   try {
-    const { receiverId, content } = req.body;
+    const { receiverId, content, messageType, mediaUrl, bookingId } = req.body;
 
-    if (!content) {
+    const type = typeof messageType === "string" ? messageType.toUpperCase() : "TEXT";
+    if (!["TEXT", "IMAGE", "VOICE"].includes(type)) {
+      sendError(res, "messageType must be TEXT, IMAGE or VOICE.", 400, "VALIDATION_ERROR");
+      return;
+    }
+
+    // Media messages carry the file; text messages carry content. The caption
+    // on a media message is optional.
+    let resolvedMedia: { abs: string; kind: string } | null = null;
+    if (type === "IMAGE" || type === "VOICE") {
+      resolvedMedia = resolveChatMedia(typeof mediaUrl === "string" ? mediaUrl : null);
+      if (!resolvedMedia) {
+        sendError(res, "Upload the file first, then send with its mediaUrl.", 400, "MEDIA_REQUIRED");
+        return;
+      }
+      const actual = classifyChatFile(resolvedMedia.abs.split(/[\\/]/).pop() ?? "");
+      if ((type === "IMAGE" && actual !== "IMAGE") || (type === "VOICE" && actual !== "VOICE")) {
+        sendError(res, "Media type does not match messageType.", 400, "MEDIA_MISMATCH");
+        return;
+      }
+      if (content && String(content).length > 1000) {
+        sendError(res, "Caption is too long (max 1000).", 400, "VALIDATION_ERROR");
+        return;
+      }
+    } else if (!content || !String(content).trim()) {
       sendError(res, "Message content is required.", 400, "VALIDATION_ERROR");
       return;
     }
@@ -66,12 +92,38 @@ export async function sendMessage(req: AuthedRequest, res: Response): Promise<vo
 
     const conversation = await ensureConversation(req.user!.userId, receiverId);
 
+    // Optional booking link: both parties must belong to the booking (the
+    // customer, or the assigned partner's user). Forged bookingIds rejected.
+    let linkedBookingId: string | null = null;
+    if (typeof bookingId === "string" && bookingId.trim()) {
+      const booking = await prisma.booking.findUnique({
+        where: { id: bookingId.trim() },
+        select: { id: true, userId: true, partner: { select: { userId: true } } },
+      });
+      if (!booking) {
+        sendError(res, "Booking not found.", 404, "BOOKING_NOT_FOUND");
+        return;
+      }
+      const me = req.user!.userId;
+      const partnerUserId = booking.partner?.userId ?? null;
+      const iBelong = booking.userId === me || partnerUserId === me;
+      const theyBelong = booking.userId === receiverId || partnerUserId === receiverId;
+      if (!iBelong || !theyBelong) {
+        sendError(res, "This booking does not involve both participants.", 403, "FORBIDDEN");
+        return;
+      }
+      linkedBookingId = booking.id;
+    }
+
     const message = await prisma.message.create({
       data: {
         senderId: req.user!.userId,
         receiverId,
         conversationId: conversation.id,
-        content,
+        content: type === "TEXT" ? String(content).trim().slice(0, 5000) : (typeof content === "string" ? content.trim().slice(0, 1000) : ""),
+        messageType: type,
+        mediaUrl: resolvedMedia ? (typeof mediaUrl === "string" ? mediaUrl : null) : null,
+        bookingId: linkedBookingId,
         status: "SENT",
       },
       include: {
@@ -95,7 +147,10 @@ export async function sendMessage(req: AuthedRequest, res: Response): Promise<vo
       messageId: message.id,
       senderId: message.senderId,
       senderName: message.sender.fullName,
-      content,
+      content: message.content,
+      messageType: message.messageType,
+      mediaUrl: message.mediaUrl,
+      bookingId: message.bookingId,
       timestamp: message.createdAt,
     });
 
@@ -139,9 +194,11 @@ export async function getConversations(req: AuthedRequest, res: Response): Promi
       },
     });
 
-    for (const r of accepted) {
-      await ensureConversation(r.senderId === userId ? r.receiverId : r.senderId, userId);
-    }
+    await Promise.all(
+      accepted.map((r) =>
+        ensureConversation(r.senderId === userId ? r.receiverId : r.senderId, userId)
+      )
+    );
 
     const conversations = await prisma.conversation.findMany({
       where: { OR: [{ participant1Id: userId }, { participant2Id: userId }] },
@@ -281,6 +338,20 @@ export async function getMessages(req: AuthedRequest, res: Response): Promise<vo
       prisma.message.count({ where: { conversationId: convId } }),
     ]);
 
+    // Delivery receipt: everything the reader has now seen moves SENT ->
+    // DELIVERED (READ still requires the explicit markAsRead call). Notify
+    // senders so single-check becomes double-check in realtime.
+    const delivered = await prisma.message.updateMany({
+      where: { conversationId: convId, receiverId: userId, status: "SENT" },
+      data: { status: "DELIVERED" },
+    });
+    if (delivered.count > 0) {
+      const senderIds = [...new Set(items.filter((m) => m.receiverId === userId && m.senderId !== userId).map((m) => m.senderId))];
+      for (const sid of senderIds) {
+        emitToUser(sid, "messages_delivered", { conversationId: convId, readBy: userId });
+      }
+    }
+
     sendSuccess(res, { items, page, limit, total });
   } catch (err: any) {
     console.error("[getMessages]", err?.message);
@@ -362,6 +433,93 @@ export async function markAsRead(req: AuthedRequest, res: Response): Promise<voi
 }
 
 // ============================================================================
+// MEDIA UPLOAD + AUTHENTICATED SERVING
+// ============================================================================
+
+/** Upload one image or voice note. Returns its mediaUrl for sendMessage. */
+export async function uploadMedia(req: AuthedRequest, res: Response): Promise<void> {
+  const run = (): Promise<void> =>
+    new Promise((resolve) => {
+      chatUpload.single("file")(req as any, res as any, (err: any) => {
+        (async () => {
+          try {
+            if (err) {
+              sendError(res, err.message || "Upload failed.", 400, "UPLOAD_FAILED");
+              return;
+            }
+            const file = (req as any).file as Express.Multer.File | undefined;
+            if (!file) {
+              sendError(res, "Attach a file as 'file'.", 400, "VALIDATION_ERROR");
+              return;
+            }
+            const kind = classifyChatFile(file.filename);
+            if (!kind) {
+              try {
+                fs.unlinkSync(file.path);
+              } catch { /* best effort */ }
+              sendError(res, "Only images and voice notes are allowed.", 400, "INVALID_FILE");
+              return;
+            }
+            await prisma.auditLog.create({
+              data: {
+                actorId: req.user!.userId,
+                actorType: "USER",
+                action: "CHAT_MEDIA_UPLOAD",
+                entityType: "ChatMedia",
+                entityId: file.filename,
+                metadata: JSON.stringify({ kind, size: file.size }),
+              },
+            });
+            sendSuccess(
+              res,
+              { mediaUrl: `/uploads/chat/${file.filename}`, kind, size: file.size },
+              "File uploaded.",
+              201
+            );
+          } finally {
+            resolve();
+          }
+        })();
+      });
+    });
+  try {
+    await run();
+  } catch {
+    if (!res.headersSent) sendError(res, "Failed to upload file.", 500, "INTERNAL_ERROR");
+  }
+}
+
+/** Stream a chat attachment after verifying conversation membership. */
+export async function getMedia(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const userId = req.user!.userId;
+    const message = await prisma.message.findUnique({
+      where: { id },
+      select: { id: true, senderId: true, receiverId: true, mediaUrl: true, messageType: true },
+    });
+    if (!message || !message.mediaUrl) {
+      sendError(res, "Media not found.", 404, "NOT_FOUND");
+      return;
+    }
+    if (message.senderId !== userId && message.receiverId !== userId) {
+      sendError(res, "You do not have access to this file.", 403, "FORBIDDEN");
+      return;
+    }
+    const resolved = resolveChatMedia(message.mediaUrl);
+    if (!resolved) {
+      sendError(res, "File is no longer available.", 410, "FILE_GONE");
+      return;
+    }
+    res.setHeader("Content-Type", resolved.mime);
+    res.setHeader("Cache-Control", "private, max-age=86400");
+    fs.createReadStream(resolved.abs).pipe(res);
+  } catch {
+    if (!res.headersSent) sendError(res, "Failed to load media.", 500, "INTERNAL_ERROR");
+  }
+}
+
+// ============================================================================
 // DELETE MESSAGE
 // ============================================================================
 
@@ -378,8 +536,16 @@ export async function deleteMessage(req: AuthedRequest, res: Response): Promise<
 
     const updated = await prisma.message.update({
       where: { id },
-      data: { status: "DELETED", content: "[deleted]" },
+      data: { status: "DELETED", content: "[deleted]", mediaUrl: null },
     });
+
+    // Remove the attachment from disk so deleted media is really gone.
+    if (message.mediaUrl) {
+      const resolved = resolveChatMedia(message.mediaUrl);
+      if (resolved) {
+        fs.unlink(resolved.abs, () => {});
+      }
+    }
 
     // Tell the recipient so their view updates immediately instead of on next poll.
     emitToUser(message.receiverId, "message_deleted", {

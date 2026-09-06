@@ -21,7 +21,7 @@ export default function Bookings() {
       {isLoading ? <Text style={styles.sub}>Loading…</Text> : null}
       <FlatList
         data={bookings}
-        keyExtractor={(item) => item.id ?? Math.random().toString()}
+        keyExtractor={(item, index) => item.id ?? `b-${index}`}
         renderItem={({ item }) => (
           <Card onPress={() => router.push(`/booking/${item.id}`)}>
             <View style={styles.row}>

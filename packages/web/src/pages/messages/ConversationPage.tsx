@@ -1,10 +1,10 @@
 ﻿import { getErrorMessage } from '../../lib/error'
+import toast from 'react-hot-toast'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Send, Loader2, AlertTriangle,
-  MoreVertical, Phone, Video,
-  CheckCheck, MessageCircle
+  CheckCheck, MessageCircle, ImagePlus, Mic, Square
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
@@ -15,9 +15,36 @@ interface Message {
   senderId: string
   receiverId?: string
   content: string
+  messageType?: string
+  mediaUrl?: string | null
   status?: string
   createdAt: string
   sender?: { fullName: string; avatarUrl?: string }
+}
+
+/** Loads an authenticated attachment (server checks membership) as a blob URL. */
+function ChatAttachment({ mediaUrl, kind }: { mediaUrl: string; kind: string }) {
+  const [src, setSrc] = useState<string | null>(null)
+  const [failed, setFailed] = useState(false)
+  useEffect(() => {
+    let alive = true
+    let objectUrl: string | null = null
+    api.get(mediaUrl, { responseType: 'blob' }).then((res) => {
+      if (!alive) return
+      objectUrl = URL.createObjectURL(res.data)
+      setSrc(objectUrl)
+    }).catch(() => { if (alive) setFailed(true) })
+    return () => {
+      alive = false
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [mediaUrl])
+  if (failed) return <p className="text-xs opacity-70">Attachment unavailable</p>
+  if (!src) return <Loader2 className="w-4 h-4 animate-spin" />
+  if (kind === 'IMAGE') {
+    return <img src={src} alt="Shared photo" className="rounded-xl max-w-full max-h-64 object-cover" />
+  }
+  return <audio controls src={src} className="max-w-full" />
 }
 
 export function ConversationPage() {
@@ -34,6 +61,11 @@ export function ConversationPage() {
   const [error, setError] = useState<string | null>(null)
   const [text, setText] = useState('')
   const [otherTyping, setOtherTyping] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [recording, setRecording] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const recorderRef = useRef<MediaRecorder | null>(null)
+  const chunksRef = useRef<Blob[]>([])
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -210,9 +242,59 @@ export function ConversationPage() {
 
   const isOwn = (senderId: string) => senderId === myId || senderId === 'me'
 
+  const sendMedia = async (file: File, kind: 'IMAGE' | 'VOICE') => {
+    if (!userId) return
+    setUploading(true)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const up = await api.post('/messages/upload', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+      const mediaUrl = up.data?.data?.mediaUrl || up.data?.mediaUrl
+      if (!mediaUrl) throw new Error('Upload failed')
+      const res = await api.post('/messages', { receiverId: userId, messageType: kind, mediaUrl, content: '' })
+      const saved = res.data?.data || res.data
+      setMessages((prev) => [...prev, saved?.message || saved])
+      scrollToBottom()
+    } catch {
+      toast.error('Failed to send attachment')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const onPickImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (file) void sendMedia(file, 'IMAGE')
+  }
+
+  const toggleRecording = async () => {
+    if (recording) {
+      recorderRef.current?.stop()
+      return
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const rec = new MediaRecorder(stream)
+      chunksRef.current = []
+      rec.ondataavailable = (e) => { if (e.data.size) chunksRef.current.push(e.data) }
+      rec.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop())
+        setRecording(false)
+        const blob = new Blob(chunksRef.current, { type: rec.mimeType || 'audio/webm' })
+        if (blob.size > 0) void sendMedia(new File([blob], 'voice-note.webm', { type: blob.type }), 'VOICE')
+      }
+      recorderRef.current = rec
+      rec.start()
+      setRecording(true)
+    } catch {
+      toast.error('Microphone access denied')
+    }
+  }
+
   if (loading) {
     return (
-      <div className="max-w-3xl mx-auto h-[calc(100vh-12rem)] flex flex-col animate-fadeInUp">
+      <div className="max-w-3xl mx-auto h-[calc(100vh-15rem)] h-[calc(100dvh-15rem)] lg:h-[calc(100vh-10rem)] lg:h-[calc(100dvh-10rem)] flex flex-col animate-fadeInUp">
         <div className="glass-card p-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-surface-100 dark:bg-surface-800 animate-pulse" />
           <div className="flex-1">
@@ -243,7 +325,7 @@ export function ConversationPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto h-[calc(100vh-12rem)] flex flex-col animate-fadeInUp">
+    <div className="max-w-3xl mx-auto h-[calc(100vh-15rem)] h-[calc(100dvh-15rem)] lg:h-[calc(100vh-10rem)] lg:h-[calc(100dvh-10rem)] flex flex-col animate-fadeInUp">
       {/* Chat Header */}
       <div className="glass-card p-4 flex items-center gap-3 flex-shrink-0">
         <button
@@ -262,17 +344,6 @@ export function ConversationPage() {
           <p className="text-xs text-emerald-500">
             {otherTyping ? 'typing…' : 'Online'}
           </p>
-        </div>
-        <div className="flex items-center gap-1">
-          <button className="w-9 h-9 rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 flex items-center justify-center text-surface-500 dark:text-surface-400 transition-colors">
-            <Phone className="w-4 h-4" />
-          </button>
-          <button className="w-9 h-9 rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 flex items-center justify-center text-surface-500 dark:text-surface-400 transition-colors">
-            <Video className="w-4 h-4" />
-          </button>
-          <button className="w-9 h-9 rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 flex items-center justify-center text-surface-500 dark:text-surface-400 transition-colors">
-            <MoreVertical className="w-4 h-4" />
-          </button>
         </div>
       </div>
 
@@ -307,7 +378,14 @@ export function ConversationPage() {
                         ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-br-md'
                         : 'bg-surface-100 dark:bg-surface-800 text-surface-900 dark:text-white rounded-bl-md'
                     }`}>
-                      <p className="text-sm leading-relaxed">{msg.content}</p>
+                      {msg.mediaUrl && (msg.messageType === 'IMAGE' || msg.messageType === 'VOICE') ? (
+                        <div className="space-y-1.5">
+                          <ChatAttachment mediaUrl={msg.mediaUrl} kind={msg.messageType} />
+                          {msg.content ? <p className="text-sm leading-relaxed">{msg.content}</p> : null}
+                        </div>
+                      ) : (
+                        <p className="text-sm leading-relaxed">{msg.content}</p>
+                      )}
                     </div>
                     <div className={`flex items-center gap-1 mt-0.5 ${own ? 'justify-end' : 'justify-start'} px-1`}>
                       <span className="text-[10px] text-surface-400">
@@ -334,6 +412,25 @@ export function ConversationPage() {
         {/* Input Area */}
         <div className="p-4 border-t border-surface-100 dark:border-surface-800">
           <form onSubmit={sendMessage} className="flex items-end gap-2">
+            <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={onPickImage} />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading || recording}
+              title="Send photo"
+              className="w-11 h-11 rounded-2xl flex items-center justify-center text-surface-500 hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors disabled:opacity-50 flex-shrink-0"
+            >
+              {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ImagePlus className="w-5 h-5" />}
+            </button>
+            <button
+              type="button"
+              onClick={toggleRecording}
+              disabled={uploading}
+              title={recording ? 'Stop recording' : 'Record voice note'}
+              className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-colors flex-shrink-0 ${recording ? 'bg-red-500 text-white animate-pulse' : 'text-surface-500 hover:bg-surface-100 dark:hover:bg-surface-800'}`}
+            >
+              {recording ? <Square className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+            </button>
             <div className="flex-1 relative">
               <input
                 type="text"

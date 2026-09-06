@@ -16,6 +16,7 @@ interface PartnerStats {
   averageRating: number
   totalEarnings: number
   serviceTypes: string[]
+  kycStatus?: string
 }
 
 export function PartnerProfilePage() {
@@ -26,9 +27,10 @@ export function PartnerProfilePage() {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const [statsRes, statusRes] = await Promise.allSettled([
+        const [statsRes, statusRes, kycRes] = await Promise.allSettled([
           api.get('/partner/performance'),
           api.get('/partner/status'),
+          api.get('/verification/status'),
         ])
         if (statsRes.status === 'fulfilled') {
           const d = statsRes.value.data?.data || statsRes.value.data
@@ -42,6 +44,10 @@ export function PartnerProfilePage() {
         if (statusRes.status === 'fulfilled') {
           const d = statusRes.value.data?.data || statusRes.value.data
           setStats((prev) => ({ ...prev, serviceTypes: d?.serviceTypes ?? prev.serviceTypes }))
+        }
+        if (kycRes.status === 'fulfilled') {
+          const d = kycRes.value.data?.data || kycRes.value.data
+          setStats((prev) => ({ ...prev, kycStatus: d?.status ?? 'NOT_STARTED' }))
         }
       } catch {
         // silent
@@ -134,9 +140,9 @@ export function PartnerProfilePage() {
             </h3>
             <div className="space-y-3">
               {[
-                { label: 'Identity Verification', status: 'Verified', verified: true },
-                { label: 'Address Proof', status: 'Pending', verified: false },
-                { label: 'Bank Details', status: 'Verified', verified: true },
+                { label: 'Identity Verification', status: stats.kycStatus === 'VERIFIED' || stats.kycStatus === 'APPROVED' ? 'Verified' : stats.kycStatus === 'SUBMITTED' || stats.kycStatus === 'PENDING_REVIEW' ? 'Under Review' : 'Not Started', verified: stats.kycStatus === 'VERIFIED' || stats.kycStatus === 'APPROVED' },
+                { label: 'Address Proof', status: stats.kycStatus === 'VERIFIED' || stats.kycStatus === 'APPROVED' ? 'Verified' : stats.kycStatus === 'SUBMITTED' || stats.kycStatus === 'PENDING_REVIEW' ? 'Under Review' : 'Not Started', verified: stats.kycStatus === 'VERIFIED' || stats.kycStatus === 'APPROVED' },
+                { label: 'Bank Details', status: 'Pending', verified: false },
               ].map((doc) => (
                 <div key={doc.label} className="flex items-center justify-between p-3 rounded-xl bg-surface-50 dark:bg-surface-800/50">
                   <div className="flex items-center gap-3">

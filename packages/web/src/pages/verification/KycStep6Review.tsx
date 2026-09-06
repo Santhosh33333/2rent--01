@@ -67,7 +67,7 @@ export function KycStep6Review() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="w-12 h-12 animate-spin text-primary-500 mx-auto mb-3" />
           <p className="text-surface-600 dark:text-surface-400">Loading your KYC data...</p>

@@ -24,6 +24,53 @@ import { useTheme } from '../lib/themeContext';
 import { RoleSwitcher } from './RoleSwitcher';
 import { PartnerLiveLocationSharer } from './PartnerLiveLocationSharer';
 import { UserLiveLocationSharer } from './UserLiveLocationSharer';
+import { api } from '../lib/api';
+import { useNotifications } from '../hooks/useSocket';
+
+/** Live unread badge for the header bell: initial fetch + realtime bumps. */
+function UnreadBadge() {
+  const [count, setCount] = useState(0);
+  const { user } = useAuth();
+  const { listenToNotifications } = useNotifications();
+
+  useEffect(() => {
+    if (!user) {
+      setCount(0);
+      return;
+    }
+    let alive = true;
+    const fetchCount = async () => {
+      try {
+        const res = await api.get('/notifications', { params: { limit: 1 } });
+        const n = res.data?.data?.unreadCount;
+        if (alive && Number.isFinite(Number(n))) setCount(Number(n));
+      } catch {
+        /* badge stays stale rather than breaking the header */
+      }
+    };
+    fetchCount();
+    const timer = setInterval(fetchCount, 30000);
+    const off = listenToNotifications(() => {
+      setCount((c) => c + 1);
+    });
+    const onFocus = () => fetchCount();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+      if (typeof off === 'function') off();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
+  if (!user || count <= 0) return null;
+  return (
+    <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+      {count > 99 ? '99+' : count}
+    </span>
+  );
+}
 
 const userNav = [
   { to: '/home', icon: Home, label: 'Home' },
@@ -120,6 +167,7 @@ export function Layout() {
               </button>
               <Link to="/notifications" className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition relative">
                 <Bell className="w-5 h-5" />
+                <UnreadBadge />
               </Link>
               <button
                 onClick={() => setSidebarOpen(true)}
@@ -187,17 +235,19 @@ export function Layout() {
       )}
 
       {/* Main Content */}
-      <main className="pb-20 lg:pb-4">
+      <main className="pb-28 lg:pb-8">
         {/* Partners silently stream live GPS for their active booking so the
             user can track them in real time (no UI of its own). */}
         <PartnerLiveLocationSharer />
         <UserLiveLocationSharer />
-        <Outlet />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <Outlet />
+        </div>
       </main>
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 inset-x-0 bg-white/90 dark:bg-gray-950/90 backdrop-blur-xl border-t border-gray-200/50 dark:border-gray-800/50 z-40 lg:hidden">
-        <div className="flex items-center justify-around h-16 px-2">
+      <nav className="fixed bottom-0 inset-x-0 bg-white/90 dark:bg-gray-950/90 backdrop-blur-xl border-t border-gray-200/50 dark:border-gray-800/50 z-40 lg:hidden pb-[env(safe-area-inset-bottom)]">
+        <div className="flex items-center justify-around h-16 px-2 overflow-x-auto">
           {navItems.map(({ to, icon: Icon, label }) => {
             const isActive = location.pathname === to || location.pathname.startsWith(to.split('/').slice(0, -1).join('/') + '/');
             return (

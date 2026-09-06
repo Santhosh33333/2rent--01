@@ -147,11 +147,11 @@ export function KycStep4AddressProof() {
         <GlassCard variant="elevated" padding="lg" className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500">
           <h3 className="font-bold text-blue-900 dark:text-blue-300 mb-3">Accepted Documents:</h3>
           <ul className="space-y-2 text-sm text-blue-800 dark:text-blue-200 mb-4">
-            <li>âœ“ Utility Bill (electricity, water, gas)</li>
-            <li>âœ“ Rental Agreement or Lease</li>
-            <li>âœ“ Government Letter with address</li>
-            <li>âœ“ Bank Statement with address</li>
-            <li>âœ“ Insurance Policy Document</li>
+            <li>✓ Utility Bill (electricity, water, gas)</li>
+            <li>✓ Rental Agreement or Lease</li>
+            <li>✓ Government Letter with address</li>
+            <li>✓ Bank Statement with address</li>
+            <li>✓ Insurance Policy Document</li>
           </ul>
           <p className="text-xs text-blue-700 dark:text-blue-400">Must be dated within last 3 months and clearly show your name and address.</p>
         </GlassCard>

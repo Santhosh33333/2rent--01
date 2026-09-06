@@ -1,11 +1,13 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Bell, BellOff, Check, CheckCheck, Trash2, MessageSquare, Calendar, MapPin, Users, CreditCard, Shield } from 'lucide-react'
+import toast from 'react-hot-toast'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { EmptyState } from '../../components/EmptyState'
 import { SkeletonLoader } from '../../components/SkeletonLoader'
 import { api } from '../../lib/api'
 import { useAsync } from '../../hooks/useAsync'
+import { useNotifications } from '../../hooks/useSocket'
 import { formatDistanceToNow } from 'date-fns'
 
 interface Notification {
@@ -21,7 +23,7 @@ interface Notification {
 }
 
 function getNotificationIcon(type: string): any {
-  const lower = type.toLowerCase()
+  const lower = (type || 'general').toLowerCase()
   if (lower.includes('message')) return MessageSquare
   if (lower.includes('event')) return Calendar
   if (lower.includes('booking') || lower.includes('walk')) return MapPin
@@ -29,6 +31,37 @@ function getNotificationIcon(type: string): any {
   if (lower.includes('payment') || lower.includes('wallet')) return CreditCard
   if (lower.includes('security') || lower.includes('sos')) return Shield
   return Bell
+}
+
+/** Normalize any row/payload shape (HTTP list, socket push, legacy cache)
+ *  into render-safe form. Never throws — broken rows render, never crash. */
+function normalizeOne(raw: any): Notification | null {
+  if (!raw || typeof raw !== 'object' || !raw.id) return null
+  let embedded: any = {}
+  try {
+    embedded = typeof raw.data === 'string' ? JSON.parse(raw.data) : (raw.data || {})
+  } catch {
+    embedded = {}
+  }
+  const type = typeof raw.type === 'string' && raw.type
+    ? raw.type
+    : (typeof embedded?.type === 'string' && embedded.type ? embedded.type : 'GENERAL')
+  return {
+    id: String(raw.id),
+    title: String(raw.title || 'Notification'),
+    description: typeof raw.description === 'string' ? raw.description : String(raw.body || ''),
+    type,
+    isRead: !!raw.isRead,
+    actionUrl: raw.actionUrl,
+    metadata: typeof raw.data === 'string' ? raw.data : (raw.metadata ?? null),
+    createdAt: raw.createdAt || new Date().toISOString(),
+    readAt: raw.readAt,
+  }
+}
+
+function normalizeList(items: any[]): Notification[] {
+  if (!Array.isArray(items)) return []
+  return items.map(normalizeOne).filter((n): n is Notification => n !== null)
 }
 
 const categoryColors: Record<string, string> = {
@@ -51,12 +84,31 @@ export function NotificationsPage() {
     async () => {
       const res = await api.get('/notifications', { params: { limit: 50 } })
       const data = res.data?.data
-      setNotifications(data?.notifications || [])
+      setNotifications(normalizeList(data?.notifications || []))
       setUnreadCount(data?.unreadCount || 0)
       return data
     },
     true
   )
+
+  // Realtime: prepend arrivals instantly + toast (backend fans out every row).
+  const { listenToNotifications } = useNotifications()
+  useEffect(() => {
+    const off = listenToNotifications((incoming: any) => {
+      const shaped = normalizeOne(incoming)
+      if (!shaped) return
+      setNotifications((prev) => {
+        if (prev.some((n) => n.id === shaped.id)) return prev
+        return [shaped, ...prev]
+      })
+      setUnreadCount((c) => c + 1)
+      toast.success(shaped.title, { duration: 5000 })
+    })
+    return () => {
+      if (typeof off === 'function') off()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const markAsRead = async (id: string) => {
     try {
@@ -167,8 +219,9 @@ export function NotificationsPage() {
         ) : (
           <div className="space-y-2">
             {filtered.map((n, i) => {
-              const Icon = getNotificationIcon(n.type)
-              const baseColor = n.type.split('_')[0].toLowerCase()
+              const ntype = n.type || 'GENERAL'
+              const Icon = getNotificationIcon(ntype)
+              const baseColor = ntype.split('_')[0].toLowerCase()
               const colorClass = categoryColors[baseColor] || categoryColors.default
 
               return (

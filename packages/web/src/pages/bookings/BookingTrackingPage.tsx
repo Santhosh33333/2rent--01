@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
-  Navigation, Phone, XCircle, AlertTriangle, Loader2, MapPin, Clock, Star, MessageCircle, Siren
+  Navigation, XCircle, AlertTriangle, Loader2, MapPin, Clock, Star, MessageCircle, Siren
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { api, assetUrl } from '../../lib/api'
@@ -172,13 +172,6 @@ export function BookingTrackingPage() {
     }
   }
 
-  const handleCall = () => {
-    const partner = booking?.partner?.user
-    if (partner?.phone) {
-      window.location.href = `tel:${partner.phone}`
-    }
-  }
-
   const handleChat = () => {
     const partnerUserId = (booking?.partner as any)?.user?.id
     if (partnerUserId) navigate(`/messages/${partnerUserId}`)
@@ -301,13 +294,8 @@ export function BookingTrackingPage() {
                   </div>
                   <div className="flex gap-2">
                     <button
-                      onClick={handleCall}
-                      className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center hover:bg-emerald-200 transition-colors"
-                    >
-                      <Phone className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                    </button>
-                    <button
                       onClick={handleChat}
+                      title="Chat with partner"
                       className="w-10 h-10 rounded-xl bg-sky-100 dark:bg-sky-900/30 flex items-center justify-center hover:bg-sky-200 transition-colors"
                     >
                       <MessageCircle className="w-5 h-5 text-sky-600 dark:text-sky-400" />

@@ -8,17 +8,26 @@ const router = Router();
 
 router.use(authenticateToken, requireKycVerified);
 
-// Send message
+// Send message (TEXT, or IMAGE/VOICE with a mediaUrl from POST /upload)
 router.post(
   "/",
   [
     body("receiverId").notEmpty().withMessage("Receiver is required").isString(),
-    body("content").notEmpty().isString().trim().isLength({ max: 5000 }),
+    body("content").optional().isString().trim().isLength({ max: 5000 }),
+    body("messageType").optional().isIn(["TEXT", "IMAGE", "VOICE", "text", "image", "voice"]),
+    body("mediaUrl").optional().isString().trim(),
+    body("bookingId").optional().isString().trim(),
   ],
   sanitizeInput,
   validateRequest,
   messageController.sendMessage
 );
+
+// Upload one image or voice note (multipart field "file")
+router.post("/upload", messageController.uploadMedia);
+
+// Authenticated attachment download (membership-checked, never public static)
+router.get("/media/:id", messageController.getMedia);
 
 // Get conversations
 router.get("/conversations", messageController.getConversations);

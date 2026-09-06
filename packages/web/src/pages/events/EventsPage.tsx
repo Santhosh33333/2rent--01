@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Calendar, Search, MapPin, Users, Clock, ChevronRight } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Calendar, Search, MapPin, Users, Clock, ChevronRight, Plus, X } from 'lucide-react'
 import { format } from 'date-fns'
+import toast from 'react-hot-toast'
 import { api } from '../../lib/api'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { PageHeader } from '../../components/PageHeader'
@@ -21,9 +22,44 @@ interface Event {
 }
 
 export function EventsPage() {
+  const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'rsvped'>('all')
   const [events, setEvents] = useState<Event[]>([])
+  const [showCreate, setShowCreate] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [form, setForm] = useState({ title: '', description: '', location: '', startTime: '', endTime: '', capacity: '' })
+
+  const createEvent = async () => {
+    if (form.title.trim().length < 3) {
+      toast.error('Title must be at least 3 characters')
+      return
+    }
+    if (!form.startTime || Number.isNaN(new Date(form.startTime).getTime())) {
+      toast.error('Pick a valid start date and time')
+      return
+    }
+    setCreating(true)
+    try {
+      const res = await api.post('/events', {
+        title: form.title.trim(),
+        description: form.description.trim() || undefined,
+        location: form.location.trim() || undefined,
+        startTime: new Date(form.startTime).toISOString(),
+        endTime: form.endTime ? new Date(form.endTime).toISOString() : undefined,
+        capacity: form.capacity ? Number(form.capacity) : undefined,
+      })
+      const created = res.data?.data || res.data
+      toast.success('Event created')
+      setShowCreate(false)
+      setForm({ title: '', description: '', location: '', startTime: '', endTime: '', capacity: '' })
+      if (created?.id) navigate(`/events/${created.id}`)
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Failed to create event')
+    } finally {
+      setCreating(false)
+    }
+  }
 
   const { loading, error, retry } = useAsync(
     async () => {
@@ -32,7 +68,7 @@ export function EventsPage() {
       const raw = Array.isArray(d) ? d : d.items || []
       const data = raw.map((ev: any) => ({
         id: ev.id,
-        name: ev.title,
+        name: ev.title || 'Event',
         date: ev.startTime,
         location: ev.location ?? 'TBA',
         description: ev.description ?? '',
@@ -47,7 +83,7 @@ export function EventsPage() {
   )
 
   const filtered = events.filter(e => {
-    const matchesSearch = e.name.toLowerCase().includes(search.toLowerCase()) || e.location.toLowerCase().includes(search.toLowerCase())
+    const matchesSearch = (e.name || '').toLowerCase().includes(search.toLowerCase()) || (e.location || '').toLowerCase().includes(search.toLowerCase())
     const eventDate = new Date(e.date)
     const now = new Date()
     if (filter === 'upcoming') return matchesSearch && eventDate >= now
@@ -80,7 +116,37 @@ export function EventsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Events" subtitle="Discover walking events and meetups near you" />
+      <PageHeader title="Events" subtitle="Discover walking events and meetups near you" action={
+        <button onClick={() => setShowCreate((v) => !v)} className="btn-gradient btn-sm flex items-center gap-2">
+          {showCreate ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+          {showCreate ? 'Close' : 'New Event'}
+        </button>
+      } />
+
+      {showCreate && (
+        <AnimatedPage>
+          <div className="glass-card p-5 space-y-3">
+            <h3 className="font-bold text-surface-900 dark:text-white">Create an event</h3>
+            <input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="Event title (min 3 characters)" maxLength={200} className="input" />
+            <textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="Description (optional)" maxLength={1000} rows={3} className="input resize-none" />
+            <input value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} placeholder="Location (optional)" maxLength={500} className="input" />
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className="text-xs text-surface-500">Starts</span>
+                <input type="datetime-local" value={form.startTime} onChange={(e) => setForm((f) => ({ ...f, startTime: e.target.value }))} className="input mt-1" />
+              </label>
+              <label className="block">
+                <span className="text-xs text-surface-500">Ends (optional)</span>
+                <input type="datetime-local" value={form.endTime} onChange={(e) => setForm((f) => ({ ...f, endTime: e.target.value }))} className="input mt-1" />
+              </label>
+            </div>
+            <input type="number" min={1} max={10000} value={form.capacity} onChange={(e) => setForm((f) => ({ ...f, capacity: e.target.value }))} placeholder="Capacity (optional)" className="input" />
+            <button onClick={createEvent} disabled={creating} className="btn-gradient w-full disabled:opacity-50">
+              {creating ? 'Creating...' : 'Create Event'}
+            </button>
+          </div>
+        </AnimatedPage>
+      )}
 
       <AnimatedPage delay={50}>
         <div className="relative">

@@ -229,6 +229,56 @@ export async function completeRequest(req: AuthedRequest, res: Response): Promis
       sendError(res, "Not part of this request.", 403, "FORBIDDEN");
       return;
     }
+    if (request.status !== "ACCEPTED") {
+      sendError(res, "Request must be accepted before completing, or was already completed.", 409, "INVALID_STATUS");
+      return;
+    }
+
+    // Two-party handshake (same no-instant-completion rule as bookings): the
+    // carrier can only REQUEST completion; only the requester confirms it and
+    // releases the escrow-backed earning. Notes carry the request flag so no
+    // schema change is needed.
+    let notes: Record<string, any> = {};
+    try {
+      notes = request.notes ? JSON.parse(request.notes) : {};
+    } catch {
+      notes = {};
+    }
+    const isRequester = request.requesterId === userId;
+
+    if (!isRequester) {
+      if (notes.completionRequestedBy) {
+        sendSuccess(res, request, "Completion already requested. Waiting for the requester to confirm.");
+        return;
+      }
+      notes.completionRequestedBy = userId;
+      notes.completionRequestedAt = new Date().toISOString();
+      await prisma.carryBuddyRequest.update({ where: { id }, data: { notes: JSON.stringify(notes) } });
+      await prisma.notification.create({
+        data: {
+          userId: request.requesterId,
+          title: "Carrier requested completion",
+          body: "Your carrier marked the delivery as done. Confirm to release their earning.",
+          data: JSON.stringify({ carryRequestId: id, type: "CARRY_COMPLETION_REQUEST" }),
+        },
+      }).catch(() => {});
+      await prisma.auditLog.create({
+        data: {
+          actorId: userId,
+          actorType: "USER",
+          action: "CARRY_BUDDY_COMPLETION_REQUESTED",
+          entityType: "CarryBuddyRequest",
+          entityId: id,
+        },
+      });
+      sendSuccess(res, { requested: true }, "Completion requested. The requester must confirm.", 202);
+      return;
+    }
+
+    if (!notes.completionRequestedBy) {
+      sendError(res, "The carrier must request completion first. You confirm after delivery.", 409, "COMPLETION_NOT_REQUESTED");
+      return;
+    }
 
     const result = await prisma.$transaction(async (tx) => {
       // Conditional claim: COMPLETED exactly once; replays and races rejected here.
@@ -271,9 +321,28 @@ export async function completeRequest(req: AuthedRequest, res: Response): Promis
         action: "CARRY_BUDDY_COMPLETE",
         entityType: "CarryBuddyRequest",
         entityId: id,
-        metadata: JSON.stringify({ completedBy: userId === request.requesterId ? "REQUESTER" : "PARTNER" }),
+        metadata: JSON.stringify({ completedBy: "REQUESTER", requestedBy: notes.completionRequestedBy }),
       },
     });
+
+    // Anomaly watch: accepted-to-completed in implausibly little time.
+    void (async () => {
+      try {
+        const mins = (Date.now() - new Date(request.createdAt).getTime()) / 60_000;
+        const minPlausible = await getConfig("AI_MIN_PLAUSIBLE_JOB_MINUTES", 5);
+        if (mins < minPlausible) {
+          await prisma.auditLog.create({
+            data: {
+              actorType: "SYSTEM",
+              action: "AI_FLAG",
+              entityType: "CarryBuddyRequest",
+              entityId: id,
+              metadata: JSON.stringify({ signal: "INSTANT_COMPLETION", durationMinutes: Math.round(mins * 100) / 100 }),
+            },
+          });
+        }
+      } catch { /* monitoring never breaks flow */ }
+    })();
 
     sendSuccess(res, result, "Carry buddy request completed.");
   } catch (err: any) {
@@ -297,8 +366,9 @@ export async function cancelRequest(req: AuthedRequest, res: Response): Promise<
 
     const refunded = await prisma.$transaction(async (tx) => {
       // Conditional claim: refund exactly once even under concurrent cancels.
+      // OPEN or ACCEPTED (work not yet confirmed) — completed jobs never refund.
       const claimed = await tx.carryBuddyRequest.updateMany({
-        where: { id, requesterId: userId, status: "OPEN" },
+        where: { id, requesterId: userId, status: { in: ["OPEN", "ACCEPTED"] } },
         data: { status: "CANCELLED" },
       });
       if (claimed.count !== 1) throw new CarryFlowError("NOT_OPEN");

@@ -147,12 +147,12 @@ export function KycStep3Selfie() {
         <GlassCard variant="elevated" padding="lg" className="bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-500">
           <h3 className="font-bold text-amber-900 dark:text-amber-300 mb-3">Selfie Guidelines:</h3>
           <ul className="space-y-2 text-sm text-amber-800 dark:text-amber-200">
-            <li>âœ“ Face clearly visible - no glasses or head coverings</li>
-            <li>âœ“ Good lighting - avoid harsh shadows</li>
-            <li>âœ“ Natural expression - neutral face expression</li>
-            <li>âœ“ Recent photo - taken within last 3 months</li>
-            <li>âœ“ Plain background - avoid cluttered backgrounds</li>
-            <li>âœ— No filters - must be original, unedited photo</li>
+            <li>✓ Face clearly visible - no glasses or head coverings</li>
+            <li>✓ Good lighting - avoid harsh shadows</li>
+            <li>✓ Natural expression - neutral face expression</li>
+            <li>✓ Recent photo - taken within last 3 months</li>
+            <li>✓ Plain background - avoid cluttered backgrounds</li>
+            <li>✓ No filters - must be original, unedited photo</li>
           </ul>
         </GlassCard>
       </AnimatedPage>

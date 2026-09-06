@@ -22,10 +22,14 @@ export function WalletPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [totalPaid, setTotalPaid] = useState(0)
   const [totalRequests, setTotalRequests] = useState(0)
+  const [balance, setBalance] = useState<number | null>(null)
 
   const { loading, error, retry } = useAsync(
     async () => {
-      const txRes = await api.get('/wallet/transactions?limit=100')
+      const [txRes, wRes] = await Promise.all([
+        api.get('/wallet/transactions?limit=100'),
+        api.get('/wallet').catch(() => null),
+      ])
       const txData = txRes.data?.data || txRes.data || {}
       const items: Transaction[] = txData.items || []
       setTransactions(items)
@@ -34,6 +38,8 @@ export function WalletPage() {
         .reduce((sum: number, t: Transaction) => sum + t.amount, 0)
       setTotalPaid(paid)
       setTotalRequests(items.length)
+      const w = wRes?.data?.data || wRes?.data
+      if (w && Number.isFinite(Number(w.balance))) setBalance(Number(w.balance))
       return items
     },
     true
@@ -72,8 +78,16 @@ export function WalletPage() {
           <div className="absolute -top-20 -right-20 w-60 h-60 bg-white/10 rounded-full blur-3xl" />
 
           <div className="relative z-10">
-            <p className="text-white/60 text-sm font-medium mb-2">Total Spent</p>
-            <p className="text-4xl sm:text-5xl font-bold font-display">₹{totalPaid.toLocaleString('en-IN')}</p>
+            <div className="flex flex-wrap items-end gap-x-8 gap-y-4">
+              <div>
+                <p className="text-white/60 text-sm font-medium mb-2">Available Balance</p>
+                <p className="text-4xl sm:text-5xl font-bold font-display">₹{(balance ?? 0).toLocaleString('en-IN')}</p>
+              </div>
+              <div className="pb-1">
+                <p className="text-white/60 text-xs font-medium mb-1">Total Spent</p>
+                <p className="text-xl font-bold font-display">₹{totalPaid.toLocaleString('en-IN')}</p>
+              </div>
+            </div>
 
             <div className="flex gap-3 mt-8">
               <Link to="/walking-requests/create" className="px-6 py-3 rounded-2xl bg-white/15 hover:bg-white/25 text-sm font-semibold transition-all flex items-center gap-2 backdrop-blur-sm">

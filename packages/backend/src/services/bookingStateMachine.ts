@@ -1,6 +1,11 @@
 /**
  * Booking state machine — the single source of truth for allowed status
  * transitions. Every booking mutation MUST pass through assertTransition.
+ *
+ * Controlled job workflow (critical rule #84):
+ * PARTNER_ACCEPTED means "upcoming job" — it must NEVER jump straight to
+ * IN_PROGRESS or COMPLETED. Start requires a verified START OTP, completion
+ * requires a verified COMPLETION OTP after an explicit completion request.
  */
 
 const TRANSITIONS: Record<string, string[]> = {
@@ -8,9 +13,10 @@ const TRANSITIONS: Record<string, string[]> = {
   PAYMENT_INITIATED: ["PAYMENT_SUCCESSFUL", "PAYMENT_PENDING", "CANCELLED", "EXPIRED"],
   PAYMENT_SUCCESSFUL: ["PARTNER_SEARCHING", "CANCELLED", "REFUND_INITIATED"],
   PARTNER_SEARCHING: ["PARTNER_ACCEPTED", "EXPIRED", "CANCELLED"],
-  PARTNER_ACCEPTED: ["OTP_GENERATED", "IN_PROGRESS", "CANCELLED", "REFUND_INITIATED"],
-  OTP_GENERATED: ["IN_PROGRESS", "CANCELLED"],
-  IN_PROGRESS: ["COMPLETED", "CANCELLED"],
+  PARTNER_ACCEPTED: ["OTP_GENERATED", "CANCELLED", "REFUND_INITIATED", "EXPIRED"],
+  OTP_GENERATED: ["IN_PROGRESS", "CANCELLED", "EXPIRED"],
+  IN_PROGRESS: ["COMPLETION_REQUESTED", "CANCELLED"],
+  COMPLETION_REQUESTED: ["COMPLETED", "CANCELLED"],
   COMPLETED: [],
   CANCELLED: ["REFUND_INITIATED"],
   REFUND_INITIATED: ["REFUND_COMPLETED"],

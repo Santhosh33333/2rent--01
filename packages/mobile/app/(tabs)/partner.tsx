@@ -78,7 +78,7 @@ export default function Partner() {
       <Text style={styles.section}>Nearby jobs</Text>
       <FlatList
         data={nearby}
-        keyExtractor={(i) => i.id ?? Math.random().toString()}
+        keyExtractor={(i, idx) => i.id ?? `pn-${idx}`}
         renderItem={({ item }) => (
           <Card>
             <View style={styles.rowBetween}>
@@ -96,7 +96,7 @@ export default function Partner() {
       <Text style={styles.section}>My jobs</Text>
       <FlatList
         data={jobs}
-        keyExtractor={(i) => i.id ?? Math.random().toString()}
+        keyExtractor={(i, idx) => i.id ?? `pj-${idx}`}
         renderItem={({ item }) => (
           <Card onPress={() => router.push(`/booking/${item.id}`)}>
             <View style={styles.rowBetween}>

@@ -3,6 +3,7 @@ import { body } from "express-validator";
 import { authenticateToken, requireKycVerified } from "../middleware/auth";
 import { validateRequest } from "../middleware/validation";
 import * as partnerController from "../controllers/partnerController";
+import * as bookingController from "../controllers/bookingController";
 
 const router = Router();
 router.use(authenticateToken);
@@ -60,6 +61,24 @@ router.post(
   validateRequest,
   partnerController.verifyOTP
 );
-router.post("/bookings/:id/complete", requireKycVerified, partnerController.completeBooking);
+// Controlled workflow (spec 84-100): travel, start-code entry, and completion
+// requests live here; the codes themselves are issued to the USER only.
+router.post("/bookings/:id/go", requireKycVerified, bookingController.goToJob);
+router.post("/bookings/:id/arrived", requireKycVerified, bookingController.markArrivedHandler);
+router.post(
+  "/bookings/:id/start-verify",
+  requireKycVerified,
+  [body("startOtp").notEmpty().trim().isLength({ min: 4, max: 10 })],
+  validateRequest,
+  bookingController.verifyStartOtpHandler
+);
+router.post("/bookings/:id/request-completion", requireKycVerified, bookingController.requestCompletionHandler);
+router.post(
+  "/bookings/:id/complete",
+  requireKycVerified,
+  [body("completionOtp").optional().isString().trim().isLength({ min: 4, max: 10 })],
+  validateRequest,
+  partnerController.completeBooking
+);
 
 export default router;

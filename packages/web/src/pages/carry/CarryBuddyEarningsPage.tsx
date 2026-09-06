@@ -40,39 +40,40 @@ export function CarryBuddyEarningsPage() {
   const [error, setError] = useState<string | null>(null)
   const [withdrawing, setWithdrawing] = useState(false)
 
-  useEffect(() => {
-    const fetchEarnings = async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        const [earningsRes, walletRes] = await Promise.allSettled([
-          api.get('/carry-buddy/earnings'),
-          api.get('/wallet'),
-        ])
+  const fetchEarnings = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const [earningsRes, walletRes] = await Promise.allSettled([
+        api.get('/carry-buddy/earnings'),
+        api.get('/wallet'),
+      ])
 
-        let total = 0, today = 0, week = 0, month = 0, transactions: Transaction[] = []
+      let total = 0, today = 0, week = 0, month = 0, transactions: Transaction[] = []
 
-        if (earningsRes.status === 'fulfilled') {
-          const d = earningsRes.value.data?.data ?? earningsRes.value.data ?? {}
-          total = d.total ?? 0
-          today = d.today ?? 0
-          week = d.week ?? 0
-          month = d.month ?? 0
-          transactions = d.transactions ?? []
-        }
-
-        if (walletRes.status === 'fulfilled') {
-          const w = walletRes.value.data?.data ?? walletRes.value.data ?? {}
-          if (!total && w.balance) total = w.balance
-        }
-
-        setEarnings({ total, today, week, month, transactions })
-      } catch {
-        setError('Failed to load earnings')
-      } finally {
-        setLoading(false)
+      if (earningsRes.status === 'fulfilled') {
+        const d = earningsRes.value.data?.data ?? earningsRes.value.data ?? {}
+        total = d.total ?? 0
+        today = d.today ?? 0
+        week = d.week ?? 0
+        month = d.month ?? 0
+        transactions = d.transactions ?? []
       }
+
+      if (walletRes.status === 'fulfilled') {
+        const w = walletRes.value.data?.data ?? walletRes.value.data ?? {}
+        if (!total && w.balance) total = w.balance
+      }
+
+      setEarnings({ total, today, week, month, transactions })
+    } catch {
+      setError('Failed to load earnings')
+    } finally {
+      setLoading(false)
     }
+  }
+
+  useEffect(() => {
     fetchEarnings()
   }, [])
 
@@ -131,7 +132,7 @@ export function CarryBuddyEarningsPage() {
         <div className="empty-state-icon"><AlertTriangle className="w-10 h-10 text-danger-400" /></div>
         <h3 className="empty-state-title">Failed to load earnings</h3>
         <p className="empty-state-desc">{error}</p>
-        <button onClick={() => window.location.reload()} className="btn-primary mt-6">Retry</button>
+        <button onClick={fetchEarnings} className="btn-primary mt-6">Retry</button>
       </div>
     )
   }
@@ -270,26 +271,9 @@ export function CarryBuddyEarningsPage() {
             Incentives Breakdown
           </h2>
           <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/10">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                <span className="text-sm font-medium text-surface-700 dark:text-surface-300">Weekly completion bonus</span>
-              </div>
-              <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">₹{Math.floor(earnings.total * 0.02).toLocaleString('en-IN')}</span>
-            </div>
-            <div className="flex items-center justify-between p-3 rounded-xl bg-amber-500/5 border border-amber-500/10">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-amber-500" />
-                <span className="text-sm font-medium text-surface-700 dark:text-surface-300">Peak hours surcharge</span>
-              </div>
-              <span className="text-sm font-bold text-amber-600 dark:text-amber-400">₹{Math.floor(earnings.total * 0.02).toLocaleString('en-IN')}</span>
-            </div>
-            <div className="flex items-center justify-between p-3 rounded-xl bg-sky-500/5 border border-sky-500/10">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-sky-500" />
-                <span className="text-sm font-medium text-surface-700 dark:text-surface-300">Perfect delivery streak</span>
-              </div>
-              <span className="text-sm font-bold text-sky-600 dark:text-sky-400">₹{Math.floor(earnings.total * 0.01).toLocaleString('en-IN')}</span>
+            <div className="p-4 rounded-xl bg-surface-50 dark:bg-surface-800/50 text-center">
+              <p className="text-sm text-surface-500 dark:text-surface-400">Incentives are calculated based on your completed jobs and performance metrics.</p>
+              <p className="text-xs text-surface-400 dark:text-surface-500 mt-1">Complete more jobs to earn bonus incentives.</p>
             </div>
           </div>
         </GlassCard>

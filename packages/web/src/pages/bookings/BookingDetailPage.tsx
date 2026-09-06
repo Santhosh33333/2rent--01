@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   Footprints, Package, MapPin, Navigation, Clock, Calendar, Star,
-  CreditCard, CheckCircle, XCircle, User, Loader2, AlertTriangle
+  CreditCard, CheckCircle, XCircle, User, Loader2, AlertTriangle, KeyRound
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { api } from '../../lib/api'
+import { api, bookingApi } from '../../lib/api'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
 import { SkeletonLoader } from '../../components/SkeletonLoader'
@@ -47,6 +47,7 @@ const statusConfig: Record<string, { label: string; badge: string }> = {
   PARTNER_ACCEPTED: { label: 'Partner Found', badge: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400' },
   OTP_GENERATED: { label: 'OTP Generated', badge: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400' },
   IN_PROGRESS: { label: 'In Progress', badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
+  COMPLETION_REQUESTED: { label: 'Confirming Completion', badge: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400' },
   COMPLETED: { label: 'Completed', badge: 'bg-surface-100 text-surface-600 dark:bg-surface-800 dark:text-surface-400' },
   CANCELLED: { label: 'Cancelled', badge: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
   PAYMENT_PENDING: { label: 'Payment Pending', badge: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
@@ -58,6 +59,13 @@ export function BookingDetailPage() {
   const [booking, setBooking] = useState<Booking | null>(null)
   const [loading, setLoading] = useState(true)
   const [cancelling, setCancelling] = useState(false)
+  const [codeBusy, setCodeBusy] = useState<string | null>(null)
+  const [startCode, setStartCode] = useState<string | null>(null)
+  const [startCodeExpiry, setStartCodeExpiry] = useState<string | null>(null)
+  const [completionCode, setCompletionCode] = useState<string | null>(null)
+  const [completionCodeExpiry, setCompletionCodeExpiry] = useState<string | null>(null)
+  const [invoice, setInvoice] = useState<any | null>(null)
+  const [invoiceLoading, setInvoiceLoading] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -100,6 +108,40 @@ export function BookingDetailPage() {
   const canCancel = booking && ['PENDING', 'CONFIRMED'].includes(booking.status)
   const canRate = booking?.status === 'COMPLETED'
   const canTrack = booking?.status === 'IN_PROGRESS'
+  const canSos = booking?.status === 'IN_PROGRESS' || booking?.status === 'COMPLETION_REQUESTED'
+
+  const fetchCode = async (kind: 'start' | 'completion') => {    if (!id) return
+    setCodeBusy(kind)
+    try {
+      const res = kind === 'start' ? await bookingApi.getStartCode(id) : await bookingApi.getCompletionCode(id)
+      const data = res.data?.data || res.data
+      if (kind === 'start') {
+        setStartCode(data.startOtp)
+        setStartCodeExpiry(data.expiresAt)
+      } else {
+        setCompletionCode(data.completionOtp)
+        setCompletionCodeExpiry(data.expiresAt)
+      }
+      toast.success('Code ready — share it in person only')
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Code not available yet')
+    } finally {
+      setCodeBusy(null)
+    }
+  }
+
+  const fetchInvoice = async () => {
+    if (!id) return
+    setInvoiceLoading(true)
+    try {
+      const res = await api.get(`/bookings/${id}/receipt`)
+      setInvoice(res.data?.data?.receipt || res.data?.receipt || null)
+    } catch {
+      toast.error('Failed to load invoice')
+    } finally {
+      setInvoiceLoading(false)
+    }
+  }
 
   const timelineIndex = statusTimeline.findIndex((s) => s.key === booking?.status)
 
@@ -146,6 +188,50 @@ export function BookingDetailPage() {
               <p className="text-xs text-white/80 mt-0.5">Your partner has been assigned. Payment was made from your wallet.</p>
             </div>
           </div>
+        </AnimatedPage>
+      )}
+
+      {(booking.status === 'PARTNER_ACCEPTED' || booking.status === 'OTP_GENERATED') && (
+        <AnimatedPage delay={75}>
+          <GlassCard variant="elevated" padding="lg">
+            <h3 className="section-title mb-2 flex items-center gap-2">
+              <KeyRound className="w-5 h-5 text-primary-500" />
+              Start Code
+            </h3>
+            <p className="text-xs text-surface-500 mb-4">When your partner arrives, read this code out loud in person. Never share it in chat.</p>
+            {startCode ? (
+              <div className="text-center py-2">
+                <p className="text-4xl font-bold font-display tracking-[0.3em] text-surface-900 dark:text-white">{startCode}</p>
+                {startCodeExpiry && <p className="text-xs text-surface-400 mt-2">Expires {new Date(startCodeExpiry).toLocaleTimeString('en-IN')}</p>}
+              </div>
+            ) : (
+              <button onClick={() => fetchCode('start')} disabled={codeBusy !== null} className="btn-gradient w-full disabled:opacity-50">
+                {codeBusy === 'start' ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Get Start Code'}
+              </button>
+            )}
+          </GlassCard>
+        </AnimatedPage>
+      )}
+
+      {booking.status === 'COMPLETION_REQUESTED' && (
+        <AnimatedPage delay={75}>
+          <GlassCard variant="elevated" padding="lg">
+            <h3 className="section-title mb-2 flex items-center gap-2">
+              <KeyRound className="w-5 h-5 text-emerald-500" />
+              Confirm Completion
+            </h3>
+            <p className="text-xs text-surface-500 mb-4">Your partner finished the work. Check everything, then read this code out loud in person.</p>
+            {completionCode ? (
+              <div className="text-center py-2">
+                <p className="text-4xl font-bold font-display tracking-[0.3em] text-surface-900 dark:text-white">{completionCode}</p>
+                {completionCodeExpiry && <p className="text-xs text-surface-400 mt-2">Expires {new Date(completionCodeExpiry).toLocaleTimeString('en-IN')}</p>}
+              </div>
+            ) : (
+              <button onClick={() => fetchCode('completion')} disabled={codeBusy !== null} className="btn-gradient w-full disabled:opacity-50">
+                {codeBusy === 'completion' ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Get Completion Code'}
+              </button>
+            )}
+          </GlassCard>
         </AnimatedPage>
       )}
 
@@ -334,7 +420,54 @@ export function BookingDetailPage() {
         </AnimatedPage>
       )}
 
+      {booking.status === 'COMPLETED' && (
+        <AnimatedPage delay={340}>
+          <GlassCard variant="elevated" padding="lg">
+            <h3 className="section-title mb-4 flex items-center gap-2">
+              <CreditCard className="w-5 h-5 text-primary-500" />
+              Invoice
+            </h3>
+            {!invoice ? (
+              <button onClick={fetchInvoice} disabled={invoiceLoading} className="btn-outline w-full disabled:opacity-50">
+                {invoiceLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'View Invoice'}
+              </button>
+            ) : (
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between"><span className="text-surface-500">Receipt No</span><span className="font-mono font-medium">{invoice.receiptNo}</span></div>
+                {invoice.booking?.startedAt && (
+                  <div className="flex justify-between"><span className="text-surface-500">Worked</span><span className="font-medium">{new Date(invoice.booking.startedAt).toLocaleString('en-IN')} → {invoice.booking.completedAt ? new Date(invoice.booking.completedAt).toLocaleString('en-IN') : '—'}</span></div>
+                )}
+                {(invoice.transactions || []).map((t: any) => (
+                  <div key={t.id} className="flex justify-between">
+                    <span className="text-surface-500">{t.description || t.type}</span>
+                    <span className="font-medium">₹{Number(t.amount).toLocaleString('en-IN')} ({t.status})</span>
+                  </div>
+                ))}
+                {invoice.refund && (
+                  <div className="flex justify-between"><span className="text-surface-500">Refund</span><span className="font-medium text-emerald-600">₹{Number(invoice.refund.amount).toLocaleString('en-IN')} ({invoice.refund.status})</span></div>
+                )}
+              </div>
+            )}
+          </GlassCard>
+        </AnimatedPage>
+      )}
+
       <AnimatedPage delay={350}>
+        {canSos && (
+          <button
+            onClick={async () => {
+              try {
+                await api.post('/users/sos/trigger', { message: `Emergency SOS during booking ${id}` })
+                toast('🚨 Emergency SOS sent. Stay safe.', { duration: 5000 })
+              } catch {
+                toast.error('Failed to send SOS')
+              }
+            }}
+            className="w-full mb-3 btn-outline text-danger-500 hover:bg-danger-50 dark:hover:bg-danger-500/10 border-danger-200 dark:border-danger-800/30 flex items-center justify-center gap-2"
+          >
+            <AlertTriangle className="w-4 h-4" /> Emergency SOS
+          </button>
+        )}
         <div className="flex gap-3">
           {canTrack && (
             <Link to={`/bookings/${id}/tracking`} className="flex-1 btn-gradient flex items-center justify-center gap-2">

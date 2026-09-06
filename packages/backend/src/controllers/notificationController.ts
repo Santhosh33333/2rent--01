@@ -38,10 +38,26 @@ export async function getNotifications(req: AuthedRequest, res: Response) {
       where: { userId, isRead: false },
     })
 
+    // Shape rows for clients: derive a stable `type` (embedded data.type wins,
+    // else inferred from text) and expose `description`. Raw columns stay too.
+    const shaped = notifications.map((n) => {
+      let embedded: any = {};
+      try {
+        embedded = n.data ? JSON.parse(n.data) : {};
+      } catch {
+        embedded = {};
+      }
+      const type =
+        typeof embedded?.type === "string" && embedded.type
+          ? embedded.type
+          : inferNotificationType(n.title, n.body);
+      return { ...n, type, description: n.body };
+    });
+
     return res.json({
       success: true,
       data: {
-        notifications,
+        notifications: shaped,
         pagination: {
           page: pageNum,
           limit: limitNum,
@@ -59,6 +75,25 @@ export async function getNotifications(req: AuthedRequest, res: Response) {
       error: error instanceof Error ? error.message : 'Unknown error',
     })
   }
+}
+
+/**
+ * Best-effort category for icon/color routing when the creator did not embed
+ * an explicit data.type. Pure function — safe to unit test.
+ */
+export function inferNotificationType(title: string, body: string): string {
+  const s = `${title || ""} ${body || ""}`.toLowerCase();
+  if (s.includes("otp") || s.includes("verification code") || s.includes("start code") || s.includes("completion code")) return "BOOKING_OTP";
+  if (s.includes("sos") || s.includes("emergency")) return "SOS";
+  if (s.includes("payment") || s.includes("cash") || s.includes("upi") || s.includes("refund") || s.includes("earning") || s.includes("withdraw") || s.includes("top-up") || s.includes("top up") || s.includes("paid")) return "PAYMENT";
+  if (s.includes("book") || s.includes("job") || s.includes("partner") || s.includes("walk") || s.includes("arriv") || s.includes("complet") || s.includes("cancel") || s.includes("dispatch") || s.includes("assign")) return "BOOKING";
+  if (s.includes("new message") || s.includes("sent you a message") || s.includes("message from") || s.includes("chat request")) return "MESSAGE";
+  if (s.includes("event")) return "EVENT";
+  if (s.includes("communit") || s.includes("post") || s.includes("comment") || s.includes("poll")) return "COMMUNITY";
+  if (s.includes("chat") || s.includes("message")) return "MESSAGE";
+  if (s.includes("book") || s.includes("job") || s.includes("partner") || s.includes("walk") || s.includes("arriv") || s.includes("complet") || s.includes("cancel") || s.includes("dispatch") || s.includes("assign")) return "BOOKING";
+  if (s.includes("kyc") || s.includes("verif") || s.includes("suspend") || s.includes("block") || s.includes("report")) return "SECURITY";
+  return "GENERAL";
 }
 
 /**
@@ -195,6 +230,61 @@ export async function clearReadNotifications(req: AuthedRequest, res: Response) 
  * Internal: Create notification for user
  * Used by other controllers
  */
+/**
+ * Register / refresh a device push token (POST /notifications/device).
+ * Without a registered fcmToken, FCM push can never reach the user — the
+ * mobile app calls this on launch and on token refresh.
+ */
+export async function registerDevice(req: AuthedRequest, res: Response) {
+  try {
+    const userId = req.user!.userId
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' })
+    }
+    const { deviceType, fcmToken, deviceToken, name } = req.body ?? {}
+    if (typeof deviceType !== 'string' || !deviceType.trim()) {
+      return res.status(400).json({ success: false, message: 'deviceType is required.' })
+    }
+    if (typeof fcmToken !== 'string' || !fcmToken.trim()) {
+      return res.status(400).json({ success: false, message: 'fcmToken is required.' })
+    }
+
+    // A token belongs to exactly one user: detach it from anyone else first
+    // (shared devices, logout/login switches).
+    await prisma.device.updateMany({
+      where: { fcmToken: fcmToken.trim(), userId: { not: userId } },
+      data: { fcmToken: null },
+    })
+
+    const existing = await prisma.device.findFirst({ where: { userId, deviceType: deviceType.trim() } })
+    const device = existing
+      ? await prisma.device.update({
+          where: { id: existing.id },
+          data: {
+            fcmToken: fcmToken.trim(),
+            deviceToken: typeof deviceToken === 'string' ? deviceToken : existing.deviceToken,
+            name: typeof name === 'string' ? name.slice(0, 200) : existing.name,
+            lastActiveAt: new Date(),
+          },
+        })
+      : await prisma.device.create({
+          data: {
+            userId,
+            deviceType: deviceType.trim(),
+            fcmToken: fcmToken.trim(),
+            deviceToken: typeof deviceToken === 'string' ? deviceToken : null,
+            name: typeof name === 'string' ? name.slice(0, 200) : null,
+            lastActiveAt: new Date(),
+          },
+        })
+
+    return res.status(201).json({ success: true, data: { id: device.id } })
+  } catch (error) {
+    console.error('Register device error:', error)
+    return res.status(500).json({ success: false, message: 'Failed to register device.' })
+  }
+}
+
 export async function createNotification(
   userId: string,
   title: string,

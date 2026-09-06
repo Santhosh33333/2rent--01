@@ -34,18 +34,21 @@ export function WalkingRequestsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    const fetchRequests = async () => {
-      try {
-        const res = await api.get('/walking-requests')
-        const data = res.data?.data || res.data || []
-        setRequests(Array.isArray(data) ? data : (data.items || []))
-      } catch {
-        setError('Failed to load walking requests')
-      } finally {
-        setLoading(false)
-      }
+  const fetchRequests = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const res = await api.get('/walking-requests')
+      const data = res.data?.data || res.data || []
+      setRequests(Array.isArray(data) ? data : (data.items || []))
+    } catch {
+      setError('Failed to load walking requests')
+    } finally {
+      setLoading(false)
     }
+  }
+
+  useEffect(() => {
     fetchRequests()
   }, [])
 
@@ -75,7 +78,7 @@ export function WalkingRequestsPage() {
         icon={AlertTriangle}
         title="Failed to load requests"
         description={error}
-        action={<button onClick={() => window.location.reload()} className="btn-primary btn-sm">Retry</button>}
+        action={<button onClick={fetchRequests} className="btn-primary btn-sm">Retry</button>}
       />
     )
   }

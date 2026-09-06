@@ -6,6 +6,7 @@ import {
   markAllAsRead,
   deleteNotification,
   clearReadNotifications,
+  registerDevice,
 } from '../controllers/notificationController'
 
 const router = Router()
@@ -30,6 +31,12 @@ router.post('/:id/read', markAsRead)
  * POST /notifications/mark-all-read
  */
 router.post('/mark-all-read', markAllAsRead)
+
+/**
+ * Register / refresh a device push token (mobile calls on launch + refresh)
+ * POST /notifications/device { deviceType, fcmToken, deviceToken?, name? }
+ */
+router.post('/device', registerDevice)
 
 /**
  * Delete a specific notification

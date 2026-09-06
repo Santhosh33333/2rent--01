@@ -1,5 +1,10 @@
 import { api } from './api'
 
+const RAZORPAY_KEY = import.meta.env.VITE_RAZORPAY_KEY_ID
+if (!RAZORPAY_KEY) {
+  console.warn('[razorpay] VITE_RAZORPAY_KEY_ID not set — payments will fail')
+}
+
 interface RazorpaySuccessResponse {
   razorpay_payment_id: string
   razorpay_order_id: string
@@ -61,7 +66,7 @@ export async function openRazorpayCheckout({
     }
 
     const options = {
-      key: import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_placeholder',
+      key: RAZORPAY_KEY || '',
       amount: amount * 100,
       currency: currency || 'INR',
       name: 'RentBuddy',
@@ -117,7 +122,7 @@ export async function openRazorpayBookingCheckout({
     }
 
     const options = {
-      key: import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_placeholder',
+      key: RAZORPAY_KEY || '',
       amount: amount * 100,
       currency: currency || 'INR',
       name: 'RentBuddy',

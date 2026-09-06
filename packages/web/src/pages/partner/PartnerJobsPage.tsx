@@ -29,6 +29,7 @@ const statusConfig: Record<string, { label: string; badge: string }> = {
   PARTNER_ACCEPTED: { label: 'Accepted', badge: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
   OTP_GENERATED: { label: 'OTP Generated', badge: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400' },
   IN_PROGRESS: { label: 'In Progress', badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
+  COMPLETION_REQUESTED: { label: 'Confirming', badge: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400' },
   COMPLETED: { label: 'Completed', badge: 'bg-surface-100 text-surface-600 dark:bg-surface-800 dark:text-surface-400' },
   CANCELLED: { label: 'Cancelled', badge: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
 }
@@ -44,7 +45,7 @@ export function PartnerJobsPage() {
     const fetchJobs = async () => {
       try {
         let endpoint = '/partner/nearby-bookings'
-        if (activeTab === 'active') endpoint = '/partner/bookings?status=IN_PROGRESS,OTP_GENERATED,PARTNER_ACCEPTED'
+        if (activeTab === 'active') endpoint = '/partner/bookings?status=IN_PROGRESS,COMPLETION_REQUESTED,OTP_GENERATED,PARTNER_ACCEPTED'
         else if (activeTab === 'completed') endpoint = '/partner/bookings?status=COMPLETED'
 
         const res = await api.get(endpoint)
@@ -205,8 +206,8 @@ export function PartnerJobsPage() {
 
                 {(activeTab === 'active' || activeTab === 'completed') && (
                   <div className="border-t border-surface-200 dark:border-surface-700/50 p-3">
-                    <Link to={`/bookings/${job.id}`} className="flex items-center justify-center gap-2 py-2 text-sm font-medium text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 transition-colors">
-                      View Details <ArrowRight className="w-4 h-4" />
+                    <Link to={activeTab === 'active' ? `/partner/jobs/${job.id}` : `/bookings/${job.id}`} className="flex items-center justify-center gap-2 py-2 text-sm font-medium text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 transition-colors">
+                      {activeTab === 'active' ? 'Manage Job' : 'View Details'} <ArrowRight className="w-4 h-4" />
                     </Link>
                   </div>
                 )}

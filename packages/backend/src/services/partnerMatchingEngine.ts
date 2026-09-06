@@ -57,6 +57,28 @@ export async function findMatchingPartners(
       throw new Error("Booking user not found");
     }
 
+    // Same-gender preference (spec 101): enforced HERE in the backend, never
+    // just hidden in UI. Read from the booking notes set at creation.
+    let genderFilter: { gender?: string } = {};
+    try {
+      const booking = await prisma.booking.findUnique({
+        where: { id: bookingId },
+        select: { notes: true },
+      });
+      let pref: any = {};
+      try {
+        pref = booking?.notes ? JSON.parse(booking.notes) : {};
+      } catch {
+        pref = {};
+      }
+      const userGender = (bookingUser as any).gender as string | undefined;
+      if (pref?.sameGenderOnly === true && (userGender === "MALE" || userGender === "FEMALE")) {
+        genderFilter = { gender: userGender };
+      }
+    } catch {
+      genderFilter = {};
+    }
+
     // Build list of blocked user IDs
     const blockedUserIds = new Set<string>();
     bookingUser.blocksInitiated.forEach((b) => blockedUserIds.add(b.blockedId));
@@ -82,6 +104,11 @@ export async function findMatchingPartners(
         user: {
           status: "ACTIVE",
           id: { notIn: Array.from(blockedUserIds) },
+          ...genderFilter,
+          // Spec 108: matching must never bypass account suspension. A
+          // currently-suspended user (suspendedUntil in the future) is
+          // ineligible even if otherwise approved/available.
+          AND: [{ OR: [{ suspendedUntil: null }, { suspendedUntil: { lte: new Date() } }] }],
         },
         // Exclude partner if they have ongoing bookings (status not in completed/cancelled)
       },
@@ -92,6 +119,7 @@ export async function findMatchingPartners(
             fullName: true,
             avatarUrl: true,
             city: true,
+            gender: true,
           },
         },
       },

@@ -17,6 +17,10 @@ import type {
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
 
+function generateIdempotencyKey(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}-${crypto.randomUUID().slice(0, 8)}`
+}
+
 // Backend returns media as relative paths (e.g. /uploads/avatar.jpg).
 // Resolve them against the API origin so they work in dev (via the Vite
 // /uploads proxy) and in prod/Capacitor builds where the SPA is not
@@ -48,6 +52,9 @@ api.interceptors.request.use(
     const token = localStorage.getItem('token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
+    }
+    if (['post', 'put', 'patch'].includes(config.method ?? '') && !config.headers['X-Idempotency-Key']) {
+      config.headers['X-Idempotency-Key'] = generateIdempotencyKey()
     }
     return config
   },
@@ -133,6 +140,10 @@ export const bookingApi = {
   cancel: (id: string, data?: { reason?: string }) => api.post(`/bookings/${id}/cancel`, data),
   rate: (id: string, data: BookingRate) => api.post(`/bookings/${id}/rate`, data),
   priceEstimate: (params: PriceEstimateParams) => api.get('/bookings/price-estimate', { params }),
+  tracking: (id: string) => api.get(`/bookings/${id}/tracking`),
+  getStartCode: (id: string) => api.post(`/bookings/${id}/start-otp`),
+  getCompletionCode: (id: string) => api.post(`/bookings/${id}/completion-otp`),
+  selectPaymentMethod: (id: string, data: { paymentMethod: string }) => api.post(`/bookings/${id}/select-payment-method`, data),
 }
 
 // Partner API
@@ -144,7 +155,11 @@ export const partnerApi = {
   rejectBooking: (id: string) => api.post(`/partner/bookings/${id}/reject`),
   generateOTP: (id: string) => api.post(`/partner/bookings/${id}/otp/generate`),
   verifyOTP: (id: string, data: { otp: string }) => api.post(`/partner/bookings/${id}/otp/verify`, data),
-  completeBooking: (id: string) => api.post(`/partner/bookings/${id}/complete`),
+  goToJob: (id: string) => api.post(`/partner/bookings/${id}/go`),
+  markArrived: (id: string) => api.post(`/partner/bookings/${id}/arrived`),
+  verifyStartCode: (id: string, data: { startOtp: string }) => api.post(`/partner/bookings/${id}/start-verify`, data),
+  requestCompletion: (id: string) => api.post(`/partner/bookings/${id}/request-completion`),
+  completeBooking: (id: string, data?: { completionOtp?: string }) => api.post(`/partner/bookings/${id}/complete`, data),
   bookings: (params?: PaginationParams) => api.get('/partner/bookings', { params }),
   performance: () => api.get('/partner/performance'),
   toggleAvailability: (data: ToggleAvailability) => api.put('/partner/availability', data),

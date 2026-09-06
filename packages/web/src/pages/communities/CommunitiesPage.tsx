@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import {
-  Users, Search, UserPlus, UserMinus, MapPin, Hash
+  Users, Search, UserPlus, UserMinus, MapPin, Hash, Plus, X
 } from 'lucide-react'
+import toast from 'react-hot-toast'
 import { api } from '../../lib/api'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { PageHeader } from '../../components/PageHeader'
@@ -11,7 +12,7 @@ import { SkeletonLoader } from '../../components/SkeletonLoader'
 import { useAsync } from '../../hooks/useAsync'
 
 interface Community {
-  id: number
+  id: string
   name: string
   members: number
   description: string
@@ -21,22 +22,35 @@ interface Community {
 }
 
 export function CommunitiesPage() {
+  const navigate = useNavigate()
   const [search, setSearch] = useState('')
-  const [joining, setJoining] = useState<number | null>(null)
+  const [joining, setJoining] = useState<string | null>(null)
   const [list, setList] = useState<Community[]>([])
+  const [showCreate, setShowCreate] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [form, setForm] = useState({ name: '', description: '', privacy: 'PUBLIC', city: '' })
 
   const { loading, error, retry } = useAsync(
     async () => {
       const res = await api.get('/communities')
       const data = res.data?.data || res.data || []
       const items = Array.isArray(data) ? data : (data.items || [])
-      setList(items)
+      // Normalize backend shape (memberCount/isMember/city) to view shape.
+      setList(items.map((c: any) => ({
+        id: String(c.id),
+        name: c.name,
+        members: c.memberCount ?? c._count?.members ?? 0,
+        description: c.description || '',
+        joined: !!c.isMember,
+        category: c.category,
+        location: c.city ?? c.location,
+      })))
       return items
     },
     true
   )
 
-  const toggleJoin = async (id: number) => {
+  const toggleJoin = async (id: string) => {
     setJoining(id)
     try {
       const community = list.find(c => c.id === id)
@@ -55,9 +69,35 @@ export function CommunitiesPage() {
   }
 
   const filtered = list.filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.description.toLowerCase().includes(search.toLowerCase())
+    (c.name || '').toLowerCase().includes(search.toLowerCase()) ||
+    (c.description || '').toLowerCase().includes(search.toLowerCase())
   )
+
+  const createCommunity = async () => {
+    if (form.name.trim().length < 3) {
+      toast.error('Name must be at least 3 characters')
+      return
+    }
+    setCreating(true)
+    try {
+      const res = await api.post('/communities', {
+        name: form.name.trim(),
+        description: form.description.trim() || undefined,
+        privacy: form.privacy,
+        city: form.city.trim() || undefined,
+      })
+      const created = res.data?.data || res.data
+      toast.success('Community created')
+      setShowCreate(false)
+      setForm({ name: '', description: '', privacy: 'PUBLIC', city: '' })
+      if (created?.id) navigate(`/communities/${created.id}`)
+      else retry()
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Failed to create community')
+    } finally {
+      setCreating(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -82,7 +122,12 @@ export function CommunitiesPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Communities" subtitle="Discover and join communities near you" />
+      <PageHeader title="Communities" subtitle="Discover and join communities near you" action={
+        <button onClick={() => setShowCreate((v) => !v)} className="btn-gradient btn-sm flex items-center gap-2">
+          {showCreate ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+          {showCreate ? 'Close' : 'New Community'}
+        </button>
+      } />
 
       <AnimatedPage delay={50}>
         <div className="relative">
@@ -102,6 +147,44 @@ export function CommunitiesPage() {
           <span className="badge-glass"><UserPlus className="w-3.5 h-3.5" /> {list.filter(c => c.joined).length} joined</span>
         </div>
       </AnimatedPage>
+
+      {showCreate && (
+        <AnimatedPage>
+          <div className="glass-card p-5 space-y-3">
+            <h3 className="font-bold text-surface-900 dark:text-white">Create a community</h3>
+            <input
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              placeholder="Community name (min 3 characters)"
+              maxLength={100}
+              className="input"
+            />
+            <textarea
+              value={form.description}
+              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+              placeholder="What is this community about? (optional)"
+              maxLength={500}
+              rows={3}
+              className="input resize-none"
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <select value={form.privacy} onChange={(e) => setForm((f) => ({ ...f, privacy: e.target.value }))} className="input">
+                <option value="PUBLIC">Public</option>
+                <option value="PRIVATE">Private</option>
+              </select>
+              <input
+                value={form.city}
+                onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
+                placeholder="City (optional)"
+                className="input"
+              />
+            </div>
+            <button onClick={createCommunity} disabled={creating} className="btn-gradient w-full disabled:opacity-50">
+              {creating ? 'Creating...' : 'Create Community'}
+            </button>
+          </div>
+        </AnimatedPage>
+      )}
 
       <AnimatedPage delay={100}>
         {filtered.length === 0 ? (

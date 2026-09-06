@@ -61,8 +61,8 @@ export function AdminLoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-surface-950 px-6">
-      <div className="w-full max-w-sm">
+    <div className="min-h-screen flex bg-surface-950 px-6">
+      <div className="w-full max-w-sm m-auto">
         <Link to="/account-type" className="inline-flex items-center gap-1 text-sm text-surface-400 hover:text-surface-200 mb-8 transition-colors">
           <ArrowLeft className="w-4 h-4" /> Back
         </Link>

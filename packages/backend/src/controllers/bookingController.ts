@@ -7,12 +7,51 @@ import * as bookingEngine from "../services/bookingEngine"
 import * as razorpayService from "../services/razorpayService"
 import * as partnerMatching from "../services/partnerMatchingEngine"
 import { dispatchBooking, onBookingClaimed } from "../services/dispatchService"
+import { ensureConversation } from "./messageController"
 import { SERVICE_KEYS } from "../services/serviceCatalog"
 import { logBookingTransition } from "../services/bookingLogService"
+import {
+  getEarlyStartMinutes,
+  isExpired,
+  isWithinStartWindow,
+  issueCompletionOtp,
+  issueStartOtp,
+  markArrived,
+  markTravelling,
+  OTP_MAX_ATTEMPTS,
+  parseNotes,
+  requestCompletion,
+  verifyOtpHash,
+  verifyStartOtp,
+} from "../services/jobWorkflowService"
+import { checkAcceptStorm, checkInstantCompletion, checkOtpAbuse } from "../services/aiMonitorService"
+import { calculateDistance } from "../utils/location"
+import { getConfig } from "../services/pricingEngine"
 import { buildReferralRewardService } from "./referralController"
 import { env } from "../config/env"
 
 const settleReferralReward = buildReferralRewardService()
+
+/** Merge the same-gender-partner preference into booking notes (spec 101).
+ *  Plain-text notes are preserved under `text`; the matcher enforces the flag. */
+function mergeBookingPreference(notes: unknown, sameGenderOnly: unknown): string | undefined {
+  if (sameGenderOnly !== true && sameGenderOnly !== "true") {
+    return typeof notes === "string" ? notes : undefined;
+  }
+  let base: Record<string, any> = {};
+  if (typeof notes === "string" && notes.trim().startsWith("{")) {
+    try {
+      const parsed = JSON.parse(notes);
+      if (parsed && typeof parsed === "object") base = parsed;
+      else base = { text: notes };
+    } catch {
+      base = { text: notes };
+    }
+  } else if (typeof notes === "string" && notes) {
+    base = { text: notes };
+  }
+  return JSON.stringify({ ...base, sameGenderOnly: true });
+}
 
 // ============================================================================
 // CREATE BOOKING
@@ -32,7 +71,7 @@ export async function createBooking(req: AuthedRequest, res: Response): Promise<
       sendError(res, "Unsupported service type.", 400, "INVALID_SERVICE");
       return;
     }
-    const { startLocation, endLocation, scheduledAt, durationMinutes, itemType, itemDescription, notes, startLatitude, startLongitude, endLatitude, endLongitude, couponCode, distanceKm } = req.body;
+    const { startLocation, endLocation, scheduledAt, durationMinutes, itemType, itemDescription, notes, startLatitude, startLongitude, endLatitude, endLongitude, couponCode, distanceKm, sameGenderOnly } = req.body;
 
     if (!startLocation || !endLocation) {
       sendError(res, "Start location and end location are required.", 400, "VALIDATION_ERROR");
@@ -63,7 +102,7 @@ export async function createBooking(req: AuthedRequest, res: Response): Promise<
       durationMinutes,
       itemType,
       itemDescription,
-      notes,
+      notes: mergeBookingPreference(notes, sameGenderOnly),
       startLatitude,
       startLongitude,
       endLatitude,
@@ -120,7 +159,10 @@ export async function getMyBookings(req: AuthedRequest, res: Response): Promise<
     const limit = Number(req.query.limit) || 20;
 
     const where: any = { userId };
-    if (status) where.status = status;
+    if (status) {
+      const list = String(status).split(",").map((s) => s.trim()).filter(Boolean);
+      where.status = list.length > 1 ? { in: list } : list[0] ?? status;
+    }
 
     const [items, total] = await Promise.all([
       prisma.booking.findMany({
@@ -572,7 +614,7 @@ export async function submitUpiReference(req: AuthedRequest, res: Response): Pro
       sendError(res, "Unauthorized.", 403, "FORBIDDEN");
       return;
     }
-    if (booking.paymentStatus !== "VERIFICATION_PENDING") {
+    if (!["VERIFICATION_PENDING", "REJECTED", "REQUEST_INFO"].includes(booking.paymentStatus)) {
       sendError(res, "This booking is not awaiting UPI verification.", 400, "INVALID_STATUS");
       return;
     }
@@ -666,6 +708,32 @@ export async function acceptBooking(req: AuthedRequest, res: Response): Promise<
 
     // Stop expiry timer, notify user + losing partners in realtime.
     void onBookingClaimed(id, req.user!.userId);
+
+    // Anomaly watch: accepting far more jobs than plausible gets flagged
+    // for admin review (never auto-punished).
+    void checkAcceptStorm(req.user!.userId);
+
+    // Open the User <-> assigned Partner conversation immediately so chat
+    // works from the moment of acceptance (spec 102). Best-effort.
+    void (async () => {
+      try {
+        const [b, p] = await Promise.all([
+          prisma.booking.findUnique({ where: { id }, select: { userId: true } }),
+          prisma.partner.findUnique({ where: { userId: req.user!.userId }, select: { userId: true } }),
+        ]);
+        if (b && p) {
+          await ensureConversation(b.userId, p.userId);
+          await prisma.notification.create({
+            data: {
+              userId: b.userId,
+              title: "Partner assigned",
+              body: "Your partner accepted. You can now chat from Messages.",
+              data: JSON.stringify({ bookingId: id, type: "CHAT_READY" }),
+            },
+          });
+        }
+      } catch { /* never block accept */ }
+    })();
 
     void logBookingTransition({
       bookingId: id,
@@ -766,7 +834,9 @@ export async function startBooking(req: AuthedRequest, res: Response): Promise<v
     }
 
     // Ownership + state enforced atomically: only the ASSIGNED partner can
-    // start the booking, and only from an accepted/generated-OTP state.
+    // start the booking, and only via a verified START OTP inside the
+    // scheduled time window. Direct PARTNER_ACCEPTED -> IN_PROGRESS is
+    // rejected (critical rule #84: accept means "upcoming", never started).
     // Idempotent: if already IN_PROGRESS, return success without error.
     const booking = await prisma.booking.findUnique({ where: { id } });
     if (!booking) {
@@ -781,12 +851,26 @@ export async function startBooking(req: AuthedRequest, res: Response): Promise<v
       sendSuccess(res, booking, "Booking already in progress.");
       return;
     }
+    if (booking.status !== "OTP_GENERATED") {
+      sendError(res, "Start code verification is required before starting. Accept means upcoming — never started.", 409, "START_OTP_REQUIRED");
+      return;
+    }
+    const notes = parseNotes(booking.notes);
+    if (!notes.startOtp?.verifiedAt || !booking.otpVerifiedAt) {
+      sendError(res, "Enter the start code from the user first (POST /:id/start-verify).", 409, "START_OTP_REQUIRED");
+      return;
+    }
+    const early = await getEarlyStartMinutes(booking.serviceType);
+    if (!isWithinStartWindow(new Date(booking.scheduledAt), new Date(), early)) {
+      sendError(res, "This scheduled job cannot start before its time window.", 409, "TOO_EARLY");
+      return;
+    }
 
     const claimed = await prisma.booking.updateMany({
       where: {
         id,
         partnerId: partner.id,
-        status: { in: ["PARTNER_ACCEPTED", "OTP_GENERATED"] },
+        status: "OTP_GENERATED",
       },
       data: {
         status: "IN_PROGRESS",
@@ -833,7 +917,7 @@ export async function startBooking(req: AuthedRequest, res: Response): Promise<v
 export async function completeBooking(req: AuthedRequest, res: Response): Promise<void> {
   try {
     const { id } = req.params;
-    const { endLatitude, endLongitude } = req.body;
+    const { endLatitude, endLongitude, completionOtp } = req.body;
 
     const partner = await prisma.partner.findUnique({
       where: { userId: req.user!.userId },
@@ -844,9 +928,57 @@ export async function completeBooking(req: AuthedRequest, res: Response): Promis
       return;
     }
 
-    // Atomic completion: only the ASSIGNED partner, only while IN_PROGRESS.
+    // Atomic completion: only the ASSIGNED partner, only from
+    // COMPLETION_REQUESTED, and only with a valid COMPLETION OTP entered by
+    // the partner (code shown to the user only). Direct IN_PROGRESS ->
+    // COMPLETED is rejected — partners cannot force completion (rule #95).
     // Earnings credit lives in the SAME transaction so a completed booking can
     // never exist without its earnings entry (and vice versa).
+    const pre = await prisma.booking.findUnique({ where: { id } });
+    if (!pre) {
+      sendError(res, "Booking not found.", 404, "BOOKING_NOT_FOUND");
+      return;
+    }
+    if (pre.partnerId !== partner.id) {
+      sendError(res, "This booking is not assigned to you.", 403, "FORBIDDEN");
+      return;
+    }
+    if (pre.status === "COMPLETED") {
+      sendSuccess(res, pre, "Booking already completed.");
+      return;
+    }
+    if (pre.status !== "COMPLETION_REQUESTED") {
+      sendError(res, "Request completion first and enter the user's completion code. Direct completion is not allowed.", 409, "COMPLETION_OTP_REQUIRED");
+      return;
+    }
+    const preNotes = parseNotes(pre.notes);
+    if (!preNotes.completionOtp?.hash && !preNotes.completionOtp?.verifiedAt) {
+      sendError(res, "No active completion code. Ask the user to generate it.", 409, "COMPLETION_OTP_REQUIRED");
+      return;
+    }
+    if (!preNotes.completionOtp?.verifiedAt) {
+      const code = (completionOtp ?? "").toString().trim();
+      if (!code) {
+        sendError(res, "Enter the completion code from the user.", 400, "COMPLETION_OTP_REQUIRED");
+        return;
+      }
+      if (isExpired(preNotes.completionOtp?.expiresAt, new Date())) {
+        sendError(res, "Completion code expired. Ask the user for a new one.", 410, "OTP_EXPIRED");
+        return;
+      }
+      if ((preNotes.completionOtp?.attempts ?? 0) >= OTP_MAX_ATTEMPTS) {
+        sendError(res, "Too many wrong attempts. Ask the user for a new code.", 429, "OTP_LOCKED");
+        return;
+      }
+      if (!verifyOtpHash(code, preNotes.completionOtp!.hash!)) {
+        preNotes.completionOtp!.attempts = (preNotes.completionOtp!.attempts ?? 0) + 1;
+        await prisma.booking.update({ where: { id }, data: { notes: JSON.stringify(preNotes) } });
+        void checkOtpAbuse(id, "COMPLETION", preNotes.completionOtp!.attempts ?? 0);
+        sendError(res, "Invalid completion code. Try again.", 400, "INVALID_OTP");
+        return;
+      }
+      preNotes.completionOtp!.verifiedAt = new Date().toISOString();
+    }
     let grossEarnings = 0;
     let commissionPercent = 0;
     let commissionFee = 0;
@@ -858,13 +990,14 @@ export async function completeBooking(req: AuthedRequest, res: Response): Promis
         where: {
           id,
           partnerId: partner.id,
-          status: "IN_PROGRESS",
+          status: "COMPLETION_REQUESTED",
         },
         data: {
           status: "COMPLETED",
           completedAt: new Date(),
           endLatitude: endLatitude || undefined,
           endLongitude: endLongitude || undefined,
+          notes: JSON.stringify(preNotes),
         },
       });
 
@@ -945,7 +1078,7 @@ export async function completeBooking(req: AuthedRequest, res: Response): Promis
     });
 
     if (!result) {
-      sendError(res, "Booking is not in progress or not assigned to you.", 400, "INVALID_STATUS");
+      sendError(res, "Completion code verification is required. Request completion first.", 400, "COMPLETION_OTP_REQUIRED");
       return;
     }
 
@@ -953,7 +1086,7 @@ export async function completeBooking(req: AuthedRequest, res: Response): Promis
 
     void logBookingTransition({
       bookingId: id,
-      fromStatus: "IN_PROGRESS",
+      fromStatus: "COMPLETION_REQUESTED",
       toStatus: "COMPLETED",
       actorId: req.user!.userId,
       actorType: "PARTNER",
@@ -980,6 +1113,10 @@ export async function completeBooking(req: AuthedRequest, res: Response): Promis
     // Fire-and-forget: settlement is claim-guarded and must never block or
     // fail the completion path.
     void settleReferralReward(updated.userId);
+
+    // Anomaly watch: implausibly fast jobs get flagged for admin review
+    // (never auto-punished).
+    void checkInstantCompletion(id);
 
     sendSuccess(res, updated, "Booking completed.");
   } catch (err: any) {
@@ -1315,6 +1452,143 @@ export async function getBookingReceipt(req: AuthedRequest, res: Response): Prom
     }, "Booking receipt retrieved.");
   } catch (err) {
     sendError(res, "Failed to retrieve booking receipt.", 500, "INTERNAL_ERROR");
+  }
+}
+
+// ============================================================================
+// CONTROLLED JOB WORKFLOW (spec 84-100): OTP-gated start/completion.
+// The start code and completion code are shown to the USER only; the partner
+// enters them and the BACKEND verifies. No frontend-only verification.
+// ============================================================================
+
+function workflowError(res: Response, err: any, fallback: string): void {
+  const code = err?.code ?? "INTERNAL_ERROR";
+  const status = err?.status ?? (code === "BOOKING_NOT_FOUND" ? 404 : code === "FORBIDDEN" ? 403 : code === "INTERNAL_ERROR" ? 500 : 409);
+  sendError(res, err?.message || fallback, status, code);
+}
+
+/** USER: get the START code (shown to user only, shared in person). */
+export async function getStartOtp(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const result = await issueStartOtp(id, req.user!.userId);
+    sendSuccess(res, { bookingId: id, startOtp: result.otp, expiresAt: result.expiresAt }, "Share this code with your partner in person on arrival.");
+  } catch (err: any) {
+    workflowError(res, err, "Failed to generate start code.");
+  }
+}
+
+/** PARTNER: GO TO JOB — opens the travel window (time-gated). */
+export async function goToJob(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const result = await markTravelling(id, req.user!.userId);
+    sendSuccess(res, { bookingId: id, ...result }, "Navigation started. Travel safely.");
+  } catch (err: any) {
+    workflowError(res, err, "Failed to start travel.");
+  }
+}
+
+/** PARTNER: "I've arrived" — notifies the user, does NOT start the job. */
+export async function markArrivedHandler(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const result = await markArrived(id, req.user!.userId);
+    sendSuccess(res, { bookingId: id, ...result }, "Arrival recorded. Ask the user for the start code.");
+  } catch (err: any) {
+    workflowError(res, err, "Failed to record arrival.");
+  }
+}
+
+/** PARTNER: enter the user's START code — backend verifies, timer starts. */
+export async function verifyStartOtpHandler(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const { startOtp } = req.body;
+    const updated = await verifyStartOtp(id, req.user!.userId, (startOtp ?? "").toString().trim());
+    sendSuccess(res, updated, "Job started. Timer is running.");
+  } catch (err: any) {
+    workflowError(res, err, "Failed to verify start code.");
+  }
+}
+
+/** PARTNER: request completion — does NOT complete; user confirms via OTP. */
+export async function requestCompletionHandler(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const updated = await requestCompletion(id, req.user!.userId);
+    sendSuccess(res, updated, "Completion requested. The user will confirm with a code.");
+  } catch (err: any) {
+    workflowError(res, err, "Failed to request completion.");
+  }
+}
+
+/** USER: get the COMPLETION code (shown to user only, shared in person). */
+export async function getCompletionOtp(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const result = await issueCompletionOtp(id, req.user!.userId);
+    sendSuccess(res, { bookingId: id, completionOtp: result.otp, expiresAt: result.expiresAt }, "Share this code with your partner in person.");
+  } catch (err: any) {
+    workflowError(res, err, "Failed to generate completion code.");
+  }
+}
+
+/** USER/PARTNER: live tracking snapshot (spec 109).
+ *  Phase comes from backend trip state; position is the partner's real GPS.
+ *  ETA is an honest estimate (great-circle distance at a configured city
+ *  speed) — labelled as such, never exact location exposure beyond need. */
+export async function getBookingTracking(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const booking = await prisma.booking.findUnique({ where: { id } });
+    if (!booking) {
+      sendError(res, "Booking not found.", 404, "BOOKING_NOT_FOUND");
+      return;
+    }
+    const userId = req.user!.userId;
+    const partnerUser = booking.partnerId
+      ? (await prisma.partner.findUnique({ where: { id: booking.partnerId }, select: { userId: true } }))?.userId ?? null
+      : null;
+    if (booking.userId !== userId && partnerUser !== userId) {
+      sendError(res, "Unauthorized.", 403, "FORBIDDEN");
+      return;
+    }
+    const notes = parseNotes(booking.notes);
+    const phase = notes.trip?.phase ?? "NOT_STARTED";
+    const partnerLocation = booking.partnerId
+      ? await prisma.partnerLocation.findUnique({ where: { partnerId: booking.partnerId } })
+      : null;
+
+    // ETA estimate from REAL positions only; null when positions unknown.
+    let etaMinutesEstimate: number | null = null;
+    if (
+      partnerLocation?.latitude != null && partnerLocation?.longitude != null &&
+      booking.startLatitude != null && booking.startLongitude != null &&
+      phase === "TRAVELLING"
+    ) {
+      const km = calculateDistance(
+        partnerLocation.latitude, partnerLocation.longitude,
+        booking.startLatitude, booking.startLongitude
+      );
+      const speedKmph = await getConfig("AVG_CITY_SPEED_KMPH", 25);
+      const speed = Number.isFinite(speedKmph) && speedKmph > 0 ? speedKmph : 25;
+      etaMinutesEstimate = Math.max(1, Math.round((km / speed) * 60));
+    }
+
+    sendSuccess(res, {
+      bookingId: id,
+      status: booking.status,
+      phase,
+      partnerLocation: partnerLocation
+        ? { latitude: partnerLocation.latitude, longitude: partnerLocation.longitude, updatedAt: (partnerLocation as any).updatedAt ?? null }
+        : null,
+      etaMinutesEstimate,
+      etaBasis: etaMinutesEstimate != null ? "great-circle distance at configured city speed; traffic-aware routing not included" : null,
+      computedAt: new Date().toISOString(),
+    }, "Tracking snapshot retrieved.");
+  } catch {
+    sendError(res, "Failed to retrieve tracking.", 500, "INTERNAL_ERROR");
   }
 }
 

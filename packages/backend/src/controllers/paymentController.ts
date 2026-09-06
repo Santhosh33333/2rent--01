@@ -430,7 +430,9 @@ export async function webhookPayment(req: Request, res: Response): Promise<void>
     res.json({ success: true })
   } catch (err: any) {
     console.error("Webhook error:", err)
-    res.status(500).json({ error: "Webhook processing failed" })
+    // Return 200 to prevent Razorpay infinite retry loop.
+    // The error is logged; idempotent processing handles duplicates.
+    res.status(200).json({ success: true, error: "Webhook processing failed" })
   }
 }
 

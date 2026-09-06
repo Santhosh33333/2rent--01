@@ -53,7 +53,7 @@ export default function BookingDetail() {
       const data = await RazorpayCheckout.open({
         description: `RentBuddy — ${booking.serviceType ?? 'Booking'}`,
         currency: order.currency ?? 'INR',
-        key: order.key ?? 'rzp_test_placeholder',
+        key: order.key || '',
         amount: Math.round((order.amount ?? 0) * 100),
         order_id: order.orderId,
         name: 'RentBuddy',

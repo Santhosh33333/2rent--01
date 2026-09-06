@@ -8,7 +8,8 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "start": "node dist/src/server.js",
-    "test": "tsx tests/integration.test.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev --name init",
     "prisma:studio": "prisma studio",
@@ -23,6 +24,7 @@
     "@clerk/backend": "^3.11.7",
     "@prisma/client": "^5.22.0",
     "@types/nodemailer": "^8.0.1",
+    "@types/twilio": "^3.19.2",
     "axios": "^1.18.1",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
@@ -40,6 +42,7 @@
     "nodemailer": "^9.0.6",
     "razorpay": "^2.9.8",
     "socket.io": "^4.8.3",
+    "twilio": "^6.1.0",
     "uuid": "^10.0.0",
     "zod": "^3.23.8"
   },
@@ -55,6 +58,7 @@
     "@types/uuid": "^10.0.0",
     "prisma": "^5.22.0",
     "tsx": "^4.19.0",
-    "typescript": "^5.6.2"
+    "typescript": "^5.6.2",
+    "vitest": "^5.0.0"
   }
 }

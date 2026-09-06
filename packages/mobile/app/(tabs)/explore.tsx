@@ -19,7 +19,7 @@ export default function Explore() {
       {isLoading ? <Text style={styles.sub}>Loading…</Text> : null}
       <FlatList
         data={people}
-        keyExtractor={(item) => item.id ?? Math.random().toString()}
+        keyExtractor={(item, index) => item.id ?? `e-${index}`}
         renderItem={({ item }) => (
           <Card>
             <Text style={styles.name}>{item.fullName ?? item.name ?? 'Member'}</Text>

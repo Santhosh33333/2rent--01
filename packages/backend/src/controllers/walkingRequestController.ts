@@ -189,19 +189,33 @@ export async function completeWalk(req: AuthedRequest, res: Response): Promise<v
       sendError(res, "Only the assigned walking partner can complete the walk.", 403, "FORBIDDEN");
       return;
     }
-    await prisma.walkingRequest.update({
-      where: { id },
-      data: { status: "COMPLETED", completedById: req.user!.userId, completedAt: new Date() },
-    });
-    if (request.fare) {
-      const platformFeePercent = await getConfig("PLATFORM_FEE_PERCENT", 10);
-      const payout = round2(Number(request.fare) - (Number(request.fare) * platformFeePercent) / 100);
-      await prisma.walkingPartner.update({
-        where: { userId: req.user!.userId },
-        data: { totalWalks: { increment: 1 }, totalEarnings: { increment: payout } },
-      });
+    if (request.status !== "ACCEPTED") {
+      sendError(res, "Walk is not in progress.", 400, "INVALID_STATUS");
+      return;
     }
-    sendSuccess(res, undefined, "Walk marked complete.");
+    if (request.completedById) {
+      sendSuccess(res, undefined, "Completion already requested. Waiting for the requester to confirm.");
+      return;
+    }
+    // Request-only: the partner signals done; the REQUESTER confirms and
+    // releases pay. No stats or money move here (spec: no instant completion).
+    const claimed = await prisma.walkingRequest.updateMany({
+      where: { id, status: "ACCEPTED", completedById: null },
+      data: { completedById: req.user!.userId, completedAt: new Date() },
+    });
+    if (claimed.count !== 1) {
+      sendError(res, "Walk is not in progress.", 409, "INVALID_STATUS");
+      return;
+    }
+    await prisma.notification.create({
+      data: {
+        userId: request.requesterId,
+        title: "Walker requested completion",
+        body: "Your walker marked the walk as done. Confirm to release their payout.",
+        data: JSON.stringify({ walkingRequestId: id, type: "WALK_COMPLETION_REQUEST" }),
+      },
+    }).catch(() => {});
+    sendSuccess(res, { requested: true }, "Completion requested. The requester must confirm.", 202);
   } catch (err) {
     sendError(res, "Failed to complete walk.", 500, "INTERNAL_ERROR");
   }
@@ -219,9 +233,22 @@ export async function confirmWalkCompletion(req: AuthedRequest, res: Response): 
       sendError(res, "Only the requester can confirm completion.", 403, "FORBIDDEN");
       return;
     }
-      if (request.fare && request.completedById) {
-        // Atomic: credit wallet AND mark completed in a single transaction to
-        // prevent double-credit from concurrent confirmations.
+    // Handshake: the walker must have requested completion first. The
+    // requester cannot conjure a completion alone, and the walker cannot
+    // complete alone — confirmation releases pay exactly once.
+    if (!request.completedById) {
+      sendError(res, "The walker must request completion first. You confirm after the walk.", 409, "COMPLETION_NOT_REQUESTED");
+      return;
+    }
+    if (request.confirmedAt) {
+      sendSuccess(res, undefined, "Walk completion already confirmed.");
+      return;
+    }
+    if (request.fare && request.completedById) {
+        // Atomic: credit wallet, bump walker stats, AND mark completed in a
+        // single transaction to prevent double-credit from concurrent
+        // confirmations. Stats move here (not at request time) so only
+        // confirmed work counts.
         const fare = Number(request.fare);
         const platformFeePercent = await getConfig("PLATFORM_FEE_PERCENT", 10);
         const payout = round2(fare - (fare * platformFeePercent) / 100);
@@ -249,6 +276,10 @@ export async function confirmWalkCompletion(req: AuthedRequest, res: Response): 
                 description: `Walk payout (incl. ${(platformFeePercent)}% platform fee) for request ${id}`,
               },
             });
+            await tx.walkingPartner.updateMany({
+              where: { userId: partnerUserId },
+              data: { totalWalks: { increment: 1 }, totalEarnings: { increment: payout } },
+            });
             return true;
           });
         if (!result) {
@@ -256,11 +287,25 @@ export async function confirmWalkCompletion(req: AuthedRequest, res: Response): 
           return;
         }
       } else {
-        // No wallet found — still mark completed
-        await prisma.walkingRequest.update({ where: { id }, data: { confirmedAt: new Date(), status: "COMPLETED" } });
+        // No wallet found — still mark completed, exactly once
+        const claimed = await prisma.walkingRequest.updateMany({
+          where: { id, confirmedAt: null },
+          data: { confirmedAt: new Date(), status: "COMPLETED" },
+        });
+        if (claimed.count !== 1) {
+          sendSuccess(res, undefined, "Walk completion already confirmed.");
+          return;
+        }
       }
     } else {
-      await prisma.walkingRequest.update({ where: { id }, data: { confirmedAt: new Date(), status: "COMPLETED" } });
+      const claimed = await prisma.walkingRequest.updateMany({
+        where: { id, confirmedAt: null },
+        data: { confirmedAt: new Date(), status: "COMPLETED" },
+      });
+      if (claimed.count !== 1) {
+        sendSuccess(res, undefined, "Walk completion already confirmed.");
+        return;
+      }
     }
     sendSuccess(res, undefined, "Walk completion confirmed.");
   } catch (err) {

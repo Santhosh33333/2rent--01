@@ -142,6 +142,18 @@ if (env.isProduction) {
     );
   }
 
+  // Razorpay API keys — payments will silently fail with placeholder keys.
+  if (isPlaceholder(env.RAZORPAY_KEY_ID) || env.RAZORPAY_KEY_ID?.includes("placeholder")) {
+    throw new Error(
+      "RAZORPAY_KEY_ID is required in production and must be the real key (not the placeholder).",
+    );
+  }
+  if (isPlaceholder(env.RAZORPAY_KEY_SECRET) || env.RAZORPAY_KEY_SECRET?.includes("placeholder")) {
+    throw new Error(
+      "RAZORPAY_KEY_SECRET is required in production and must be the real secret (not the placeholder).",
+    );
+  }
+
   // SMTP: OTP email + transactional notifications won't be delivered without it.
   if (isPlaceholder(env.SMTP_HOST) || isPlaceholder(env.SMTP_USER) || isPlaceholder(env.SMTP_PASS)) {
     console.warn(

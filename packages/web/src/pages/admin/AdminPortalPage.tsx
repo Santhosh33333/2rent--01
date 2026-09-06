@@ -28,7 +28,7 @@ export function AdminPortalPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-gray-950 p-6">
+    <div className="bg-gray-950 p-4 sm:p-6 rounded-3xl">
       <div className="max-w-5xl mx-auto">
         <div className="flex items-center gap-3 mb-8">
           <Link to="/dashboard" className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition">
@@ -61,3 +61,4 @@ export function AdminPortalPage() {
     </div>
   )
 }
+

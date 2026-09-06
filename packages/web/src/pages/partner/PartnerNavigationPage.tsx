@@ -89,31 +89,58 @@ export function PartnerNavigationPage() {
 
       <AnimatedPage delay={50}>
         <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-sky-100 via-sky-50 to-blue-100 dark:from-sky-900/30 dark:via-sky-800/20 dark:to-blue-900/30 p-8 sm:p-12 border border-sky-200/50 dark:border-sky-700/30">
-          <div className="absolute inset-0 opacity-20">
-            <svg className="w-full h-full" viewBox="0 0 800 400" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="0.5" className="text-sky-300 dark:text-sky-600" />
-                </pattern>
-              </defs>
-              <rect width="100%" height="100%" fill="url(#grid)" />
-              <circle cx="200" cy="150" r="4" fill="#0ea5e9" />
-              <circle cx="200" cy="150" r="12" fill="none" stroke="#0ea5e9" strokeWidth="1" opacity="0.4" />
-              <circle cx="200" cy="150" r="20" fill="none" stroke="#0ea5e9" strokeWidth="0.5" opacity="0.2" />
-              <circle cx="500" cy="250" r="4" fill="#22c55e" />
-              <circle cx="500" cy="250" r="12" fill="none" stroke="#22c55e" strokeWidth="1" opacity="0.4" />
-              <path d="M200,150 C250,100 350,300 500,250" fill="none" stroke="#0ea5e9" strokeWidth="2" strokeDasharray="8,4" opacity="0.6" />
-            </svg>
-          </div>
-          <div className="relative z-10 text-center">
-            <div className="w-16 h-16 mx-auto rounded-2xl bg-sky-500/20 flex items-center justify-center mb-4">
-              <Compass className="w-8 h-8 text-sky-500" />
-            </div>
-            <h2 className="text-xl font-bold font-display text-sky-800 dark:text-sky-200 mb-2">Map Integration Coming Soon</h2>
-            <p className="text-sm text-sky-600/70 dark:text-sky-300/60 max-w-md mx-auto">
-              Interactive maps with turn-by-turn navigation will be available in the next update.
-              For now, use your preferred maps app.
-            </p>
+          <div className="relative z-10">
+            {activeJob ? (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-12 h-12 rounded-2xl bg-sky-500/20 flex items-center justify-center">
+                    <Navigation className="w-6 h-6 text-sky-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold font-display text-sky-800 dark:text-sky-200">Active Job Navigation</h2>
+                    <p className="text-sm text-sky-600/70 dark:text-sky-300/60">{activeJob.type} • ₹{activeJob.fare}</p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-start gap-3 p-3 rounded-xl bg-white/60 dark:bg-sky-900/20">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center shrink-0">
+                      <MapPin className="w-4 h-4 text-emerald-600" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-surface-500 uppercase tracking-wider">Pickup</p>
+                      <p className="text-sm font-medium text-surface-900 dark:text-white">{activeJob.startLocation}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 p-3 rounded-xl bg-white/60 dark:bg-sky-900/20">
+                    <div className="w-8 h-8 rounded-lg bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center shrink-0">
+                      <MapPin className="w-4 h-4 text-rose-600" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-surface-500 uppercase tracking-wider">Drop-off</p>
+                      <p className="text-sm font-medium text-surface-900 dark:text-white">{activeJob.endLocation}</p>
+                    </div>
+                  </div>
+                </div>
+                <a
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(activeJob.endLocation)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-sm font-semibold transition-colors"
+                >
+                  <Compass className="w-4 h-4" /> Open in Google Maps
+                </a>
+              </div>
+            ) : (
+              <div className="text-center">
+                <div className="w-16 h-16 mx-auto rounded-2xl bg-sky-500/20 flex items-center justify-center mb-4">
+                  <Compass className="w-8 h-8 text-sky-500" />
+                </div>
+                <h2 className="text-xl font-bold font-display text-sky-800 dark:text-sky-200 mb-2">No Active Job</h2>
+                <p className="text-sm text-sky-600/70 dark:text-sky-300/60 max-w-md mx-auto">
+                  Accept a job from the jobs page to see navigation and route details here.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </AnimatedPage>

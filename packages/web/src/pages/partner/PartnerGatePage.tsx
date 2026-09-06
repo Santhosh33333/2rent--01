@@ -56,7 +56,7 @@ export function PartnerGatePage() {
   const kycApproved = user?.kycStatus === 'VERIFIED' || user?.kycStatus === 'APPROVED'
 
   return (
-    <div className="min-h-screen bg-surface-50 dark:bg-surface-950 flex flex-col">
+    <div className="bg-surface-50 dark:bg-surface-950 flex flex-col rounded-3xl">
       <div className="p-6">
         <Link to="/dashboard" className="inline-flex items-center gap-1 text-sm text-surface-500 hover:text-surface-800 dark:hover:text-surface-200 transition">
           <ArrowLeft className="w-4 h-4" /> Back

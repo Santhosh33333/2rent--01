@@ -30,29 +30,26 @@ export function CarryBuddyRoutePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const [turns] = useState<TurnStep[]>([
-    { instruction: 'Head north on Main Street', distance: '0.3 km', duration: '4 min' },
-    { instruction: 'Turn right onto Park Avenue', distance: '1.2 km', duration: '15 min' },
-    { instruction: 'Continue straight past City Mall', distance: '0.8 km', duration: '10 min' },
-    { instruction: 'Turn left onto Lake Road', distance: '0.5 km', duration: '6 min' },
-    { instruction: 'Destination will be on your right', distance: '0.1 km', duration: '2 min' },
-  ])
+  const [turns] = useState<TurnStep[]>([])
+
+  const fetchActiveJob = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const res = await api.get('/carry-buddy/my-requests')
+      const root = res.data
+      const arr = Array.isArray(root) ? root : (root?.data?.items ?? root?.data ?? [])
+      const data: any[] = Array.isArray(arr) ? arr : []
+      const active = data.find((j: RouteJob) => j.status === 'active' || j.status === 'in_progress')
+      setActiveJob(active ?? null)
+    } catch {
+      setError('Failed to load route')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    const fetchActiveJob = async () => {
-      try {
-        const res = await api.get('/carry-buddy/my-requests')
-        const root = res.data
-        const arr = Array.isArray(root) ? root : (root?.data?.items ?? root?.data ?? [])
-        const data: any[] = Array.isArray(arr) ? arr : []
-        const active = data.find((j: RouteJob) => j.status === 'active' || j.status === 'in_progress')
-        setActiveJob(active ?? null)
-      } catch {
-        setError('Failed to load route')
-      } finally {
-        setLoading(false)
-      }
-    }
     fetchActiveJob()
   }, [])
 
@@ -74,7 +71,7 @@ export function CarryBuddyRoutePage() {
         <div className="empty-state-icon"><AlertTriangle className="w-10 h-10 text-danger-400" /></div>
         <h3 className="empty-state-title">Failed to load route</h3>
         <p className="empty-state-desc">{error}</p>
-        <button onClick={() => window.location.reload()} className="btn-primary mt-6">Retry</button>
+        <button onClick={fetchActiveJob} className="btn-primary mt-6">Retry</button>
       </div>
     )
   }

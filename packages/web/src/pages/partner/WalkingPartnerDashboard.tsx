@@ -121,7 +121,15 @@ export function WalkingPartnerDashboard() {
                 <p className="text-white/60 text-sm mt-1">Here's your walking dashboard</p>
               </div>
               <button
-                onClick={() => setIsAvailable(!isAvailable)}
+                onClick={async () => {
+                  const newVal = !isAvailable
+                  setIsAvailable(newVal)
+                  try {
+                    await api.put('/partner/availability', { isAvailable: newVal })
+                  } catch {
+                    setIsAvailable(!newVal)
+                  }
+                }}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all ${
                   isAvailable
                     ? 'bg-white/20 text-white hover:bg-white/30'
@@ -273,7 +281,7 @@ export function WalkingPartnerDashboard() {
               <div className="space-y-3">
                 {[
                   { label: 'Completed', value: stats.todayRequests, icon: CheckCircle, color: 'text-emerald-500' },
-                  { label: 'Earnings', value: `₹${(stats.todayRequests * 150).toLocaleString('en-IN')}`, icon: Wallet, color: 'text-amber-500' },
+                  { label: 'Earnings', value: `₹${stats.totalEarnings.toLocaleString('en-IN')}`, icon: Wallet, color: 'text-amber-500' },
                   { label: 'Rating', value: `★ ${stats.averageRating.toFixed(1)}`, icon: Star, color: 'text-violet-500' },
                 ].map((item) => (
                   <div key={item.label} className="flex items-center justify-between p-2.5 rounded-xl">

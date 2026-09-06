@@ -8,6 +8,7 @@ import {
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
 import { api } from '../../lib/api'
+import { useAuth } from '../../lib/auth'
 
 interface RequestDetail {
   id: number
@@ -18,6 +19,10 @@ interface RequestDetail {
   status: 'open' | 'accepted' | 'completed'
   reward: number
   description: string
+  requesterId?: string
+  acceptedById?: string | null
+  completedById?: string | null
+  confirmedAt?: string | null
   requester: { name: string; avatar?: string; rating?: number }
   acceptedBy?: { name: string; avatar?: string }
 }
@@ -31,36 +36,50 @@ const statusConfig = {
 export function WalkingRequestDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [request, setRequest] = useState<RequestDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
 
+  const reload = async () => {
+    if (!id) return
+    try {
+      const res = await api.get(`/walking-requests/${id}`)
+      setRequest(res.data?.data || res.data)
+    } catch {
+      setError('Failed to load request details')
+    }
+  }
+
   useEffect(() => {
     const fetchRequest = async () => {
-      try {
-        const res = await api.get(`/walking-requests/${id}`)
-        const data = res.data?.data || res.data
-        setRequest(data)
-      } catch {
-        setError('Failed to load request details')
-      } finally {
-        setLoading(false)
-      }
+      await reload()
+      setLoading(false)
     }
     if (id) fetchRequest()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
-  const handleAction = async (action: 'accept' | 'complete' | 'cancel') => {
+  const handleAction = async (action: 'accept' | 'complete' | 'confirm' | 'cancel') => {
     if (!request) return
     setActionLoading(action)
     try {
-      await api.post(`/walking-requests/${id}/${action}`)
-      const newStatus = action === 'accept' ? 'accepted' : action === 'complete' ? 'completed' : 'open'
-      setRequest({ ...request, status: newStatus as RequestDetail['status'] })
-      toast.success(`Request ${action === 'accept' ? 'accepted' : action === 'complete' ? 'completed' : 'cancelled'} successfully`)
-    } catch {
-      toast.error(`Failed to ${action} request`)
+      if (action === 'cancel') {
+        await api.delete(`/walking-requests/${id}`)
+      } else {
+        await api.post(`/walking-requests/${id}/${action}`)
+      }
+      const messages: Record<string, string> = {
+        accept: 'Request accepted',
+        complete: 'Completion requested. The requester must confirm.',
+        confirm: 'Completion confirmed. Payout released.',
+        cancel: 'Request cancelled',
+      }
+      toast.success(messages[action])
+      await reload()
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || `Failed to ${action} request`)
     } finally {
       setActionLoading(null)
     }
@@ -120,6 +139,10 @@ export function WalkingRequestDetailPage() {
   const isOpen = request.status === 'open'
   const isAccepted = request.status === 'accepted'
   const isCompleted = request.status === 'completed'
+  const myId = (user as any)?.id
+  const iAmRequester = !!myId && request.requesterId === myId
+  const iAmWalker = !!myId && request.acceptedById === myId
+  const completionRequested = !!request.completedById && !request.confirmedAt
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 animate-fadeInUp">
@@ -265,28 +288,50 @@ export function WalkingRequestDetailPage() {
             )}
             {isAccepted && (
               <>
-                <button
-                  onClick={() => handleAction('complete')}
-                  disabled={actionLoading !== null}
-                  className="flex-1 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-sm font-medium shadow-lg shadow-emerald-500/20 hover:shadow-xl hover:shadow-emerald-500/30 transition-all duration-200 flex items-center justify-center gap-2"
-                >
-                  {actionLoading === 'complete' ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <><CheckCircle className="w-4 h-4" /> Mark Complete</>
-                  )}
-                </button>
-                <button
-                  onClick={() => handleAction('cancel')}
-                  disabled={actionLoading !== null}
-                  className="px-6 py-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm font-medium hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors flex items-center gap-2"
-                >
-                  {actionLoading === 'cancel' ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <><XCircle className="w-4 h-4" /> Cancel</>
-                  )}
-                </button>
+                {iAmWalker && !completionRequested && (
+                  <button
+                    onClick={() => handleAction('complete')}
+                    disabled={actionLoading !== null}
+                    className="flex-1 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-sm font-medium shadow-lg shadow-emerald-500/20 hover:shadow-xl hover:shadow-emerald-500/30 transition-all duration-200 flex items-center justify-center gap-2"
+                  >
+                    {actionLoading === 'complete' ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <><CheckCircle className="w-4 h-4" /> Request Completion</>
+                    )}
+                  </button>
+                )}
+                {iAmRequester && completionRequested && (
+                  <button
+                    onClick={() => handleAction('confirm')}
+                    disabled={actionLoading !== null}
+                    className="flex-1 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-sm font-medium shadow-lg shadow-emerald-500/20 hover:shadow-xl hover:shadow-emerald-500/30 transition-all duration-200 flex items-center justify-center gap-2"
+                  >
+                    {actionLoading === 'confirm' ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <><CheckCircle className="w-4 h-4" /> Confirm Completion</>
+                    )}
+                  </button>
+                )}
+                {iAmWalker && completionRequested && (
+                  <div className="flex-1 p-3 rounded-xl bg-surface-50 dark:bg-surface-800/50 text-center">
+                    <p className="text-sm text-surface-500">Completion requested — waiting for the requester to confirm</p>
+                  </div>
+                )}
+                {iAmRequester && (
+                  <button
+                    onClick={() => handleAction('cancel')}
+                    disabled={actionLoading !== null}
+                    className="px-6 py-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm font-medium hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors flex items-center gap-2"
+                  >
+                    {actionLoading === 'cancel' ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <><XCircle className="w-4 h-4" /> Cancel</>
+                    )}
+                  </button>
+                )}
               </>
             )}
             {isCompleted && (

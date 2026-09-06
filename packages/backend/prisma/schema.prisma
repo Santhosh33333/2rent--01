@@ -55,6 +55,10 @@ model User {
   transactions                   Transaction[]
   communities                    CommunityMember[]    @relation("CommunityMembership")
   ownedCommunities               Community[]          @relation("CommunityOwner")
+  communityPosts                 CommunityPost[]
+  communityComments              CommunityComment[]
+  communityPolls                 CommunityPoll[]
+  communityPollVotes             CommunityPollVote[]
   events                         Event[]              @relation("EventOrganizer")
   eventAttendances               EventAttendee[]      @relation("EventAttendeeUser")
   sentMessages                   Message[]            @relation("MessageSender")
@@ -206,13 +210,15 @@ model WalkingRequest {
   updatedAt       DateTime  @updatedAt
 
   requester     User                        @relation("WalkingRequestRequester", fields: [requesterId], references: [id], onDelete: Cascade)
-  acceptedBy    User?                       @relation("WalkAcceptedBy", fields: [acceptedById], references: [id])
-  completedBy   User?                       @relation("WalkCompletedBy", fields: [completedById], references: [id])
+  acceptedBy    User?                       @relation("WalkAcceptedBy", fields: [acceptedById], references: [id], onDelete: SetNull)
+  completedBy   User?                       @relation("WalkCompletedBy", fields: [completedById], references: [id], onDelete: SetNull)
   applications  WalkingRequestApplication[]
   earningDetails EarningDetail[]
 
   @@index([status])
   @@index([requesterId])
+  @@index([acceptedById])
+  @@index([completedById])
 }
 
 model WalkingRequestApplication {
@@ -252,6 +258,7 @@ model EarningDetail {
 
   @@index([earningsId])
   @@index([bookingId])
+  @@index([walkingRequestId])
   @@index([createdAt])
 }
 
@@ -292,6 +299,7 @@ model Transaction {
 
   @@index([userId])
   @@index([bookingId])
+  @@index([referenceId])
   @@index([createdAt])
 }
 
@@ -318,7 +326,7 @@ model WithdrawalRequest {
 model PaymentOrder {
   id               String    @id @default(uuid())
   razorpayOrderId  String    @unique
-  razorpayPaymentId String?
+  razorpayPaymentId String?   @unique
   userId           String
   walletId         String
   amount           Decimal
@@ -381,6 +389,8 @@ model Community {
 
   owner   User              @relation("CommunityOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   members CommunityMember[]
+  posts   CommunityPost[]
+  polls   CommunityPoll[]
 
   @@index([privacy])
   @@index([city])
@@ -393,11 +403,86 @@ model CommunityMember {
   role        String   @default("MEMBER")
   joinedAt    DateTime @default(now())
 
-  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
   user      User      @relation("CommunityMembership", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([communityId, userId])
   @@index([communityId])
+}
+
+model CommunityPost {
+  id          String   @id @default(uuid())
+  communityId String
+  authorId    String
+  content     String
+  imageUrl    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  community Community          @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  author    User               @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  comments  CommunityComment[]
+
+  @@index([communityId, createdAt])
+  @@index([authorId])
+}
+
+model CommunityComment {
+  id        String   @id @default(uuid())
+  postId    String
+  authorId  String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  post   CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([postId, createdAt])
+  @@index([authorId])
+}
+
+model CommunityPoll {
+  id          String    @id @default(uuid())
+  communityId String
+  authorId    String
+  question    String
+  closesAt    DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  community Community            @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  author    User                 @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  options   CommunityPollOption[]
+  votes     CommunityPollVote[]
+
+  @@index([communityId, createdAt])
+}
+
+model CommunityPollOption {
+  id        String   @id @default(uuid())
+  pollId    String
+  text      String
+  voteCount Int      @default(0)
+
+  poll  CommunityPoll      @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  votes CommunityPollVote[]
+
+  @@index([pollId])
+}
+
+model CommunityPollVote {
+  id       String @id @default(uuid())
+  pollId   String
+  optionId String
+  userId   String
+
+  poll   CommunityPoll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  option CommunityPollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  user   User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([pollId, userId])
+  @@index([optionId])
 }
 
 model Event {
@@ -447,6 +532,9 @@ model Message {
   receiverId     String
   conversationId String
   content        String
+  messageType    String    @default("TEXT")
+  mediaUrl       String?
+  bookingId      String?
   status         String    @default("SENT")
   readAt         DateTime?
   createdAt      DateTime  @default(now())
@@ -454,7 +542,7 @@ model Message {
 
   sender       User         @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
   receiver     User         @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
-  conversation Conversation? @relation(fields: [conversationId], references: [id])
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId])
   @@index([senderId, receiverId])
@@ -468,8 +556,8 @@ model Conversation {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  participant1 User          @relation("ConversationP1", fields: [participant1Id], references: [id])
-  participant2 User          @relation("ConversationP2", fields: [participant2Id], references: [id])
+  participant1 User          @relation("ConversationP1", fields: [participant1Id], references: [id], onDelete: Cascade)
+  participant2 User          @relation("ConversationP2", fields: [participant2Id], references: [id], onDelete: Cascade)
   messages     Message[]
   typingStatus TypingStatus[]
 
@@ -501,8 +589,8 @@ model CallLog {
   duration   Int?
   createdAt  DateTime @default(now())
 
-  caller   User @relation("CallCaller", fields: [callerId], references: [id])
-  receiver User @relation("CallReceiver", fields: [receiverId], references: [id])
+  caller   User @relation("CallCaller", fields: [callerId], references: [id], onDelete: Cascade)
+  receiver User @relation("CallReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
 
   @@index([callerId])
   @@index([receiverId])
@@ -520,8 +608,8 @@ model Friendship {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  requester User @relation("FriendRequester", fields: [requesterId], references: [id])
-  addressee User @relation("FriendAddressee", fields: [addresseeId], references: [id])
+  requester User @relation("FriendRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addressee User @relation("FriendAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
 
   @@unique([requesterId, addresseeId])
   @@index([requesterId])
@@ -552,11 +640,12 @@ model CarryBuddyRequest {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  requester  User @relation("CBRequester", fields: [requesterId], references: [id])
-  acceptedBy User? @relation("CBAcceptedBy", fields: [acceptedById], references: [id])
+  requester  User @relation("CBRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  acceptedBy User? @relation("CBAcceptedBy", fields: [acceptedById], references: [id], onDelete: SetNull)
 
   @@index([status])
   @@index([requesterId])
+  @@index([acceptedById])
 }
 
 // ============================================================
@@ -682,6 +771,7 @@ model SosAlert {
   message    String?
   status     String    @default("ACTIVE")
   createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt @default(now())
   resolvedAt DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -701,6 +791,7 @@ model Rating {
   score      Int
   comment    String?
   createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt @default(now())
 
   rater User @relation("RatingGivenBy", fields: [raterId], references: [id], onDelete: Cascade)
   rated User @relation("RatingReceivedBy", fields: [ratedId], references: [id], onDelete: Cascade)
@@ -721,6 +812,7 @@ model LocationShare {
   sharer User @relation(fields: [sharerId], references: [id], onDelete: Cascade)
 
   @@index([sharerId])
+  @@index([viewerId])
 }
 
 model TrustScore {
@@ -740,6 +832,7 @@ model Referral {
   code          String
   rewardClaimed Boolean  @default(false)
   createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt @default(now())
 
   referrer User @relation("ReferralSender", fields: [referrerId], references: [id], onDelete: Cascade)
   referred User @relation("ReferredBy", fields: [referredId], references: [id], onDelete: Cascade)
@@ -1634,5 +1727,19 @@ model City {
 
   @@index([key])
   @@index([isActive])
+}
+
+model IdempotencyKey {
+  id            String   @id @default(cuid())
+  key           String   @unique
+  userId        String?
+  requestBody   Json?
+  responseBody  Json?
+  statusCode    Int?
+  createdAt     DateTime @default(now())
+  expiresAt     DateTime
+
+  @@index([key])
+  @@index([userId])
 }
 

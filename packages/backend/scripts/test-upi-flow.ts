@@ -32,13 +32,15 @@ async function main() {
   const email = `upitest_${suffix}@example.com`;
   const phone = `+91${98}${Math.floor(10000000 + Math.random() * 89999999)}`;
 
-  // 1) Admin login
-  const adminLogin = await call("POST", "/auth/login", { email: "santhoshkrishna958@gmail.com", password: "300703S#s" });
+  // 1) Admin login (uses env vars — set ADMIN_EMAIL/ADMIN_PASSWORD in .env)
+  const adminEmail = process.env.ADMIN_EMAIL || "admin@rentbuddy.app";
+  const adminPassword = process.env.ADMIN_PASSWORD || "ChangeMe!";
+  const adminLogin = await call("POST", "/auth/login", { email: adminEmail, password: adminPassword });
   const adminToken = tokenOf(adminLogin.json);
   console.log("[1] admin login:", adminLogin.status, adminToken ? "OK" : JSON.stringify(adminLogin.json));
 
-  // 2) Set UPI config (your personal QR)
-  const setUpi = await call("PUT", "/admin/settings/upi", { upiId: "rentbuddy@oksbi", accountName: "RentBuddy Personal", qrUrl: "" }, adminToken!);
+  // 2) Set UPI config
+  const setUpi = await call("PUT", "/admin/settings/upi", { upiId: "test@upi", accountName: "Test Account", qrUrl: "" }, adminToken!);
   console.log("[2] set UPI config:", setUpi.status, JSON.stringify(setUpi.json?.data ?? setUpi.json));
 
   // 3) Get UPI config
@@ -47,7 +49,7 @@ async function main() {
 
   // 4) Register a user
   const reg = await call("POST", "/auth/register", {
-    email, phone, password: "Password123", fullName: "UPI Tester",
+    email, phone, password: "TestPass123!", fullName: "UPI Tester",
     dateOfBirth: "1995-05-05", gender: "OTHER",
   });
   console.log("[4] register:", reg.status, JSON.stringify(reg.json).slice(0, 400));
@@ -62,7 +64,7 @@ async function main() {
   });
 
   // 6) Login as user
-  const login = await call("POST", "/auth/login", { email, password: "Password123" });
+  const login = await call("POST", "/auth/login", { email, password: "TestPass123!" });
   const userToken = tokenOf(login.json);
   console.log("[6] user login:", login.status, userToken ? "OK" : JSON.stringify(login.json));
 

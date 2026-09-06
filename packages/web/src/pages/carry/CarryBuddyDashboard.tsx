@@ -36,35 +36,38 @@ export function CarryBuddyDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    const fetchDashboard = async () => {
-      try {
-        const [myRequestsRes, statsRes] = await Promise.allSettled([
-          api.get('/carry-buddy/my-requests'),
-          api.get('/carry-buddy/stats'),
-        ])
+  const fetchDashboard = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const [myRequestsRes, statsRes] = await Promise.allSettled([
+        api.get('/carry-buddy/my-requests'),
+        api.get('/carry-buddy/stats'),
+      ])
 
-        if (myRequestsRes.status === 'fulfilled') {
-          const root = myRequestsRes.value.data
-          const items = (Array.isArray(root) ? root : (root?.data?.items ?? root?.data ?? []))
-          setJobs((Array.isArray(items) ? items : []).slice(0, 5))
-        }
-
-        if (statsRes.status === 'fulfilled') {
-          const s = statsRes.value.data?.data ?? statsRes.value.data ?? {}
-          setStats({
-            activeJobs: s.activeJobs ?? 0,
-            totalEarnings: s.totalEarnings ?? 0,
-            completedJobs: s.completedJobs ?? 0,
-            rating: s.rating ?? 0,
-          })
-        }
-      } catch {
-        setError('Failed to load dashboard')
-      } finally {
-        setLoading(false)
+      if (myRequestsRes.status === 'fulfilled') {
+        const root = myRequestsRes.value.data
+        const items = (Array.isArray(root) ? root : (root?.data?.items ?? root?.data ?? []))
+        setJobs((Array.isArray(items) ? items : []).slice(0, 5))
       }
+
+      if (statsRes.status === 'fulfilled') {
+        const s = statsRes.value.data?.data ?? statsRes.value.data ?? {}
+        setStats({
+          activeJobs: s.activeJobs ?? 0,
+          totalEarnings: s.totalEarnings ?? 0,
+          completedJobs: s.completedJobs ?? 0,
+          rating: s.rating ?? 0,
+        })
+      }
+    } catch {
+      setError('Failed to load dashboard')
+    } finally {
+      setLoading(false)
     }
+  }
+
+  useEffect(() => {
     fetchDashboard()
   }, [])
 
@@ -108,7 +111,7 @@ export function CarryBuddyDashboard() {
         </div>
         <h3 className="empty-state-title">Something went wrong</h3>
         <p className="empty-state-desc">{error}</p>
-        <button onClick={() => window.location.reload()} className="btn-primary mt-6">Retry</button>
+        <button onClick={fetchDashboard} className="btn-primary mt-6">Retry</button>
       </div>
     )
   }
@@ -262,11 +265,11 @@ export function CarryBuddyDashboard() {
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-white/70">Completion Rate</span>
-                  <span className="text-lg font-bold">{stats.completedJobs > 0 ? '98%' : '—'}</span>
+                  <span className="text-lg font-bold">{stats.completedJobs > 0 && (stats.activeJobs + stats.completedJobs) > 0 ? `${Math.round((stats.completedJobs / (stats.activeJobs + stats.completedJobs)) * 100)}%` : '—'}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-white/70">On-time Delivery</span>
-                  <span className="text-lg font-bold">{stats.completedJobs > 0 ? '95%' : '—'}</span>
+                  <span className="text-sm text-white/70">Jobs Completed</span>
+                  <span className="text-lg font-bold">{stats.completedJobs}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-white/70">Avg Rating</span>
@@ -281,12 +284,8 @@ export function CarryBuddyDashboard() {
                 Incentives
               </h3>
               <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/20">
-                <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">Complete 5 more jobs this week</p>
-                <p className="text-xs text-amber-600/70 dark:text-amber-400/70 mt-1">Earn ₹200 bonus on your next payout</p>
-                <div className="mt-3 w-full bg-amber-500/20 rounded-full h-2">
-                  <div className="bg-amber-500 h-2 rounded-full transition-all" style={{ width: `${Math.min((stats.completedJobs / 5) * 100, 100)}%` }} />
-                </div>
-                <p className="text-[10px] text-amber-600/70 dark:text-amber-400/70 mt-1">{Math.min(stats.completedJobs, 5)}/5 jobs completed</p>
+                <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">Weekly Progress</p>
+                <p className="text-xs text-amber-600/70 dark:text-amber-400/70 mt-1">{stats.completedJobs} jobs completed this period</p>
               </div>
             </GlassCard>
           </div>

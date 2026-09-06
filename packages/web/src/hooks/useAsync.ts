@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 
 interface UseAsyncState<T> {
   data: T | null
@@ -48,8 +48,13 @@ export function useAsync<T>(
     execute()
   }, [execute])
 
+  // Fire-once on mount. The asyncFunction is typically inlined at the call
+  // site (new identity every render) — without this guard the effect below
+  // re-runs forever and the page never leaves its loading state.
+  const fired = useRef(false)
   useEffect(() => {
-    if (immediate) {
+    if (immediate && !fired.current) {
+      fired.current = true
       execute()
     }
   }, [execute, immediate])

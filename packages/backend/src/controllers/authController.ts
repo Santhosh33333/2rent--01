@@ -183,34 +183,37 @@ export async function register(req: Request, res: Response): Promise<void> {
     }
 
     const passwordHash = await bcrypt.hash(password, env.BCRYPT_SALT_ROUNDS);
-    const user = await prisma.user.create({
-      data: {
-        email,
-        phone,
-        passwordHash,
-        fullName,
-        dateOfBirth: new Date(dateOfBirth || "2000-01-01"),
-        gender: gender || "OTHER",
-        role: "USER",
-        activeRole: "USER",
-      },
-      select: { id: true, email: true, phone: true, fullName: true, status: true, role: true, activeRole: true },
-    });
-
-    if (normalizedAccountType === "PARTNER") {
-      await prisma.partner.upsert({
-        where: { userId: user.id },
-        update: { status: "PENDING" },
-        create: {
-          userId: user.id,
-          status: "PENDING",
-          providesWalking: true,
-          providesCarry: true,
+    const user = await prisma.$transaction(async (tx) => {
+      const u = await tx.user.create({
+        data: {
+          email,
+          phone,
+          passwordHash,
+          fullName,
+          dateOfBirth: new Date(dateOfBirth || "2000-01-01"),
+          gender: gender || "OTHER",
+          role: "USER",
+          activeRole: "USER",
         },
+        select: { id: true, email: true, phone: true, fullName: true, status: true, role: true, activeRole: true },
       });
-    }
 
-    await prisma.wallet.create({ data: { userId: user.id } });
+      if (normalizedAccountType === "PARTNER") {
+        await tx.partner.upsert({
+          where: { userId: u.id },
+          update: { status: "PENDING" },
+          create: {
+            userId: u.id,
+            status: "PENDING",
+            providesWalking: true,
+            providesCarry: true,
+          },
+        });
+      }
+
+      await tx.wallet.create({ data: { userId: u.id } });
+      return u;
+    });
 
     const otp = setOtp(`email:${user.id}`);
     sendOTP(otp, { email: user.email });
@@ -514,20 +517,23 @@ export async function googleSignIn(req: Request, res: Response): Promise<void> {
       }
     } else {
       const passwordHash = await bcrypt.hash(generateOTP(32), env.BCRYPT_SALT_ROUNDS);
-      user = await prisma.user.create({
-        data: {
-          email: email || `google-${uid}@rentbuddy.app`,
-          phone: phone_number || `+91${uid.slice(0, 10)}`,
-          passwordHash,
-          fullName: name || "Google User",
-          dateOfBirth: new Date("2000-01-01"),
-          gender: "OTHER",
-          emailVerified: true,
-          mobileVerified: !!phone_number,
-          avatarUrl: picture,
-        },
+      user = await prisma.$transaction(async (tx) => {
+        const u = await tx.user.create({
+          data: {
+            email: email || `google-${uid}@rentbuddy.app`,
+            phone: phone_number || `+91${uid.slice(0, 10)}`,
+            passwordHash,
+            fullName: name || "Google User",
+            dateOfBirth: new Date("2000-01-01"),
+            gender: "OTHER",
+            emailVerified: true,
+            mobileVerified: !!phone_number,
+            avatarUrl: picture,
+          },
+        });
+        await tx.wallet.create({ data: { userId: u.id } });
+        return u;
       });
-      await prisma.wallet.create({ data: { userId: user.id } });
     }
 
     const { accessToken, refreshToken } = await createUserSession(user.id, req);
@@ -599,19 +605,22 @@ export async function appleSignIn(req: AuthedRequest, res: Response): Promise<vo
 
     if (!user) {
       const passwordHash = await bcrypt.hash(generateOTP(32), env.BCRYPT_SALT_ROUNDS);
-      user = await prisma.user.create({
-        data: {
-          email: claims.email || `apple-${appleId}@rentbuddy.app`,
-          phone: `apple_${appleId.replace(/[^a-zA-Z0-9]/g, "")}`,
-          passwordHash,
-          fullName: fullName || "Apple User",
-          dateOfBirth: new Date("2000-01-01"),
-          gender: "OTHER",
-          emailVerified: !!claims.email,
-          appleId,
-        },
+      user = await prisma.$transaction(async (tx) => {
+        const u = await tx.user.create({
+          data: {
+            email: claims.email || `apple-${appleId}@rentbuddy.app`,
+            phone: `apple_${appleId.replace(/[^a-zA-Z0-9]/g, "")}`,
+            passwordHash,
+            fullName: fullName || "Apple User",
+            dateOfBirth: new Date("2000-01-01"),
+            gender: "OTHER",
+            emailVerified: !!claims.email,
+            appleId,
+          },
+        });
+        await tx.wallet.create({ data: { userId: u.id } });
+        return u;
       });
-      await prisma.wallet.create({ data: { userId: user.id } });
     } else if (!user.appleId) {
       await prisma.user.update({ where: { id: user.id }, data: { appleId } });
     }

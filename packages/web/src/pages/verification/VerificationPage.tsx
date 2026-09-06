@@ -40,6 +40,7 @@ export function VerificationPage() {
   const [error, setError] = useState<string | null>(null)
   const [overallStatus, setOverallStatus] = useState<string>('UNVERIFIED')
   const [rejectionReason, setRejectionReason] = useState<string | null>(null)
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
   const { updateUser } = useAuth()
   const navigate = useNavigate()
   // Set once when approval is detected so the cached session user unlocks the
@@ -101,7 +102,7 @@ export function VerificationPage() {
     return () => {
       if (intervalId) clearInterval(intervalId)
     }
-  }, [updateUser, navigate])
+  }, [updateUser, navigate, refreshTrigger])
 
   const verifiedCount = steps.filter(s => s.status === 'verified').length
   const progress = steps.length > 0 ? (verifiedCount / steps.length) * 100 : 0
@@ -125,7 +126,7 @@ export function VerificationPage() {
   if (error) {
     return (
       <EmptyState icon={AlertTriangle} title="Failed to load verification" description={error}
-        action={<button onClick={() => window.location.reload()} className="btn-primary btn-sm">Retry</button>} />
+        action={<button onClick={() => setRefreshTrigger(t => t + 1)} className="btn-primary btn-sm">Retry</button>} />
     )
   }
 

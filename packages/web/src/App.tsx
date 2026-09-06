@@ -48,8 +48,16 @@ const EventDetailPage = lazy(() => import('./pages/events/EventDetailPage').then
 const MessagesPage = lazy(() => import('./pages/messages/MessagesPage').then(m => ({ default: m.MessagesPage })))
 const ConversationPage = lazy(() => import('./pages/messages/ConversationPage').then(m => ({ default: m.ConversationPage })))
 const PartnerJobsPage = lazy(() => import('./pages/partner/PartnerJobsPage').then(m => ({ default: m.PartnerJobsPage })))
+const PartnerJobDetailPage = lazy(() => import('./pages/partner/PartnerJobDetailPage').then(m => ({ default: m.PartnerJobDetailPage })))
 const PartnerWalletPage = lazy(() => import('./pages/partner/PartnerWalletPage').then(m => ({ default: m.PartnerWalletPage })))
 const PartnerProfilePage = lazy(() => import('./pages/partner/PartnerProfilePage').then(m => ({ default: m.PartnerProfilePage })))
+
+// CarryBuddy pages
+const CarryBuddyDashboard = lazy(() => import('./pages/carry/CarryBuddyDashboard').then(m => ({ default: m.CarryBuddyDashboard })))
+const CarryBuddyJobsPage = lazy(() => import('./pages/carry/CarryBuddyJobsPage').then(m => ({ default: m.CarryBuddyJobsPage })))
+const CarryBuddyRoutePage = lazy(() => import('./pages/carry/CarryBuddyRoutePage').then(m => ({ default: m.CarryBuddyRoutePage })))
+const CarryBuddyEarningsPage = lazy(() => import('./pages/carry/CarryBuddyEarningsPage').then(m => ({ default: m.CarryBuddyEarningsPage })))
+const CarryBuddyProfilePage = lazy(() => import('./pages/carry/CarryBuddyProfilePage').then(m => ({ default: m.CarryBuddyProfilePage })))
 
 // Admin pages
 const AdminPortalPage = lazy(() => import('./pages/admin/AdminPortalPage').then(m => ({ default: m.AdminPortalPage })))
@@ -190,10 +198,21 @@ export function App() {
               <Route path="/partner/pending" element={<PartnerGatePage />} />
               <Route path="/partner/dashboard" element={<PartnerDashboardPage />} />
               <Route path="/partner/jobs" element={<PartnerJobsPage />} />
+              <Route path="/partner/jobs/:id" element={<PartnerJobDetailPage />} />
               <Route path="/partner/map" element={<PartnerMapPage />} />
               <Route path="/partner/wallet" element={<PartnerWalletPage />} />
               <Route path="/partner/performance" element={<PartnerPerformancePage />} />
               <Route path="/partner/profile" element={<PartnerProfilePage />} />
+            </Route>
+          </Route>
+
+          <Route element={<ProtectedRoute allowedRoles={['PARTNER']} />}>
+            <Route element={<Layout />}>
+              <Route path="/carry/dashboard" element={<CarryBuddyDashboard />} />
+              <Route path="/carry/jobs" element={<CarryBuddyJobsPage />} />
+              <Route path="/carry/route" element={<CarryBuddyRoutePage />} />
+              <Route path="/carry/earnings" element={<CarryBuddyEarningsPage />} />
+              <Route path="/carry/profile" element={<CarryBuddyProfilePage />} />
             </Route>
           </Route>
 
@@ -217,9 +236,9 @@ export function App() {
               <Route path="/admin/admins" element={<AdminAdminsPage />} />
                <Route path="/admin/payments" element={<AdminPaymentsPage />} />
                <Route path="/admin/upi-verification" element={<AdminUpiVerificationPage />} />
-          <Route path="/admin/settings" element={<AdminSettingsPage />} />
-          <Route path="/admin/pricing" element={<AdminPricingPage />} />
-          <Route path="/admin/live-tracking" element={<AdminLiveTrackingPage />} />
+              <Route path="/admin/settings" element={<AdminSettingsPage />} />
+              <Route path="/admin/pricing" element={<AdminPricingPage />} />
+              <Route path="/admin/live-tracking" element={<AdminLiveTrackingPage />} />
             </Route>
           </Route>
 

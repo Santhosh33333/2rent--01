@@ -731,9 +731,11 @@ export async function getAuditLogs(req: AuthedRequest, res: Response): Promise<v
   try {
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 50;
+    const action = typeof req.query.action === "string" && req.query.action.trim() ? req.query.action.trim() : undefined;
+    const where: any = action ? { action } : {};
     const [items, total] = await Promise.all([
-      prisma.auditLog.findMany({ orderBy: { createdAt: "desc" }, skip: (page - 1) * limit, take: limit }),
-      prisma.auditLog.count(),
+      prisma.auditLog.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page - 1) * limit, take: limit }),
+      prisma.auditLog.count({ where }),
     ]);
     sendSuccess(res, { items, page, limit, total });
   } catch (err) {

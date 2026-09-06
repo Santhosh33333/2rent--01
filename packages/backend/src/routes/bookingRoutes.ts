@@ -2,6 +2,7 @@ import { Router } from "express";
 import { body } from "express-validator";
 import { authenticateToken, requireKycVerified } from "../middleware/auth";
 import { sanitizeInput, validateRequest } from "../middleware/validation";
+import { preventDuplicateBooking, preventDuplicatePayment } from "../middleware/fraudPrevention";
 import * as bookingController from "../controllers/bookingController";
 import { SERVICE_KEYS } from "../services/serviceCatalog";
 
@@ -26,9 +27,11 @@ router.post(
     body("itemType").optional().isString().trim(),
     body("itemDescription").optional().isString().trim().isLength({ max: 500 }),
     body("notes").optional().isString().trim().isLength({ max: 500 }),
+    body("sameGenderOnly").optional().isBoolean().toBoolean(),
   ],
   sanitizeInput,
   validateRequest,
+  preventDuplicateBooking,
   bookingController.createBooking
 );
 
@@ -45,7 +48,7 @@ router.get("/:id", bookingController.getBookingDetail);
 router.post("/:id/pay", bookingController.initiatePayment);
 
 // Verify payment
-router.post("/:id/verify-payment", bookingController.verifyPayment);
+router.post("/:id/verify-payment", preventDuplicatePayment, bookingController.verifyPayment);
 
 // Manual UPI / QR payment (temporary flow for personal UPI accounts)
 router.get("/:id/upi-details", bookingController.getUpiDetails);
@@ -63,15 +66,36 @@ router.post(
   bookingController.rejectBooking
 );
 
-// Start booking (partner)
+// Start booking (partner) — requires verified START OTP (see controller).
 router.post("/:id/start", bookingController.startBooking);
 
-// Complete booking (partner)
+// Controlled job workflow (spec 84-100): OTP-gated, backend-verified.
+// Start code is issued to the USER only; the partner enters it.
+router.post("/:id/start-otp", bookingController.getStartOtp);
+router.post(
+  "/:id/start-verify",
+  [body("startOtp").notEmpty().trim().isLength({ min: 4, max: 10 })],
+  sanitizeInput,
+  validateRequest,
+  bookingController.verifyStartOtpHandler
+);
+
+// Travel: GO TO JOB / ARRIVED (partner, time-window gated).
+router.post("/:id/go", bookingController.goToJob);
+router.post("/:id/arrived", bookingController.markArrivedHandler);
+
+// Completion: partner requests, user issues code, partner completes with code.
+router.post("/:id/request-completion", bookingController.requestCompletionHandler);
+router.post("/:id/completion-otp", bookingController.getCompletionOtp);
+
+// Complete booking (partner) — requires COMPLETION OTP (see controller).
 router.post(
   "/:id/complete",
   [
     body("endLatitude").optional().isFloat({ min: -90, max: 90 }),
     body("endLongitude").optional().isFloat({ min: -180, max: 180 }),
+    body("completionOtp").optional().isString().trim().isLength({ min: 4, max: 10 }),
+    body("waitingMinutes").optional().isInt({ min: 0, max: 480 }),
   ],
   sanitizeInput,
   validateRequest,
@@ -113,6 +137,9 @@ router.post(
 
 // Booking receipt
 router.get("/:id/receipt", bookingController.getBookingReceipt);
+
+// Live tracking snapshot (phase + real GPS + ETA estimate)
+router.get("/:id/tracking", bookingController.getBookingTracking);
 
 // Select payment method (after partner accepts)
 router.post(
