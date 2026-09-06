@@ -171,7 +171,8 @@ app.use("/api/discovery", discoveryRoutes);
       sendError(res, err.message, 400, "FILE_UPLOAD_ERROR");
       return;
     }
-    sendError(res, "Internal server error.", 500, "INTERNAL_ERROR");
+    // DEBUG: expose underlying error to probe prod upload failures. Revert me.
+    sendError(res, `internal: ${err?.message || "unknown"}`, 500, "INTERNAL_ERROR");
   });
 
   const server = http.createServer(app);
