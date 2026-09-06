@@ -174,9 +174,28 @@ export async function acceptBooking(req: AuthedRequest, res: Response): Promise<
       return;
     }
 
+    // ACTIVE JOB LOCK: Partner can only have ONE active job at a time.
+    const activeJob = await prisma.booking.findFirst({
+      where: {
+        partnerId: partner.id,
+        status: { in: ["PARTNER_ACCEPTED", "OTP_GENERATED", "OTP_VERIFIED", "IN_PROGRESS", "ARRIVED", "GOING_TO_JOB"] },
+      },
+      select: { id: true, status: true },
+    });
+    if (activeJob) {
+      sendError(res, "Complete your current job before accepting another job.", 409, "PARTNER_BUSY");
+      return;
+    }
+
     const booking = await prisma.booking.findUnique({ where: { id } });
     if (!booking) {
       sendError(res, "Booking not found.", 404, "BOOKING_NOT_FOUND");
+      return;
+    }
+
+    // SELF-BOOKING PREVENTION: A user cannot book their own partner profile.
+    if (booking.userId === req.user!.userId) {
+      sendError(res, "You cannot book your own Partner profile.", 400, "SELF_BOOKING_NOT_ALLOWED");
       return;
     }
 

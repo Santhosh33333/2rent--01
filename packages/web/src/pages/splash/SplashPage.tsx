@@ -8,37 +8,42 @@ export function SplashPage() {
   const [fadeOut, setFadeOut] = useState(false)
 
   useEffect(() => {
-    if (authLoading) return
+    const timer = setTimeout(() => {
+      setFadeOut(true)
+    }, 2000)
+
+    return () => clearTimeout(timer)
+  }, [])
+
+  useEffect(() => {
+    if (authLoading || !fadeOut) return
 
     const onboardingComplete = localStorage.getItem('onboarding_complete')
     const profileComplete = localStorage.getItem('profile_complete') === 'true'
 
-    const timer = setTimeout(() => {
-      setFadeOut(true)
-      setTimeout(() => {
-        if (!onboardingComplete) {
-          navigate('/onboarding', { replace: true })
-        } else if (user) {
-          const role = user.activeRole || user.role || 'USER'
-          if (role === 'USER' && !user.city && !profileComplete) {
-            navigate('/profile/complete', { replace: true })
-          } else {
-            const ROLE_DASHBOARDS: Record<string, string> = {
-              USER: '/dashboard',
-              PARTNER: '/partner/dashboard',
-              ADMIN: '/admin/dashboard',
-              SUPER_ADMIN: '/admin/dashboard',
-            }
-            navigate(ROLE_DASHBOARDS[role.toUpperCase()] || '/dashboard', { replace: true })
-          }
+    const innerTimer = setTimeout(() => {
+      if (!onboardingComplete) {
+        navigate('/onboarding', { replace: true })
+      } else if (user) {
+        const role = user.activeRole || user.role || 'USER'
+        if (role === 'USER' && !user.city && !profileComplete) {
+          navigate('/profile/complete', { replace: true })
         } else {
-          navigate('/account-type', { replace: true })
+          const ROLE_DASHBOARDS: Record<string, string> = {
+            USER: '/dashboard',
+            PARTNER: '/partner/dashboard',
+            ADMIN: '/admin/dashboard',
+            SUPER_ADMIN: '/admin/dashboard',
+          }
+          navigate(ROLE_DASHBOARDS[role.toUpperCase()] || '/dashboard', { replace: true })
         }
-      }, 500)
-    }, 2000)
+      } else {
+        navigate('/account-type', { replace: true })
+      }
+    }, 500)
 
-    return () => clearTimeout(timer)
-  }, [user, authLoading, navigate])
+    return () => clearTimeout(innerTimer)
+  }, [fadeOut, authLoading, user, navigate])
 
   return (
     <>

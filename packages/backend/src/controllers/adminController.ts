@@ -380,6 +380,45 @@ export async function approveWalkingPartner(req: AuthedRequest, res: Response): 
   }
 }
 
+export async function suspendPartner(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    const partner = await prisma.partner.findUnique({ where: { id } });
+    if (!partner) {
+      sendError(res, "Partner not found.", 404, "NOT_FOUND");
+      return;
+    }
+
+    await prisma.partner.update({ where: { id }, data: { status: "SUSPENDED", rejectionReason: reason ?? null } });
+    await prisma.walkingPartner.updateMany({ where: { userId: partner.userId }, data: { status: "SUSPENDED", rejectionReason: reason ?? null, reviewedBy: req.user!.userId, reviewedAt: new Date() } });
+
+    await prisma.auditLog.create({ data: { actorId: req.user!.userId, actorType: "ADMIN", action: "PARTNER_SUSPEND", entityType: "Partner", entityId: id, metadata: JSON.stringify({ reason }) } });
+    sendSuccess(res, { id, status: "SUSPENDED" }, "Partner suspended.");
+  } catch (err) {
+    sendError(res, "Failed to suspend partner.", 500, "INTERNAL_ERROR");
+  }
+}
+
+export async function reactivatePartner(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const partner = await prisma.partner.findUnique({ where: { id } });
+    if (!partner) {
+      sendError(res, "Partner not found.", 404, "NOT_FOUND");
+      return;
+    }
+
+    await prisma.partner.update({ where: { id }, data: { status: "APPROVED", rejectionReason: null } });
+    await prisma.walkingPartner.updateMany({ where: { userId: partner.userId }, data: { status: "APPROVED", rejectionReason: null, reviewedBy: req.user!.userId, reviewedAt: new Date() } });
+
+    await prisma.auditLog.create({ data: { actorId: req.user!.userId, actorType: "ADMIN", action: "PARTNER_REACTIVATE", entityType: "Partner", entityId: id } });
+    sendSuccess(res, { id, status: "APPROVED" }, "Partner reactivated.");
+  } catch (err) {
+    sendError(res, "Failed to reactivate partner.", 500, "INTERNAL_ERROR");
+  }
+}
+
 export async function rejectWalkingPartner(req: AuthedRequest, res: Response): Promise<void> {
   try {
     const { id } = req.params;
@@ -410,6 +449,29 @@ export async function getBookings(req: AuthedRequest, res: Response): Promise<vo
         { startLocation: { contains: req.query.search, mode: "insensitive" } },
         { endLocation: { contains: req.query.search, mode: "insensitive" } },
       ];
+    }
+    // Date range filters (ISO string or epoch ms)
+    if (req.query.dateFrom || req.query.dateTo) {
+      where.createdAt = {};
+      if (req.query.dateFrom) {
+        const from = new Date(String(req.query.dateFrom));
+        if (!Number.isNaN(from.getTime())) where.createdAt.gte = from;
+      }
+      if (req.query.dateTo) {
+        const to = new Date(String(req.query.dateTo));
+        if (!Number.isNaN(to.getTime())) where.createdAt.lte = to;
+      }
+    }
+    if (req.query.scheduledFrom || req.query.scheduledTo) {
+      where.scheduledAt = {};
+      if (req.query.scheduledFrom) {
+        const from = new Date(String(req.query.scheduledFrom));
+        if (!Number.isNaN(from.getTime())) where.scheduledAt.gte = from;
+      }
+      if (req.query.scheduledTo) {
+        const to = new Date(String(req.query.scheduledTo));
+        if (!Number.isNaN(to.getTime())) where.scheduledAt.lte = to;
+      }
     }
     const [items, total] = await Promise.all([
       prisma.booking.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page - 1) * limit, take: limit,

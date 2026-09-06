@@ -86,6 +86,8 @@ router.post("/kyc/:id/reject", requireSectionAction("KYC", "REJECT"), [body("rea
 router.get("/walking-partners", partnersManage, adminController.getWalkingPartners);
 router.post("/walking-partners/:id/approve", requireSectionAction("PARTNERS", "APPROVE"), adminController.approveWalkingPartner);
 router.post("/walking-partners/:id/reject", requireSectionAction("PARTNERS", "REJECT"), [body("reason").optional().isString()], sanitizeInput, validateRequest, adminController.rejectWalkingPartner);
+router.post("/walking-partners/:id/suspend", requireSectionAction("PARTNERS", "REJECT"), [body("reason").optional().isString()], sanitizeInput, validateRequest, adminController.suspendPartner);
+router.post("/walking-partners/:id/reactivate", requireSectionAction("PARTNERS", "APPROVE"), adminController.reactivatePartner);
 router.get("/bookings", bookingsView, adminController.getBookings);
 router.get("/bookings/:id", bookingsView, adminController.getBookingDetail);
 router.get("/withdrawals", withdrawalsManage, adminController.getWithdrawalRequests);

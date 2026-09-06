@@ -84,11 +84,36 @@ export function AdminWalkingPartnersPage() {
     setActionLoading(id)
     try {
       await adminApi.rejectPartner(id, rejectReason)
-      setPartners((prev) => prev.filter((p) => p.id !== id))
+      setPartners((prev) => prev.map((p) => p.id === id ? { ...p, status: 'REJECTED' } : p))
       setRejectId(null)
       setRejectReason('')
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to reject partner'))
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleSuspend = async (id: string) => {
+    if (!confirm('Are you sure you want to suspend this partner?')) return
+    setActionLoading(id)
+    try {
+      await adminApi.suspendPartner(id, 'Suspended by admin')
+      setPartners((prev) => prev.map((p) => p.id === id ? { ...p, status: 'SUSPENDED' } : p))
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to suspend partner'))
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleReactivate = async (id: string) => {
+    setActionLoading(id)
+    try {
+      await adminApi.reactivatePartner(id)
+      setPartners((prev) => prev.map((p) => p.id === id ? { ...p, status: 'APPROVED' } : p))
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to reactivate partner'))
     } finally {
       setActionLoading(null)
     }
@@ -153,7 +178,7 @@ export function AdminWalkingPartnersPage() {
 
         <div className="mb-6">
           <div className="flex gap-2">
-            {[['ALL', 'All'], ['PENDING', 'Pending'], ['APPLIED', 'Applied'], ['APPROVED', 'Approved'], ['REJECTED', 'Rejected']].map(([s, label]) => (
+            {[['ALL', 'All'], ['APPLIED', 'Applied'], ['APPROVED', 'Approved'], ['REJECTED', 'Rejected'], ['SUSPENDED', 'Suspended']].map(([s, label]) => (
               <button
                 key={s}
                 onClick={() => { setStatusFilter(s); setPage(1) }}
@@ -276,6 +301,32 @@ export function AdminWalkingPartnersPage() {
                           >
                             <X className="w-4 h-4" />
                             Reject
+                          </button>
+                        </div>
+                      )}
+
+                      {partner.status === 'APPROVED' && (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleSuspend(partner.id) }}
+                            disabled={actionLoading === partner.id}
+                            className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition"
+                          >
+                            <X className="w-4 h-4" />
+                            {actionLoading === partner.id ? 'Processing...' : 'Suspend'}
+                          </button>
+                        </div>
+                      )}
+
+                      {partner.status === 'SUSPENDED' && (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleReactivate(partner.id) }}
+                            disabled={actionLoading === partner.id}
+                            className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition"
+                          >
+                            <Check className="w-4 h-4" />
+                            {actionLoading === partner.id ? 'Processing...' : 'Reactivate'}
                           </button>
                         </div>
                       )}
