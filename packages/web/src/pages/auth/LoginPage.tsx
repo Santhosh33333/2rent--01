@@ -5,7 +5,8 @@ import { useAuth } from '../../lib/auth'
 import { isClerkConfigured } from '../../lib/clerkAuth'
 import { initGoogleSignIn, signInWithGoogle } from '../../lib/googleAuth'
 import { AnimatedPage } from '../../components/AnimatedPage'
-import { ArrowRight, Sparkles, Mail, Lock, Loader2 } from 'lucide-react'
+import { ArrowRight, Sparkles, Mail, Lock, Loader2, Phone } from 'lucide-react'
+import { api } from '../../lib/api'
 import toast from 'react-hot-toast'
 
 const ROLE_DASHBOARDS: Record<string, string> = {
@@ -26,11 +27,15 @@ function getDashboardForUser(user: any): string {
 
 export function LoginPage() {
   const navigate = useNavigate()
-  const { user, login } = useAuth()
+  const { user, login, completeLogin } = useAuth()
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
   const [googleReady, setGoogleReady] = useState(false)
+  const [loginMode, setLoginMode] = useState<'email' | 'phone'>('email')
+  const [phone, setPhone] = useState('')
+  const [otpSent, setOtpSent] = useState(false)
+  const [otp, setOtp] = useState('')
 
   useEffect(() => {
     initGoogleSignIn(handleGoogleCredential)
@@ -91,6 +96,46 @@ export function LoginPage() {
     setTimeout(() => {
       window.google?.accounts?.id?.prompt()
     }, 100)
+  }
+
+  const handleSendOtp = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setApiError(null)
+    try {
+      await api.post('/auth/phone/send-otp', { phone })
+      setOtpSent(true)
+      toast.success('OTP sent to your phone')
+    } catch (err: unknown) {
+      setApiError(getErrorMessage(err, 'Failed to send OTP'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setApiError(null)
+    try {
+      const res = await api.post('/auth/phone/verify-otp', { phone, otp })
+      const data = res.data?.data || res.data || {}
+      const payload = data
+      if (payload.accessToken && payload.refreshToken) {
+        completeLogin({
+          accessToken: payload.accessToken,
+          refreshToken: payload.refreshToken,
+          user: payload.user,
+        })
+        toast.success('Welcome back!')
+      } else {
+        throw new Error('No tokens returned')
+      }
+    } catch (err: unknown) {
+      setApiError(getErrorMessage(err, 'OTP verification failed'))
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleEmailLogin = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -160,10 +205,38 @@ export function LoginPage() {
             <div className="divider my-7">
               <span className="flex items-center gap-1.5">
                 <Sparkles className="w-3 h-3" />
-                or sign in with password
+                or sign in with
               </span>
             </div>
 
+            <div className="flex gap-2 mb-5">
+              <button
+                type="button"
+                onClick={() => { setLoginMode('email'); setApiError(null); setOtpSent(false); setPhone(''); setOtp(''); }}
+                className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${
+                  loginMode === 'email'
+                    ? 'bg-primary-500 text-white'
+                    : 'bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 hover:bg-surface-200 dark:hover:bg-surface-700'
+                }`}
+              >
+                <Mail className="w-4 h-4" />
+                Email
+              </button>
+              <button
+                type="button"
+                onClick={() => { setLoginMode('phone'); setApiError(null); setOtpSent(false); setPhone(''); setOtp(''); }}
+                className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${
+                  loginMode === 'phone'
+                    ? 'bg-primary-500 text-white'
+                    : 'bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 hover:bg-surface-200 dark:hover:bg-surface-700'
+                }`}
+              >
+                <Phone className="w-4 h-4" />
+                Phone
+              </button>
+            </div>
+
+            {loginMode === 'email' ? (
             <form onSubmit={handleEmailLogin} className="space-y-5">
               <div>
                 <label htmlFor="email" className="label">Email address</label>
@@ -229,6 +302,106 @@ export function LoginPage() {
                 )}
               </button>
             </form>
+            ) : !otpSent ? (
+            <form onSubmit={handleSendOtp} className="space-y-5">
+              <div>
+                <label htmlFor="phone" className="label">Phone number</label>
+                <div className="relative">
+                  <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-surface-400" />
+                  <input
+                    name="phone"
+                    type="tel"
+                    id="phone"
+                    className="input pl-11"
+                    placeholder="+91 98765 43210"
+                    autoComplete="tel"
+                    value={phone}
+                    onChange={e => setPhone(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+
+              {apiError && (
+                <div className="rounded-2xl bg-danger-50 dark:bg-danger-500/10 border border-danger-200 dark:border-danger-500/20 px-4 py-3 animate-scale-in">
+                  <p className="text-sm text-danger-600 dark:text-danger-400">{apiError}</p>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading || !phone}
+                className="btn-gradient w-full btn-lg group"
+              >
+                {loading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                    Sending OTP...
+                  </span>
+                ) : (
+                  <span className="flex items-center justify-center gap-2">
+                    Send OTP
+                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  </span>
+                )}
+              </button>
+            </form>
+            ) : (
+            <form onSubmit={handleVerifyOtp} className="space-y-5">
+              <p className="text-sm text-surface-500 dark:text-surface-400">
+                Enter the 6-digit code sent to <span className="font-semibold text-surface-700 dark:text-surface-200">{phone}</span>
+              </p>
+              <div>
+                <label htmlFor="otp" className="label">Verification code</label>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-surface-400" />
+                  <input
+                    name="otp"
+                    type="text"
+                    id="otp"
+                    className="input pl-11 text-center text-2xl tracking-widest font-mono"
+                    placeholder="000000"
+                    maxLength={6}
+                    value={otp}
+                    onChange={e => setOtp(e.target.value)}
+                    autoComplete="one-time-code"
+                    required
+                  />
+                </div>
+              </div>
+
+              {apiError && (
+                <div className="rounded-2xl bg-danger-50 dark:bg-danger-500/10 border border-danger-200 dark:border-danger-500/20 px-4 py-3 animate-scale-in">
+                  <p className="text-sm text-danger-600 dark:text-danger-400">{apiError}</p>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading || otp.length !== 6}
+                className="btn-gradient w-full btn-lg group"
+              >
+                {loading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                    Verifying...
+                  </span>
+                ) : (
+                  <span className="flex items-center justify-center gap-2">
+                    Sign in
+                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setOtpSent(false); setOtp(''); setApiError(null); }}
+                className="w-full text-sm text-surface-500 dark:text-surface-400 hover:text-primary-500 transition-colors"
+              >
+                Use a different phone number
+              </button>
+            </form>
+            )}
 
             {isClerkConfigured() && (
               <div className="mt-5">

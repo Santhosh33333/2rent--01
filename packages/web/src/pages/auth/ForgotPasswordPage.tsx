@@ -25,7 +25,6 @@ export function ForgotPasswordPage() {
   const [loading, setLoading] = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
   const [email, setEmail] = useState('')
-  const [devOtp, setDevOtp] = useState('')
   const [showPassword, setShowPassword] = useState(false)
 
   const emailForm = useForm<EmailForm>({ resolver: zodResolver(emailSchema) })
@@ -37,11 +36,7 @@ export function ForgotPasswordPage() {
       setLoading(true)
       setApiError(null)
       setEmail(data.email)
-      const res = await api.post('/auth/forgot-password', { email: data.email })
-      const result = res.data
-      if (result.data?.otp) {
-        setDevOtp(result.data.otp)
-      }
+      await api.post('/auth/forgot-password', { email: data.email })
       toast.success('OTP sent to your email')
       setStep(2)
     } catch (err: unknown) {
@@ -51,16 +46,13 @@ export function ForgotPasswordPage() {
     }
   }
 
-  const onOtpSubmit = async (_data: OtpForm) => {
-    try {
-      setLoading(true)
-      setApiError(null)
-      setStep(3)
-    } catch (err: unknown) {
-      setApiError(getErrorMessage(err, 'Invalid OTP'))
-    } finally {
-      setLoading(false)
+  const onOtpSubmit = async (data: OtpForm) => {
+    setApiError(null)
+    if (data.otp.length !== 6) {
+      setApiError('OTP must be 6 digits')
+      return
     }
+    setStep(3)
   }
 
   const onResetSubmit = async (data: ResetForm) => {
@@ -147,12 +139,6 @@ export function ForgotPasswordPage() {
               <h1 className="text-3xl font-bold font-display text-surface-900 dark:text-white">Enter OTP</h1>
               <p className="mt-2 text-surface-500 dark:text-surface-400">We sent a 6-digit code to {email}</p>
             </div>
-            {devOtp && (
-              <div className="glass-elevated p-4 mb-4 border-2 border-amber-300 dark:border-amber-600">
-                <p className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase mb-1">Dev Mode — Your OTP:</p>
-                <p className="text-2xl font-mono font-bold text-amber-700 dark:text-amber-300 tracking-widest">{devOtp}</p>
-              </div>
-            )}
             <div className="glass-elevated p-8">
               <form onSubmit={otpForm.handleSubmit(onOtpSubmit)} className="space-y-5">
                 <div>

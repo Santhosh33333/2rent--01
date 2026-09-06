@@ -143,7 +143,7 @@ async function restoreSessionFromRefreshToken(): Promise<User | null> {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(() => loadUser())
-  const [loading] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   const refreshProfile = useCallback(async () => {
     const token = localStorage.getItem('token')
@@ -176,13 +176,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const token = localStorage.getItem('token')
     const refreshToken = localStorage.getItem('refreshToken')
     if (token && user) {
-      refreshProfile()
+      refreshProfile().finally(() => setLoading(false))
     } else if (!token && refreshToken && !user) {
       restoreSessionFromRefreshToken()
         .then((restored) => {
           if (restored) setUser(restored)
         })
         .catch(() => {})
+        .finally(() => setLoading(false))
+    } else {
+      setLoading(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -252,6 +255,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password: data.password,
       dateOfBirth: data.dateOfBirth || '2000-01-01',
       gender: data.gender || 'MALE',
+      accountType: data.accountType || 'USER',
+      role: data.role || 'USER',
     }
 
     const response = await api.post('/auth/register', payload)
