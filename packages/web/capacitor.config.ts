@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'app.rentbuddy.app',
-  appName: 'RentBuddy',
+  appName: 'Sidebud',
   webDir: 'dist',
   server: {
     androidScheme: 'https',
@@ -11,7 +11,7 @@ const config: CapacitorConfig = {
     SplashScreen: {
       launchAutoHide: false,
       launchShowDuration: 3000,
-      backgroundColor: '#6366f1',
+      backgroundColor: '#ffffff',
       androidScaleType: 'CENTER_CROP',
       showSpinner: false,
       splashFullScreen: true,

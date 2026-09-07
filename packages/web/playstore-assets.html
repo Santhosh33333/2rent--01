@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>RentBuddy - Play Store Asset Generator</title>
+  <title>Sidebud - Play Store Asset Generator</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #0f0f14; color: #e4e4e7; padding: 2rem; }
@@ -22,7 +22,7 @@
   </style>
 </head>
 <body>
-  <h1>RentBuddy Play Store Assets</h1>
+  <h1>Sidebud Play Store Assets</h1>
   <p class="subtitle">Open this file in a browser to preview and download all required Google Play Store listing images.</p>
 
   <div class="info">
@@ -38,8 +38,8 @@
       <p class="meta">512 x 512 px &mdash; Required for Play Store</p>
       <canvas id="icon512" width="512" height="512"></canvas>
       <div class="btn-row">
-        <button onclick="download('icon512', 'rentbuddy-icon-512.png')">Download PNG</button>
-        <button onclick="download('icon512', 'rentbuddy-icon-512.jpg', 'image/jpeg')">Download JPG</button>
+        <button onclick="download('icon512', 'Sidebud-icon-512.png')">Download PNG</button>
+        <button onclick="download('icon512', 'Sidebud-icon-512.jpg', 'image/jpeg')">Download JPG</button>
       </div>
     </div>
 
@@ -49,7 +49,7 @@
       <p class="meta">1024 x 500 px &mdash; Play Store banner</p>
       <canvas id="featureGraphic" width="1024" height="500"></canvas>
       <div class="btn-row">
-        <button onclick="download('featureGraphic', 'rentbuddy-feature-graphic.png')">Download PNG</button>
+        <button onclick="download('featureGraphic', 'Sidebud-feature-graphic.png')">Download PNG</button>
       </div>
     </div>
 
@@ -59,7 +59,7 @@
       <p class="meta">1080 x 2340 px &mdash; Modern phone aspect ratio</p>
       <canvas id="screenshot1" width="1080" height="2340"></canvas>
       <div class="btn-row">
-        <button onclick="download('screenshot1', 'rentbuddy-screenshot-1.png')">Download PNG</button>
+        <button onclick="download('screenshot1', 'Sidebud-screenshot-1.png')">Download PNG</button>
       </div>
     </div>
 
@@ -69,7 +69,7 @@
       <p class="meta">1080 x 2340 px</p>
       <canvas id="screenshot2" width="1080" height="2340"></canvas>
       <div class="btn-row">
-        <button onclick="download('screenshot2', 'rentbuddy-screenshot-2.png')">Download PNG</button>
+        <button onclick="download('screenshot2', 'Sidebud-screenshot-2.png')">Download PNG</button>
       </div>
     </div>
 
@@ -79,7 +79,7 @@
       <p class="meta">1080 x 2340 px</p>
       <canvas id="screenshot3" width="1080" height="2340"></canvas>
       <div class="btn-row">
-        <button onclick="download('screenshot3', 'rentbuddy-screenshot-3.png')">Download PNG</button>
+        <button onclick="download('screenshot3', 'Sidebud-screenshot-3.png')">Download PNG</button>
       </div>
     </div>
 
@@ -89,7 +89,7 @@
       <p class="meta">1080 x 2340 px</p>
       <canvas id="screenshot4" width="1080" height="2340"></canvas>
       <div class="btn-row">
-        <button onclick="download('screenshot4', 'rentbuddy-screenshot-4.png')">Download PNG</button>
+        <button onclick="download('screenshot4', 'Sidebud-screenshot-4.png')">Download PNG</button>
       </div>
     </div>
 
@@ -99,7 +99,7 @@
       <p class="meta">1280 x 720 px &mdash; Android TV (optional)</p>
       <canvas id="tvBanner" width="1280" height="720"></canvas>
       <div class="btn-row">
-        <button onclick="download('tvBanner', 'rentbuddy-tv-banner.png')">Download PNG</button>
+        <button onclick="download('tvBanner', 'Sidebud-tv-banner.png')">Download PNG</button>
       </div>
     </div>
 
@@ -270,7 +270,7 @@
         ctx.fillStyle = COLORS.text;
         ctx.font = `bold ${s * 0.12}px 'Segoe UI', system-ui, sans-serif`;
         ctx.textAlign = 'center';
-        ctx.fillText('RentBuddy', cx, cy + hs + s * 0.14);
+        ctx.fillText('Sidebud', cx, cy + hs + s * 0.14);
       }
     }
 
@@ -316,7 +316,7 @@
       ctx.fillStyle = COLORS.text;
       ctx.font = "bold 72px 'Segoe UI', system-ui, sans-serif";
       ctx.textAlign = 'left';
-      ctx.fillText('RentBuddy', 420, 220);
+      ctx.fillText('Sidebud', 420, 220);
 
       ctx.fillStyle = COLORS.textMuted;
       ctx.font = "300 30px 'Segoe UI', system-ui, sans-serif";
@@ -378,7 +378,7 @@
       ctx.textAlign = 'center';
       ctx.fillStyle = COLORS.text;
       ctx.font = "bold 80px 'Segoe UI', system-ui, sans-serif";
-      ctx.fillText('RentBuddy', W / 2, H * 0.55);
+      ctx.fillText('Sidebud', W / 2, H * 0.55);
 
       ctx.fillStyle = COLORS.textMuted;
       ctx.font = "300 32px 'Segoe UI', system-ui, sans-serif";
@@ -433,10 +433,10 @@
 
       // Cards
       const cards = [
-        { title: 'Active Listings', value: '3', icon: '🏠', color: COLORS.indigo },
-        { title: 'Chat Requests', value: '12', icon: '💬', color: COLORS.orange },
-        { title: 'Walking Partners', value: '5', icon: '🚶', color: '#10b981' },
-        { title: 'Events Nearby', value: '8', icon: '🎉', color: '#ec4899' },
+        { title: 'Active Listings', value: '3', icon: 'ðŸ ', color: COLORS.indigo },
+        { title: 'Chat Requests', value: '12', icon: 'ðŸ’¬', color: COLORS.orange },
+        { title: 'Walking Partners', value: '5', icon: 'ðŸš¶', color: '#10b981' },
+        { title: 'Events Nearby', value: '8', icon: 'ðŸŽ‰', color: '#ec4899' },
       ];
 
       cards.forEach((card, i) => {
@@ -482,7 +482,7 @@
       ctx.fillStyle = COLORS.darkCard;
       ctx.fillRect(0, H - 140, W, 140);
 
-      const navItems = ['🏠', '🔍', '💬', '👤'];
+      const navItems = ['ðŸ ', 'ðŸ”', 'ðŸ’¬', 'ðŸ‘¤'];
       navItems.forEach((icon, i) => {
         const nx = (W / 4) * i + W / 8;
         ctx.font = "36px serif";
@@ -540,7 +540,7 @@
         { text: 'Hey! Yes, it\'s still available. Would you like to visit?', me: true, time: '10:32 AM' },
         { text: 'That would be great! Can I come tomorrow evening?', me: false, time: '10:33 AM' },
         { text: 'Sure! I\'ll share the location pin. It\'s near the metro station.', me: true, time: '10:35 AM' },
-        { text: 'Perfect, thanks! See you tomorrow 😊', me: false, time: '10:36 AM' },
+        { text: 'Perfect, thanks! See you tomorrow ðŸ˜Š', me: false, time: '10:36 AM' },
         { text: 'See you! I\'ll be at the apartment by 5 PM.', me: true, time: '10:38 AM' },
       ];
 
@@ -690,7 +690,7 @@
       ctx.fill();
       ctx.fillStyle = COLORS.textMuted;
       ctx.font = "400 26px 'Segoe UI', system-ui, sans-serif";
-      ctx.fillText('🔍  Search by location...', 100, 158);
+      ctx.fillText('ðŸ”  Search by location...', 100, 158);
 
       // Bottom overlay
       const bottomGrad = ctx.createLinearGradient(0, H - 400, 0, H);
@@ -713,7 +713,7 @@
 
       ctx.font = "48px serif";
       ctx.textAlign = 'center';
-      ctx.fillText('🏠', 150, H - 240);
+      ctx.fillText('ðŸ ', 150, H - 240);
 
       ctx.fillStyle = COLORS.text;
       ctx.font = "bold 30px 'Segoe UI', system-ui, sans-serif";
@@ -722,11 +722,11 @@
 
       ctx.fillStyle = COLORS.textMuted;
       ctx.font = "400 24px 'Segoe UI', system-ui, sans-serif";
-      ctx.fillText('Rs. 18,000/mo  •  Furnished', 250, H - 250);
+      ctx.fillText('Rs. 18,000/mo  â€¢  Furnished', 250, H - 250);
 
       ctx.fillStyle = '#10b981';
       ctx.font = "bold 26px 'Segoe UI', system-ui, sans-serif";
-      ctx.fillText('Verified  •  2.3 km away', 250, H - 210);
+      ctx.fillText('Verified  â€¢  2.3 km away', 250, H - 210);
 
       // Home indicator
       roundRect(ctx, W / 2 - 80, H - 40, 160, 6, 3);
@@ -768,7 +768,7 @@
       ctx.fillStyle = COLORS.text;
       ctx.font = "bold 80px 'Segoe UI', system-ui, sans-serif";
       ctx.textAlign = 'left';
-      ctx.fillText('RentBuddy', 440, 310);
+      ctx.fillText('Sidebud', 440, 310);
 
       ctx.fillStyle = COLORS.textMuted;
       ctx.font = "300 32px 'Segoe UI', system-ui, sans-serif";
