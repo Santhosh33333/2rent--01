@@ -27,7 +27,7 @@
 
   <div class="info">
     <strong>Required Play Store assets:</strong><br/>
-    App Icon (512x512 PNG) &bull; Feature Graphic (1024x500 PNG) &bull; Phone Screenshots (min 2, 1080x1920 or 1080x2340) &bull; TV Banner (1280x720 optional)
+    App Icon (512x512 PNG) &bull; Feature Graphic (1024x500 PNG) &bull; Phone Screenshots (min 2, 1080x1920 or 1080x1920) &bull; TV Banner (1280x720 optional)
   </div>
 
   <div class="grid">
@@ -56,8 +56,8 @@
     <!-- Phone Screenshot 1 -->
     <div class="card">
       <h2>Phone Screenshot 1 &mdash; Splash</h2>
-      <p class="meta">1080 x 2340 px &mdash; Modern phone aspect ratio</p>
-      <canvas id="screenshot1" width="1080" height="2340"></canvas>
+      <p class="meta">1080 x 1920 px &mdash; Modern phone aspect ratio</p>
+      <canvas id="screenshot1" width="1080" height="1920"></canvas>
       <div class="btn-row">
         <button onclick="download('screenshot1', 'Sidebud-screenshot-1.png')">Download PNG</button>
       </div>
@@ -66,8 +66,8 @@
     <!-- Phone Screenshot 2 -->
     <div class="card">
       <h2>Phone Screenshot 2 &mdash; Dashboard</h2>
-      <p class="meta">1080 x 2340 px</p>
-      <canvas id="screenshot2" width="1080" height="2340"></canvas>
+      <p class="meta">1080 x 1920 px</p>
+      <canvas id="screenshot2" width="1080" height="1920"></canvas>
       <div class="btn-row">
         <button onclick="download('screenshot2', 'Sidebud-screenshot-2.png')">Download PNG</button>
       </div>
@@ -76,8 +76,8 @@
     <!-- Phone Screenshot 3 -->
     <div class="card">
       <h2>Phone Screenshot 3 &mdash; Chat</h2>
-      <p class="meta">1080 x 2340 px</p>
-      <canvas id="screenshot3" width="1080" height="2340"></canvas>
+      <p class="meta">1080 x 1920 px</p>
+      <canvas id="screenshot3" width="1080" height="1920"></canvas>
       <div class="btn-row">
         <button onclick="download('screenshot3', 'Sidebud-screenshot-3.png')">Download PNG</button>
       </div>
@@ -86,8 +86,8 @@
     <!-- Phone Screenshot 4 -->
     <div class="card">
       <h2>Phone Screenshot 4 &mdash; Map</h2>
-      <p class="meta">1080 x 2340 px</p>
-      <canvas id="screenshot4" width="1080" height="2340"></canvas>
+      <p class="meta">1080 x 1920 px</p>
+      <canvas id="screenshot4" width="1080" height="1920"></canvas>
       <div class="btn-row">
         <button onclick="download('screenshot4', 'Sidebud-screenshot-4.png')">Download PNG</button>
       </div>
@@ -340,7 +340,7 @@
     (function() {
       const c = document.getElementById('screenshot1');
       const ctx = c.getContext('2d');
-      const W = 1080, H = 2340;
+      const W = 1080, H = 1920;
 
       // Background
       const bg = ctx.createLinearGradient(0, 0, W, H);
@@ -401,7 +401,7 @@
     (function() {
       const c = document.getElementById('screenshot2');
       const ctx = c.getContext('2d');
-      const W = 1080, H = 2340;
+      const W = 1080, H = 1920;
 
       ctx.fillStyle = COLORS.dark;
       ctx.fillRect(0, 0, W, H);
@@ -503,7 +503,7 @@
     (function() {
       const c = document.getElementById('screenshot3');
       const ctx = c.getContext('2d');
-      const W = 1080, H = 2340;
+      const W = 1080, H = 1920;
 
       ctx.fillStyle = COLORS.dark;
       ctx.fillRect(0, 0, W, H);
@@ -610,7 +610,7 @@
     (function() {
       const c = document.getElementById('screenshot4');
       const ctx = c.getContext('2d');
-      const W = 1080, H = 2340;
+      const W = 1080, H = 1920;
 
       // Map background
       ctx.fillStyle = '#1a2332';
