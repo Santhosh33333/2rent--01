@@ -1,15 +1,21 @@
 ﻿<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <g transform="translate(29.2 70) scale(0.816)">
-    <!-- friendly ground smile -->
-    <path d="M120 392 Q256 460 392 392" stroke="#FFFFFF" stroke-width="12" stroke-linecap="round" fill="none" opacity="0.9"/>
-    <!-- left buddy -->
-    <path d="M176 96 a44 44 0 1 1 88 0 a44 44 0 1 1 -88 0 Z" fill="#FFFFFF"/>
-    <path d="M132 292 a56 56 0 0 1 56 -56 h52 a56 56 0 0 1 56 56 v120 h-164 Z" fill="#FFFFFF"/>
-    <!-- right buddy -->
-    <path d="M300 116 a42 42 0 1 1 84 0 a42 42 0 1 1 -84 0 Z" fill="#FFFFFF"/>
-    <path d="M272 300 a48 48 0 0 1 48 -48 h56 a48 48 0 0 1 48 48 v112 h-152 Z" fill="#FFFFFF"/>
-    <!-- hearts -->
-    <path d="M376 60 c-4 -8 -14 -8 -18 0 c-2 5 1 10 4 13 c2 3 5 5 5 5 c0 0 3 -2 5 -5 c3 -3 6 -8 4 -13 Z" fill="#FFD7A0"/>
-    <path d="M96 300 c-3 -7 -12 -7 -15 0 c-2 4 1 8 3 11 c2 2 4 4 4 4 c0 0 2 -2 4 -4 c2 -3 4 -7 4 -11 Z" fill="#FFFFFF" opacity="0.9"/>
+  <defs>
+    <linearGradient id="afHeadL" x1="20" y1="20" x2="140" y2="140" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4F46E5"/>
+      <stop offset="1" stop-color="#6366F1"/>
+    </linearGradient>
+    <linearGradient id="afHeadR" x1="140" y1="20" x2="260" y2="140" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F97316"/>
+      <stop offset="1" stop-color="#FB923C"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(76 51) scale(0.72)">
+    <path d="M150 330 L110 428 Q102 442 116 428 L196 352 Q174 340 150 330 Z" fill="#FFFFFF"/>
+    <rect x="124" y="146" width="264" height="196" rx="52" fill="#FFFFFF"/>
+    <circle cx="218" cy="246" r="48" fill="url(#afHeadL)"/>
+    <circle cx="310" cy="246" r="48" fill="url(#afHeadR)"/>
+    <path d="M196 262 Q218 280 240 262" stroke="#FFFFFF" stroke-width="9" stroke-linecap="round" fill="none" opacity="0.92"/>
+    <path d="M288 262 Q310 280 332 262" stroke="#FFFFFF" stroke-width="9" stroke-linecap="round" fill="none" opacity="0.92"/>
+    <path d="M360 178 c-6 -11 -20 -11 -26 0 c-3 7 1 13 6 17 c2 2 4 4 7 6 c3 -2 5 -4 7 -6 c5 -4 9 -10 6 -17 Z" fill="#FFF1E0" opacity="0.95"/>
   </g>
 </svg>
