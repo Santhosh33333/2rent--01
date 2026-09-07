@@ -91,6 +91,21 @@ if (!dbAvailable) {
     await prisma.$executeRawUnsafe(
       `CREATE INDEX IF NOT EXISTS "UploadedFile_createdAt_idx" ON "UploadedFile"("createdAt")`
     );
+    // If Prisma had recorded this migration as FAILED (finished_at IS NULL),
+    // the next `migrate deploy` would re-run the (now idempotent) DDL and
+    // could fail on the already-created table, aborting deploys. Resolve the
+    // row as applied, mirroring `prisma migrate resolve --applied` once the
+    // table is guaranteed to exist. No-op when the row is already finished
+    // or absent.
+    await prisma.$executeRawUnsafe(
+      `UPDATE "_prisma_migrations"
+       SET finished_at = COALESCE(finished_at, NOW()),
+           applied_steps_count = 1,
+           logs = NULL,
+           rolled_back_at = NULL
+       WHERE migration_name = '20260906_uploaded_files'
+         AND finished_at IS NULL`
+    );
     console.log("Schema reconciliation: UploadedFile ensured.");
   } catch (err) {
     console.warn("Schema reconciliation warning:", (err as Error)?.message);

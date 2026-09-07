@@ -1,5 +1,7 @@
--- CreateTable
-CREATE TABLE "UploadedFile" (
+-- CreateTable (idempotent: this migration was once recorded as applied without
+-- the DDL executing, so the same SQL may be re-run after boot-time recovery.
+-- IF NOT EXISTS makes execution safe on both fresh and existing databases.)
+CREATE TABLE IF NOT EXISTS "UploadedFile" (
     "id" TEXT NOT NULL,
     "key" TEXT NOT NULL,
     "filename" TEXT NOT NULL,
@@ -12,7 +14,7 @@ CREATE TABLE "UploadedFile" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "UploadedFile_key_key" ON "UploadedFile"("key");
+CREATE UNIQUE INDEX IF NOT EXISTS "UploadedFile_key_key" ON "UploadedFile"("key");
 
 -- CreateIndex
-CREATE INDEX "UploadedFile_createdAt_idx" ON "UploadedFile"("createdAt");
+CREATE INDEX IF NOT EXISTS "UploadedFile_createdAt_idx" ON "UploadedFile"("createdAt");

@@ -28,11 +28,19 @@ CREATE INDEX IF NOT EXISTS "CommunityPost_authorId_idx" ON "CommunityPost"("auth
 CREATE INDEX IF NOT EXISTS "CommunityComment_postId_createdAt_idx" ON "CommunityComment"("postId", "createdAt");
 CREATE INDEX IF NOT EXISTS "CommunityComment_authorId_idx" ON "CommunityComment"("authorId");
 
+DO $baseline$ BEGIN
 ALTER TABLE "CommunityPost" ADD CONSTRAINT "CommunityPost_communityId_fkey"
   FOREIGN KEY ("communityId") REFERENCES "Community"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $baseline$;
+DO $baseline$ BEGIN
 ALTER TABLE "CommunityPost" ADD CONSTRAINT "CommunityPost_authorId_fkey"
   FOREIGN KEY ("authorId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $baseline$;
+DO $baseline$ BEGIN
 ALTER TABLE "CommunityComment" ADD CONSTRAINT "CommunityComment_postId_fkey"
   FOREIGN KEY ("postId") REFERENCES "CommunityPost"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $baseline$;
+DO $baseline$ BEGIN
 ALTER TABLE "CommunityComment" ADD CONSTRAINT "CommunityComment_authorId_fkey"
   FOREIGN KEY ("authorId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $baseline$;

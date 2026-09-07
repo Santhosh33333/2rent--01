@@ -33,15 +33,27 @@ CREATE INDEX IF NOT EXISTS "CommunityPoll_communityId_createdAt_idx" ON "Communi
 CREATE INDEX IF NOT EXISTS "CommunityPollOption_pollId_idx" ON "CommunityPollOption"("pollId");
 CREATE INDEX IF NOT EXISTS "CommunityPollVote_optionId_idx" ON "CommunityPollVote"("optionId");
 
+DO $baseline$ BEGIN
 ALTER TABLE "CommunityPoll" ADD CONSTRAINT "CommunityPoll_communityId_fkey"
   FOREIGN KEY ("communityId") REFERENCES "Community"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $baseline$;
+DO $baseline$ BEGIN
 ALTER TABLE "CommunityPoll" ADD CONSTRAINT "CommunityPoll_authorId_fkey"
   FOREIGN KEY ("authorId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $baseline$;
+DO $baseline$ BEGIN
 ALTER TABLE "CommunityPollOption" ADD CONSTRAINT "CommunityPollOption_pollId_fkey"
   FOREIGN KEY ("pollId") REFERENCES "CommunityPoll"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $baseline$;
+DO $baseline$ BEGIN
 ALTER TABLE "CommunityPollVote" ADD CONSTRAINT "CommunityPollVote_pollId_fkey"
   FOREIGN KEY ("pollId") REFERENCES "CommunityPoll"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $baseline$;
+DO $baseline$ BEGIN
 ALTER TABLE "CommunityPollVote" ADD CONSTRAINT "CommunityPollVote_optionId_fkey"
   FOREIGN KEY ("optionId") REFERENCES "CommunityPollOption"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $baseline$;
+DO $baseline$ BEGIN
 ALTER TABLE "CommunityPollVote" ADD CONSTRAINT "CommunityPollVote_userId_fkey"
   FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $baseline$;
