@@ -33,7 +33,7 @@ async function sendSMS(phone: string, message: string): Promise<void> {
   const fromNumber = process.env.TWILIO_FROM_NUMBER;
 
   if (!accountSid || !authToken || !fromNumber) {
-    throw new Error("Twilio not configured â€” set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER");
+    throw new Error("Twilio not configured — set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER");
   }
 
   const twilio = (await import("twilio")).default;
@@ -57,7 +57,7 @@ export async function sendOTP(otp: string, channel: OtpChannel): Promise<void> {
       console.error(`[OTP] SMS delivery failed for ${channel.phone}:`, err);
       // In dev, log the OTP so developers can test without Twilio
       if (process.env.NODE_ENV !== "production") {
-        console.log(`[OTP] Dev fallback â€” SMS OTP for ${channel.phone}: ${otp}`);
+        console.log(`[OTP] Dev fallback — SMS OTP for ${channel.phone}: ${otp}`);
       }
     }
   }

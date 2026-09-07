@@ -433,10 +433,10 @@
 
       // Cards
       const cards = [
-        { title: 'Active Listings', value: '3', icon: 'ðŸ ', color: COLORS.indigo },
-        { title: 'Chat Requests', value: '12', icon: 'ðŸ’¬', color: COLORS.orange },
-        { title: 'Walking Partners', value: '5', icon: 'ðŸš¶', color: '#10b981' },
-        { title: 'Events Nearby', value: '8', icon: 'ðŸŽ‰', color: '#ec4899' },
+        { title: 'Active Listings', value: '3', icon: '🏠', color: COLORS.indigo },
+        { title: 'Chat Requests', value: '12', icon: '💬', color: COLORS.orange },
+        { title: 'Walking Partners', value: '5', icon: '🚶', color: '#10b981' },
+        { title: 'Events Nearby', value: '8', icon: '🎉', color: '#ec4899' },
       ];
 
       cards.forEach((card, i) => {
@@ -482,7 +482,7 @@
       ctx.fillStyle = COLORS.darkCard;
       ctx.fillRect(0, H - 140, W, 140);
 
-      const navItems = ['ðŸ ', 'ðŸ”', 'ðŸ’¬', 'ðŸ‘¤'];
+      const navItems = ['🏠', '🔍', '💬', '👤'];
       navItems.forEach((icon, i) => {
         const nx = (W / 4) * i + W / 8;
         ctx.font = "36px serif";
@@ -540,7 +540,7 @@
         { text: 'Hey! Yes, it\'s still available. Would you like to visit?', me: true, time: '10:32 AM' },
         { text: 'That would be great! Can I come tomorrow evening?', me: false, time: '10:33 AM' },
         { text: 'Sure! I\'ll share the location pin. It\'s near the metro station.', me: true, time: '10:35 AM' },
-        { text: 'Perfect, thanks! See you tomorrow ðŸ˜Š', me: false, time: '10:36 AM' },
+        { text: 'Perfect, thanks! See you tomorrow 😊', me: false, time: '10:36 AM' },
         { text: 'See you! I\'ll be at the apartment by 5 PM.', me: true, time: '10:38 AM' },
       ];
 
@@ -690,7 +690,7 @@
       ctx.fill();
       ctx.fillStyle = COLORS.textMuted;
       ctx.font = "400 26px 'Segoe UI', system-ui, sans-serif";
-      ctx.fillText('ðŸ”  Search by location...', 100, 158);
+      ctx.fillText('🔍  Search by location...', 100, 158);
 
       // Bottom overlay
       const bottomGrad = ctx.createLinearGradient(0, H - 400, 0, H);
@@ -713,7 +713,7 @@
 
       ctx.font = "48px serif";
       ctx.textAlign = 'center';
-      ctx.fillText('ðŸ ', 150, H - 240);
+      ctx.fillText('🏠', 150, H - 240);
 
       ctx.fillStyle = COLORS.text;
       ctx.font = "bold 30px 'Segoe UI', system-ui, sans-serif";
@@ -722,11 +722,11 @@
 
       ctx.fillStyle = COLORS.textMuted;
       ctx.font = "400 24px 'Segoe UI', system-ui, sans-serif";
-      ctx.fillText('Rs. 18,000/mo  â€¢  Furnished', 250, H - 250);
+      ctx.fillText('Rs. 18,000/mo  •  Furnished', 250, H - 250);
 
       ctx.fillStyle = '#10b981';
       ctx.font = "bold 26px 'Segoe UI', system-ui, sans-serif";
-      ctx.fillText('Verified  â€¢  2.3 km away', 250, H - 210);
+      ctx.fillText('Verified  •  2.3 km away', 250, H - 210);
 
       // Home indicator
       roundRect(ctx, W / 2 - 80, H - 40, 160, 6, 3);

@@ -2,7 +2,7 @@
 
 const RAZORPAY_KEY = import.meta.env.VITE_RAZORPAY_KEY_ID
 if (!RAZORPAY_KEY) {
-  console.warn('[razorpay] VITE_RAZORPAY_KEY_ID not set â€” payments will fail')
+  console.warn('[razorpay] VITE_RAZORPAY_KEY_ID not set — payments will fail')
 }
 
 interface RazorpaySuccessResponse {

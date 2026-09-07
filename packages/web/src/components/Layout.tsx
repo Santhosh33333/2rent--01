@@ -130,7 +130,7 @@ export function Layout() {
     : [];
 
   // On phones the bottom bar holds up to 5 slots. If the role has more items
-  // (admin: 7), show the first 4 + a "More" button whose drawer holds the rest â€”
+  // (admin: 7), show the first 4 + a "More" button whose drawer holds the rest —
   // otherwise all items are shy of the 390px width. Desktop keeps all links in
   // the hamburger drawer regardless.
   const bottomNavItems = navItems.length > 5 ? navItems.slice(0, 4) : navItems;

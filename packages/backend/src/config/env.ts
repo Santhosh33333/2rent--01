@@ -8,10 +8,10 @@ const envSchema = z.object({
   // Database
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
 
-  // Redis (Bull queues + rate limiter) â€” optional in dev
+  // Redis (Bull queues + rate limiter) — optional in dev
   REDIS_URL: z.string().default("redis://localhost:6379"),
 
-  // JWT â€” MUST be provided in production. In development a strong random secret is
+  // JWT — MUST be provided in production. In development a strong random secret is
   // generated at boot so a missing var never falls back to a known/guessable value.
   JWT_SECRET: z.string().optional(),
   JWT_ACCESS_SECRET: z.string().optional(),
@@ -40,7 +40,7 @@ const envSchema = z.object({
   ADMIN_PASSWORD: z.string().optional(),
   ADMIN_NAME: z.string().optional(),
 
-  // Firebase Admin SDK â€” optional in dev (server uses FIREBASE_SERVICE_ACCOUNT JSON blob at runtime)
+  // Firebase Admin SDK — optional in dev (server uses FIREBASE_SERVICE_ACCOUNT JSON blob at runtime)
   FIREBASE_PROJECT_ID: z.string().default("Sidebud-dev"),
   FIREBASE_PRIVATE_KEY: z.string().default(""),
   FIREBASE_CLIENT_EMAIL: z.string().default("dev@dev.com"),
@@ -63,7 +63,7 @@ const envSchema = z.object({
   APPLE_KEY_ID: z.string().optional(),
   APPLE_PRIVATE_KEY: z.string().optional(),
 
-  // Razorpay â€” optional in dev
+  // Razorpay — optional in dev
   RAZORPAY_KEY_ID: z.string().default("rzp_test_placeholder"),
   RAZORPAY_KEY_SECRET: z.string().default("razorpay_secret_placeholder"),
   RAZORPAY_WEBHOOK_SECRET: z.string().default("webhook_secret_placeholder"),
@@ -73,24 +73,24 @@ const envSchema = z.object({
   MIN_BOOKING_AMOUNT: z.string().default("50").transform(Number),
   MAX_BOOKING_AMOUNT: z.string().default("10000").transform(Number),
 
-  // Email (SMTP) â€” optional in dev, required for real OTP delivery
+  // Email (SMTP) — optional in dev, required for real OTP delivery
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.string().default("587").transform(Number),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().default("Sidebud <noreply@Sidebud.app>"),
 
-  // SMS (Twilio) â€” optional
+  // SMS (Twilio) — optional
   TWILIO_ACCOUNT_SID: z.string().optional(),
   TWILIO_AUTH_TOKEN: z.string().optional(),
   TWILIO_FROM_NUMBER: z.string().optional(),
 
-  // LocationIQ â€” optional in dev
+  // LocationIQ — optional in dev
   LOCATIONIQ_API_KEY: z.string().default("pk_dev_placeholder"),
   LOCATIONIQ_BASE_URL: z.string().default("https://us1.locationiq.com/v1"),
   LOCATIONIQ_TILE_URL: z.string().default("https://{s}.tile.locationiq.com/hot/{z}/{x}/{y}.png"),
 
-  // Clerk (legacy â€” optional)
+  // Clerk (legacy — optional)
   CLERK_SECRET_KEY: z.string().optional(),
   CLERK_PUBLISHABLE_KEY: z.string().optional(),
   CLERK_JWKS_URL: z.string().default("https://willing-leech-39.clerk.accounts.dev/.well-known/jwks.json"),
@@ -112,7 +112,7 @@ if (!parsed.success) {
   for (const [field, messages] of Object.entries(errors)) {
     console.error(`   ${field}: ${(messages as string[]).join(", ")}`);
   }
-  throw new Error("Environment validation failed â€” server cannot start with missing/invalid vars.");
+  throw new Error("Environment validation failed — server cannot start with missing/invalid vars.");
 }
 
 export const env = parsed.data as RuntimeEnv;
@@ -128,7 +128,7 @@ if (!env.JWT_SECRET) {
   env.JWT_SECRET = crypto.randomBytes(32).toString("hex");
 }
 
-// Production secret gates â€” fail fast (or loudly warn) on insecure config so a
+// Production secret gates — fail fast (or loudly warn) on insecure config so a
 // deployment can never silently run with placeholder/guessable secrets.
 if (env.isProduction) {
   const placeholders = ["", "placeholder", "changeme", "dev", "test"];
@@ -142,7 +142,7 @@ if (env.isProduction) {
     );
   }
 
-  // Razorpay API keys â€” payments will silently fail with placeholder keys.
+  // Razorpay API keys — payments will silently fail with placeholder keys.
   if (isPlaceholder(env.RAZORPAY_KEY_ID) || env.RAZORPAY_KEY_ID?.includes("placeholder")) {
     throw new Error(
       "RAZORPAY_KEY_ID is required in production and must be the real key (not the placeholder).",
@@ -157,14 +157,14 @@ if (env.isProduction) {
   // SMTP: OTP email + transactional notifications won't be delivered without it.
   if (isPlaceholder(env.SMTP_HOST) || isPlaceholder(env.SMTP_USER) || isPlaceholder(env.SMTP_PASS)) {
     console.warn(
-      "[env] WARNING: SMTP is not fully configured in production â€” email OTP and notifications will NOT be delivered.",
+      "[env] WARNING: SMTP is not fully configured in production — email OTP and notifications will NOT be delivered.",
     );
   }
 
   // Firebase push/phone auth secrets must be real in production.
   if (isPlaceholder(env.FIREBASE_PRIVATE_KEY) && isPlaceholder(process.env.FIREBASE_SERVICE_ACCOUNT)) {
     console.warn(
-      "[env] WARNING: Firebase credentials are not configured in production â€” push notifications and phone auth will be limited.",
+      "[env] WARNING: Firebase credentials are not configured in production — push notifications and phone auth will be limited.",
     );
   }
 }

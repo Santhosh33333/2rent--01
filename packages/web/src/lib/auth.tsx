@@ -78,7 +78,7 @@ function clearSessionData(): void {
   localStorage.removeItem('user')
   localStorage.removeItem('activeRole')
   // Routing-state flags must not leak to the next user on a shared device.
-  // NOTE: 'theme' / UI prefs intentionally persist â€” they are device settings,
+  // NOTE: 'theme' / UI prefs intentionally persist — they are device settings,
   // not session state.
   localStorage.removeItem('onboarding_complete')
   localStorage.removeItem('profile_complete')

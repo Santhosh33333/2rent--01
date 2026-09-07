@@ -77,7 +77,7 @@ export function AdminWalletsPage() {
                 rows: wallets.map((w) => [
                   w.userName || '-',
                   w.userEmail || '-',
-                  `â‚¹${w.balance.toLocaleString('en-IN')}`,
+                  `₹${w.balance.toLocaleString('en-IN')}`,
                   w.userStatus || '-',
                 ]),
                 fileName: `Sidebud-wallets-${new Date().toISOString().slice(0, 10)}`,
@@ -98,7 +98,7 @@ export function AdminWalletsPage() {
             </div>
             <div>
               <p className="text-gray-400 text-xs uppercase tracking-wide">Total platform float</p>
-              <p className="text-white text-xl font-bold">â‚¹{Number(totalBalance).toLocaleString('en-IN')}</p>
+              <p className="text-white text-xl font-bold">₹{Number(totalBalance).toLocaleString('en-IN')}</p>
             </div>
           </div>
         </div>
@@ -110,7 +110,7 @@ export function AdminWalletsPage() {
               setSearch(e.target.value)
               setPage(1)
             }}
-            placeholder="Search by name or emailâ€¦"
+            placeholder="Search by name or email…"
             className="input w-full max-w-sm"
           />
         </div>
@@ -147,7 +147,7 @@ export function AdminWalletsPage() {
                         </td>
                         <td className="px-4 py-3 text-gray-400 text-xs">{w.userStatus || '-'}</td>
                         <td className="px-4 py-3">
-                          <span className="text-white font-semibold">â‚¹{w.balance.toLocaleString('en-IN')}</span>
+                          <span className="text-white font-semibold">₹{w.balance.toLocaleString('en-IN')}</span>
                         </td>
                       </tr>
                     ))}

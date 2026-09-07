@@ -79,9 +79,9 @@ export function AdminServicesPage() {
                   s.label,
                   s.category,
                   s.enabled ? 'Yes' : 'No',
-                  `â‚¹${s.pricing.baseFee ?? 0}`,
-                  `â‚¹${s.pricing.perMinute ?? 0}`,
-                  `â‚¹${s.pricing.perKm ?? 0}`,
+                  `₹${s.pricing.baseFee ?? 0}`,
+                  `₹${s.pricing.perMinute ?? 0}`,
+                  `₹${s.pricing.perKm ?? 0}`,
                   `${s.pricing.platformFeePercent ?? 0}%`,
                 ]),
                 fileName: `Sidebud-services-${new Date().toISOString().slice(0, 10)}`,
@@ -123,15 +123,15 @@ export function AdminServicesPage() {
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div className="bg-gray-900/50 rounded-lg p-2">
                     <p className="text-gray-500 text-[10px] uppercase">Base fee</p>
-                    <p className="text-white">â‚¹{Number(s.pricing.baseFee ?? 0).toLocaleString('en-IN')}</p>
+                    <p className="text-white">₹{Number(s.pricing.baseFee ?? 0).toLocaleString('en-IN')}</p>
                   </div>
                   <div className="bg-gray-900/50 rounded-lg p-2">
                     <p className="text-gray-500 text-[10px] uppercase">Per minute</p>
-                    <p className="text-white">â‚¹{Number(s.pricing.perMinute ?? 0).toLocaleString('en-IN')}</p>
+                    <p className="text-white">₹{Number(s.pricing.perMinute ?? 0).toLocaleString('en-IN')}</p>
                   </div>
                   <div className="bg-gray-900/50 rounded-lg p-2">
                     <p className="text-gray-500 text-[10px] uppercase">Per km</p>
-                    <p className="text-white">â‚¹{Number(s.pricing.perKm ?? 0).toLocaleString('en-IN')}</p>
+                    <p className="text-white">₹{Number(s.pricing.perKm ?? 0).toLocaleString('en-IN')}</p>
                   </div>
                   <div className="bg-gray-900/50 rounded-lg p-2">
                     <p className="text-gray-500 text-[10px] uppercase">Platform fee</p>

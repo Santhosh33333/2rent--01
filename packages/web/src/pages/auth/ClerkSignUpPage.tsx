@@ -8,7 +8,7 @@ export function ClerkSignUpPage() {
         <div className="text-center mb-8">
           <Link to="/" className="inline-block text-2xl font-bold font-display gradient-text">Sidebud</Link>
           <p className="text-sm text-surface-500 dark:text-surface-400 mt-2">
-            Create your account with Clerk â€” email, Google, OTP & more
+            Create your account with Clerk — email, Google, OTP & more
           </p>
         </div>
         <SignUp

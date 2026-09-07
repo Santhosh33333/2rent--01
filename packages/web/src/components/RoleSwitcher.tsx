@@ -29,8 +29,11 @@ export function RoleSwitcher() {
   // Only show roles the user is approved for
   const availableRoles: UserRole[] = ['USER', ...approvedRoles.filter(r => r !== 'USER')]
 
-  // Only show switcher if user has multiple approved roles
-  if (availableRoles.length <= 1) {
+  const isUserOnly = availableRoles.length <= 1
+
+  // Hide the switcher entirely unless there is something meaningful to offer:
+  // multiple approved roles, or a plain user who can still apply to become a partner.
+  if (isUserOnly && activeRole !== 'USER') {
     return null
   }
 
@@ -130,6 +133,25 @@ export function RoleSwitcher() {
                 )
               })}
             </div>
+
+            {isUserOnly && activeRole === 'USER' && (
+              <>
+                <div className="mx-3 my-1 h-px bg-surface-200 dark:bg-surface-800" />
+                <div className="p-2">
+                  <button
+                    onClick={() => { setIsOpen(false); navigate('/partner/apply') }}
+                    className="w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all hover:bg-surface-50 dark:hover:bg-surface-800"
+                  >
+                    <span className="text-xl">{ROLE_META.PARTNER.icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-medium text-surface-900 dark:text-surface-50">Become a Partner</span>
+                      <p className="text-xs text-surface-500 dark:text-surface-400">Apply, get approved, and start earning</p>
+                    </div>
+                    <ArrowRight className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </>
       )}

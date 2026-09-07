@@ -7,7 +7,7 @@ function getTransporter() {
   if (transporter) return transporter;
 
   if (!env.SMTP_HOST || !env.SMTP_USER || !env.SMTP_PASS) {
-    console.warn("[EMAIL] SMTP not configured â€” emails will be logged only");
+    console.warn("[EMAIL] SMTP not configured — emails will be logged only");
     return null;
   }
 
@@ -24,10 +24,10 @@ function getTransporter() {
 export async function sendEmail(to: string, subject: string, html: string, text?: string): Promise<boolean> {
   const tx = getTransporter();
   if (!tx) {
-    // Never log email bodies (they may contain OTPs / PII) â€” especially in
+    // Never log email bodies (they may contain OTPs / PII) — especially in
     // production, where that would leak secrets to the console/log aggregator.
     if (env.isProduction) {
-      console.warn("[EMAIL] SMTP not configured â€” email not delivered (suppressed from logs for PII safety).");
+      console.warn("[EMAIL] SMTP not configured — email not delivered (suppressed from logs for PII safety).");
       return false;
     }
     console.log(`[EMAIL] (dev) To: ${to} | Subject: ${subject}`);

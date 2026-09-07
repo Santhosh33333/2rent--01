@@ -120,7 +120,7 @@ if (!dbAvailable) {
 
   // Realtime + push fan-out for EVERY in-app notification row (spec: OTP and
   // arrival alerts must reach the user live, not sit silently in the DB).
-  // Installed once on the shared singleton â€” covers all creators, so no
+  // Installed once on the shared singleton — covers all creators, so no
   // call site can forget to emit. Never throws into the write path.
   prisma.$use(async (params, next) => {
     const result = await next(params);

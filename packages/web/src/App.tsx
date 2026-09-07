@@ -146,6 +146,7 @@ export function App() {
             <Route element={<Layout />}>
               <Route path="/profile/complete" element={<ProfileCompletionPage />} />
               <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/partner/apply" element={<PartnerGatePage />} />
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/verification" element={<VerificationPage />} />
               <Route path="/verification/step1" element={<KycStep1PersonalDetails />} />

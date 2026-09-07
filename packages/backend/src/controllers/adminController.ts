@@ -1338,7 +1338,7 @@ export async function getPartnerLevels(_req: AuthedRequest, res: Response): Prom
 }
 
 // ============================================================================
-// ADMIN PAYMENT CENTER � real Razorpay orders/payments (PaymentOrder ledger)
+// ADMIN PAYMENT CENTER — real Razorpay orders/payments (PaymentOrder ledger)
 // ============================================================================
 
 export async function getPayments(req: AuthedRequest, res: Response): Promise<void> {
@@ -1671,7 +1671,7 @@ export async function getUpiConfig(_req: AuthedRequest, res: Response): Promise<
 }
 
 // ============================================================================
-// ADMIN ACCOUNT PROVISIONING � only SUPER_ADMIN can add/manage admins here.
+// ADMIN ACCOUNT PROVISIONING — only SUPER_ADMIN can add/manage admins here.
 // Public signup can never create admin accounts (register hardcodes USER).
 // ============================================================================
 

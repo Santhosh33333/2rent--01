@@ -118,7 +118,7 @@ export function DiscoveryCategoryPage({ categoryKey }: DiscoveryCategoryPageProp
       {showsPeople ? (
         loading ? (
           <div className="rounded-3xl border border-dashed border-surface-300 bg-surface-50 p-8 text-center dark:border-surface-700 dark:bg-surface-900">
-            <p className="text-sm text-surface-500">Loading real {category.label.toLowerCase()} near youâ€¦</p>
+            <p className="text-sm text-surface-500">Loading real {category.label.toLowerCase()} near you…</p>
           </div>
         ) : people.length > 0 ? (
           <div className="grid gap-4 md:grid-cols-2">

@@ -160,7 +160,7 @@ export function SettingsPage() {
             </div>
           </SettingRow>
 
-          {/* Language is English-only â€” no selector shown. */}
+          {/* Language is English-only — no selector shown. */}
 
           {/* Notifications */}
           <h2 className="text-xs font-semibold text-surface-400 uppercase tracking-wider mb-3 mt-8">Notifications</h2>

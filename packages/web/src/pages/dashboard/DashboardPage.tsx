@@ -73,7 +73,7 @@ export function DashboardPage() {
   }
 
   const quickStats = [
-    { label: 'Wallet', value: `â‚¹${walletBalance.toLocaleString('en-IN')}`, icon: Wallet, color: 'from-primary-500 to-primary-600' },
+    { label: 'Wallet', value: `₹${walletBalance.toLocaleString('en-IN')}`, icon: Wallet, color: 'from-primary-500 to-primary-600' },
     { label: 'Friends', value: stats.friends, icon: Users, color: 'from-sky-500 to-blue-600' },
     { label: 'Communities', value: stats.communities, icon: Heart, color: 'from-pink-500 to-rose-600' },
     { label: 'Events', value: stats.events, icon: Calendar, color: 'from-amber-500 to-orange-600' },
@@ -257,7 +257,7 @@ export function DashboardPage() {
                 <Wallet className="w-5 h-5 text-white/80" />
                 <span className="text-sm font-medium text-white/80">Wallet Balance</span>
               </div>
-              <p className="text-3xl font-bold font-display">â‚¹{walletBalance.toLocaleString('en-IN')}</p>
+              <p className="text-3xl font-bold font-display">₹{walletBalance.toLocaleString('en-IN')}</p>
               <div className="flex gap-2 mt-4">
                 <Link to="/wallet/withdraw" className="flex-1 text-center py-2.5 rounded-xl bg-white/15 hover:bg-white/25 text-xs font-semibold transition-colors">
                   Withdraw

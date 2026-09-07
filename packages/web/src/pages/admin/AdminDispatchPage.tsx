@@ -45,7 +45,7 @@ export function AdminDispatchPage() {
           id: b.id,
           userName: b.user?.fullName || 'Unknown',
           partnerName: b.partner?.user?.fullName || null,
-          serviceType: b.serviceType || 'â€”',
+          serviceType: b.serviceType || '—',
           status: b.status,
           offersSent: b._count?.dispatchRequests ?? 0,
           createdAt: b.createdAt,
