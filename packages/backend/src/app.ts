@@ -65,6 +65,18 @@ export function createApp(): http.Server {
     }
   };
 
+  // Vercel deploys get fresh subdomains on every push (web-<hash>.*.vercel.app);
+  // allow any *.vercel.app origin so the app keeps working across redeploys
+  // without editing CORS_ORIGIN, while env.CORS_ORIGIN still gates custom domains.
+  const isVercelOrigin = (origin: string): boolean => {
+    try {
+      const url = new URL(origin);
+      return url.hostname === "vercel.app" || url.hostname.endsWith(".vercel.app");
+    } catch {
+      return false;
+    }
+  };
+
   app.use(helmet({
     contentSecurityPolicy: {
       directives: {
@@ -84,7 +96,7 @@ export function createApp(): http.Server {
   }));
   app.use(cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin) || isLocalDevOrigin(origin)) {
+      if (!origin || allowedOrigins.includes(origin) || isLocalDevOrigin(origin) || isVercelOrigin(origin)) {
         callback(null, true);
         return;
       }
