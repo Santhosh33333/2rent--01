@@ -29,6 +29,14 @@ export function RoleSwitcher() {
   // Only show roles the user is approved for
   const availableRoles: UserRole[] = ['USER', ...approvedRoles.filter(r => r !== 'USER')]
 
+  // Admin-tier accounts can preview the PARTNER view: the backend
+  // auto-provisions an APPROVED partner profile when they switch.
+  const ADMIN_TIERS = ['ADMIN', 'SUPER_ADMIN', 'MODERATOR', 'SUPPORT', 'FINANCE', 'SUPPORT_ADMIN', 'FINANCE_ADMIN', 'KYC_ADMIN', 'MARKETING_ADMIN', 'PARTNER_ADMIN']
+  const isAdminTier = availableRoles.some(r => ADMIN_TIERS.includes(r))
+  if (isAdminTier && !availableRoles.includes('PARTNER')) {
+    availableRoles.push('PARTNER')
+  }
+
   const isUserOnly = availableRoles.length <= 1
 
   // Hide the switcher entirely unless there is something meaningful to offer:
