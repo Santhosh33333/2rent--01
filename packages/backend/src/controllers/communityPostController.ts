@@ -71,6 +71,32 @@ export async function createPost(req: AuthedRequest, res: Response): Promise<voi
   }
 }
 
+export async function uploadPostImage(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    if (!req.file) {
+      sendError(res, "No image uploaded.", 400, "NO_FILE");
+      return;
+    }
+    const { community, member } = await membership(id, req.user!.userId);
+    if (!community) {
+      sendError(res, "Community not found.", 404, "COMMUNITY_NOT_FOUND");
+      return;
+    }
+    if (!roleOf(community, member, req.user!.userId)) {
+      sendError(res, "Join this community to post images.", 403, "NOT_MEMBER");
+      return;
+    }
+    sendSuccess(
+      res,
+      { imageUrl: `/uploads/${(req.file as Express.Multer.File).filename}` },
+      "Image uploaded. Attach it when publishing the post."
+    );
+  } catch {
+    sendError(res, "Failed to upload image.", 500, "INTERNAL_ERROR");
+  }
+}
+
 export async function listPosts(req: AuthedRequest, res: Response): Promise<void> {
   try {
     const { id } = req.params;

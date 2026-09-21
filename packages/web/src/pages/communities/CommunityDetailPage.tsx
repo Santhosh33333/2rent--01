@@ -1,12 +1,12 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   Users, ArrowLeft, Loader2, AlertTriangle,
   Hash, MapPin, Calendar, Globe, Shield,
-  UserPlus, UserMinus, Send, Trash2, MessageSquare, Flag, BarChart3, Plus, X
+  UserPlus, UserMinus, Send, Trash2, MessageSquare, Flag, BarChart3, Plus, X, ImagePlus
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { api } from '../../lib/api'
+import { api, assetUrl } from '../../lib/api'
 
 interface Member {
   id: string
@@ -19,6 +19,7 @@ interface Post {
   content: string
   authorId: string
   createdAt: string
+  imageUrl?: string | null
   author?: { fullName: string; avatarUrl?: string | null }
   _count?: { comments: number }
 }
@@ -82,6 +83,9 @@ export function CommunityDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [joining, setJoining] = useState(false)
   const [composer, setComposer] = useState('')
+  const [composerImage, setComposerImage] = useState<File | null>(null)
+  const [composerPreview, setComposerPreview] = useState<string | null>(null)
+  const composerFileRef = useRef<HTMLInputElement>(null)
   const [posting, setPosting] = useState(false)
   const [openComments, setOpenComments] = useState<Record<string, boolean>>({})
   const [comments, setComments] = useState<Record<string, Comment[]>>({})
@@ -150,8 +154,20 @@ export function CommunityDetailPage() {
     if (!composer.trim()) return
     setPosting(true)
     try {
-      await api.post(`/communities/${id}/posts`, { content: composer.trim() })
+      let imageUrl: string | undefined
+      if (composerImage) {
+        const fd = new FormData()
+        fd.append('image', composerImage)
+        const up = await api.post(`/communities/${id}/posts/image`, fd, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 120000,
+        })
+        imageUrl = up.data?.data?.imageUrl || up.data?.imageUrl
+        if (!imageUrl) throw new Error('Image upload failed')
+      }
+      await api.post(`/communities/${id}/posts`, { content: composer.trim(), imageUrl })
       setComposer('')
+      clearComposerImage()
       toast.success('Post published')
       await refresh()
     } catch (e: any) {
@@ -159,6 +175,29 @@ export function CommunityDetailPage() {
     } finally {
       setPosting(false)
     }
+  }
+
+  const clearComposerImage = () => {
+    setComposerImage(null)
+    setComposerPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev)
+      return null
+    })
+  }
+
+  const pickComposerImage = (file: File | undefined) => {
+    if (!file) return
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+      toast.error('Please choose an image file.')
+      return
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      toast.error('Image must be under 8 MB.')
+      return
+    }
+    clearComposerImage()
+    setComposerImage(file)
+    setComposerPreview(URL.createObjectURL(file))
   }
 
   const removePost = async (postId: string) => {
@@ -444,18 +483,52 @@ export function CommunityDetailPage() {
         </h2>
 
         {community.isMember ? (
-          <div className="flex gap-2 mb-6">
-            <input
-              value={composer}
-              onChange={(e) => setComposer(e.target.value)}
-              placeholder="Share something with the community..."
-              maxLength={2000}
-              className="input flex-1"
-              disabled={posting}
-            />
-            <button onClick={publishPost} disabled={posting || !composer.trim()} className="btn-gradient px-4 disabled:opacity-50">
-              {posting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            </button>
+          <div className="mb-6 space-y-2">
+            <div className="flex gap-2">
+              <input
+                value={composer}
+                onChange={(e) => setComposer(e.target.value)}
+                placeholder="Share something with the community..."
+                maxLength={2000}
+                className="input flex-1"
+                disabled={posting}
+              />
+              <input
+                ref={composerFileRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="hidden"
+                onChange={(e) => {
+                  pickComposerImage(e.target.files?.[0])
+                  e.target.value = ''
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => composerFileRef.current?.click()}
+                disabled={posting}
+                title="Attach a photo"
+                className="w-11 rounded-2xl border border-surface-200 dark:border-surface-700 flex items-center justify-center text-surface-500 hover:text-primary-500 transition-colors disabled:opacity-50"
+              >
+                <ImagePlus className="w-5 h-5" />
+              </button>
+              <button onClick={publishPost} disabled={posting || !composer.trim()} className="btn-gradient px-4 disabled:opacity-50">
+                {posting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              </button>
+            </div>
+            {composerPreview && (
+              <div className="relative inline-block">
+                <img src={composerPreview} alt="Attachment preview" className="h-28 rounded-2xl object-cover" />
+                <button
+                  type="button"
+                  onClick={clearComposerImage}
+                  aria-label="Remove photo"
+                  className="absolute -top-2 -right-2 w-7 h-7 rounded-full bg-surface-900/80 text-white flex items-center justify-center"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           <p className="text-sm text-surface-400 mb-6">Join this community to post and comment.</p>
@@ -486,6 +559,9 @@ export function CommunityDetailPage() {
                   {reportBox(`post-${post.id}`, 'post', post.id)}
                 </div>
                 <p className="text-sm text-surface-700 dark:text-surface-300 mt-3 whitespace-pre-wrap">{post.content}</p>
+                {(post as any).imageUrl && (
+                  <img src={assetUrl((post as any).imageUrl) || ''} alt="" loading="lazy" className="mt-3 rounded-2xl max-h-72 w-auto object-cover" />
+                )}
                 <button onClick={() => loadComments(post.id)} className="text-xs text-primary-600 dark:text-primary-400 hover:underline mt-2">
                   {openComments[post.id] ? 'Hide comments' : `Comments (${post._count?.comments ?? ''})`}
                 </button>

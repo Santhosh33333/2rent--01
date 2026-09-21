@@ -4,7 +4,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Send, Loader2, AlertTriangle,
-  CheckCheck, MessageCircle, ImagePlus, Mic, Square
+  CheckCheck, MessageCircle, ImagePlus, Mic, Square,
+  Trash2, Flag, Ban, X
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
@@ -63,6 +64,10 @@ export function ConversationPage() {
   const [otherTyping, setOtherTyping] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [recording, setRecording] = useState(false)
+  const [selectedMsg, setSelectedMsg] = useState<Message | null>(null)
+  const [reportReason, setReportReason] = useState('Spam')
+  const [reportDesc, setReportDesc] = useState('')
+  const [modBusy, setModBusy] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
@@ -242,6 +247,56 @@ export function ConversationPage() {
 
   const isOwn = (senderId: string) => senderId === myId || senderId === 'me'
 
+  const deleteSelectedMessage = async () => {
+    if (!selectedMsg || modBusy) return
+    setModBusy(true)
+    try {
+      await api.delete(`/messages/${selectedMsg.id}`)
+      setMessages((prev) => prev.filter((m) => m.id !== selectedMsg.id))
+      toast.success('Message deleted')
+      setSelectedMsg(null)
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Could not delete message'))
+    } finally {
+      setModBusy(false)
+    }
+  }
+
+  const reportSelectedMessage = async () => {
+    if (!selectedMsg || modBusy) return
+    setModBusy(true)
+    try {
+      await api.post('/privacy/report', {
+        messageId: selectedMsg.id,
+        conversationId: conversationId || undefined,
+        reason: reportReason,
+        description: reportDesc.trim() || undefined,
+      })
+      toast.success('Report submitted. Our team will review it.')
+      setSelectedMsg(null)
+      setReportDesc('')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Could not submit report'))
+    } finally {
+      setModBusy(false)
+    }
+  }
+
+  const blockPartner = async () => {
+    if (modBusy || !userId) return
+    setModBusy(true)
+    try {
+      await api.post('/privacy/block', { blockedId: userId })
+      toast.success('User blocked')
+      setSelectedMsg(null)
+      navigate('/messages')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Could not block user'))
+    } finally {
+      setModBusy(false)
+    }
+  }
+
   const sendMedia = async (file: File, kind: 'IMAGE' | 'VOICE') => {
     if (!userId) return
     setUploading(true)
@@ -373,11 +428,16 @@ export function ConversationPage() {
                   )}
                   {!own && !showAvatar && <div className="w-8 flex-shrink-0" />}
                   <div className={`max-w-[75%] group relative ${own ? 'order-1' : 'order-0'}`}>
-                    <div className={`px-4 py-2.5 rounded-2xl ${
-                      own
-                        ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-br-md'
-                        : 'bg-surface-100 dark:bg-surface-800 text-surface-900 dark:text-white rounded-bl-md'
-                    }`}>
+                    <button
+                      type="button"
+                      disabled={msg.id.startsWith('temp-')}
+                      onClick={() => setSelectedMsg(msg)}
+                      className={`block w-full text-left px-4 py-2.5 rounded-2xl active:scale-[0.98] transition-transform ${
+                        own
+                          ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-br-md'
+                          : 'bg-surface-100 dark:bg-surface-800 text-surface-900 dark:text-white rounded-bl-md'
+                      }`}
+                    >
                       {msg.mediaUrl && (msg.messageType === 'IMAGE' || msg.messageType === 'VOICE') ? (
                         <div className="space-y-1.5">
                           <ChatAttachment mediaUrl={msg.mediaUrl} kind={msg.messageType} />
@@ -386,7 +446,7 @@ export function ConversationPage() {
                       ) : (
                         <p className="text-sm leading-relaxed">{msg.content}</p>
                       )}
-                    </div>
+                    </button>
                     <div className={`flex items-center gap-1 mt-0.5 ${own ? 'justify-end' : 'justify-start'} px-1`}>
                       <span className="text-[10px] text-surface-400">
                         {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -408,6 +468,75 @@ export function ConversationPage() {
           )}
           <div ref={messagesEndRef} />
         </div>
+
+        {/* Message actions: delete own, report/block others */}
+        {selectedMsg && (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4" onClick={() => !modBusy && setSelectedMsg(null)}>
+            <div className="w-full max-w-sm rounded-3xl bg-white dark:bg-surface-900 p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold">Message options</h3>
+                <button type="button" onClick={() => setSelectedMsg(null)} className="p-1.5 rounded-lg text-surface-400 hover:text-surface-600" aria-label="Close">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              {isOwn(selectedMsg.senderId) ? (
+                <button
+                  type="button"
+                  onClick={deleteSelectedMessage}
+                  disabled={modBusy}
+                  className="w-full flex items-center gap-2 rounded-2xl bg-red-50 dark:bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-600 dark:text-red-400 disabled:opacity-50"
+                >
+                  <Trash2 className="w-4 h-4" /> Delete this message
+                </button>
+              ) : (
+                <>
+                  <div>
+                    <p className="text-xs font-semibold text-surface-500 mb-2">Report reason</p>
+                    <div className="flex flex-wrap gap-2">
+                      {['Spam', 'Harassment', 'Inappropriate', 'Scam', 'Other'].map((r) => (
+                        <button
+                          key={r}
+                          type="button"
+                          onClick={() => setReportReason(r)}
+                          className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+                            reportReason === r
+                              ? 'bg-primary-600 text-white'
+                              : 'bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-300'
+                          }`}
+                        >
+                          {r}
+                        </button>
+                      ))}
+                    </div>
+                    <input
+                      value={reportDesc}
+                      onChange={(e) => setReportDesc(e.target.value)}
+                      placeholder="Details (optional)"
+                      maxLength={500}
+                      className="input mt-2"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={reportSelectedMessage}
+                    disabled={modBusy}
+                    className="w-full flex items-center justify-center gap-2 rounded-2xl bg-amber-500/10 px-4 py-3 text-sm font-semibold text-amber-600 dark:text-amber-400 disabled:opacity-50"
+                  >
+                    <Flag className="w-4 h-4" /> Submit report
+                  </button>
+                  <button
+                    type="button"
+                    onClick={blockPartner}
+                    disabled={modBusy}
+                    className="w-full flex items-center justify-center gap-2 rounded-2xl bg-red-50 dark:bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-600 dark:text-red-400 disabled:opacity-50"
+                  >
+                    <Ban className="w-4 h-4" /> Block this user
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Input Area */}
         <div className="p-4 border-t border-surface-100 dark:border-surface-800">

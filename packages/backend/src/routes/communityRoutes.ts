@@ -2,6 +2,7 @@ import { Router } from "express";
 import { body } from "express-validator";
 import { authenticateToken, requireKycVerified } from "../middleware/auth";
 import { sanitizeInput, validateRequest } from "../middleware/validation";
+import { upload } from "../middleware/upload";
 import * as communityController from "../controllers/communityController";
 import * as communityPostController from "../controllers/communityPostController";
 
@@ -56,6 +57,11 @@ router.post("/:id/leave", communityController.leaveCommunity);
 router.get("/:id/members", communityController.getCommunityMembers);
 
 // Posts (members only; reads open for PUBLIC, members-only for PRIVATE)
+router.post(
+  "/:id/posts/image",
+  upload.single("image"),
+  communityPostController.uploadPostImage
+);
 router.post(
   "/:id/posts",
   [body("content").notEmpty().trim().isLength({ min: 1, max: 2000 }), body("imageUrl").optional().isString().trim()],
