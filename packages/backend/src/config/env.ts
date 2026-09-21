@@ -94,6 +94,14 @@ const envSchema = z.object({
   // MOVIES_NOT_CONFIGURED and the app shows meetups only. Never fake data.
   TMDB_API_KEY: z.string().optional(),
 
+  // AI gateway — all optional. Without AI_API_BASE + AI_API_KEY the LLM
+  // features honestly report AI_NOT_CONFIGURED; rules-based AI (matching,
+  // safety flags, assistant router, admin summary) works without any key.
+  AI_API_BASE: z.string().optional(),
+  AI_API_KEY: z.string().optional(),
+  AI_MODEL: z.string().optional(),
+  AI_USER_QUOTA_PER_HOUR: z.string().optional(),
+
   // Clerk (legacy — optional)
   CLERK_SECRET_KEY: z.string().optional(),
   CLERK_PUBLISHABLE_KEY: z.string().optional(),

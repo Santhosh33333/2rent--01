@@ -44,6 +44,7 @@ import partnerRoutes from "./routes/partnerRoutes";
 import searchRoutes from "./routes/searchRoutes";
 import discoveryRoutes from "./routes/discoveryRoutes";
 import moviesRoutes from "./routes/moviesRoutes";
+import aiRoutes from "./routes/aiRoutes";
 import referralRoutes from "./routes/referralRoutes";
 
 export function createApp(): http.Server {
@@ -259,6 +260,7 @@ export function createApp(): http.Server {
 app.use("/api/partner", partnerRoutes);
 app.use("/api/discovery", discoveryRoutes);
 app.use("/api/movies", moviesRoutes);
+app.use("/api/ai", aiRoutes);
   // Public service catalog (Expanded Partner Ecosystem) — registered BEFORE the
   // /api search router (which applies auth globally) so it stays unauthenticated.
   app.get("/api/services", (_req: Request, res: Response) => {
