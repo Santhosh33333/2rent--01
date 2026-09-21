@@ -494,6 +494,7 @@ model Event {
   location      String?
   coverImageUrl String?
   category      String?
+  subcategory   String?
   privacy       String  @default("PUBLIC") // PUBLIC, PRIVATE
   price         Float?
   startTime     DateTime
@@ -510,6 +511,7 @@ model Event {
     @@index([organizerId])
     @@index([status, startTime])
     @@index([category])
+    @@index([category, subcategory])
 }
 
 model EventAttendee {

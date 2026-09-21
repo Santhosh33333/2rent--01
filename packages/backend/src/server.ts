@@ -123,6 +123,10 @@ if (!dbAvailable) {
       `CREATE INDEX IF NOT EXISTS "Event_status_startTime_idx" ON "Event"("status", "startTime")`
     );
     await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Event_category_idx" ON "Event"("category")`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "subcategory" TEXT`);
+    await prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS "Event_category_subcategory_idx" ON "Event"("category", "subcategory")`
+    );
     console.log("Schema reconciliation: Event discovery columns ensured.");
   } catch (err) {
     console.warn("Schema reconciliation warning (Event):", (err as Error)?.message);

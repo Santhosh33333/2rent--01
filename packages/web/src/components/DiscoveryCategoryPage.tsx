@@ -1,6 +1,6 @@
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { ArrowLeft, ChevronRight, Search, ShieldCheck, Sparkles, User as UserIcon } from 'lucide-react'
+import { ArrowLeft, ChevronRight, Search, ShieldCheck, Sparkles, Trophy, User as UserIcon } from 'lucide-react'
 import { DISCOVERY_BY_KEY, type DiscoveryCategoryKey } from '../lib/discoveryData'
 import { api, assetUrl } from '../lib/api'
 
@@ -89,6 +89,14 @@ export function DiscoveryCategoryPage({ categoryKey }: DiscoveryCategoryPageProp
             <category.icon className="w-6 h-6" />
           </div>
         </div>
+        {categoryKey === 'sports' && (
+          <Link
+            to="/sports"
+            className="mt-4 inline-flex items-center gap-2 rounded-xl bg-white/15 px-4 py-2.5 text-sm font-semibold backdrop-blur-sm hover:bg-white/25 transition-colors"
+          >
+            <Trophy className="w-4 h-4" /> Open Sports hub — games, players, RSVP
+          </Link>
+        )}
       </div>
 
       <div className="relative">

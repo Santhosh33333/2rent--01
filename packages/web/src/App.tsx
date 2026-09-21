@@ -110,6 +110,7 @@ const PartnerGatePage = lazy(() => import('./pages/partner/PartnerGatePage').the
 const PartnerMapPage = lazy(() => import('./pages/partner/PartnerMapPage').then(m => ({ default: m.PartnerMapPage })))
 const PartnerPerformancePage = lazy(() => import('./pages/partner/PartnerPerformancePage').then(m => ({ default: m.PartnerPerformancePage })))
 const SearchPage = lazy(() => import('./pages/search/SearchPage').then(m => ({ default: m.SearchPage })))
+const SportsPage = lazy(() => import('./pages/sports/SportsPage').then(m => ({ default: m.SportsPage })))
 
 function LoadingSpinner() {
   return (
@@ -170,6 +171,7 @@ export function App() {
               <Route path="/home" element={<HomePage />} />
               <Route path="/discover" element={<DiscoverPage />} />
               <Route path="/discover/:categoryKey" element={<DiscoveryCategoryRoute />} />
+              <Route path="/sports" element={<SportsPage />} />
 
               {/* New Booking System */}
               <Route path="/bookings" element={<BookingsListPage />} />

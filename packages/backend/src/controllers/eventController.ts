@@ -116,7 +116,7 @@ function datePresetRange(preset: string): { from?: Date; to?: Date } | null {
 
 export async function createEvent(req: AuthedRequest, res: Response): Promise<void> {
   try {
-    const { title, description, communityId, location, startTime, endTime, capacity, coverImageUrl, category, privacy, price } = req.body;
+    const { title, description, communityId, location, startTime, endTime, capacity, coverImageUrl, category, subcategory, privacy, price } = req.body;
 
     if (!title || !startTime) {
       sendError(res, "Title and startTime are required.", 400, "VALIDATION_ERROR");
@@ -135,6 +135,8 @@ export async function createEvent(req: AuthedRequest, res: Response): Promise<vo
       sendError(res, "Price must be a non-negative number.", 400, "VALIDATION_ERROR");
       return;
     }
+    const subcategoryValue =
+      subcategory === undefined || subcategory === null ? undefined : String(subcategory).toLowerCase().trim().slice(0, 32) || null;
 
     const event = await prisma.event.create({
       data: {
@@ -147,6 +149,7 @@ export async function createEvent(req: AuthedRequest, res: Response): Promise<vo
         capacity: capacity || null,
         coverImageUrl: coverImageUrl || null,
         category: normalizeCategory(category),
+        subcategory: subcategoryValue,
         privacy: privacy || "PUBLIC",
         price: priceValue,
         organizerId: req.user!.userId,
@@ -184,6 +187,7 @@ export async function getEvents(req: AuthedRequest, res: Response): Promise<void
     if (req.query.status) where.status = req.query.status;
     if (req.query.communityId) where.communityId = req.query.communityId;
     if (req.query.category) where.category = String(req.query.category).toLowerCase();
+    if (req.query.subcategory) where.subcategory = String(req.query.subcategory).toLowerCase();
     if (req.query.privacy) where.privacy = req.query.privacy;
     if (req.query.free === "true") where.OR = [{ price: null }, { price: 0 }];
     else if (req.query.free === "false") where.price = { gt: 0 };
@@ -288,7 +292,7 @@ export async function getEventById(req: AuthedRequest, res: Response): Promise<v
 export async function updateEvent(req: AuthedRequest, res: Response): Promise<void> {
   try {
     const { id } = req.params;
-    const { title, description, location, startTime, endTime, capacity, status, coverImageUrl, category, privacy, price } = req.body;
+    const { title, description, location, startTime, endTime, capacity, status, coverImageUrl, category, subcategory, privacy, price } = req.body;
 
     const event = await prisma.event.findUnique({ where: { id } });
 
@@ -316,6 +320,12 @@ export async function updateEvent(req: AuthedRequest, res: Response): Promise<vo
       sendError(res, "Price must be a non-negative number.", 400, "VALIDATION_ERROR");
       return;
     }
+    const subcategoryValue =
+      subcategory === undefined
+        ? undefined
+        : subcategory === null || subcategory === ""
+          ? null
+          : String(subcategory).toLowerCase().trim().slice(0, 32) || null;
 
     const updated = await prisma.event.update({
       where: { id },
@@ -329,6 +339,7 @@ export async function updateEvent(req: AuthedRequest, res: Response): Promise<vo
         status: status || event.status,
         coverImageUrl: coverImageUrl !== undefined ? coverImageUrl || null : event.coverImageUrl,
         category: category !== undefined ? normalizeCategory(category) : event.category,
+        subcategory: subcategoryValue !== undefined ? subcategoryValue : (event as any).subcategory ?? null,
         privacy: privacy || event.privacy,
         price: priceValue !== undefined ? priceValue : event.price,
       },
