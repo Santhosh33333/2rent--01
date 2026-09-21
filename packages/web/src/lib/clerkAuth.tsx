@@ -86,8 +86,9 @@ export function AppClerkProvider({ children }: { children: ReactNode }) {
     return <>{children}</>
   }
   return (
-    // clerk-js is loaded by index.html from /clerk (self-hosted, see
-    // scripts/copy-clerk-js.cjs); ClerkProvider adopts window.Clerk.
+    // ClerkProvider loads the matching clerk-js from the Clerk CDN itself.
+    // (A previous self-hosted bundle drifted a major version ahead of
+    // @clerk/clerk-react and broke the SignIn/SignUp UI — never vendor it.)
     <ClerkProvider
       publishableKey={CLERK_PUBLISHABLE_KEY!}
       appearance={{ variables: { colorPrimary: '#6366f1' } }}
