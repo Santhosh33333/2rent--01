@@ -18,7 +18,12 @@ declare global {
   }
 }
 
-const GOOGLE_CLIENT_ID = '523643092182-auoknf0n7fg27j1h91klhs8vr6v5dvej.apps.googleusercontent.com'
+// Client ID is public (it ships in the browser bundle by design), but it
+// belongs in env so white-label/staging builds can swap it without edits.
+const GOOGLE_CLIENT_ID =
+  import.meta.env.VITE_GOOGLE_CLIENT_ID ||
+  window.__googleClientId ||
+  '523643092182-auoknf0n7fg27j1h91klhs8vr6v5dvej.apps.googleusercontent.com'
 
 let googleInitialized = false
 let googleCallback: ((credential: string) => void) | null = null
