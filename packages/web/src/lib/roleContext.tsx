@@ -66,10 +66,6 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(false)
 
   const refreshRoles = useCallback(async () => {
-    if (!user) {
-      setLoading(false)
-      return
-    }
     try {
       const res = await api.get('/roles/my-roles')
       const data = res.data?.data
@@ -96,6 +92,16 @@ export function RoleProvider({ children }: { children: ReactNode }) {
       refreshRoles()
     }
   }, [user?.id])
+
+  // Boot parallel: fetch roles as soon as a token exists instead of waiting
+  // for the profile fetch to finish (profile + roles used to waterfall,
+  // doubling time-to-interactive on slow networks).
+  useEffect(() => {
+    if (!user && typeof window !== 'undefined' && localStorage.getItem('token')) {
+      refreshRoles()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const switchRole = useCallback(
     async (role: UserRole) => {

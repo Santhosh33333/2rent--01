@@ -131,7 +131,9 @@ api.interceptors.response.use(
         const current = localStorage.getItem('token') || ''
         if (!current || current === attempted) {
           clearSessionStorage()
-          if (typeof window !== 'undefined' && !['/login', '/register', '/forgot-password', '/sign-in', '/sign-up'].includes(window.location.pathname)) {
+          // Entry/portal pages decide routing themselves (Splash, onboarding,
+          // account-type, admin login): never yank them to /login.
+          if (typeof window !== 'undefined' && !['/', '/login', '/register', '/forgot-password', '/sign-in', '/sign-up', '/onboarding', '/account-type', '/admin/login'].includes(window.location.pathname)) {
             window.location.replace('/login')
           }
         }

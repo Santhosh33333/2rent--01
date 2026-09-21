@@ -77,13 +77,24 @@ function clearSessionData(): void {
   localStorage.removeItem('refreshToken')
   localStorage.removeItem('user')
   localStorage.removeItem('activeRole')
-  // Routing-state flags must not leak to the next user on a shared device.
-  // NOTE: 'theme' / UI prefs intentionally persist — they are device settings,
-  // not session state.
-  localStorage.removeItem('onboarding_complete')
-  localStorage.removeItem('profile_complete')
+  // NOTE: 'onboarding_complete' / 'profile_complete' intentionally persist.
+  // They record device-level facts ("this device finished onboarding"), and
+  // the server (city/KYC gates) remains the source of truth. Wiping them on
+  // logout forced returning users through onboarding + profile setup again
+  // on every re-login. 'theme' / UI prefs persist for the same reason.
   localStorage.removeItem('impersonating')
   sessionStorage.removeItem('rb_admin_session')
+}
+
+// Server is the source of truth for completed steps: if the profile already
+// has a city, the profile-setup gate must never bounce the user again,
+// regardless of which device/browser they sign in from.
+function reconcileCompletionFlags(u: { city?: string | null } | null | undefined): void {
+  try {
+    if (u?.city) localStorage.setItem('profile_complete', 'true')
+  } catch {
+    // storage unavailable — gates fall back to server fields
+  }
 }
 
 interface SavedAdminSession {
@@ -180,6 +191,7 @@ async function restoreSessionFromRefreshToken(): Promise<User | null> {
       gender: p.gender,
     }
     localStorage.setItem('user', JSON.stringify(u))
+    reconcileCompletionFlags(u)
     return u
   } catch {
     return null
@@ -208,6 +220,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const u = buildUserFromPayload(p)
         localStorage.setItem('user', JSON.stringify(u))
         setUser(u)
+        reconcileCompletionFlags(u)
       }
     } catch {
       const saved = localStorage.getItem('user')
@@ -274,6 +287,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('activeRole', u.activeRole || u.role || 'USER')
     setUser(u)
     setImpersonating(null)
+    reconcileCompletionFlags(u)
   }
 
   const completeLogin = (
@@ -297,6 +311,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('user', JSON.stringify(u))
     localStorage.setItem('activeRole', u.activeRole || u.role || 'USER')
     setUser(u)
+    reconcileCompletionFlags(u)
   }
 
   const register = async (data: RegisterInput) => {
@@ -429,6 +444,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const updated = { ...user, ...data }
       setUser(updated)
       localStorage.setItem('user', JSON.stringify(updated))
+      reconcileCompletionFlags(updated)
     }
   }
 

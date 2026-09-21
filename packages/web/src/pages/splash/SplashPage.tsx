@@ -6,14 +6,22 @@ export function SplashPage() {
   const navigate = useNavigate()
   const { user, loading: authLoading } = useAuth()
   const [fadeOut, setFadeOut] = useState(false)
+  // Returning sessions skip the full brand hold: the 2.5s fixed delay on
+  // every cold start read as "very bad loading".
+  const hasSession =
+    typeof window !== 'undefined' &&
+    Boolean(localStorage.getItem('token') || localStorage.getItem('refreshToken'))
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setFadeOut(true)
-    }, 2000)
+    const timer = setTimeout(
+      () => {
+        setFadeOut(true)
+      },
+      hasSession ? 350 : 2000
+    )
 
     return () => clearTimeout(timer)
-  }, [])
+  }, [hasSession])
 
   useEffect(() => {
     if (authLoading || !fadeOut) return
@@ -40,10 +48,10 @@ export function SplashPage() {
       } else {
         navigate('/account-type', { replace: true })
       }
-    }, 500)
+    }, hasSession ? 150 : 500)
 
     return () => clearTimeout(innerTimer)
-  }, [fadeOut, authLoading, user, navigate])
+  }, [fadeOut, authLoading, user, navigate, hasSession])
 
   return (
     <>

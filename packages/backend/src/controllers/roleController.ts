@@ -5,11 +5,13 @@ import { sendSuccess, sendError } from "../utils/response";
 
 export async function getMyRoles(req: AuthedRequest, res: Response): Promise<void> {
   try {
+    // Single round-trip: role fields + partner state via relation include.
     const user = await prisma.user.findUnique({
       where: { id: req.user!.userId },
       select: {
         role: true,
         activeRole: true,
+        partner: { select: { status: true, providesWalking: true, providesCarry: true } },
       },
     });
 
@@ -20,10 +22,7 @@ export async function getMyRoles(req: AuthedRequest, res: Response): Promise<voi
 
     const approvedRoles: string[] = ["USER"];
 
-    const partner = await prisma.partner.findUnique({
-      where: { userId: req.user!.userId },
-      select: { status: true, providesWalking: true, providesCarry: true },
-    });
+    const partner = user.partner;
 
     if (partner && partner.status === "APPROVED") {
       approvedRoles.push("PARTNER");

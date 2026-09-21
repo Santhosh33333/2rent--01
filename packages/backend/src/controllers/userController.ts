@@ -6,6 +6,8 @@ import { getIO } from "../services/socketService";
 
 export async function getProfile(req: AuthedRequest, res: Response): Promise<void> {
   try {
+    // Single round-trip: user + KYC + partner state via relation includes.
+    // (Sequential lookups here cost ~1s each against hosted Postgres.)
     const user = await prisma.user.findUnique({
       where: { id: req.user!.userId },
       select: {
@@ -25,6 +27,8 @@ export async function getProfile(req: AuthedRequest, res: Response): Promise<voi
         emailVerified: true,
         mobileVerified: true,
         createdAt: true,
+        verification: { select: { status: true, rejectionReason: true } },
+        partner: { select: { status: true, rejectionReason: true } },
       },
     });
     if (!user) {
@@ -32,18 +36,11 @@ export async function getProfile(req: AuthedRequest, res: Response): Promise<voi
       return;
     }
     // Expose KYC state so clients can gate features on admin approval.
-    const verification = await prisma.verification.findUnique({
-      where: { userId: req.user!.userId },
-      select: { status: true, rejectionReason: true },
-    });
-    const partner = await prisma.partner.findUnique({
-      where: { userId: req.user!.userId },
-      select: { status: true, rejectionReason: true },
-    });
+    const { verification, partner, ...profile } = user;
     sendSuccess(
       res,
       {
-        ...user,
+        ...profile,
         kycStatus: verification?.status ?? "NOT_STARTED",
         kycRejectionReason: verification?.rejectionReason ?? null,
         partnerStatus: partner?.status ?? null,

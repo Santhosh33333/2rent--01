@@ -35,7 +35,11 @@ export function PartnerLiveLocationSharer() {
     };
 
     load();
-    const iv = setInterval(load, 10000);
+    // Idle backoff: no active booking is the common case — polling every 10s
+    // from every open tab kept the API (and radios) hot for nothing.
+    const iv = setInterval(() => {
+      if (typeof document === 'undefined' || !document.hidden) load();
+    }, 30000);
     return () => {
       cancelled = true;
       clearInterval(iv);
