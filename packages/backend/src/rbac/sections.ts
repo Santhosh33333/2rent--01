@@ -1,5 +1,5 @@
-﻿/**
- * Sidebud — Advanced Admin RBAC
+/**
+ * Side Bud — Advanced Admin RBAC
  * -------------------------------------------------------------
  * The platform follows a strict trust chain:
  *

@@ -1,4 +1,4 @@
-﻿import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, FileText } from 'lucide-react'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
@@ -28,7 +28,7 @@ export function TermsOfServicePage() {
           <div className="prose prose-sm dark:prose-invert max-w-none space-y-6 text-surface-700 dark:text-surface-300">
             <section>
               <h2 className="text-lg font-bold font-display text-surface-900 dark:text-white mb-3">1. Acceptance of Terms</h2>
-              <p className="text-sm leading-relaxed">By accessing or using Sidebud, you agree to be bound by these Terms of Service. If you do not agree, do not use the application.</p>
+              <p className="text-sm leading-relaxed">By accessing or using Side Bud, you agree to be bound by these Terms of Service. If you do not agree, do not use the application.</p>
             </section>
 
             <section>
@@ -38,7 +38,7 @@ export function TermsOfServicePage() {
 
             <section>
               <h2 className="text-lg font-bold font-display text-surface-900 dark:text-white mb-3">3. Services</h2>
-              <p className="text-sm leading-relaxed">Sidebud connects users with service providers (partners) for walking companions, carry assistance, and other community services. We are a platform — we do not directly provide the services listed.</p>
+              <p className="text-sm leading-relaxed">Side Bud connects users with service providers (partners) for walking companions, carry assistance, and other community services. We are a platform — we do not directly provide the services listed.</p>
             </section>
 
             <section>
@@ -58,7 +58,7 @@ export function TermsOfServicePage() {
 
             <section>
               <h2 className="text-lg font-bold font-display text-surface-900 dark:text-white mb-3">7. Liability</h2>
-              <p className="text-sm leading-relaxed">Sidebud is not liable for injuries, damages, or losses during service delivery. Our liability is limited to the amount of fees paid for the specific booking in question. We provide the platform "as is" without warranties.</p>
+              <p className="text-sm leading-relaxed">Side Bud is not liable for injuries, damages, or losses during service delivery. Our liability is limited to the amount of fees paid for the specific booking in question. We provide the platform "as is" without warranties.</p>
             </section>
 
             <section>

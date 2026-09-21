@@ -132,8 +132,8 @@ export function createApp(): http.Server {
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="description" content="Sidebud Privacy Policy" />
-<title>Sidebud — Privacy Policy</title>
+<meta name="description" content="Side Bud Privacy Policy" />
+<title>Side Bud — Privacy Policy</title>
 <style>
   :root { color-scheme: light; }
   * { box-sizing: border-box; }
@@ -153,13 +153,13 @@ export function createApp(): http.Server {
 </head>
 <body>
 <header>
-  <h1>Sidebud Privacy Policy</h1>
+  <h1>Side Bud Privacy Policy</h1>
   <p>Effective date: September 7, 2026</p>
 </header>
 <main>
   <section>
     <h2>1. Introduction</h2>
-    <p>Sidebud ("we", "our", or "us") provides a peer-assistance marketplace that connects people who request help with local verified partners. This policy explains what information we collect, why we collect it, how it is used, and the choices you have.</p>
+    <p>Side Bud ("we", "our", or "us") provides a peer-assistance marketplace that connects people who request help with local verified partners. This policy explains what information we collect, why we collect it, how it is used, and the choices you have.</p>
   </section>
   <section>
     <h2>2. Information We Collect</h2>
@@ -175,7 +175,7 @@ export function createApp(): http.Server {
   <section>
     <h2>3. How We Use Information</h2>
     <ul>
-      <li>Provide, operate, and maintain the Sidebud marketplace.</li>
+      <li>Provide, operate, and maintain the Side Bud marketplace.</li>
       <li>Verify partner applicants and keep the platform safe.</li>
       <li>Process bookings, payments, chat, and support requests.</li>
       <li>Send transactional notifications (booking updates, verification results, wallet alerts).</li>
@@ -206,7 +206,7 @@ export function createApp(): http.Server {
   </section>
   <section>
     <h2>8. Children</h2>
-    <p>Sidebud is not directed at children under 13, and we do not knowingly collect their personal information. If you believe a child has provided us data, contact us and we will delete it.</p>
+    <p>Side Bud is not directed at children under 13, and we do not knowingly collect their personal information. If you believe a child has provided us data, contact us and we will delete it.</p>
   </section>
   <section>
     <h2>9. Contact</h2>

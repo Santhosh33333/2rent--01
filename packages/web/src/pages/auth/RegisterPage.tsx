@@ -1,4 +1,4 @@
-﻿import { getErrorMessage } from '../../lib/error'
+import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
@@ -51,7 +51,7 @@ const registerSchema = z.object({
 type RegisterForm = z.infer<typeof registerSchema>
 
 const steps = [
-  { id: 1, title: 'Account Type', subtitle: 'Choose how you want to use Sidebud' },
+  { id: 1, title: 'Account Type', subtitle: 'Choose how you want to use Side Bud' },
   { id: 2, title: 'Personal Info', subtitle: 'Your name and email' },
   { id: 3, title: 'About You', subtitle: 'Gender & date of birth' },
   { id: 4, title: 'Security', subtitle: 'Phone & password' },
@@ -139,11 +139,11 @@ export function RegisterPage() {
           <div className="text-center mb-8">
             <img
               src="/logo-mark.svg"
-              alt="Sidebud logo"
+              alt="Side Bud logo"
               className="inline-block w-14 h-14 rounded-2xl shadow-xl shadow-primary-500/25 mb-5 animate-float"
             />
             <h1 className="text-3xl font-bold font-display text-surface-900 dark:text-white tracking-tight">Create account</h1>
-            <p className="mt-2 text-surface-500 dark:text-surface-400 text-sm">Join the Sidebud community</p>
+            <p className="mt-2 text-surface-500 dark:text-surface-400 text-sm">Join the Side Bud community</p>
           </div>
 
           {/* Step indicators */}

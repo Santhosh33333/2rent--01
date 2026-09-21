@@ -1,4 +1,4 @@
-﻿import { getErrorMessage } from '../../lib/error'
+import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
@@ -109,8 +109,8 @@ export function ProfileCompletionPage() {
 
       const nextUser = {
         ...(user || {}),
-        name: data.fullName || user?.name || 'Sidebud User',
-        fullName: data.fullName || user?.fullName || 'Sidebud User',
+        name: data.fullName || user?.name || 'Side Bud User',
+        fullName: data.fullName || user?.fullName || 'Side Bud User',
         bio: data.bio || user?.bio,
         city: data.city || user?.city,
         country: data.country || user?.country,
@@ -126,7 +126,7 @@ export function ProfileCompletionPage() {
     } catch (err: unknown) {
       localStorage.setItem('profile_complete', 'true')
       if (user) {
-        const fallbackUser = { ...user, name: user.name || 'Sidebud User', fullName: user.fullName || user.name || 'Sidebud User' }
+        const fallbackUser = { ...user, name: user.name || 'Side Bud User', fullName: user.fullName || user.name || 'Side Bud User' }
         updateUser(fallbackUser)
       }
       toast.error(getErrorMessage(err, 'Failed to save profile, but your session was saved locally.'))
@@ -153,7 +153,7 @@ export function ProfileCompletionPage() {
           <div className="text-center mb-8">
             <img
               src="/logo-mark.svg"
-              alt="Sidebud logo"
+              alt="Side Bud logo"
               className="inline-block w-14 h-14 rounded-2xl shadow-xl shadow-primary-500/25 mb-5 animate-float"
             />
             <h1 className="text-3xl font-bold font-display text-surface-900 dark:text-white tracking-tight">Complete Your Profile</h1>
@@ -193,7 +193,7 @@ export function ProfileCompletionPage() {
                   <Check className="w-10 h-10 text-emerald-500" />
                 </div>
                 <h3 className="text-xl font-bold font-display text-surface-900 dark:text-white mb-2">Your profile is ready!</h3>
-                <p className="text-sm text-surface-500 dark:text-surface-400 mb-6">You're all set to explore Sidebud</p>
+                <p className="text-sm text-surface-500 dark:text-surface-400 mb-6">You're all set to explore Side Bud</p>
                 <button
                   onClick={() => navigate('/dashboard', { replace: true })}
                   className="btn-gradient w-full btn-lg group"

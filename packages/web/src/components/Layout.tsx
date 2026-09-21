@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
 import {
   Home, User, Wallet, Users, Sun, Moon, Menu, X, Bell,
@@ -164,9 +164,9 @@ export function Layout() {
                 <Menu className="w-5 h-5" />
               </button>
               <Link to="/dashboard" className="flex items-center gap-2.5">
-                <img src="/logo-mark.svg" alt="Sidebud logo" className="w-9 h-9 rounded-xl shadow-md shadow-primary-500/25" />
+                <img src="/logo-mark.svg" alt="Side Bud logo" className="w-9 h-9 rounded-xl shadow-md shadow-primary-500/25" />
                 <span className="text-lg font-extrabold font-display tracking-tight bg-gradient-to-r from-primary-600 via-violet-600 to-accent-500 bg-clip-text text-transparent hidden sm:block">
-                  Sidebud
+                  Side Bud
                 </span>
               </Link>
             </div>

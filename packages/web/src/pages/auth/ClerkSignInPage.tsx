@@ -1,4 +1,4 @@
-﻿import { SignIn } from '@clerk/clerk-react'
+import { SignIn } from '@clerk/clerk-react'
 import { Link } from 'react-router-dom'
 
 export function ClerkSignInPage() {
@@ -6,9 +6,9 @@ export function ClerkSignInPage() {
     <div className="min-h-screen flex flex-col px-4 py-12 bg-surface-50 dark:bg-surface-950">
       <div className="w-full max-w-md m-auto">
         <div className="text-center mb-8">
-          <Link to="/" className="inline-block text-2xl font-bold font-display gradient-text">Sidebud</Link>
+          <Link to="/" className="inline-block text-2xl font-bold font-display gradient-text">Side Bud</Link>
           <p className="text-sm text-surface-500 dark:text-surface-400 mt-2">
-            Sign in with Clerk to continue
+            Sign in to continue
           </p>
         </div>
         <SignIn

@@ -1,4 +1,4 @@
-﻿import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 import { api, refreshSessionTokens } from './api'
 import { disconnectGlobalSocket } from '../hooks/useSocket'
 import type { RegisterInput } from '../types/api'
@@ -52,7 +52,7 @@ function buildUserFromPayload(payload: Record<string, unknown>, fallbackName?: s
   return {
     id: (payload?.id as string) || `local-${Date.now()}`,
     email: (payload?.email as string) || fallbackName || 'user@Sidebud.local',
-    name: (payload?.fullName as string) || (payload?.name as string) || fallbackName || 'Sidebud User',
+    name: (payload?.fullName as string) || (payload?.name as string) || fallbackName || 'Side Bud User',
     phone: payload?.phone as string,
     role,
     activeRole: normalizeRole((payload?.activeRole || payload?.role || role) as string),
@@ -62,7 +62,7 @@ function buildUserFromPayload(payload: Record<string, unknown>, fallbackName?: s
     kycStatus: payload?.kycStatus as string,
     kycRejectionReason: (payload?.kycRejectionReason as string) ?? null,
     partnerStatus: (payload?.partnerStatus as string) ?? null,
-    fullName: (payload?.fullName as string) || (payload?.name as string) || fallbackName || 'Sidebud User',
+    fullName: (payload?.fullName as string) || (payload?.name as string) || fallbackName || 'Side Bud User',
     city: payload?.city as string,
     bio: payload?.bio as string,
     country: payload?.country as string,

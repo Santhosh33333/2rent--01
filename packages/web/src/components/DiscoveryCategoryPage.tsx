@@ -1,4 +1,4 @@
-﻿import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { ArrowLeft, ChevronRight, Search, ShieldCheck, Sparkles, User as UserIcon } from 'lucide-react'
 import { DISCOVERY_BY_KEY, type DiscoveryCategoryKey } from '../lib/discoveryData'
@@ -137,13 +137,13 @@ export function DiscoveryCategoryPage({ categoryKey }: DiscoveryCategoryPageProp
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-surface-900 dark:text-white">{p.name}</p>
                     <p className="text-xs text-surface-500">
-                      {[p.city, ageFrom(p.dateOfBirth) ? `${ageFrom(p.dateOfBirth)} yrs` : null].filter(Boolean).join(' Â· ') || 'Sidebud member'}
+                      {[p.city, ageFrom(p.dateOfBirth) ? `${ageFrom(p.dateOfBirth)} yrs` : null].filter(Boolean).join(' Â· ') || 'Side Bud member'}
                     </p>
                   </div>
                 </div>
                 {p.bio && <p className="mt-3 text-sm text-surface-600 dark:text-surface-300 line-clamp-2">{p.bio}</p>}
                 <div className="mt-4 flex items-center justify-between text-xs text-surface-500">
-                  <span>Sidebud member</span>
+                  <span>Side Bud member</span>
                   <button
                     onClick={() => navigate(`/messages?user=${p.id}`)}
                     className="inline-flex items-center gap-1 font-medium text-primary-600 dark:text-primary-400"

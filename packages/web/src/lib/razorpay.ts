@@ -1,4 +1,4 @@
-﻿import { api } from './api'
+import { api } from './api'
 
 const RAZORPAY_KEY = import.meta.env.VITE_RAZORPAY_KEY_ID
 if (!RAZORPAY_KEY) {
@@ -69,7 +69,7 @@ export async function openRazorpayCheckout({
       key: RAZORPAY_KEY || '',
       amount: amount * 100,
       currency: currency || 'INR',
-      name: 'Sidebud',
+      name: 'Side Bud',
       description,
       order_id: orderId,
       notes,
@@ -125,7 +125,7 @@ export async function openRazorpayBookingCheckout({
       key: RAZORPAY_KEY || '',
       amount: amount * 100,
       currency: currency || 'INR',
-      name: 'Sidebud',
+      name: 'Side Bud',
       description: `Booking Payment - ${bookingId}`,
       order_id: orderId,
       notes: {

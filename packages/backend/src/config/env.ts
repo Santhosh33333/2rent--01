@@ -1,4 +1,4 @@
-﻿import { z } from "zod";
+import { z } from "zod";
 import crypto from "crypto";
 
 const envSchema = z.object({
@@ -78,7 +78,7 @@ const envSchema = z.object({
   SMTP_PORT: z.string().default("587").transform(Number),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
-  SMTP_FROM: z.string().default("Sidebud <noreply@Sidebud.app>"),
+  SMTP_FROM: z.string().default("Side Bud <noreply@Sidebud.app>"),
 
   // SMS (Twilio) — optional
   TWILIO_ACCOUNT_SID: z.string().optional(),

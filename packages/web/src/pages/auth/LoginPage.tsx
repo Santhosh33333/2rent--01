@@ -1,4 +1,4 @@
-﻿import { getErrorMessage } from '../../lib/error'
+import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect, useCallback } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../lib/auth'
@@ -180,14 +180,14 @@ export function LoginPage() {
           <div className="text-center mb-10">
             <img
               src="/logo-mark.svg"
-              alt="Sidebud logo"
+              alt="Side Bud logo"
               className="inline-block w-16 h-16 rounded-2xl shadow-xl shadow-primary-500/25 mb-5 animate-float"
             />
             <h1 className="text-3xl font-bold font-display text-surface-900 dark:text-white tracking-tight">
               Welcome back
             </h1>
             <p className="mt-2 text-surface-500 dark:text-surface-400 text-sm">
-              Sign in to continue with Sidebud
+              Sign in to continue with Side Bud
             </p>
           </div>
 

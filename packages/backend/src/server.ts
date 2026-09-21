@@ -1,4 +1,4 @@
-﻿import "dotenv/config";
+import "dotenv/config";
 import { createApp } from "./app";
 import { env } from "./config/env";
 import { prisma, testConnection, disconnect } from "./config/database";
@@ -153,7 +153,7 @@ if (!dbAvailable) {
   startReminderSweeper();
 
   server.listen(env.PORT, () => {
-    console.log(`Sidebud API server listening on port ${env.PORT} [${env.NODE_ENV}]`);
+    console.log(`Side Bud API server listening on port ${env.PORT} [${env.NODE_ENV}]`);
   });
 
   const shutdown = async (signal: string): Promise<void> => {

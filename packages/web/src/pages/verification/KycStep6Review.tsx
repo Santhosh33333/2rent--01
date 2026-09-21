@@ -1,4 +1,4 @@
-﻿import { getErrorMessage } from '../../lib/error'
+import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Send, Loader2, AlertTriangle, CheckCircle, Clock } from 'lucide-react'
@@ -226,7 +226,7 @@ export function KycStep6Review() {
             <li>1. Your documents are submitted to our verification team</li>
             <li>2. We verify your documents within 1-2 business days</li>
             <li>3. You'll receive an email notification of the result</li>
-            <li>4. Once approved, you unlock full access to Sidebud features</li>
+            <li>4. Once approved, you unlock full access to Side Bud features</li>
           </ol>
         </GlassCard>
       </AnimatedPage>

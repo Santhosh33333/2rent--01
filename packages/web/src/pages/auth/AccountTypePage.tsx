@@ -1,4 +1,4 @@
-﻿import { useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { User, Handshake, ShieldCheck, ArrowRight, Check } from 'lucide-react'
 
@@ -60,7 +60,7 @@ export function AccountTypePage() {
           </svg>
         </div>
         <h1 className="text-2xl sm:text-3xl font-bold font-display tracking-tight text-surface-900 dark:text-white">
-          How do you want to use Sidebud?
+          How do you want to use Side Bud?
         </h1>
         <p className="mt-2 text-sm text-surface-500 dark:text-surface-400">
           Choose your account type. You can switch later if your account allows it.
