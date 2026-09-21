@@ -11,7 +11,7 @@ import { useAuth } from '../../lib/auth'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
 import { LocationInput } from '../../components/LocationInput'
-import { SERVICES, serviceTitle, serviceRequiresItem } from '../../lib/serviceCatalog'
+import { SERVICES, serviceTitle, serviceRequiresItem, serviceRequiresDropoff } from '../../lib/serviceCatalog'
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7
 type ServiceType = string
@@ -163,7 +163,7 @@ export function CreateBookingPage() {
   const canProceed = () => {
     switch (step) {
       case 1: return !!booking.serviceType
-      case 2: return !!booking.pickupLocation
+      case 2: return !!booking.pickupLocation && (!serviceRequiresDropoff(booking.serviceType) || !!booking.dropLocation)
       case 3: return !!booking.date && !!booking.time
       case 4: return true
       case 5: return true
@@ -363,10 +363,11 @@ export function CreateBookingPage() {
               />
               <LocationInput
                 label="Destination"
-                optional
+                required={serviceRequiresDropoff(booking.serviceType)}
+                optional={!serviceRequiresDropoff(booking.serviceType)}
                 value={booking.dropLocation}
                 onChange={(v) => updateBooking({ dropLocation: v })}
-                placeholder="Enter destination (defaults to pickup)"
+                placeholder={serviceRequiresDropoff(booking.serviceType) ? 'Where should it be delivered?' : 'Enter destination (defaults to pickup)'}
               />
             </div>
           )}

@@ -2,7 +2,7 @@ import crypto from "crypto";
 import { prisma } from "../config/database";
 import { getConfig } from "./pricingEngine";
 import { assertTransition } from "./bookingStateMachine";
-import { catalogDefaults } from "./serviceCatalog";
+import { catalogDefaults, getServiceDef } from "./serviceCatalog";
 import { notifyBookingStatusChange } from "../controllers/notificationController";
 
 // All real rates come from the admin-controlled PricingConfig table, scoped per
@@ -421,6 +421,26 @@ export async function createBooking(
     couponCode?: string;
   }
 ) {
+  // Per-type process rules: every service has a different required flow.
+  // Unknown services, missing item details (carry-style), and missing
+  // destinations (pickup-to-drop services) are rejected here, not in UI.
+  const serviceDef = getServiceDef(data.serviceType);
+  if (!serviceDef) {
+    const err: any = new Error(`Unknown service type: ${data.serviceType}.`);
+    err.code = "INVALID_SERVICE";
+    throw err;
+  }
+  if (serviceDef.requiresItem && (!data.itemType?.trim() || !data.itemDescription?.trim())) {
+    const err: any = new Error(`${serviceDef.label} needs item type and description.`);
+    err.code = "ITEM_REQUIRED";
+    throw err;
+  }
+  if (serviceDef.requiresDropoff && !data.endLocation?.trim()) {
+    const err: any = new Error(`${serviceDef.label} needs a destination (pickup-to-drop service).`);
+    err.code = "DESTINATION_REQUIRED";
+    throw err;
+  }
+
   const duration = data.durationMinutes && data.durationMinutes > 0 ? Math.floor(data.durationMinutes) : 30;
   let distanceKm = data.distanceKm && data.distanceKm > 0 ? Number(data.distanceKm) : 0;
   if (!distanceKm) {

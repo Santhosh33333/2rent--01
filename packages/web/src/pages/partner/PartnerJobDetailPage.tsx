@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { MapPin, Clock, Navigation, KeyRound, CheckCircle, Loader2, ArrowLeft, Timer, Receipt, MessageCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { api, partnerApi, bookingApi } from '../../lib/api'
+import { otpLabels, serviceTitle } from '../../lib/serviceCatalog'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
 import { SkeletonLoader } from '../../components/SkeletonLoader'
@@ -118,7 +119,7 @@ export function PartnerJobDetailPage() {
           <ArrowLeft className="w-4 h-4" /> Back to Jobs
         </button>
         <h1 className="text-2xl font-bold font-display text-surface-900 dark:text-white">
-          {job.serviceType === 'WALKING' ? 'Walking Buddy Job' : 'CarryBuddy Job'}
+          {serviceTitle(job.serviceType)} Job
         </h1>
         <p className="text-sm text-surface-500 mt-1">Job #{job.id.slice(-8)} • {job.status.replace(/_/g, ' ')}</p>
       </AnimatedPage>
@@ -154,13 +155,13 @@ export function PartnerJobDetailPage() {
                   {busy === 'go' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />} Go to Job
                 </button>
               ) : (
-                <button onClick={() => run('arrived', async () => { await partnerApi.markArrived(job.id); toast.success('Arrival recorded. Ask the user for the start code.') })} disabled={busy !== null || phase === 'ARRIVED'} className="flex-1 btn-gradient flex items-center justify-center gap-2 disabled:opacity-50">
+                <button onClick={() => run('arrived', async () => { await partnerApi.markArrived(job.id); toast.success(otpLabels(job.serviceType).startToast) })} disabled={busy !== null || phase === 'ARRIVED'} className="flex-1 btn-gradient flex items-center justify-center gap-2 disabled:opacity-50">
                   {busy === 'arrived' ? <Loader2 className="w-4 h-4 animate-spin" /> : <MapPin className="w-4 h-4" />}
                   {phase === 'ARRIVED' ? 'Arrived ✓' : "I've Arrived"}
                 </button>
               )}
             </div>
-            <p className="text-xs text-surface-400 mt-3">Start unlocks inside the scheduled time window after the user shares the start code in person.</p>
+            <p className="text-xs text-surface-400 mt-3">Start unlocks inside the scheduled time window after the user shares the {otpLabels(job.serviceType).start.toLowerCase()} in person.</p>
           </GlassCard>
         </AnimatedPage>
       )}
@@ -169,8 +170,8 @@ export function PartnerJobDetailPage() {
       {(job.status === 'OTP_GENERATED' || (isUpcoming && phase === 'ARRIVED')) && (
         <AnimatedPage delay={100}>
           <GlassCard variant="elevated" padding="lg">
-            <h3 className="section-title mb-2 flex items-center gap-2"><KeyRound className="w-5 h-5 text-primary-500" /> Enter Start Code</h3>
-            <p className="text-xs text-surface-500 mb-4">Ask the customer to read out their start code in person. Never accept codes over chat.</p>
+            <h3 className="section-title mb-2 flex items-center gap-2"><KeyRound className="w-5 h-5 text-primary-500" /> Enter {otpLabels(job.serviceType).start}</h3>
+            <p className="text-xs text-surface-500 mb-4">{otpLabels(job.serviceType).startHint}</p>
             <div className="flex gap-3">
               <input value={startCode} onChange={(e) => setStartCode(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="6-digit code" inputMode="numeric" className="input flex-1 text-center tracking-[0.3em] font-bold" />
               <button onClick={() => run('start', async () => { await partnerApi.verifyStartCode(job.id, { startOtp: startCode }); toast.success('Job started. Timer is running.') })} disabled={busy !== null || startCode.length < 4} className="btn-gradient px-6 disabled:opacity-50">
@@ -192,7 +193,34 @@ export function PartnerJobDetailPage() {
               {busy === 'request' ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Request Completion'}
             </button>
             <button
-              onClick={() => run('sos', async () => { await api.post('/users/sos/trigger', { message: `Emergency SOS during job ${job.id}` }); toast('🚨 Emergency SOS sent. Stay safe.', { duration: 5000 }) })}
+              onClick={() => run('sos', async () => {
+                const pos = await new Promise<GeolocationPosition | null>((resolve) => {
+                  try {
+                    const cached = localStorage.getItem('Sidebud-geo-fix')
+                    if (cached) {
+                      const fix = JSON.parse(cached)
+                      if (Date.now() - fix.ts < 10 * 60 * 1000) {
+                        resolve({ coords: { latitude: fix.lat, longitude: fix.lon } } as GeolocationPosition)
+                        return
+                      }
+                    }
+                  } catch {
+                    // fall through to live fix
+                  }
+                  if (!navigator.geolocation) {
+                    resolve(null)
+                    return
+                  }
+                  navigator.geolocation.getCurrentPosition(resolve, () => resolve(null), { timeout: 10000 })
+                })
+                if (!pos) throw new Error('Location unavailable — call 112 directly right now.')
+                await api.post('/users/sos/trigger', {
+                  latitude: pos.coords.latitude,
+                  longitude: pos.coords.longitude,
+                  message: `Emergency SOS during job ${job.id}`,
+                })
+                toast('Emergency SOS sent with your location. Stay safe.', { duration: 5000 })
+              })}
               disabled={busy !== null}
               className="w-full mt-3 btn-outline text-danger-500 hover:bg-danger-50 dark:hover:bg-danger-500/10 border-danger-200 dark:border-danger-800/30 flex items-center justify-center gap-2 disabled:opacity-50"
             >
@@ -206,8 +234,8 @@ export function PartnerJobDetailPage() {
       {job.status === 'COMPLETION_REQUESTED' && (
         <AnimatedPage delay={100}>
           <GlassCard variant="elevated" padding="lg">
-            <h3 className="section-title mb-2 flex items-center gap-2"><Receipt className="w-5 h-5 text-primary-500" /> Enter Completion Code</h3>
-            <p className="text-xs text-surface-500 mb-4">The customer confirms the work and reads out their completion code in person.</p>
+            <h3 className="section-title mb-2 flex items-center gap-2"><Receipt className="w-5 h-5 text-primary-500" /> Enter {otpLabels(job.serviceType).complete}</h3>
+            <p className="text-xs text-surface-500 mb-4">{otpLabels(job.serviceType).completeHint}</p>
             <div className="flex gap-3">
               <input value={completionCode} onChange={(e) => setCompletionCode(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="6-digit code" inputMode="numeric" className="input flex-1 text-center tracking-[0.3em] font-bold" />
               <button onClick={() => run('complete', async () => { await partnerApi.completeBooking(job.id, { completionOtp: completionCode }); toast.success('Job completed.') })} disabled={busy !== null || completionCode.length < 4} className="btn-gradient px-6 disabled:opacity-50">

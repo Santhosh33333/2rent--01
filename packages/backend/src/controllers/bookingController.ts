@@ -8,7 +8,7 @@ import * as razorpayService from "../services/razorpayService"
 import * as partnerMatching from "../services/partnerMatchingEngine"
 import { dispatchBooking, onBookingClaimed } from "../services/dispatchService"
 import { ensureConversation } from "./messageController"
-import { SERVICE_KEYS } from "../services/serviceCatalog"
+import { SERVICE_KEYS, getServiceDef } from "../services/serviceCatalog"
 import { logBookingTransition } from "../services/bookingLogService"
 import {
   getEarlyStartMinutes,
@@ -73,8 +73,15 @@ export async function createBooking(req: AuthedRequest, res: Response): Promise<
     }
     const { startLocation, endLocation, scheduledAt, durationMinutes, itemType, itemDescription, notes, startLatitude, startLongitude, endLatitude, endLongitude, couponCode, distanceKm, sameGenderOnly } = req.body;
 
-    if (!startLocation || !endLocation) {
-      sendError(res, "Start location and end location are required.", 400, "VALIDATION_ERROR");
+    // Per-type process: pickup-to-drop services must have a destination;
+    // companion-style services (walking, pet, study…) default it to pickup.
+    const serviceDef = getServiceDef(normalizedServiceType);
+    if (!startLocation) {
+      sendError(res, "Start location is required.", 400, "VALIDATION_ERROR");
+      return;
+    }
+    if (serviceDef?.requiresDropoff && !endLocation) {
+      sendError(res, `${serviceDef.label} needs a destination (pickup-to-drop service).`, 400, "DESTINATION_REQUIRED");
       return;
     }
 
@@ -141,6 +148,10 @@ export async function createBooking(req: AuthedRequest, res: Response): Promise<
     }
     if (err?.code === "MIN_DURATION") {
       sendError(res, err.message, 400, "MIN_DURATION");
+      return;
+    }
+    if (err?.code === "INVALID_SERVICE" || err?.code === "ITEM_REQUIRED" || err?.code === "DESTINATION_REQUIRED") {
+      sendError(res, err.message, 400, err.code);
       return;
     }
     sendError(res, "Failed to create booking.", 500, "INTERNAL_ERROR");

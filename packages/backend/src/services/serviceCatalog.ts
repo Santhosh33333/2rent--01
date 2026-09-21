@@ -27,6 +27,7 @@ export interface ServiceDef {
   icon: string; // emoji used by the web client
   requiresItem: boolean; // carry/errand style: item description needed
   requiresDistance: boolean; // distance-based fare component applies
+  requiresDropoff: boolean; // pickup-to-drop services: destination mandatory
   pricing: ServicePricing;
 }
 
@@ -39,6 +40,7 @@ export const SERVICE_CATALOG: ServiceDef[] = [
     icon: "🚶",
     requiresItem: false,
     requiresDistance: true,
+    requiresDropoff: false,
     pricing: { baseFee: 50, perMinute: 2, perKm: 0.7, minDurationMinutes: 10, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
   },
   {
@@ -49,6 +51,7 @@ export const SERVICE_CATALOG: ServiceDef[] = [
     icon: "📦",
     requiresItem: true,
     requiresDistance: true,
+    requiresDropoff: true,
     pricing: { baseFee: 80, perMinute: 2.5, perKm: 1, minDurationMinutes: 10, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
   },
   {
@@ -59,6 +62,7 @@ export const SERVICE_CATALOG: ServiceDef[] = [
     icon: "🛋️",
     requiresItem: false,
     requiresDistance: false,
+    requiresDropoff: false,
     pricing: { baseFee: 60, perMinute: 3, perKm: 0, minDurationMinutes: 30, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
   },
   {
@@ -69,6 +73,7 @@ export const SERVICE_CATALOG: ServiceDef[] = [
     icon: "🚚",
     requiresItem: false,
     requiresDistance: true,
+    requiresDropoff: true,
     pricing: { baseFee: 120, perMinute: 4, perKm: 2, minDurationMinutes: 60, waitingChargePerMin: 0, waitingFreeMinutes: 10, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
   },
   {
@@ -79,6 +84,7 @@ export const SERVICE_CATALOG: ServiceDef[] = [
     icon: "🛵",
     requiresItem: false,
     requiresDistance: true,
+    requiresDropoff: true,
     pricing: { baseFee: 40, perMinute: 3, perKm: 2.5, minDurationMinutes: 15, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
   },
   {
@@ -89,6 +95,7 @@ export const SERVICE_CATALOG: ServiceDef[] = [
     icon: "🏃",
     requiresItem: false,
     requiresDistance: true,
+    requiresDropoff: true,
     pricing: { baseFee: 30, perMinute: 2.5, perKm: 1.5, minDurationMinutes: 15, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
   },
   {
@@ -99,6 +106,7 @@ export const SERVICE_CATALOG: ServiceDef[] = [
     icon: "⏳",
     requiresItem: false,
     requiresDistance: false,
+    requiresDropoff: false,
     pricing: { baseFee: 0, perMinute: 2, perKm: 0, minDurationMinutes: 15, waitingChargePerMin: 2, waitingFreeMinutes: 5, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
   },
   {
@@ -109,6 +117,7 @@ export const SERVICE_CATALOG: ServiceDef[] = [
     icon: "📚",
     requiresItem: false,
     requiresDistance: false,
+    requiresDropoff: false,
     pricing: { baseFee: 50, perMinute: 4, perKm: 0, minDurationMinutes: 30, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
   },
   {
@@ -119,6 +128,7 @@ export const SERVICE_CATALOG: ServiceDef[] = [
     icon: "📍",
     requiresItem: false,
     requiresDistance: false,
+    requiresDropoff: false,
     pricing: { baseFee: 20, perMinute: 2, perKm: 0, minDurationMinutes: 15, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
   },
   {
@@ -129,6 +139,7 @@ export const SERVICE_CATALOG: ServiceDef[] = [
     icon: "✈️",
     requiresItem: false,
     requiresDistance: true,
+    requiresDropoff: true,
     pricing: { baseFee: 60, perMinute: 3, perKm: 2, minDurationMinutes: 30, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
   },
   {
@@ -139,6 +150,7 @@ export const SERVICE_CATALOG: ServiceDef[] = [
     icon: "🎉",
     requiresItem: false,
     requiresDistance: false,
+    requiresDropoff: false,
     pricing: { baseFee: 80, perMinute: 3.5, perKm: 0, minDurationMinutes: 60, waitingChargePerMin: 0, waitingFreeMinutes: 10, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
   },
   {
@@ -149,6 +161,7 @@ export const SERVICE_CATALOG: ServiceDef[] = [
     icon: "💼",
     requiresItem: false,
     requiresDistance: true,
+    requiresDropoff: true,
     pricing: { baseFee: 100, perMinute: 5, perKm: 1.5, minDurationMinutes: 30, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
   },
   {
@@ -159,6 +172,7 @@ export const SERVICE_CATALOG: ServiceDef[] = [
     icon: "🐾",
     requiresItem: false,
     requiresDistance: true,
+    requiresDropoff: false,
     pricing: { baseFee: 60, perMinute: 3, perKm: 1, minDurationMinutes: 15, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
   },
   {
@@ -169,6 +183,7 @@ export const SERVICE_CATALOG: ServiceDef[] = [
     icon: "🏭",
     requiresItem: false,
     requiresDistance: true,
+    requiresDropoff: true,
     pricing: { baseFee: 200, perMinute: 6, perKm: 4, minDurationMinutes: 120, waitingChargePerMin: 0, waitingFreeMinutes: 10, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
   },
 ];
