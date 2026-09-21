@@ -7,7 +7,9 @@ import { prisma } from '../config/database';
  */
 export async function preventDuplicateBooking(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).userId as string;
+    // authenticateToken sets req.user — the old (req as any).userId read was
+    // always undefined, so this guard never fired. Fall back kept for safety.
+    const userId = ((req as any).user?.userId ?? (req as any).userId) as string;
     const { serviceType, scheduledAt } = req.body ?? {};
 
     if (!userId || !serviceType || !scheduledAt) {
@@ -17,11 +19,13 @@ export async function preventDuplicateBooking(req: Request, res: Response, next:
     const windowStart = new Date(new Date(scheduledAt).getTime() - 5 * 60 * 1000);
     const windowEnd = new Date(new Date(scheduledAt).getTime() + 5 * 60 * 1000);
 
+    // Any non-final booking in the window blocks: enumerate final states
+    // instead of active ones so new machine states are safe by default.
     const existing = await prisma.booking.findFirst({
       where: {
         userId,
         serviceType,
-        status: { in: ['PENDING', 'CONFIRMED', 'PARTNER_SEARCHING', 'PARTNER_ASSIGNED', 'IN_PROGRESS'] },
+        status: { notIn: ['COMPLETED', 'CANCELLED', 'EXPIRED', 'REFUND_INITIATED', 'REFUND_COMPLETED'] },
         scheduledAt: { gte: windowStart, lte: windowEnd },
       },
       select: { id: true, status: true, scheduledAt: true },

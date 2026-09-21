@@ -875,6 +875,15 @@ export async function startBooking(req: AuthedRequest, res: Response): Promise<v
       sendError(res, "Start code verification is required before starting. Accept means upcoming — never started.", 409, "START_OTP_REQUIRED");
       return;
     }
+    // No free rides: UPI-manual bookings must be admin-verified (PAID) before
+    // the job can start. Cash bookings settle after the service by design
+    // (PENDING_CASH), and zero-amount bookings need no payment.
+    const amountDue = Number(booking.finalAmount ?? booking.estimatedAmount ?? 0);
+    const paymentSettled = ["PAID", "PENDING_CASH", "CASH_RECEIVED"].includes((booking as any).paymentStatus);
+    if (amountDue > 0 && !paymentSettled) {
+      sendError(res, "Payment is not settled yet. UPI payments must be verified before the job can start.", 409, "PAYMENT_UNSETTLED");
+      return;
+    }
     const notes = parseNotes(booking.notes);
     if (!notes.startOtp?.verifiedAt || !booking.otpVerifiedAt) {
       sendError(res, "Enter the start code from the user first (POST /:id/start-verify).", 409, "START_OTP_REQUIRED");

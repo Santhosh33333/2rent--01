@@ -38,7 +38,7 @@ export function idempotencyMiddleware(req: IdempotentRequest, res: Response, nex
       res.json = ((body: any) => {
         // Only cache successful responses
         if (res.statusCode >= 200 && res.statusCode < 300) {
-          const userId = (req as any).userId as string | undefined;
+          const userId = ((req as any).user?.userId ?? (req as any).userId) as string | undefined;
           prisma.idempotencyKey.create({
             data: {
               key,
