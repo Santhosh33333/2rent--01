@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Loader2, Phone, ShieldAlert, Siren, X } from 'lucide-react'
+import { Loader2, Phone, ShieldAlert, Siren } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { api } from '../lib/api'
 import { useGeolocation } from '../lib/geolocation'

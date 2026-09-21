@@ -8,6 +8,7 @@ import { useAuth } from '../../lib/auth'
 import { api } from '../../lib/api'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
+import { EmergencyPanel } from '../../components/EmergencyPanel'
 
 interface DashboardStats {
   wallet: { balance: number } | null
@@ -268,7 +269,8 @@ export function DashboardPage() {
               </div>
             </GlassCard>
 
-            {/* Messages Shortcut */}            <GlassCard variant="elevated" padding="lg">
+            {/* Messages Shortcut */}
+            <GlassCard variant="elevated" padding="lg">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold font-display text-surface-900 dark:text-surface-100 flex items-center gap-2">
                   <MessageCircle className="w-4 h-4 text-primary-500" />
@@ -285,6 +287,9 @@ export function DashboardPage() {
                 <ArrowRight className="w-3.5 h-3.5" />
               </Link>
             </GlassCard>
+
+            {/* Emergency / Safety */}
+            <EmergencyPanel />
 
             {/* Quick Links */}
             <GlassCard variant="elevated" padding="lg">
