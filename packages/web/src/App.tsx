@@ -113,6 +113,7 @@ const SearchPage = lazy(() => import('./pages/search/SearchPage').then(m => ({ d
 const SportsPage = lazy(() => import('./pages/sports/SportsPage').then(m => ({ default: m.SportsPage })))
 const MoviesPage = lazy(() => import('./pages/movies/MoviesPage').then(m => ({ default: m.MoviesPage })))
 const AiAssistantPage = lazy(() => import('./pages/ai/AiAssistantPage').then(m => ({ default: m.AiAssistantPage })))
+const SosAlertPage = lazy(() => import('./pages/sos/SosAlertPage').then(m => ({ default: m.SosAlertPage })))
 
 function LoadingSpinner() {
   return (
@@ -207,6 +208,7 @@ export function App() {
             <Route element={<Layout />}>
               <Route path="/messages" element={<MessagesPage />} />
               <Route path="/messages/:userId" element={<ConversationPage />} />
+              <Route path="/sos/:alertId" element={<SosAlertPage />} />
             </Route>
           </Route>
 

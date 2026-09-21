@@ -22,8 +22,25 @@ interface Notification {
   readAt?: string
 }
 
-function getNotificationIcon(type: string): any {
-  const lower = (type || 'general').toLowerCase()
+// Deep-link routing: tapping a notification opens what it is about —
+// an SOS alert opens its live location, a booking opens tracking, etc.
+export function resolveNotificationRoute(n: { metadata?: string | null; actionUrl?: string }): string | null {
+  try {
+    const d = n.metadata ? JSON.parse(n.metadata) : {}
+    if (typeof d.route === 'string' && d.route.startsWith('/')) return d.route
+    if (d.alertId) return `/sos/${d.alertId}`
+    if (d.bookingId) return `/bookings/${d.bookingId}`
+    if (d.eventId) return `/events/${d.eventId}`
+    if (d.communityId) return `/communities/${d.communityId}`
+    if (d.userId && (d.kind === 'CHAT' || d.type === 'CHAT_MESSAGE')) return `/messages/${d.userId}`
+  } catch {
+    // malformed payload — fall through to actionUrl
+  }
+  if (n.actionUrl && n.actionUrl.startsWith('/')) return n.actionUrl
+  return null
+}
+
+function getNotificationIcon(type: string): any {  const lower = (type || 'general').toLowerCase()
   if (lower.includes('message')) return MessageSquare
   if (lower.includes('event')) return Calendar
   if (lower.includes('booking') || lower.includes('walk')) return MapPin
@@ -235,9 +252,16 @@ export function NotificationsPage() {
               return (
                 <AnimatedPage key={n.id} delay={i * 30}>
                   <div
+                    onClick={() => {
+                      const route = resolveNotificationRoute(n)
+                      if (route) {
+                        if (!n.isRead) markAsRead(n.id)
+                        navigate(route)
+                      }
+                    }}
                     className={`glass-card-static p-4 flex items-start gap-3 transition-all ${
                       !n.isRead ? 'border-l-4 border-primary-500 bg-primary-50/30 dark:bg-primary-500/5' : ''
-                    }`}
+                    } ${resolveNotificationRoute(n) ? 'cursor-pointer hover:border-primary-300 dark:hover:border-primary-700' : ''}`}
                   >
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${colorClass}`}>
                       <Icon className="w-5 h-5" />
@@ -261,7 +285,10 @@ export function NotificationsPage() {
                     <div className="flex gap-1 shrink-0">
                       {!n.isRead && (
                         <button
-                          onClick={() => markAsRead(n.id)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            markAsRead(n.id)
+                          }}
                           className="p-1.5 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-800 text-surface-400 hover:text-primary-500 transition-colors"
                           title="Mark as read"
                         >
@@ -269,7 +296,10 @@ export function NotificationsPage() {
                         </button>
                       )}
                       <button
-                        onClick={() => deleteNotification(n.id)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          deleteNotification(n.id)
+                        }}
                         className="p-1.5 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-800 text-surface-400 hover:text-danger-500 transition-colors"
                         title="Delete"
                       >

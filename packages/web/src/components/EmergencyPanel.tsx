@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Loader2, Phone, ShieldAlert, Siren } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { api } from '../lib/api'
@@ -20,6 +21,7 @@ export function EmergencyPanel() {
   const [open, setOpen] = useState(false)
   const [sending, setSending] = useState(false)
   const [active, setActive] = useState(false)
+  const [activeAlertId, setActiveAlertId] = useState<string | null>(null)
   const [contactPhone, setContactPhone] = useState<string | null>(null)
   const [contactName, setContactName] = useState<string | null>(null)
   const geo = useGeolocation()
@@ -29,6 +31,7 @@ export function EmergencyPanel() {
       const res = await api.get('/users/sos/status')
       const d = res.data?.data || res.data
       setActive(Boolean(d?.active))
+      setActiveAlertId(d?.alert?.id || null)
     } catch {
       // status is best-effort; the buttons work regardless
     }
@@ -77,6 +80,9 @@ export function EmergencyPanel() {
         latitude: lat,
         longitude: lon,
         message: 'Emergency SOS from Safety panel',
+      }).then((res) => {
+        const d = res.data?.data || res.data
+        if (d?.id) setActiveAlertId(d.id)
       })
       setActive(true)
       toast.success('SOS sent to admins and your partner. Stay safe.', { duration: 6000 })
@@ -91,6 +97,7 @@ export function EmergencyPanel() {
     try {
       await api.post('/users/sos/cancel')
       setActive(false)
+      setActiveAlertId(null)
       toast.success('SOS alert cancelled')
     } catch (err) {
       toast.error(getErrorMessage(err, 'Could not cancel the alert'))
@@ -112,9 +119,16 @@ export function EmergencyPanel() {
           </div>
         </div>
         {active ? (
-          <button type="button" onClick={cancelSos} className="rounded-xl bg-red-500 px-3 py-2 text-xs font-bold text-white">
-            Cancel SOS
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {activeAlertId && (
+              <Link to={`/sos/${activeAlertId}`} className="rounded-xl bg-white/70 dark:bg-white/10 px-3 py-2 text-xs font-bold text-red-600 dark:text-red-300">
+                View live
+              </Link>
+            )}
+            <button type="button" onClick={cancelSos} className="rounded-xl bg-red-500 px-3 py-2 text-xs font-bold text-white">
+              Cancel SOS
+            </button>
+          </div>
         ) : (
           <button
             type="button"
@@ -126,8 +140,7 @@ export function EmergencyPanel() {
         )}
       </div>
 
-      {open && !active && (
-        <div className="mt-3 space-y-2">
+      {open && !active && (        <div className="mt-3 space-y-2">
           {CALL_OPTIONS.map((c) => (
             <a
               key={c.number}
