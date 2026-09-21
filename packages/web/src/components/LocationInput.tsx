@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Loader2, Crosshair, MapPin } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { api } from '../lib/api'
+import { useGeolocation, geoStatusMessage } from '../lib/geolocation'
 
 interface Suggestion {
   placeId: string
@@ -62,8 +63,11 @@ export function LocationInput({ label, value, onChange, placeholder, required, o
   const debounceRef = useRef<ReturnType<typeof setTimeout>>()
   const skipNextSearch = useRef(false)
   const autoDoneRef = useRef(false)
-  // Refs so the mount-once auto-detect always calls the latest handler
-  // even when parents re-create callbacks every render.
+  // Set when the next GPS fix should fill this field (auto-mount or the
+  // crosshair button). Manual typing always wins and clears the intent.
+  const wantFillRef = useRef(false)
+  const geo = useGeolocation()
+  // Refs so mount-once effects always call the latest handler.
   const valueRef = useRef(value)
   valueRef.current = value
   const onChangeRef = useRef(onChange)
@@ -119,50 +123,48 @@ export function LocationInput({ label, value, onChange, placeholder, required, o
     setOpen(false)
   }
 
-  const detectLocation = (silent: boolean) => {
-    if (!navigator.geolocation) {
-      if (!silent) toast.error('Geolocation is not supported by this browser.')
-      return
-    }
+  const resolveAndFill = async (lat: number, lon: number, silent: boolean) => {
     setLocating(true)
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const { latitude, longitude } = pos.coords
-        try {
-          const res = await api.get('/location/reverse', {
-            params: { lat: latitude, lon: longitude },
-          })
-          const result = res.data?.data?.result
-          const name =
-            result?.displayName && !String(result.displayName).startsWith(String(latitude).slice(0, 5))
-              ? (result.displayName as string)
-              : (result?.displayName as string) || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`
-          skipNextSearch.current = true
-          onChangeRef.current(name)
-          writeCachedLocation(latitude, longitude, name)
-          if (!silent) toast.success('Current location detected')
-        } catch {
-          const fallback = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`
-          onChangeRef.current(fallback)
-          writeCachedLocation(latitude, longitude, fallback)
-          if (!silent) toast.success('Current location coordinates detected')
-        } finally {
-          setLocating(false)
-        }
-      },
-      () => {
-        setLocating(false)
-        if (!silent) toast.error('Location permission denied')
-      },
-      { enableHighAccuracy: true, timeout: 10000 }
-    )
+    try {
+      const res = await api.get('/location/reverse', {
+        params: { lat, lon },
+      })
+      const result = res.data?.data?.result
+      const name =
+        result?.displayName && !String(result.displayName).startsWith(String(lat).slice(0, 5))
+          ? (result.displayName as string)
+          : (result?.displayName as string) || `${lat.toFixed(4)}, ${lon.toFixed(4)}`
+      skipNextSearch.current = true
+      onChangeRef.current(name)
+      writeCachedLocation(lat, lon, name)
+      if (!silent) toast.success('Current location detected')
+    } catch {
+      const fallback = `${lat.toFixed(4)}, ${lon.toFixed(4)}`
+      onChangeRef.current(fallback)
+      writeCachedLocation(lat, lon, fallback)
+      if (!silent) toast.success('Current location coordinates detected')
+    } finally {
+      setLocating(false)
+    }
   }
 
-  const useMyLocation = () => detectLocation(false)
+  // GPS fix arrived: fill only when this field asked for it and is empty.
+  useEffect(() => {
+    if (!geo.fix || !wantFillRef.current || valueRef.current) return
+    wantFillRef.current = false
+    resolveAndFill(geo.fix.lat, geo.fix.lon, true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [geo.fix])
+
+  const useMyLocation = () => {
+    wantFillRef.current = true
+    geo.requestFix()
+  }
 
   // Automatic fill on mount when the field starts empty: instant when we
   // have a fresh cached fix, otherwise one GPS attempt. The browser asks
-  // for permission at most once per origin; afterwards this is silent.
+  // for permission at most once per origin; afterwards this is silent, and
+  // every failure state tells the user to type instead of trapping them.
   useEffect(() => {
     if (!autoDetect || autoDoneRef.current) return
     autoDoneRef.current = true
@@ -173,7 +175,8 @@ export function LocationInput({ label, value, onChange, placeholder, required, o
       onChangeRef.current(cached.displayName)
       return
     }
-    detectLocation(true)
+    wantFillRef.current = true
+    geo.requestFix()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoDetect])
 
@@ -215,14 +218,19 @@ export function LocationInput({ label, value, onChange, placeholder, required, o
           <button
             type="button"
             onClick={useMyLocation}
-            disabled={locating}
+            disabled={locating || geo.status === 'locating'}
             title="Use my current location"
             className="p-2 rounded-xl text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-500/10 transition-colors disabled:opacity-50"
           >
-            {locating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Crosshair className="w-4 h-4" />}
+            {locating || geo.status === 'locating' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Crosshair className="w-4 h-4" />}
           </button>
         </div>
       </div>
+      {(() => {
+        const msg = geoStatusMessage(geo.status)
+        if (!msg || locating || geo.status === 'locating') return null
+        return <p className="mt-1.5 text-xs text-surface-500 dark:text-surface-400">{msg}</p>
+      })()}
       {open && suggestions.length > 0 && (
         <ul className="absolute z-20 left-0 right-0 mt-1 glass-card overflow-hidden shadow-lg">
           {suggestions.map((s, i) => (

@@ -1,9 +1,177 @@
 ﻿import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, ChevronRight, GripVertical, Search, SlidersHorizontal, Sparkles } from 'lucide-react'
+import { ArrowRight, ChevronRight, GripVertical, Loader2, MapPin, Navigation, Search, SlidersHorizontal, Sparkles, Star } from 'lucide-react'
 import { DISCOVERY_CATEGORIES, QUICK_ACTIONS, type DiscoveryCategoryKey } from '../../lib/discoveryData'
+import { api, assetUrl } from '../../lib/api'
+import { useGeolocation, geoStatusMessage } from '../../lib/geolocation'
+import { getErrorMessage } from '../../lib/error'
 
 const STORAGE_KEY = 'Sidebud.discovery-order'
+const RADII = [1, 5, 10, 25]
+
+interface NearbyPartner {
+  id: string
+  userId: string | null
+  name: string
+  avatarUrl: string | null
+  city: string | null
+  services: string[]
+  rating: number
+  completedJobs: number
+  distanceKm?: number
+}
+
+function NearbyPartners() {
+  const geo = useGeolocation(true)
+  const [partners, setPartners] = useState<NearbyPartner[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [radius, setRadius] = useState(10)
+  const [loadedWithoutLocation, setLoadedWithoutLocation] = useState(false)
+
+  const fetchNearby = async (lat?: number, lon?: number) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const params: Record<string, string | number> = { limit: 12, radiusKm: radius }
+      if (lat !== undefined && lon !== undefined) {
+        params.lat = lat
+        params.lon = lon
+      }
+      const res = await api.get('/discovery/nearby-partners', { params })
+      const data = res.data?.data || res.data
+      setPartners(Array.isArray(data?.partners) ? data.partners : [])
+    } catch (err) {
+      setError(getErrorMessage(err, 'Could not load nearby partners'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (geo.fix) fetchNearby(geo.fix.lat, geo.fix.lon)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [geo.fix, radius])
+
+  const geoMsg = geoStatusMessage(geo.status)
+
+  return (
+    <div className="rounded-3xl border border-surface-200 bg-white p-4 shadow-sm dark:border-surface-800 dark:bg-surface-900">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Navigation className="w-4 h-4 text-emerald-500" />
+          <h2 className="font-semibold">Partners near you</h2>
+        </div>
+        <div className="flex items-center gap-1">
+          {RADII.map((r) => (
+            <button
+              key={r}
+              type="button"
+              onClick={() => setRadius(r)}
+              className={`rounded-full px-2.5 py-1 text-xs font-semibold transition-colors ${
+                radius === r
+                  ? 'bg-emerald-500 text-white'
+                  : 'bg-surface-100 text-surface-600 dark:bg-surface-800 dark:text-surface-300'
+              }`}
+            >
+              {r} km
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading && partners.length === 0 ? (
+        <div className="flex items-center gap-2 py-6 text-sm text-surface-500">
+          <Loader2 className="w-4 h-4 animate-spin" /> Finding partners nearby…
+        </div>
+      ) : error ? (
+        <div className="py-4 text-center">
+          <p className="text-sm text-surface-500">{error}</p>
+          <button
+            type="button"
+            onClick={() => (geo.fix ? fetchNearby(geo.fix.lat, geo.fix.lon) : geo.requestFix())}
+            className="mt-2 text-sm font-semibold text-primary-600 dark:text-primary-400"
+          >
+            Retry
+          </button>
+        </div>
+      ) : partners.length === 0 ? (
+        <div className="py-4 text-center text-sm text-surface-500">
+          {geoMsg ? (
+            <>
+              <p>{geoMsg}</p>
+              <div className="mt-2 flex items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => geo.requestFix()}
+                  className="font-semibold text-primary-600 dark:text-primary-400"
+                >
+                  Enable location
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoadedWithoutLocation(true)
+                    fetchNearby()
+                  }}
+                  className="font-semibold text-surface-600 dark:text-surface-300"
+                >
+                  Browse all
+                </button>
+              </div>
+            </>
+          ) : (
+            'No available partners in this area yet.'
+          )}
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {partners.map((p) => (
+            <div key={p.id} className="flex items-center gap-3 rounded-2xl border border-surface-200 p-3 dark:border-surface-700">
+              {p.avatarUrl ? (
+                <img src={assetUrl(p.avatarUrl) || ''} alt={p.name} className="w-12 h-12 rounded-2xl object-cover shrink-0" />
+              ) : (
+                <div className="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-700 dark:text-emerald-300 font-bold shrink-0">
+                  {(p.name || 'P').slice(0, 1).toUpperCase()}
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold truncate">{p.name}</p>
+                <p className="text-xs text-surface-500 flex items-center gap-1">
+                  <MapPin className="w-3 h-3" />
+                  {p.distanceKm !== undefined ? `${p.distanceKm} km away` : p.city || 'Nearby'}
+                </p>
+                <p className="text-xs text-surface-500 flex items-center gap-1 mt-0.5">
+                  <Star className="w-3 h-3 text-amber-500" />
+                  {Number(p.rating || 0).toFixed(1)} · {p.completedJobs} jobs · {p.services.join(' + ') || 'services'}
+                </p>
+              </div>
+              <div className="flex flex-col gap-1.5 shrink-0">
+                <Link
+                  to={`/bookings/create${p.services.includes('carry') && !p.services.includes('walking') ? '?type=CARRY' : ''}`}
+                  className="rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white text-center"
+                >
+                  Book
+                </Link>
+                {p.userId && (
+                  <Link
+                    to={`/messages/${p.userId}`}
+                    className="rounded-lg bg-surface-100 px-3 py-1.5 text-xs font-semibold text-surface-700 text-center dark:bg-surface-800 dark:text-surface-200"
+                  >
+                    Message
+                  </Link>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {loadedWithoutLocation && partners.length > 0 && (
+        <p className="mt-2 text-xs text-surface-400">Showing all partners — enable location for distances.</p>
+      )}
+    </div>
+  )
+}
 
 export function DiscoveryHubPage() {
   const [query, setQuery] = useState('')
@@ -65,6 +233,8 @@ export function DiscoveryHubPage() {
           className="input pl-12 py-3.5"
         />
       </div>
+
+      <NearbyPartners />
 
       <div className="rounded-3xl border border-surface-200 bg-white p-4 shadow-sm dark:border-surface-800 dark:bg-surface-900">
         <div className="mb-3 flex items-center gap-2">
