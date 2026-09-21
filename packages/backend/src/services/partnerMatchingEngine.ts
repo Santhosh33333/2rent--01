@@ -1,6 +1,7 @@
 import { prisma } from "../config/database";
 import { calculateDistance } from "../utils/location";
 import { getServiceDef } from "./serviceCatalog";
+import { getConfig } from "./pricingEngine";
 import { isDemoEmail, isDemoPartnerEmail, isDemoUserEmail } from "../utils/demo";
 
 function serviceLabel(type: string): string {
@@ -314,15 +315,20 @@ export async function assignPartnerToBooking(
       });
     }
 
-    // Create a matching request window (30 seconds for partners to respond)
+    // Partner search window: notified partners get a fair chance to accept
+    // before the booking auto-cancels with a full refund. Was a hardcoded
+    // 30 seconds — far too short for a human to see and accept a job.
+    // Admin-configurable via PARTNER_SEARCH_WINDOW_MINUTES (default 10).
+    const windowMinutes = await getConfig("PARTNER_SEARCH_WINDOW_MINUTES", 10).catch(() => 10);
+    const windowMs = Math.max(1, Math.min(120, Number(windowMinutes) || 10)) * 60000;
     await prisma.bookingTimeout.upsert({
       where: { bookingId },
       update: {
-        timeoutAt: new Date(Date.now() + 30000), // 30 second window
+        timeoutAt: new Date(Date.now() + windowMs),
       },
       create: {
         bookingId,
-        timeoutAt: new Date(Date.now() + 30000),
+        timeoutAt: new Date(Date.now() + windowMs),
         isProcessed: false,
       },
     });
