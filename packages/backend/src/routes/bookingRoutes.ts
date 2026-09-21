@@ -21,7 +21,9 @@ router.post(
       return typeof value === "string" && SERVICE_KEYS.includes(value);
     }),
     body("startLocation").notEmpty().trim().isLength({ min: 2, max: 200 }),
-    body("endLocation").notEmpty().trim().isLength({ min: 2, max: 200 }),
+    // Destination is optional at the route layer: pickup-to-drop services
+    // enforce it in the controller/engine, companion services default it.
+    body("endLocation").optional().trim().isLength({ min: 2, max: 200 }),
     body("scheduledAt").notEmpty().isISO8601(),
     body("durationMinutes").optional().isInt({ min: 1, max: 480 }),
     body("itemType").optional().isString().trim(),
