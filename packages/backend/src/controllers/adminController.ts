@@ -137,7 +137,7 @@ export async function getUserById(req: AuthedRequest, res: Response): Promise<vo
 
 export async function impersonateUser(req: AuthedRequest, res: Response): Promise<void> {
   try {
-    const targetId = req.params.userId;
+    const targetId = req.params.id || req.params.userId;
     const actor = req.user!;
     if (!targetId) {
       sendError(res, "User id is required.", 400, "VALIDATION_ERROR");
