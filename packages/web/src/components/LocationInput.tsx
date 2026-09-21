@@ -24,7 +24,9 @@ interface LocationInputProps {
 }
 
 const LOCATION_CACHE_KEY = 'Sidebud-last-location'
-const LOCATION_CACHE_TTL_MS = 15 * 60 * 1000
+// A resolved place NAME stays valid far longer than a GPS fix: once we know
+// it, every location field reuses it silently instead of re-prompting.
+const LOCATION_CACHE_TTL_MS = 24 * 60 * 60 * 1000
 
 interface CachedLocation {
   lat: number

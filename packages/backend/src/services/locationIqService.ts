@@ -156,6 +156,57 @@ function isPlaceholderKey(): boolean {
   return !API_KEY || API_KEY.includes("placeholder") || API_KEY === "pk_dev_placeholder";
 }
 
+// --- Nominatim (OpenStreetMap) fallback: no key needed -----------------------
+// Used whenever no LocationIQ key is configured, so the app returns REAL
+// place names instead of coordinate labels or silent fakes. Complies with
+// the Nominatim usage policy: max 1 req/s (throttled below), identifying
+// User-Agent, no bulk queries. Our volume is a handful of user-initiated
+// lookups per minute.
+const NOMINATIM_BASE = "https://nominatim.openstreetmap.org";
+let lastNominatimAt = 0;
+
+async function nominatimThrottle(): Promise<void> {
+  const wait = 1100 - (Date.now() - lastNominatimAt);
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  lastNominatimAt = Date.now();
+}
+
+async function nominatimFetch(path: string, params: Record<string, string>): Promise<any> {
+  await nominatimThrottle();
+  const url = new URL(NOMINATIM_BASE + path);
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 12000);
+  try {
+    const res = await fetch(url.toString(), {
+      signal: controller.signal,
+      headers: {
+        Accept: "application/json",
+        "User-Agent": `SideBud/1.0 (${env.ADMIN_EMAIL || "support"})`,
+      },
+    });
+    if (!res.ok) throw new Error(`Nominatim responded ${res.status}.`);
+    return await res.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function nominatimAddress(a: any) {
+  return {
+    houseNumber: a?.house_number,
+    road: a?.road,
+    neighbourhood: a?.neighbourhood,
+    suburb: a?.suburb,
+    city: a?.city || a?.town || a?.village || a?.hamlet,
+    county: a?.county,
+    state: a?.state,
+    postcode: a?.postcode,
+    country: a?.country,
+    countryCode: a?.country_code,
+  };
+}
+
 export async function forwardGeocode(
   address: string,
   options?: { countryCodes?: string; limit?: number }
@@ -164,20 +215,29 @@ export async function forwardGeocode(
     throw new Error("Address must be at least 2 characters");
   }
   if (isPlaceholderKey()) {
-    // Return a basic fallback result so the app doesn't break without LocationIQ
-    return [{
-      placeId: "placeholder",
-      licence: "",
-      osmType: "node",
-      osmId: "0",
-      lat: 0,
-      lon: 0,
-      displayName: address,
-      address: { city: address, country: "IN" },
-      boundingbox: [],
-      type: "result",
-      importance: 1,
-    }];
+    // No LocationIQ key: use Nominatim (real OSM data, no key required)
+    // instead of returning a fake Null-Island result.
+    const r = await nominatimFetch("/search", {
+      q: address.trim(),
+      format: "jsonv2",
+      addressdetails: "1",
+      limit: String(options?.limit || 5),
+      countrycodes: options?.countryCodes || "in",
+    });
+    const list = Array.isArray(r) ? r : [];
+    return list.map((x: any) => ({
+      placeId: String(x.place_id ?? ""),
+      licence: "© OpenStreetMap contributors",
+      osmType: x.osm_type,
+      osmId: String(x.osm_id ?? ""),
+      lat: parseFloat(x.lat),
+      lon: parseFloat(x.lon),
+      displayName: x.display_name,
+      address: nominatimAddress(x.address),
+      boundingbox: (x.boundingbox || []).map(Number),
+      type: x.type,
+      importance: x.importance ?? 0,
+    }));
   }
 
   const params = new URLSearchParams({
@@ -229,15 +289,25 @@ export async function reverseGeocode(
   validateCoordinates(lat, lon);
 
   if (isPlaceholderKey()) {
+    // No LocationIQ key: real reverse lookup via Nominatim instead of an
+    // echoed "lat, lon" label.
+    const r = await nominatimFetch("/reverse", {
+      lat: String(lat),
+      lon: String(lon),
+      format: "jsonv2",
+      addressdetails: "1",
+      zoom: "16",
+    });
+    if (!r || !r.display_name) throw new Error("Nominatim returned no address.");
     return {
-      placeId: "placeholder",
-      licence: "",
-      osmType: "node",
-      osmId: "0",
-      lat,
-      lon,
-      displayName: `${lat.toFixed(4)}, ${lon.toFixed(4)}`,
-      address: { country: "IN" },
+      placeId: String(r.place_id ?? ""),
+      licence: "© OpenStreetMap contributors",
+      osmType: r.osm_type,
+      osmId: String(r.osm_id ?? ""),
+      lat: parseFloat(r.lat),
+      lon: parseFloat(r.lon),
+      displayName: r.display_name,
+      address: nominatimAddress(r.address),
     };
   }
 
@@ -302,7 +372,26 @@ export async function autocomplete(
   }
 
   if (isPlaceholderKey()) {
-    return [];
+    // No LocationIQ key: real suggestions via Nominatim instead of an
+    // empty list (which made search-as-you-type silently dead).
+    const r = await nominatimFetch("/search", {
+      q: query.trim(),
+      format: "jsonv2",
+      addressdetails: "1",
+      limit: String(options?.limit || 5),
+      countrycodes: options?.countryCodes || "in",
+    });
+    const list = Array.isArray(r) ? r : [];
+    return list.map((x: any) => ({
+      placeId: String(x.place_id ?? ""),
+      osmId: String(x.osm_id ?? ""),
+      osmType: x.osm_type,
+      lat: parseFloat(x.lat),
+      lon: parseFloat(x.lon),
+      displayName: x.display_name,
+      type: x.type,
+      importance: x.importance ?? 0,
+    }));
   }
 
   const params = new URLSearchParams({
