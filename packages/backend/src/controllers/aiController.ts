@@ -2,6 +2,7 @@ import { Response } from "express";
 import { AuthedRequest } from "../middleware/authTypes";
 import { sendSuccess, sendError } from "../utils/response";
 import { prisma } from "../config/database";
+import { isDemoEmail } from "../utils/demo";
 import {
   aiComplete,
   aiConfigInfo,
@@ -188,7 +189,7 @@ export async function getMatches(req: AuthedRequest, res: Response): Promise<voi
     const selfId = req.user!.userId;
     const me = await prisma.user.findUnique({
       where: { id: selfId },
-      select: { city: true },
+      select: { city: true, email: true },
     });
     const [myCommunities, myEvents] = await Promise.all([
       prisma.communityMember.findMany({ where: { userId: selfId }, select: { communityId: true } }),
@@ -199,13 +200,19 @@ export async function getMatches(req: AuthedRequest, res: Response): Promise<voi
 
     const candidates = await prisma.user.findMany({
       where: { id: { not: selfId }, status: "ACTIVE", role: { notIn: ["ADMIN", "SUPER_ADMIN"] } },
-      select: { id: true, fullName: true, avatarUrl: true, city: true, bio: true },
+      select: { id: true, fullName: true, avatarUrl: true, city: true, bio: true, email: true },
       orderBy: { createdAt: "desc" },
       take: 100,
     } as any);
 
+    // Demo sandbox fence: demos only ever match demos.
+    const requesterIsDemo = isDemoEmail(me?.email);
+    const pool = (candidates as any[]).filter((c: any) =>
+      requesterIsDemo ? isDemoEmail(c.email) : !isDemoEmail(c.email)
+    );
+
     const scored = await Promise.all(
-      (candidates as any[]).map(async (c: any) => {
+      pool.map(async (c: any) => {
         let score = 0;
         const reasons: string[] = [];
         if (me?.city && c.city && me.city.toLowerCase() === String(c.city).toLowerCase()) {

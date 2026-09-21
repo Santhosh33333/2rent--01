@@ -3,6 +3,7 @@ import { prisma } from "../config/database";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
 import { getPartnerEarnings, getConfig } from "../services/pricingEngine";
+import { isDemoEmail } from "../utils/demo";
 
 // Serializes concurrent money-affecting operations per user so the app-level
 // "one open withdrawal at a time" rule cannot be raced by two parallel requests
@@ -202,6 +203,11 @@ export async function getWithdrawalHistory(req: AuthedRequest, res: Response): P
 
 export async function requestWithdrawal(req: AuthedRequest, res: Response): Promise<void> {
   try {
+    // Demo sandbox money has no cash value and can never leave the platform.
+    if (isDemoEmail(req.user?.email)) {
+      sendError(res, "Demo accounts cannot withdraw play money.", 403, "DEMO_NO_WITHDRAW");
+      return;
+    }
     const { amount, method, accountDetail } = req.body;
 
     const validMethods = ["BANK_TRANSFER", "UPI"];

@@ -3,6 +3,7 @@ import { prisma } from "../config/database";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
 import { getIO } from "../services/socketService";
+import { sendSmsMessage } from "../utils/otp";
 
 export async function getProfile(req: AuthedRequest, res: Response): Promise<void> {
   try {
@@ -305,7 +306,12 @@ export async function triggerSos(req: AuthedRequest, res: Response): Promise<voi
       data: { userId: req.user!.userId, latitude, longitude, message: message || "Emergency SOS" },
     });
     await prisma.notification.create({
-      data: { userId: req.user!.userId, title: "SOS Alert Activated", body: "Your emergency alert has been sent. Stay safe.", data: JSON.stringify({ alertId: alert.id }) },
+      data: {
+        userId: req.user!.userId,
+        title: "SOS Alert Activated",
+        body: "Your emergency alert has been sent. Stay safe.",
+        data: JSON.stringify({ alertId: alert.id, kind: "SOS_ALERT", route: `/sos/${alert.id}` }),
+      },
     });
 
     // Alert admins (and the assigned partner, if a booking is in progress) in real time.
@@ -313,6 +319,56 @@ export async function triggerSos(req: AuthedRequest, res: Response): Promise<voi
       where: { userId: req.user!.userId, status: { in: ["PARTNER_ACCEPTED", "OTP_GENERATED", "IN_PROGRESS"] } },
       select: { id: true },
     });
+
+    // 1) Persistent admin inbox fallback: sockets only reach online admins.
+    try {
+      const admins = await prisma.adminUser.findMany({
+        where: { user: { status: "ACTIVE" } },
+        select: { id: true },
+      });
+      if (admins.length > 0) {
+        const sender = await prisma.user.findUnique({
+          where: { id: req.user!.userId },
+          select: { fullName: true },
+        });
+        await prisma.adminNotification.createMany({
+          data: admins.map((a) => ({
+            adminUserId: a.id,
+            type: "SOS_ALERT",
+            title: "SOS emergency alert",
+            body: `${sender?.fullName || "A user"} triggered SOS${activeBooking ? " during an active booking" : ""}. Tap to see live location.`,
+            link: `/sos/${alert.id}`,
+          })),
+        });
+      }
+    } catch (e) {
+      console.error("[SOS] admin inbox fan-out failed:", (e as Error)?.message);
+    }
+
+    // 2) SMS to the user's emergency contact (best-effort; needs Twilio env).
+    let smsSent = false;
+    let smsReason: string | null = null;
+    try {
+      const verification = await prisma.verification.findUnique({
+        where: { userId: req.user!.userId },
+        select: { emergencyContactPhone: true, emergencyContactName: true },
+      });
+      // Emergency contact fields live on Verification; fall back gracefully.
+      const contactPhone = (verification as any)?.emergencyContactPhone as string | undefined;
+      if (contactPhone) {
+        const mapsLink = `https://maps.google.com/?q=${latitude},${longitude}`;
+        await sendSmsMessage(
+          contactPhone,
+          `SOS! Your contact needs emergency help. Location: ${mapsLink} Msg: ${alert.message || "Emergency SOS"} - Side Bud Safety`
+        );
+        smsSent = true;
+      } else {
+        smsReason = "NO_EMERGENCY_CONTACT";
+      }
+    } catch (e) {
+      smsReason = (e as Error)?.message?.includes("Twilio") ? "SMS_NOT_CONFIGURED" : "SMS_FAILED";
+    }
+
     const payload = {
       alertId: alert.id,
       bookingId: activeBooking?.id ?? null,
@@ -340,7 +396,7 @@ export async function triggerSos(req: AuthedRequest, res: Response): Promise<voi
       })
       .catch(() => {});
 
-    sendSuccess(res, alert, "SOS alert activated.", 201);
+    sendSuccess(res, { ...alert, smsSent, smsReason }, "SOS alert activated.", 201);
   } catch (err) {
     sendError(res, "Failed to trigger SOS.", 500, "INTERNAL_ERROR");
   }
@@ -352,5 +408,45 @@ export async function cancelSos(req: AuthedRequest, res: Response): Promise<void
     sendSuccess(res, undefined, "SOS alert cancelled.");
   } catch (err) {
     sendError(res, "Failed to cancel SOS.", 500, "INTERNAL_ERROR");
+  }
+}
+
+// Alert detail for the location view. Visible to: the owner, any admin-tier
+// account, or a partner sharing an ACTIVE booking with the alert owner.
+export async function getSosAlert(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const { alertId } = req.params;
+    const alert = await prisma.sosAlert.findUnique({
+      where: { id: alertId },
+      include: { user: { select: { id: true, fullName: true, phone: true, avatarUrl: true } } },
+    });
+    if (!alert) {
+      sendError(res, "SOS alert not found.", 404, "NOT_FOUND");
+      return;
+    }
+    const me = req.user!;
+    const isOwner = alert.userId === me.userId;
+    const isAdmin =
+      !!me.activeRole &&
+      ["SUPER_ADMIN", "ADMIN", "MODERATOR", "SUPPORT", "FINANCE", "SUPPORT_ADMIN", "FINANCE_ADMIN", "KYC_ADMIN", "MARKETING_ADMIN", "PARTNER_ADMIN"].includes(me.activeRole);
+    let isLinkedPartner = false;
+    if (!isOwner && !isAdmin) {
+      const link = await prisma.booking.findFirst({
+        where: {
+          userId: alert.userId,
+          status: { in: ["PARTNER_ACCEPTED", "OTP_GENERATED", "IN_PROGRESS"] },
+          partner: { userId: me.userId },
+        },
+        select: { id: true },
+      });
+      isLinkedPartner = !!link;
+    }
+    if (!isOwner && !isAdmin && !isLinkedPartner) {
+      sendError(res, "Access denied to this alert.", 403, "FORBIDDEN");
+      return;
+    }
+    sendSuccess(res, { alert, viewerRole: isOwner ? "OWNER" : isAdmin ? "ADMIN" : "PARTNER" }, "SOS alert retrieved.");
+  } catch (err) {
+    sendError(res, "Failed to retrieve SOS alert.", 500, "INTERNAL_ERROR");
   }
 }

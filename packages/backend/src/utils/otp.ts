@@ -27,6 +27,14 @@ export interface OtpChannel {
   phone?: string;
 }
 
+/**
+ * Shared SMS sender (Twilio). Throws when unconfigured — callers decide
+ * whether SMS is critical (OTP) or best-effort (SOS alerts).
+ */
+export async function sendSmsMessage(phone: string, message: string): Promise<void> {
+  return sendSMS(phone, message);
+}
+
 async function sendSMS(phone: string, message: string): Promise<void> {
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const authToken = process.env.TWILIO_AUTH_TOKEN;

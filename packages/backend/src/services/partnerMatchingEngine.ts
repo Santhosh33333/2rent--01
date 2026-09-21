@@ -1,6 +1,7 @@
 import { prisma } from "../config/database";
 import { calculateDistance } from "../utils/location";
 import { getServiceDef } from "./serviceCatalog";
+import { isDemoEmail, isDemoPartnerEmail, isDemoUserEmail } from "../utils/demo";
 
 function serviceLabel(type: string): string {
   return getServiceDef(type)?.label ?? type;
@@ -117,6 +118,7 @@ export async function findMatchingPartners(
           select: {
             id: true,
             fullName: true,
+            email: true,
             avatarUrl: true,
             city: true,
             gender: true,
@@ -129,8 +131,19 @@ export async function findMatchingPartners(
       return [];
     }
 
+    // Demo sandbox fence: demo-user bookings match ONLY the demo partner;
+    // real bookings never match the demo partner.
+    const requesterIsDemo = isDemoUserEmail((bookingUser as any)?.email);
+    const eligible = partners.filter((p: any) =>
+      requesterIsDemo ? isDemoPartnerEmail(p.user?.email) : !isDemoEmail(p.user?.email)
+    );
+
+    if (eligible.length === 0) {
+      return [];
+    }
+
     // Score and rank partners
-    const scoredPartners: PartnerScore[] = partners
+    const scoredPartners: PartnerScore[] = eligible
       .map((partner) => {
         // Calculate distance (default to 0 if no coords provided)
         const distance =

@@ -80,6 +80,8 @@ router.post(
   adminController.blockUser
 );
 router.post("/users/:id/unblock", users, adminController.unblockUser);
+router.post("/sos/:id/resolve", users, adminController.resolveSosAlert);
+router.post("/demo/refill", requireSuperAdmin, adminController.refillDemoWallet);
 router.delete("/users/:id", requireSuperAdmin, adminController.deleteUser);
 router.get("/kyc-queue", kycReview, adminController.getKycQueue);
 router.post("/kyc/:id/approve", requireSectionAction("KYC", "APPROVE"), adminController.approveKyc);

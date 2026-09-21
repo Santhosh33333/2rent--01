@@ -9,6 +9,7 @@ import { createImpersonationSession } from "./authController";
 import { env } from "../config/env";
 import * as bookingEngine from "../services/bookingEngine";
 import { PRICING_VERSION_KEY } from "../services/bookingEngine";
+import { isDemoEmail, DEMO_WALLET_CEILING } from "../utils/demo";
 import { SERVICE_KEYS } from "../services/serviceCatalog";
 import * as partnerMatching from "../services/partnerMatchingEngine";
 
@@ -295,6 +296,28 @@ export async function unblockUser(req: AuthedRequest, res: Response): Promise<vo
     sendSuccess(res, { id: user.id, status: user.status }, "User unblocked.");
   } catch (err) {
     sendError(res, "Failed to unblock user.", 500, "INTERNAL_ERROR");
+  }
+}
+
+// Resolve an SOS alert (admin confirms the situation is handled).
+export async function resolveSosAlert(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const alert = await prisma.sosAlert.findUnique({ where: { id } });
+    if (!alert) {
+      sendError(res, "SOS alert not found.", 404, "NOT_FOUND");
+      return;
+    }
+    const updated = await prisma.sosAlert.update({
+      where: { id },
+      data: { status: "RESOLVED", resolvedAt: new Date() },
+    });
+    await prisma.auditLog.create({
+      data: { actorId: req.user!.userId, actorType: "ADMIN", action: "SOS_RESOLVED", entityType: "SosAlert", entityId: id, metadata: "{}" },
+    });
+    sendSuccess(res, updated, "SOS alert resolved.");
+  } catch (err) {
+    sendError(res, "Failed to resolve SOS alert.", 500, "INTERNAL_ERROR");
   }
 }
 
@@ -1888,6 +1911,65 @@ export async function resetAdminPassword(req: AuthedRequest, res: Response): Pro
   } catch (err) {
     console.error("resetAdminPassword error:", err);
     sendError(res, "Failed to reset admin password.", 500, "INTERNAL_ERROR");
+  }
+}
+
+// ============================================================================
+// DEMO WALLET REFILL — SUPER_ADMIN only. Tops a DEMO sandbox account back up
+// to the play-money ceiling. Refuses anything that is not a demo account,
+// so real-money balances can never be touched through this endpoint.
+// ============================================================================
+
+export async function refillDemoWallet(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    if (!email || !isDemoEmail(email)) {
+      sendError(res, "Refills are only allowed for demo sandbox accounts.", 403, "NOT_DEMO_ACCOUNT");
+      return;
+    }
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      sendError(res, "Demo account not found.", 404, "NOT_FOUND");
+      return;
+    }
+    const wallet = await prisma.wallet.upsert({
+      where: { userId: user.id },
+      update: {},
+      create: { userId: user.id, balance: 0 },
+    });
+    let refilled = 0;
+    if (Number(wallet.balance) < DEMO_WALLET_CEILING) {
+      refilled = DEMO_WALLET_CEILING - Number(wallet.balance);
+      await prisma.$transaction(async (tx) => {
+        await tx.wallet.update({ where: { userId: user.id }, data: { balance: { increment: refilled } } });
+        await tx.transaction.create({
+          data: {
+            userId: user.id,
+            walletId: wallet.id,
+            type: "TOPUP",
+            amount: refilled,
+            status: "SUCCESS",
+            description: "Demo sandbox refill (play money, no cash value)",
+            referenceId: `DEMO-REFILL-${Date.now()}`,
+          },
+        });
+        await tx.auditLog.create({
+          data: {
+            actorId: req.user!.userId,
+            actorType: "ADMIN",
+            action: "DEMO_WALLET_REFILL",
+            entityType: "User",
+            entityId: user.id,
+            metadata: JSON.stringify({ email, refilled }),
+          },
+        });
+      });
+    }
+    const after = await prisma.wallet.findUnique({ where: { userId: user.id }, select: { balance: true } });
+    sendSuccess(res, { email, balance: after?.balance ?? 0, refilled }, "Demo wallet refilled with play money.");
+  } catch (err) {
+    console.error("refillDemoWallet error:", err);
+    sendError(res, "Failed to refill demo wallet.", 500, "INTERNAL_ERROR");
   }
 }
 

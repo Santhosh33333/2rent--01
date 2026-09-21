@@ -84,5 +84,6 @@ router.post(
   userController.triggerSos
 );
 router.post("/sos/cancel", userController.cancelSos);
+router.get("/sos/:alertId", userController.getSosAlert);
 
 export default router;
