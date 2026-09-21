@@ -111,6 +111,23 @@ if (!dbAvailable) {
     console.warn("Schema reconciliation warning:", (err as Error)?.message);
   }
 
+  // Runtime reconciliation for the event discovery rebuild (migration
+  // 20260921_event_cover_category). Same pattern as above: Render builds do
+  // not reliably run `migrate deploy`, so ensure the columns idempotently.
+  try {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "coverImageUrl" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "category" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "privacy" TEXT NOT NULL DEFAULT 'PUBLIC'`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "price" DOUBLE PRECISION`);
+    await prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS "Event_status_startTime_idx" ON "Event"("status", "startTime")`
+    );
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Event_category_idx" ON "Event"("category")`);
+    console.log("Schema reconciliation: Event discovery columns ensured.");
+  } catch (err) {
+    console.warn("Schema reconciliation warning (Event):", (err as Error)?.message);
+  }
+
   initializeFirebase();
   initializeFirebaseAuth();
 
