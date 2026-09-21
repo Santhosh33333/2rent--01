@@ -1,5 +1,5 @@
 ﻿import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
-import { api } from './api'
+import { api, refreshSessionTokens } from './api'
 import { disconnectGlobalSocket } from '../hooks/useSocket'
 import type { RegisterInput } from '../types/api'
 
@@ -151,40 +151,39 @@ async function restoreSessionFromRefreshToken(): Promise<User | null> {
     return null
   }
 
-  const response = await api.post('/auth/refresh-token', { refreshToken })
-  const payload = response.data?.data || response.data
-  const accessToken = payload?.accessToken
-  const nextRefreshToken = payload?.refreshToken
-  if (!accessToken) return null
+  try {
+    // Shared single-flight refresh: never consume the rotating refresh
+    // token twice, even if boot races in-flight API 401s.
+    await refreshSessionTokens()
 
-  localStorage.setItem('token', accessToken)
-  if (nextRefreshToken) localStorage.setItem('refreshToken', nextRefreshToken)
+    const profileRes = await api.get('/users/profile')
+    const p = profileRes.data?.data || profileRes.data
+    if (!p || !p.id) return null
 
-  const profileRes = await api.get('/users/profile')
-  const p = profileRes.data?.data || profileRes.data
-  if (!p || !p.id) return null
-
-  const u: User = {
-    id: p.id,
-    email: p.email,
-    name: p.fullName || p.name || 'User',
-    phone: p.phone,
-    role: normalizeRole(p.role),
-    activeRole: normalizeRole(p.activeRole || p.role),
-    accountType: normalizeRole(p.accountType || p.userType || p.activeRole || p.role),
-    isVerified: p.emailVerified || p.mobileVerified,
-    trustScore: p.trustScore,
-    kycStatus: p.kycStatus,
-    kycRejectionReason: p.kycRejectionReason ?? null,
-    partnerStatus: p.partnerStatus ?? null,
-    fullName: p.fullName,
-    city: p.city,
-    bio: p.bio,
-    country: p.country,
-    gender: p.gender,
+    const u: User = {
+      id: p.id,
+      email: p.email,
+      name: p.fullName || p.name || 'User',
+      phone: p.phone,
+      role: normalizeRole(p.role),
+      activeRole: normalizeRole(p.activeRole || p.role),
+      accountType: normalizeRole(p.accountType || p.userType || p.activeRole || p.role),
+      isVerified: p.emailVerified || p.mobileVerified,
+      trustScore: p.trustScore,
+      kycStatus: p.kycStatus,
+      kycRejectionReason: p.kycRejectionReason ?? null,
+      partnerStatus: p.partnerStatus ?? null,
+      fullName: p.fullName,
+      city: p.city,
+      bio: p.bio,
+      country: p.country,
+      gender: p.gender,
+    }
+    localStorage.setItem('user', JSON.stringify(u))
+    return u
+  } catch {
+    return null
   }
-  localStorage.setItem('user', JSON.stringify(u))
-  return u
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {

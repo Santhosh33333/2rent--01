@@ -1,6 +1,7 @@
 ﻿import { useEffect, useRef, useCallback, ReactNode } from 'react'
 import { ClerkProvider, useSession, useUser } from '@clerk/clerk-react'
 import { useNavigate } from 'react-router-dom'
+import toast from 'react-hot-toast'
 import { api } from './api'
 import { useAuth as useAppAuth } from './auth'
 
@@ -53,9 +54,12 @@ function ClerkBridge() {
         updateUser(u)
         lastSyncedSidRef.current = session.id
         navigate('/dashboard', { replace: true })
+      } else {
+        toast.error('Could not finish signing you in. Please try again.')
       }
     } catch (err: unknown) {
       console.error('Clerk backend sync error:', err)
+      toast.error('Could not finish signing you in. Please try again.')
     } finally {
       syncingRef.current = false
     }

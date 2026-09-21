@@ -1,6 +1,6 @@
 ﻿import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect, useCallback } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../lib/auth'
 import { isClerkConfigured } from '../../lib/clerkAuth'
 import { initGoogleSignIn, signInWithGoogle } from '../../lib/googleAuth'
@@ -27,6 +27,7 @@ function getDashboardForUser(user: any): string {
 
 export function LoginPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { user, loading: authLoading, login, completeLogin } = useAuth()
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
@@ -53,36 +54,41 @@ export function LoginPage() {
     const role = user.activeRole || user.role || 'USER'
     if (role === 'USER' && !user.city && localStorage.getItem('profile_complete') !== 'true') {
       navigate('/profile/complete', { replace: true })
-    } else {
-      navigate(getDashboardForUser(user), { replace: true })
+      return
     }
-  }, [user, authLoading, navigate])
+    // Honor the deep link that bounced to /login (ProtectedRoute state.from).
+    const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname
+    const safeFrom =
+      typeof from === 'string' &&
+      from.startsWith('/') &&
+      !['/', '/login', '/register', '/sign-in', '/sign-up', '/onboarding', '/account-type', '/forgot-password', '/verify-email', '/verify-mobile'].includes(from)
+        ? from
+        : null
+    navigate(safeFrom || getDashboardForUser(user), { replace: true })
+  }, [user, authLoading, navigate, location.state])
 
   const handleGoogleCredential = useCallback(async (credential: string) => {
     setGoogleLoading(true)
     try {
       const data = await signInWithGoogle(credential)
-      localStorage.setItem('token', data.accessToken)
-      if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken)
-
-      const u = {
-        id: data.user.id,
-        email: data.user.email,
-        name: data.user.fullName || data.user.email,
-        phone: data.user.phone,
-        role: data.user.role,
-        activeRole: data.user.activeRole || data.user.role,
-        isVerified: data.user.emailVerified || data.user.mobileVerified,
-        avatarUrl: data.user.avatarUrl,
+      if (!data?.accessToken || !data?.refreshToken) {
+        throw new Error('Google sign-in did not return a session. Please try again.')
       }
-      localStorage.setItem('user', JSON.stringify(u))
-      window.location.reload()
+      // Same in-memory session path as email/phone: persist + setUser so the
+      // redirect effect below navigates. No page reload (reload + a transient
+      // 401 on the first profile fetch used to wipe the fresh session).
+      completeLogin({
+        accessToken: data.accessToken,
+        refreshToken: data.refreshToken,
+        user: data.user,
+      })
+      toast.success('Welcome back!')
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Google sign-in failed'))
     } finally {
       setGoogleLoading(false)
     }
-  }, [])
+  }, [completeLogin])
 
   const handleGoogleClick = () => {
     if (!googleReady) {

@@ -70,6 +70,7 @@ function clearSessionStorage() {
   localStorage.removeItem('refreshToken')
   localStorage.removeItem('user')
   localStorage.removeItem('activeRole')
+  localStorage.removeItem('impersonating')
 }
 
 async function doRefresh(refreshToken: string): Promise<string> {
@@ -83,6 +84,19 @@ async function doRefresh(refreshToken: string): Promise<string> {
   localStorage.setItem('token', newAccessToken)
   if (newRefreshToken) localStorage.setItem('refreshToken', newRefreshToken)
   return newAccessToken as string
+}
+
+// Shared entry point for ALL token refreshes (interceptor + boot restore).
+// Single-flight guarantees the single-use refresh token is consumed once.
+export async function refreshSessionTokens(): Promise<string> {
+  const refreshToken = localStorage.getItem('refreshToken')
+  if (!refreshToken) throw new Error('No refresh token available')
+  if (!refreshPromise) {
+    refreshPromise = doRefresh(refreshToken).finally(() => {
+      refreshPromise = null
+    })
+  }
+  return refreshPromise
 }
 
 api.interceptors.response.use(
@@ -103,24 +117,23 @@ api.interceptors.response.use(
     if (status === 401 && !originalRequest._retry && !shouldSkipRefresh) {
       originalRequest._retry = true
       try {
-        const refreshToken = localStorage.getItem('refreshToken')
-        if (!refreshToken) throw error
-
-        if (!refreshPromise) {
-          refreshPromise = doRefresh(refreshToken).finally(() => {
-            refreshPromise = null
-          })
-        }
-
-        const newAccessToken = await refreshPromise
+        const newAccessToken = await refreshSessionTokens()
 
         originalRequest.headers = originalRequest.headers || {}
         originalRequest.headers.Authorization = `Bearer ${newAccessToken}`
         return api(originalRequest)
       } catch (refreshError) {
-        clearSessionStorage()
-        if (typeof window !== 'undefined' && !['/login', '/register', '/forgot-password'].includes(window.location.pathname)) {
-          window.location.assign('/login')
+        // Generation guard: only wipe when no newer session won the race.
+        // If another in-flight refresh already stored fresh tokens, the
+        // stored token differs from the one this request attempted with —
+        // wiping now would delete a VALID session (the login-loop bug).
+        const attempted = String(originalRequest.headers?.Authorization || '').replace(/^Bearer\s+/i, '')
+        const current = localStorage.getItem('token') || ''
+        if (!current || current === attempted) {
+          clearSessionStorage()
+          if (typeof window !== 'undefined' && !['/login', '/register', '/forgot-password', '/sign-in', '/sign-up'].includes(window.location.pathname)) {
+            window.location.replace('/login')
+          }
         }
         return Promise.reject(refreshError)
       }

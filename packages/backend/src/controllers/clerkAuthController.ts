@@ -78,11 +78,24 @@ export async function clerkSync(req: Request, res: Response): Promise<void> {
 
     const accessToken = generateAccessToken({ userId: user.id, email: user.email });
     const refreshToken = generateRefreshToken(user.id);
-    await prisma.session.deleteMany({ where: { userId: user.id } });
+    // Multi-device safe: only purge expired rows + this device's stale rows.
+    // (Previously deleteMany wiped EVERY session: signing in on one device
+    // logged out all others and fed the frontend refresh race.)
+    await prisma.session.deleteMany({
+      where: {
+        userId: user.id,
+        OR: [
+          { expiresAt: { lte: new Date() } },
+          { ipAddress: req.ip ?? req.socket.remoteAddress ?? null, userAgent: req.headers["user-agent"] ?? null },
+        ],
+      },
+    });
     await prisma.session.create({
       data: {
         userId: user.id,
         refreshToken,
+        ipAddress: req.ip ?? req.socket.remoteAddress ?? null,
+        userAgent: req.headers["user-agent"] ?? null,
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
