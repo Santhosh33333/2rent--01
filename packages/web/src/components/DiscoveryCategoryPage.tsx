@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { ArrowLeft, ChevronRight, Search, ShieldCheck, Sparkles, User as UserIcon } from 'lucide-react'
 import { DISCOVERY_BY_KEY, type DiscoveryCategoryKey } from '../lib/discoveryData'
-import { api } from '../lib/api'
+import { api, assetUrl } from '../lib/api'
 
 interface DiscoveryCategoryPageProps {
   categoryKey: DiscoveryCategoryKey
@@ -127,7 +127,7 @@ export function DiscoveryCategoryPage({ categoryKey }: DiscoveryCategoryPageProp
                 <div className="flex items-start gap-3">
                   <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-surface-200 dark:bg-surface-700">
                     {p.avatarUrl ? (
-                      <img src={p.avatarUrl} alt={p.name} className="h-full w-full object-cover" />
+                      <img src={assetUrl(p.avatarUrl) || ''} alt={p.name} className="h-full w-full object-cover" />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center text-surface-500">
                         <UserIcon className="w-5 h-5" />

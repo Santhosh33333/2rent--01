@@ -272,6 +272,11 @@ app.use("/api/discovery", discoveryRoutes);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     console.error("Unhandled error:", err);
+    if (err.code === "LIMIT_FILE_SIZE") {
+      const maxMb = Math.round(env.MAX_FILE_SIZE / 1048576);
+      sendError(res, `File is too large. Maximum ${maxMb} MB.`, 413, "FILE_TOO_LARGE");
+      return;
+    }
     if (err.type === "entity.too.large") {
       sendError(res, "Payload too large.", 413, "PAYLOAD_TOO_LARGE");
       return;

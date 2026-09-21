@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, ChevronLeft, ChevronRight, Check, X, Phone, Mail, ShieldCheck, AlertTriangle, FileDown } from 'lucide-react'
-import { adminApi } from '../../lib/api'
+import { adminApi, assetUrl } from '../../lib/api'
 import { exportTableToPdf } from '../../lib/pdfExport'
 import { AuthImage } from '../../components/AuthImage'
 
@@ -230,7 +230,7 @@ export function AdminKycPage() {
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center text-sm font-bold text-white overflow-hidden">
                             {entry.user?.avatarUrl ? (
-                              <img src={entry.user.avatarUrl} alt="" className="w-full h-full object-cover" />
+                              <img src={assetUrl(entry.user.avatarUrl) || ''} alt="" className="w-full h-full object-cover" />
                             ) : (
                               entry.user?.fullName?.charAt(0)?.toUpperCase() || '?'
                             )}

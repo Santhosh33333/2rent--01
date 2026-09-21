@@ -9,10 +9,11 @@ import { GlassCard } from '../../components/GlassCard'
 import { RoleSwitcher } from '../../components/RoleSwitcher'
 import { useRole } from '../../lib/roleContext'
 import {
-  User, Mail, Phone, Camera, Save, X, Shield,
+  User, Mail, Phone, Camera, Save, X, Shield, Check,
   LogOut, ChevronRight, MapPin, Calendar, Award, Edit3,
   Clock, AlertTriangle, Sparkles, Settings, Lock, Repeat
 } from 'lucide-react'
+import { useAvatarUpload } from '../../lib/photo'
 import toast from 'react-hot-toast'
 import { api, assetUrl } from '../../lib/api'
 
@@ -21,7 +22,7 @@ export function ProfilePage() {
   const { approvedRoles, activeRole } = useRole()
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [uploading, setUploading] = useState(false)
+  const avatar = useAvatarUpload((avatarUrl) => updateUser({ avatarUrl }))
   const [profileStats, setProfileStats] = useState<{ walksCompleted?: number; eventsJoined?: number; averageRating?: number; joinedYear?: number } | null>(null)
   const [verificationStatus, setVerificationStatus] = useState<Record<string, unknown> | null>(null)
   const [statsLoading, setStatsLoading] = useState(true)
@@ -77,25 +78,8 @@ export function ProfilePage() {
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (!file) return
-    setUploading(true)
-    try {
-      const formData = new FormData()
-      formData.append('photo', file)
-      const res = await api.post('/users/profile-photo', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      })
-      const avatarUrl = res.data?.data?.avatarUrl
-      if (avatarUrl) {
-        updateUser({ avatarUrl })
-        toast.success('Photo updated!')
-      }
-    } catch {
-      toast.error('Failed to upload photo')
-    } finally {
-      setUploading(false)
-      if (fileInputRef.current) fileInputRef.current.value = ''
-    }
+    if (fileInputRef.current) fileInputRef.current.value = ''
+    await avatar.pick(file)
   }
 
   const adminRoles = ["SUPER_ADMIN", "ADMIN", "MODERATOR", "SUPPORT", "FINANCE"]
@@ -119,8 +103,8 @@ export function ProfilePage() {
 
           <div className="relative z-10 flex flex-col sm:flex-row items-center sm:items-start gap-6">
             <div className="relative group">
-              {user?.avatarUrl ? (
-                <img src={assetUrl(user.avatarUrl) || ''} alt="avatar" className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl object-cover ring-4 ring-white/20" />
+              {(avatar.previewUrl || user?.avatarUrl) ? (
+                <img src={avatar.previewUrl || assetUrl(user?.avatarUrl) || ''} alt="avatar" className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl object-cover ring-4 ring-white/20" />
               ) : (
                 <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl avatar flex items-center justify-center text-white text-3xl font-bold ring-4 ring-white/20">
                   {initials}
@@ -133,18 +117,42 @@ export function ProfilePage() {
                 className="hidden"
                 onChange={handlePhotoUpload}
               />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
-                className="absolute -bottom-1 -right-1 w-8 h-8 rounded-xl bg-white text-primary-600 flex items-center justify-center shadow-lg hover:scale-110 transition-all disabled:opacity-50"
-              >
-                {uploading ? (
-                  <span className="w-4 h-4 rounded-full border-2 border-primary-300 border-t-primary-600 animate-spin" />
-                ) : (
+              {avatar.previewUrl ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => avatar.confirm()}
+                    disabled={avatar.uploading}
+                    aria-label="Use this photo"
+                    className="absolute -bottom-1 -right-1 w-8 h-8 rounded-xl bg-emerald-500 text-white flex items-center justify-center shadow-lg hover:scale-110 transition-all disabled:opacity-50"
+                  >
+                    {avatar.uploading ? (
+                      <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                    ) : (
+                      <Check className="w-4 h-4" strokeWidth={3} />
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => avatar.cancel()}
+                    disabled={avatar.uploading}
+                    aria-label="Discard photo"
+                    className="absolute -bottom-1 left-0 w-8 h-8 rounded-xl bg-surface-900/80 text-white flex items-center justify-center shadow-lg hover:scale-110 transition-all disabled:opacity-50"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={avatar.uploading}
+                  aria-label="Change photo"
+                  className="absolute -bottom-1 -right-1 w-8 h-8 rounded-xl bg-white text-primary-600 flex items-center justify-center shadow-lg hover:scale-110 transition-all disabled:opacity-50"
+                >
                   <Camera className="w-4 h-4" />
-                )}
-              </button>
+                </button>
+              )}
             </div>
 
             <div className="flex-1 text-center sm:text-left">

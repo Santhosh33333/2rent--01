@@ -5,7 +5,7 @@ import {
   User, DollarSign, Wallet, ChevronRight, ArrowUpRight
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { api } from '../../lib/api'
+import { api, assetUrl } from '../../lib/api'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
 import { SkeletonLoader } from '../../components/SkeletonLoader'
@@ -312,7 +312,7 @@ export function PartnerPerformancePage() {
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       {r.userAvatar ? (
-                        <img src={r.userAvatar} alt={r.userName}
+                        <img src={assetUrl(r.userAvatar) || ''} alt={r.userName}
                           className="w-8 h-8 rounded-lg object-cover" />
                       ) : (
                         <div className="w-8 h-8 rounded-lg bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
