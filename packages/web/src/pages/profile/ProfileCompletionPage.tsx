@@ -8,6 +8,7 @@ import toast from 'react-hot-toast'
 import { useAuth } from '../../lib/auth'
 import { api } from '../../lib/api'
 import { AnimatedPage } from '../../components/AnimatedPage'
+import { LocationInput } from '../../components/LocationInput'
 import {
   User, MapPin, Check, ArrowRight, ArrowLeft, Camera, Calendar,
 } from 'lucide-react'
@@ -60,6 +61,7 @@ export function ProfileCompletionPage() {
 
   const watchedGender = watch('gender')
   const watchedBio = watch('bio')
+  const watchedCity = watch('city')
 
   useEffect(() => {
     if (profileCompleteSet) {
@@ -258,16 +260,12 @@ export function ProfileCompletionPage() {
                     <div key={`step2-${animKey.current}`} className={slideClass}>
                       <div className="space-y-4">
                         <div>
-                          <label className="label">City</label>
-                          <div className="relative">
-                            <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 shrink-0 pointer-events-none text-surface-400" />
-                            <input
-                              {...register('city')}
-                              type="text"
-                              className="input pl-11"
-                              placeholder="Your city"
-                            />
-                          </div>
+                          <LocationInput
+                            label="City"
+                            value={watchedCity || ''}
+                            onChange={(v) => setValue('city', v, { shouldValidate: true })}
+                            placeholder="Your city"
+                          />
                         </div>
 
                         <div>

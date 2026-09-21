@@ -17,9 +17,42 @@ interface LocationInputProps {
   placeholder?: string
   required?: boolean
   optional?: boolean
+  // When true (default) the field fills itself: fresh cache instantly,
+  // otherwise the device GPS + reverse-geocode. Manual typing always wins.
+  autoDetect?: boolean
 }
 
-export function LocationInput({ label, value, onChange, placeholder, required, optional }: LocationInputProps) {
+const LOCATION_CACHE_KEY = 'Sidebud-last-location'
+const LOCATION_CACHE_TTL_MS = 15 * 60 * 1000
+
+interface CachedLocation {
+  lat: number
+  lon: number
+  displayName: string
+  ts: number
+}
+
+function readCachedLocation(): CachedLocation | null {
+  try {
+    const raw = localStorage.getItem(LOCATION_CACHE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as CachedLocation
+    if (!parsed || typeof parsed.displayName !== 'string' || Date.now() - parsed.ts > LOCATION_CACHE_TTL_MS) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+function writeCachedLocation(lat: number, lon: number, displayName: string) {
+  try {
+    localStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify({ lat, lon, displayName, ts: Date.now() }))
+  } catch {
+    // storage unavailable (private mode) — detection still works per mount
+  }
+}
+
+export function LocationInput({ label, value, onChange, placeholder, required, optional, autoDetect = true }: LocationInputProps) {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const [open, setOpen] = useState(false)
   const [searching, setSearching] = useState(false)
@@ -28,6 +61,13 @@ export function LocationInput({ label, value, onChange, placeholder, required, o
   const containerRef = useRef<HTMLDivElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout>>()
   const skipNextSearch = useRef(false)
+  const autoDoneRef = useRef(false)
+  // Refs so the mount-once auto-detect always calls the latest handler
+  // even when parents re-create callbacks every render.
+  const valueRef = useRef(value)
+  valueRef.current = value
+  const onChangeRef = useRef(onChange)
+  onChangeRef.current = onChange
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -79,9 +119,9 @@ export function LocationInput({ label, value, onChange, placeholder, required, o
     setOpen(false)
   }
 
-  const useMyLocation = () => {
+  const detectLocation = (silent: boolean) => {
     if (!navigator.geolocation) {
-      toast.error('Geolocation is not supported by this browser.')
+      if (!silent) toast.error('Geolocation is not supported by this browser.')
       return
     }
     setLocating(true)
@@ -93,30 +133,49 @@ export function LocationInput({ label, value, onChange, placeholder, required, o
             params: { lat: latitude, lon: longitude },
           })
           const result = res.data?.data?.result
-          if (result?.displayName && !String(result.displayName).startsWith(String(latitude).slice(0, 5))) {
-            skipNextSearch.current = true
-            onChange(result.displayName as string)
-            toast.success('Current location detected')
-          } else if (result?.displayName) {
-            onChange(result.displayName as string)
-            toast.success('Current location coordinates detected')
-          } else {
-            toast.error('Could not resolve your address')
-          }
+          const name =
+            result?.displayName && !String(result.displayName).startsWith(String(latitude).slice(0, 5))
+              ? (result.displayName as string)
+              : (result?.displayName as string) || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`
+          skipNextSearch.current = true
+          onChangeRef.current(name)
+          writeCachedLocation(latitude, longitude, name)
+          if (!silent) toast.success('Current location detected')
         } catch {
-          onChange(`${latitude.toFixed(4)}, ${longitude.toFixed(4)}`)
-          toast.success('Current location coordinates detected')
+          const fallback = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`
+          onChangeRef.current(fallback)
+          writeCachedLocation(latitude, longitude, fallback)
+          if (!silent) toast.success('Current location coordinates detected')
         } finally {
           setLocating(false)
         }
       },
       () => {
         setLocating(false)
-        toast.error('Location permission denied')
+        if (!silent) toast.error('Location permission denied')
       },
       { enableHighAccuracy: true, timeout: 10000 }
     )
   }
+
+  const useMyLocation = () => detectLocation(false)
+
+  // Automatic fill on mount when the field starts empty: instant when we
+  // have a fresh cached fix, otherwise one GPS attempt. The browser asks
+  // for permission at most once per origin; afterwards this is silent.
+  useEffect(() => {
+    if (!autoDetect || autoDoneRef.current) return
+    autoDoneRef.current = true
+    if (valueRef.current) return
+    const cached = readCachedLocation()
+    if (cached) {
+      skipNextSearch.current = true
+      onChangeRef.current(cached.displayName)
+      return
+    }
+    detectLocation(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoDetect])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!open || suggestions.length === 0) return

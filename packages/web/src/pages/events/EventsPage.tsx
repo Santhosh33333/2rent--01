@@ -5,6 +5,7 @@ import { format } from 'date-fns'
 import toast from 'react-hot-toast'
 import { api } from '../../lib/api'
 import { AnimatedPage } from '../../components/AnimatedPage'
+import { LocationInput } from '../../components/LocationInput'
 import { PageHeader } from '../../components/PageHeader'
 import { EmptyState } from '../../components/EmptyState'
 import { SkeletonLoader } from '../../components/SkeletonLoader'
@@ -129,7 +130,13 @@ export function EventsPage() {
             <h3 className="font-bold text-surface-900 dark:text-white">Create an event</h3>
             <input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="Event title (min 3 characters)" maxLength={200} className="input" />
             <textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="Description (optional)" maxLength={1000} rows={3} className="input resize-none" />
-            <input value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} placeholder="Location (optional)" maxLength={500} className="input" />
+            <LocationInput
+              label="Location"
+              optional
+              value={form.location}
+              onChange={(v) => setForm((f) => ({ ...f, location: v }))}
+              placeholder="Event venue or area"
+            />
             <div className="grid grid-cols-2 gap-3">
               <label className="block">
                 <span className="text-xs text-surface-500">Starts</span>

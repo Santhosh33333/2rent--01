@@ -6,6 +6,7 @@ import {
 import toast from 'react-hot-toast'
 import { api } from '../../lib/api'
 import { AnimatedPage } from '../../components/AnimatedPage'
+import { LocationInput } from '../../components/LocationInput'
 import { PageHeader } from '../../components/PageHeader'
 import { EmptyState } from '../../components/EmptyState'
 import { SkeletonLoader } from '../../components/SkeletonLoader'
@@ -169,15 +170,19 @@ export function CommunitiesPage() {
               className="input resize-none"
             />
             <div className="grid grid-cols-2 gap-3">
-              <select value={form.privacy} onChange={(e) => setForm((f) => ({ ...f, privacy: e.target.value }))} className="input">
-                <option value="PUBLIC">Public</option>
-                <option value="PRIVATE">Private</option>
-              </select>
-              <input
+              <label className="block">
+                <span className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-2">Visibility</span>
+                <select value={form.privacy} onChange={(e) => setForm((f) => ({ ...f, privacy: e.target.value }))} className="input">
+                  <option value="PUBLIC">Public</option>
+                  <option value="PRIVATE">Private</option>
+                </select>
+              </label>
+              <LocationInput
+                label="City"
+                optional
                 value={form.city}
-                onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
+                onChange={(v) => setForm((f) => ({ ...f, city: v }))}
                 placeholder="City (optional)"
-                className="input"
               />
             </div>
             <button onClick={createCommunity} disabled={creating} className="btn-gradient w-full disabled:opacity-50">
