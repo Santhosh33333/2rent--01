@@ -7,16 +7,132 @@ import { AuthedRequest } from "../middleware/authTypes";
 class EventAlreadyRegisteredError extends Error {}
 class EventFullError extends Error {}
 
+// Canonical category list (spec: sports, movies, walking, ...). Admins can
+// disable entries via AppSettings key "event.categories.disabled" (JSON
+// array) through the existing admin app-settings endpoint.
+export const EVENT_CATEGORIES = [
+  "sports",
+  "movies",
+  "walking",
+  "running",
+  "cycling",
+  "fitness",
+  "gaming",
+  "study",
+  "travel",
+  "food",
+  "coffee",
+  "music",
+  "concerts",
+  "photography",
+  "shopping",
+  "networking",
+  "technology",
+  "community",
+  "workshops",
+  "education",
+  "volunteering",
+  "hobbies",
+  "meetups",
+  "other",
+] as const;
+
+export type EventCategory = (typeof EVENT_CATEGORIES)[number];
+
+async function getDisabledCategories(): Promise<Set<string>> {
+  try {
+    const row = await prisma.appSettings.findUnique({ where: { key: "event.categories.disabled" } });
+    if (!row) return new Set();
+    const parsed = JSON.parse(row.value);
+    return new Set(Array.isArray(parsed) ? parsed.map(String) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+export async function getEventCategories(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const disabled = await getDisabledCategories();
+    sendSuccess(
+      res,
+      {
+        categories: EVENT_CATEGORIES.map((key) => ({ key, enabled: !disabled.has(key) })),
+      },
+      "Event categories."
+    );
+  } catch (err: any) {
+    sendError(res, "Failed to load categories.", 500, "INTERNAL_ERROR");
+  }
+}
+
+function normalizeCategory(raw: unknown): string | null {
+  if (raw === undefined || raw === null || raw === "") return null;
+  const key = String(raw).toLowerCase().trim();
+  return (EVENT_CATEGORIES as readonly string[]).includes(key) ? key : null;
+}
+
+function datePresetRange(preset: string): { from?: Date; to?: Date } | null {
+  const now = new Date();
+  const startOfDay = (d: Date) => {
+    const c = new Date(d);
+    c.setUTCHours(0, 0, 0, 0);
+    return c;
+  };
+  const addDays = (d: Date, n: number) => new Date(d.getTime() + n * 86400000);
+  switch (preset) {
+    case "today": {
+      const s = startOfDay(now);
+      return { from: s, to: addDays(s, 1) };
+    }
+    case "tomorrow": {
+      const s = addDays(startOfDay(now), 1);
+      return { from: s, to: addDays(s, 1) };
+    }
+    case "week": {
+      return { from: now, to: addDays(now, 7) };
+    }
+    case "weekend": {
+      // Upcoming Saturday 00:00 -> Sunday 23:59 (UTC). If today is Saturday
+      // or Sunday, this weekend.
+      const day = now.getUTCDay();
+      const toSat = (6 - day + 7) % 7;
+      const sat = addDays(startOfDay(now), toSat);
+      return { from: sat, to: addDays(sat, 2) };
+    }
+    case "month": {
+      return { from: now, to: addDays(now, 30) };
+    }
+    case "upcoming": {
+      return { from: now };
+    }
+    default:
+      return null;
+  }
+}
+
 // ============================================================================
 // CREATE EVENT
 // ============================================================================
 
 export async function createEvent(req: AuthedRequest, res: Response): Promise<void> {
   try {
-    const { title, description, communityId, location, startTime, endTime, capacity } = req.body;
+    const { title, description, communityId, location, startTime, endTime, capacity, coverImageUrl, category, privacy, price } = req.body;
 
     if (!title || !startTime) {
       sendError(res, "Title and startTime are required.", 400, "VALIDATION_ERROR");
+      return;
+    }
+    if (category !== undefined && category !== null && category !== "" && !normalizeCategory(category)) {
+      sendError(res, `Unknown category. Use GET /events/categories for the list.`, 400, "INVALID_CATEGORY");
+      return;
+    }
+    if (privacy !== undefined && privacy !== "PUBLIC" && privacy !== "PRIVATE") {
+      sendError(res, "Privacy must be PUBLIC or PRIVATE.", 400, "VALIDATION_ERROR");
+      return;
+    }
+    const priceValue = price === undefined || price === null || price === "" ? null : Number(price);
+    if (priceValue !== null && (!Number.isFinite(priceValue) || priceValue < 0)) {
+      sendError(res, "Price must be a non-negative number.", 400, "VALIDATION_ERROR");
       return;
     }
 
@@ -29,6 +145,10 @@ export async function createEvent(req: AuthedRequest, res: Response): Promise<vo
         startTime: new Date(startTime),
         endTime: endTime ? new Date(endTime) : null,
         capacity: capacity || null,
+        coverImageUrl: coverImageUrl || null,
+        category: normalizeCategory(category),
+        privacy: privacy || "PUBLIC",
+        price: priceValue,
         organizerId: req.user!.userId,
         status: "PUBLISHED",
       },
@@ -63,6 +183,24 @@ export async function getEvents(req: AuthedRequest, res: Response): Promise<void
 
     if (req.query.status) where.status = req.query.status;
     if (req.query.communityId) where.communityId = req.query.communityId;
+    if (req.query.category) where.category = String(req.query.category).toLowerCase();
+    if (req.query.privacy) where.privacy = req.query.privacy;
+    if (req.query.free === "true") where.OR = [{ price: null }, { price: 0 }];
+    else if (req.query.free === "false") where.price = { gt: 0 };
+
+    // Date filtering: explicit from/to (ISO) or a named preset
+    // (today, tomorrow, week, weekend, month, upcoming).
+    const preset = typeof req.query.preset === "string" ? datePresetRange(req.query.preset) : null;
+    const fromRaw = (req.query.from as string) || undefined;
+    const toRaw = (req.query.to as string) || undefined;
+    const from = fromRaw ? new Date(fromRaw) : preset?.from;
+    const to = toRaw ? new Date(toRaw) : preset?.to;
+    if (from && !Number.isNaN(from.getTime())) {
+      where.startTime = { ...(where.startTime || {}), gte: from };
+    }
+    if (to && !Number.isNaN(to.getTime())) {
+      where.startTime = { ...(where.startTime || {}), lt: to };
+    }
 
     const [items, total] = await Promise.all([
       prisma.event.findMany({
@@ -150,7 +288,7 @@ export async function getEventById(req: AuthedRequest, res: Response): Promise<v
 export async function updateEvent(req: AuthedRequest, res: Response): Promise<void> {
   try {
     const { id } = req.params;
-    const { title, description, location, startTime, endTime, capacity, status } = req.body;
+    const { title, description, location, startTime, endTime, capacity, status, coverImageUrl, category, privacy, price } = req.body;
 
     const event = await prisma.event.findUnique({ where: { id } });
 
@@ -164,6 +302,20 @@ export async function updateEvent(req: AuthedRequest, res: Response): Promise<vo
       sendError(res, "Only event organizer can update.", 403, "FORBIDDEN");
       return;
     }
+    if (category !== undefined && category !== null && category !== "" && !normalizeCategory(category)) {
+      sendError(res, `Unknown category. Use GET /events/categories for the list.`, 400, "INVALID_CATEGORY");
+      return;
+    }
+    if (privacy !== undefined && privacy !== "PUBLIC" && privacy !== "PRIVATE") {
+      sendError(res, "Privacy must be PUBLIC or PRIVATE.", 400, "VALIDATION_ERROR");
+      return;
+    }
+    const priceValue =
+      price === undefined ? undefined : price === null || price === "" ? null : Number(price);
+    if (priceValue !== undefined && (priceValue === null ? false : !Number.isFinite(priceValue) || (priceValue as number) < 0)) {
+      sendError(res, "Price must be a non-negative number.", 400, "VALIDATION_ERROR");
+      return;
+    }
 
     const updated = await prisma.event.update({
       where: { id },
@@ -175,6 +327,10 @@ export async function updateEvent(req: AuthedRequest, res: Response): Promise<vo
         endTime: endTime ? new Date(endTime) : event.endTime,
         capacity: capacity !== undefined ? capacity : event.capacity,
         status: status || event.status,
+        coverImageUrl: coverImageUrl !== undefined ? coverImageUrl || null : event.coverImageUrl,
+        category: category !== undefined ? normalizeCategory(category) : event.category,
+        privacy: privacy || event.privacy,
+        price: priceValue !== undefined ? priceValue : event.price,
       },
     });
 
@@ -192,6 +348,37 @@ export async function updateEvent(req: AuthedRequest, res: Response): Promise<vo
     sendSuccess(res, updated, "Event updated.");
   } catch (err: any) {
     sendError(res, "Failed to update event.", 500, "INTERNAL_ERROR");
+  }
+}
+
+// ============================================================================
+// UPLOAD EVENT COVER (organizer only, public image)
+// ============================================================================
+
+export async function uploadEventCover(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    if (!req.file) {
+      sendError(res, "No cover image uploaded.", 400, "NO_FILE");
+      return;
+    }
+    const event = await prisma.event.findUnique({ where: { id }, select: { id: true, organizerId: true } });
+    if (!event) {
+      sendError(res, "Event not found.", 404, "EVENT_NOT_FOUND");
+      return;
+    }
+    if (event.organizerId !== req.user!.userId) {
+      sendError(res, "Only event organizer can change the cover.", 403, "FORBIDDEN");
+      return;
+    }
+    const coverImageUrl = `/uploads/${(req.file as Express.Multer.File).filename}`;
+    const updated = await prisma.event.update({ where: { id }, data: { coverImageUrl } });
+    await prisma.auditLog.create({
+      data: { actorId: req.user!.userId, actorType: "USER", action: "EVENT_COVER_UPLOAD", entityType: "Event", entityId: id },
+    });
+    sendSuccess(res, { coverImageUrl, event: updated }, "Cover image updated.");
+  } catch (err: any) {
+    sendError(res, "Failed to upload cover image.", 500, "INTERNAL_ERROR");
   }
 }
 

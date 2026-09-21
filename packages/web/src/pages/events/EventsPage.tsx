@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Calendar, Search, MapPin, Users, Clock, ChevronRight, Plus, X } from 'lucide-react'
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
-import { api } from '../../lib/api'
+import { api, assetUrl } from '../../lib/api'
+import { prepareCover } from '../../lib/photo'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { LocationInput } from '../../components/LocationInput'
 import { PageHeader } from '../../components/PageHeader'
@@ -20,16 +21,45 @@ interface Event {
   description?: string
   attendees?: number
   category?: string
+  capacity?: number | null
+  price?: number | null
+  coverImageUrl?: string | null
 }
 
 export function EventsPage() {
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
-  const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'rsvped'>('all')
   const [events, setEvents] = useState<Event[]>([])
   const [showCreate, setShowCreate] = useState(false)
   const [creating, setCreating] = useState(false)
-  const [form, setForm] = useState({ title: '', description: '', location: '', startTime: '', endTime: '', capacity: '' })
+  const [form, setForm] = useState({ title: '', description: '', location: '', startTime: '', endTime: '', capacity: '', category: '', price: '' })
+  const [categories, setCategories] = useState<Array<{ key: string; enabled: boolean }>>([])
+  const [coverFile, setCoverFile] = useState<Blob | null>(null)
+  const [coverPreview, setCoverPreview] = useState<string | null>(null)
+  const [datePreset, setDatePreset] = useState<'all' | 'today' | 'week' | 'free' | 'rsvped'>('all')
+
+  useEffect(() => {
+    api.get('/events/categories')
+      .then((r) => {
+        const list = r.data?.data?.categories
+        if (Array.isArray(list)) setCategories(list.filter((c: any) => c.enabled !== false))
+      })
+      .catch(() => {})
+  }, [])
+
+  const pickCover = async (file: File | undefined) => {
+    if (!file) return
+    try {
+      const { blob, previewUrl } = await prepareCover(file)
+      setCoverFile(blob)
+      setCoverPreview((prev) => {
+        if (prev) URL.revokeObjectURL(prev)
+        return previewUrl
+      })
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not use that image.')
+    }
+  }
 
   const createEvent = async () => {
     if (form.title.trim().length < 3) {
@@ -49,11 +79,30 @@ export function EventsPage() {
         startTime: new Date(form.startTime).toISOString(),
         endTime: form.endTime ? new Date(form.endTime).toISOString() : undefined,
         capacity: form.capacity ? Number(form.capacity) : undefined,
+        category: form.category || undefined,
+        price: form.price !== '' ? Number(form.price) : undefined,
       })
       const created = res.data?.data || res.data
+      if (created?.id && coverFile) {
+        try {
+          const fd = new FormData()
+          fd.append('cover', coverFile, 'cover.jpg')
+          await api.post(`/events/${created.id}/cover`, fd, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            timeout: 120000,
+          })
+        } catch {
+          toast.error('Event created, but the cover image failed to upload.')
+        }
+      }
       toast.success('Event created')
       setShowCreate(false)
-      setForm({ title: '', description: '', location: '', startTime: '', endTime: '', capacity: '' })
+      setForm({ title: '', description: '', location: '', startTime: '', endTime: '', capacity: '', category: '', price: '' })
+      setCoverFile(null)
+      setCoverPreview((prev) => {
+        if (prev) URL.revokeObjectURL(prev)
+        return null
+      })
       if (created?.id) navigate(`/events/${created.id}`)
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Failed to create event')
@@ -62,9 +111,12 @@ export function EventsPage() {
     }
   }
 
-  const { loading, error, retry } = useAsync(
+  const { loading, error, retry, execute: reloadEvents } = useAsync(
     async () => {
-      const res = await api.get('/events')
+      const params: Record<string, string | number> = {}
+      if (datePreset === 'today' || datePreset === 'week') params.preset = datePreset
+      if (datePreset === 'free') params.free = 'true'
+      const res = await api.get('/events', { params })
       const d = res.data?.data || res.data || {}
       const raw = Array.isArray(d) ? d : d.items || []
       const data = raw.map((ev: any) => ({
@@ -75,6 +127,9 @@ export function EventsPage() {
         description: ev.description ?? '',
         category: ev.category,
         attendees: ev.attendeeCount ?? 0,
+        capacity: ev.capacity ?? null,
+        price: ev.price ?? null,
+        coverImageUrl: ev.coverImageUrl ?? null,
         rsvp: !!ev.isRegistered,
       }))
       setEvents(data)
@@ -83,13 +138,20 @@ export function EventsPage() {
     true
   )
 
+  // Server-side date preset: refetch when the pill changes (first load is
+  // handled by useAsync itself).
+  const firstPresetLoad = useRef(true)
+  useEffect(() => {
+    if (firstPresetLoad.current) {
+      firstPresetLoad.current = false
+      return
+    }
+    reloadEvents().catch(() => {})
+  }, [datePreset, reloadEvents])
+
   const filtered = events.filter(e => {
     const matchesSearch = (e.name || '').toLowerCase().includes(search.toLowerCase()) || (e.location || '').toLowerCase().includes(search.toLowerCase())
-    const eventDate = new Date(e.date)
-    const now = new Date()
-    if (filter === 'upcoming') return matchesSearch && eventDate >= now
-    if (filter === 'past') return matchesSearch && eventDate < now
-    if (filter === 'rsvped') return matchesSearch && e.rsvp
+    if (datePreset === 'rsvped') return matchesSearch && e.rsvp
     return matchesSearch
   })
 
@@ -148,6 +210,39 @@ export function EventsPage() {
               </label>
             </div>
             <input type="number" min={1} max={10000} value={form.capacity} onChange={(e) => setForm((f) => ({ ...f, capacity: e.target.value }))} placeholder="Capacity (optional)" className="input" />
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className="text-xs text-surface-500">Category</span>
+                <select value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} className="input mt-1">
+                  <option value="">Select…</option>
+                  {categories.map((c) => (
+                    <option key={c.key} value={c.key}>{c.key.charAt(0).toUpperCase() + c.key.slice(1)}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-xs text-surface-500">Price ₹ (0 = free)</span>
+                <input type="number" min={0} value={form.price} onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))} placeholder="Free" className="input mt-1" />
+              </label>
+            </div>
+            <div>
+              <span className="text-xs text-surface-500">Cover photo (optional)</span>
+              <div className="mt-1 flex items-center gap-3">
+                {coverPreview ? (
+                  <img src={coverPreview} alt="Cover preview" className="w-full h-32 rounded-2xl object-cover" />
+                ) : (
+                  <label className="flex-1 cursor-pointer rounded-2xl border border-dashed border-surface-300 dark:border-surface-600 px-4 py-3 text-sm text-surface-500 text-center">
+                    Choose cover photo
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => { pickCover(e.target.files?.[0]); e.target.value = '' }} />
+                  </label>
+                )}
+                {coverPreview && (
+                  <button type="button" onClick={() => { setCoverFile(null); setCoverPreview((prev) => { if (prev) URL.revokeObjectURL(prev); return null }) }} className="shrink-0 p-2 rounded-xl bg-surface-100 dark:bg-surface-800 text-surface-500" aria-label="Remove cover">
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
             <button onClick={createEvent} disabled={creating} className="btn-gradient w-full disabled:opacity-50">
               {creating ? 'Creating...' : 'Create Event'}
             </button>
@@ -162,12 +257,18 @@ export function EventsPage() {
         </div>
 
         <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
-          {(['all', 'upcoming', 'past', 'rsvped'] as const).map(f => (
-            <button key={f} onClick={() => setFilter(f)}
+          {([
+            { key: 'all', label: 'All Events' },
+            { key: 'today', label: 'Today' },
+            { key: 'week', label: 'This Week' },
+            { key: 'free', label: 'Free' },
+            { key: 'rsvped', label: 'Rsvped' },
+          ] as const).map(f => (
+            <button key={f.key} onClick={() => setDatePreset(f.key)}
               className={`px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${
-                filter === f ? 'bg-primary-600 text-white shadow-lg shadow-primary-500/25' : 'bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 hover:bg-surface-200 dark:hover:bg-surface-700'
+                datePreset === f.key ? 'bg-primary-600 text-white shadow-lg shadow-primary-500/25' : 'bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 hover:bg-surface-200 dark:hover:bg-surface-700'
               }`}>
-              {f === 'all' ? 'All Events' : f.charAt(0).toUpperCase() + f.slice(1)}
+              {f.label}
             </button>
           ))}
         </div>
@@ -182,9 +283,13 @@ export function EventsPage() {
             {filtered.map(event => {
               const eventDate = new Date(event.date)
               const isPast = eventDate < new Date()
+              const isFull = event.capacity != null && (event.attendees ?? 0) >= event.capacity
               return (
                 <Link key={event.id} to={`/events/${event.id}`}
                   className="glass-card p-5 group hover:-translate-y-0.5 transition-all duration-300 block">
+                  {event.coverImageUrl && (
+                    <img src={assetUrl(event.coverImageUrl) || ''} alt="" className="w-full h-36 rounded-2xl object-cover mb-3" loading="lazy" />
+                  )}
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3 mb-2">
@@ -202,7 +307,13 @@ export function EventsPage() {
                         <span className="text-xs text-surface-500 flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> {format(eventDate, 'MMM d, yyyy')}</span>
                         <span className="text-xs text-surface-500 flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {format(eventDate, 'h:mm a')}</span>
                         <span className="text-xs text-surface-500 flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {event.location}</span>
-                        {event.attendees !== undefined && <span className="text-xs text-surface-500 flex items-center gap-1"><Users className="w-3.5 h-3.5" /> {event.attendees} attending</span>}
+                        {event.attendees !== undefined && <span className="text-xs text-surface-500 flex items-center gap-1"><Users className="w-3.5 h-3.5" /> {event.attendees}{event.capacity != null ? `/${event.capacity}` : ''} attending</span>}
+                        {event.price != null && (
+                          <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                            {Number(event.price) === 0 ? 'Free' : `₹${event.price}`}
+                          </span>
+                        )}
+                        {isFull && !isPast && <span className="badge-danger text-[10px]">Event Full</span>}
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-2 flex-shrink-0">

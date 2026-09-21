@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
-import { api } from '../../lib/api'
+import { api, assetUrl } from '../../lib/api'
 
 interface EventDetail {
   id: number
@@ -20,6 +20,8 @@ interface EventDetail {
   category?: string
   organizer?: string
   maxAttendees?: number
+  coverImageUrl?: string | null
+  price?: number | null
 }
 
 export function EventDetailPage() {
@@ -48,6 +50,8 @@ export function EventDetailPage() {
           category: raw.category,
           organizer: raw.organizer?.fullName,
           maxAttendees: raw.capacity,
+          coverImageUrl: raw.coverImageUrl ?? null,
+          price: raw.price ?? null,
         } : null
         setEvent(data)
       } catch (err) {
@@ -134,7 +138,34 @@ export function EventDetailPage() {
 
       {/* Event Card */}
       <div className="glass-card overflow-hidden">
-        {/* Gradient Header */}
+        {/* Cover Header */}
+        {event.coverImageUrl ? (
+          <div className="h-48 relative">
+            <img src={assetUrl(event.coverImageUrl) || ''} alt="" className="absolute inset-0 w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+            <div className="absolute top-4 right-4 flex gap-2">
+              <button
+                onClick={async () => {
+                  const url = window.location.href
+                  try {
+                    if (navigator.share) {
+                      await navigator.share({ title: event?.name || 'Event', url })
+                    } else {
+                      await navigator.clipboard.writeText(url)
+                      toast.success('Event link copied')
+                    }
+                  } catch {
+                    /* user dismissed the share sheet */
+                  }
+                }}
+                title="Share this event"
+                className="w-9 h-9 rounded-xl bg-white/80 dark:bg-surface-800/80 backdrop-blur-sm flex items-center justify-center text-surface-600 dark:text-surface-400 hover:bg-white dark:hover:bg-surface-700 transition-colors"
+              >
+                <Share2 className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        ) : (
         <div className="h-32 bg-gradient-to-br from-primary-500/20 via-accent-500/10 to-surface-100 dark:from-primary-900/20 dark:via-accent-900/10 dark:to-surface-900 relative">
           <div className="absolute inset-0 bg-grid opacity-20" />
           <div className="absolute top-4 right-4 flex gap-2">
@@ -159,6 +190,7 @@ export function EventDetailPage() {
             </button>
           </div>
         </div>
+        )}
 
         <div className="p-6 md:p-8 -mt-16 relative">
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center shadow-lg shadow-primary-500/30 mb-4">
@@ -208,6 +240,14 @@ export function EventDetailPage() {
                 {event.attendees}{spotsLeft !== undefined ? `/${event.maxAttendees}` : ''}
               </p>
             </div>
+            {event.price != null && (
+              <div className="glass-card-sm p-3 text-center">
+                <p className="text-[10px] text-surface-400">Entry</p>
+                <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                  {Number(event.price) === 0 ? 'Free' : `₹${event.price}`}
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Description */}
@@ -248,17 +288,19 @@ export function EventDetailPage() {
           <div className="flex items-center gap-3 mt-6">
             <button
               onClick={handleRsvp}
-              disabled={rsvping || isPast}
+              disabled={rsvping || isPast || (!event.rsvp && spotsLeft !== undefined && spotsLeft <= 0)}
               className={`flex-1 py-3 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 ${
                 event.rsvp
                   ? 'bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 border border-surface-200 dark:border-surface-700'
                   : 'bg-gradient-to-r from-primary-500 to-accent-500 text-white shadow-lg shadow-primary-500/20 hover:shadow-xl hover:shadow-primary-500/30'
-              } ${isPast ? 'opacity-50 cursor-not-allowed' : ''}`}
+              } ${(isPast || (!event.rsvp && spotsLeft !== undefined && spotsLeft <= 0)) ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               {rsvping ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : event.rsvp ? (
                 <><XCircle className="w-4 h-4" /> Cancel RSVP</>
+              ) : !event.rsvp && spotsLeft !== undefined && spotsLeft <= 0 ? (
+                <>Event Full</>
               ) : (
                 <><CheckCircle className="w-4 h-4" /> RSVP Now</>
               )}

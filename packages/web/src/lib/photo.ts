@@ -64,6 +64,35 @@ export async function uploadAvatar(blob: Blob): Promise<string> {
   return avatarUrl
 }
 
+const COVER_MAX_W = 1600
+const COVER_MAX_BYTES = 8 * 1024 * 1024
+
+/**
+ * Landscape cover prep: validate, downscale to max 1600px wide, JPEG.
+ * No cropping — the full frame is kept, CSS object-cover handles display.
+ */
+export async function prepareCover(file: File): Promise<{ blob: Blob; previewUrl: string }> {
+  if (!ACCEPTED_TYPES.includes(file.type)) {
+    throw new Error('Please choose a JPEG, PNG, WebP or GIF image.')
+  }
+  if (file.size > COVER_MAX_BYTES) {
+    throw new Error('That image is too large (over 8 MB). Pick a smaller one.')
+  }
+  const img = await loadImage(file)
+  const scale = Math.min(1, COVER_MAX_W / img.naturalWidth)
+  const w = Math.round(img.naturalWidth * scale)
+  const h = Math.round(img.naturalHeight * scale)
+  const canvas = document.createElement('canvas')
+  canvas.width = w
+  canvas.height = h
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('Your browser cannot process images.')
+  ctx.drawImage(img, 0, 0, w, h)
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.82))
+  if (!blob) throw new Error('Could not process that image. Try another file.')
+  return { blob, previewUrl: URL.createObjectURL(blob) }
+}
+
 interface AvatarUpload {
   previewUrl: string | null
   uploading: boolean

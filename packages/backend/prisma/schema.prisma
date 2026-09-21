@@ -492,6 +492,10 @@ model Event {
   organizerId   String
   communityId   String?
   location      String?
+  coverImageUrl String?
+  category      String?
+  privacy       String  @default("PUBLIC") // PUBLIC, PRIVATE
+  price         Float?
   startTime     DateTime
   endTime       DateTime?
   capacity      Int?
@@ -500,10 +504,12 @@ model Event {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  organizer User            @relation("EventOrganizer", fields: [organizerId], references: [id], onDelete: Cascade)
-  attendees EventAttendee[]
+    organizer User            @relation("EventOrganizer", fields: [organizerId], references: [id], onDelete: Cascade)
+    attendees EventAttendee[]
 
-  @@index([organizerId])
+    @@index([organizerId])
+    @@index([status, startTime])
+    @@index([category])
 }
 
 model EventAttendee {

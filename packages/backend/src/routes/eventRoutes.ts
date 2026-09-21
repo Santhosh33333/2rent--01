@@ -2,11 +2,15 @@ import { Router } from "express";
 import { body } from "express-validator";
 import { authenticateToken, requireKycVerified } from "../middleware/auth";
 import { sanitizeInput, validateRequest } from "../middleware/validation";
+import { upload } from "../middleware/upload";
 import * as eventController from "../controllers/eventController";
 
 const router = Router();
 
 router.use(authenticateToken, requireKycVerified);
+
+// Event categories (with admin enable/disable flags)
+router.get("/categories", eventController.getEventCategories);
 
 // Create event
 router.post(
@@ -19,6 +23,10 @@ router.post(
     body("capacity").optional().isInt({ min: 1, max: 10000 }),
     body("location").optional().isString().trim().isLength({ max: 500 }),
     body("communityId").optional().isString(),
+    body("coverImageUrl").optional().isString().trim().isLength({ max: 500 }),
+    body("category").optional().isString().trim().isLength({ max: 32 }),
+    body("privacy").optional().isIn(["PUBLIC", "PRIVATE"]),
+    body("price").optional().isFloat({ min: 0 }),
   ],
   sanitizeInput,
   validateRequest,
@@ -42,11 +50,18 @@ router.put(
     body("capacity").optional().isInt({ min: 1, max: 10000 }),
     body("location").optional().isString().trim(),
     body("status").optional().isIn(["PUBLISHED", "CANCELLED", "COMPLETED"]),
+    body("coverImageUrl").optional().isString().trim().isLength({ max: 500 }),
+    body("category").optional().isString().trim().isLength({ max: 32 }),
+    body("privacy").optional().isIn(["PUBLIC", "PRIVATE"]),
+    body("price").optional().isFloat({ min: 0 }),
   ],
   sanitizeInput,
   validateRequest,
   eventController.updateEvent
 );
+
+// Upload event cover (organizer only)
+router.post("/:id/cover", upload.single("cover"), eventController.uploadEventCover);
 
 // Delete event (organizer only)
 router.delete("/:id", eventController.deleteEvent);
