@@ -43,6 +43,7 @@ import bookingRoutes from "./routes/bookingRoutes";
 import partnerRoutes from "./routes/partnerRoutes";
 import searchRoutes from "./routes/searchRoutes";
 import discoveryRoutes from "./routes/discoveryRoutes";
+import moviesRoutes from "./routes/moviesRoutes";
 import referralRoutes from "./routes/referralRoutes";
 
 export function createApp(): http.Server {
@@ -257,6 +258,7 @@ export function createApp(): http.Server {
   app.use("/api/wallet", idempotencyMiddleware, walletRoutes);
 app.use("/api/partner", partnerRoutes);
 app.use("/api/discovery", discoveryRoutes);
+app.use("/api/movies", moviesRoutes);
   // Public service catalog (Expanded Partner Ecosystem) — registered BEFORE the
   // /api search router (which applies auth globally) so it stays unauthenticated.
   app.get("/api/services", (_req: Request, res: Response) => {

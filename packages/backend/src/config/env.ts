@@ -90,6 +90,10 @@ const envSchema = z.object({
   LOCATIONIQ_BASE_URL: z.string().default("https://us1.locationiq.com/v1"),
   LOCATIONIQ_TILE_URL: z.string().default("https://{s}.tile.locationiq.com/hot/{z}/{x}/{y}.png"),
 
+  // TMDB (movies) — optional. Without TMDB_API_KEY the movies API reports
+  // MOVIES_NOT_CONFIGURED and the app shows meetups only. Never fake data.
+  TMDB_API_KEY: z.string().optional(),
+
   // Clerk (legacy — optional)
   CLERK_SECRET_KEY: z.string().optional(),
   CLERK_PUBLISHABLE_KEY: z.string().optional(),

@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { ArrowLeft, ChevronRight, Search, ShieldCheck, Sparkles, Trophy, User as UserIcon } from 'lucide-react'
+import { ArrowLeft, ChevronRight, Clapperboard, Search, ShieldCheck, Sparkles, Trophy, User as UserIcon } from 'lucide-react'
 import { DISCOVERY_BY_KEY, type DiscoveryCategoryKey } from '../lib/discoveryData'
 import { api, assetUrl } from '../lib/api'
 
@@ -95,6 +95,14 @@ export function DiscoveryCategoryPage({ categoryKey }: DiscoveryCategoryPageProp
             className="mt-4 inline-flex items-center gap-2 rounded-xl bg-white/15 px-4 py-2.5 text-sm font-semibold backdrop-blur-sm hover:bg-white/25 transition-colors"
           >
             <Trophy className="w-4 h-4" /> Open Sports hub — games, players, RSVP
+          </Link>
+        )}
+        {categoryKey === 'movies' && (
+          <Link
+            to="/movies"
+            className="mt-4 inline-flex items-center gap-2 rounded-xl bg-white/15 px-4 py-2.5 text-sm font-semibold backdrop-blur-sm hover:bg-white/25 transition-colors"
+          >
+            <Clapperboard className="w-4 h-4" /> Open Movies hub — listings, meetups
           </Link>
         )}
       </div>
