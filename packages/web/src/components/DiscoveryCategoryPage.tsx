@@ -153,7 +153,7 @@ export function DiscoveryCategoryPage({ categoryKey }: DiscoveryCategoryPageProp
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-surface-900 dark:text-white">{p.name}</p>
                     <p className="text-xs text-surface-500">
-                      {[p.city, ageFrom(p.dateOfBirth) ? `${ageFrom(p.dateOfBirth)} yrs` : null].filter(Boolean).join(' Â· ') || 'Side Bud member'}
+                      {[p.city, ageFrom(p.dateOfBirth) ? `${ageFrom(p.dateOfBirth)} yrs` : null].filter(Boolean).join(' · ') || 'Side Bud member'}
                     </p>
                   </div>
                 </div>

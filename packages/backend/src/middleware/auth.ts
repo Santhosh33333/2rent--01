@@ -4,6 +4,15 @@ import { prisma } from "../config/database";
 import { sendError } from "../utils/response";
 import { AuthedRequest, AuthenticatedUser, UserRole } from "./authTypes";
 
+const ADMIN_TIER_ROLES = ["SUPER_ADMIN", "ADMIN", "MODERATOR", "SUPPORT", "FINANCE", "SUPPORT_ADMIN", "FINANCE_ADMIN", "KYC_ADMIN", "MARKETING_ADMIN", "PARTNER_ADMIN"];
+
+// Admins must be able to open every area (support, moderation, testing)
+// without completing user KYC first. Feature gates below defer to this.
+export function isAdminTier(user?: { role?: string; activeRole?: string } | null): boolean {
+  if (!user) return false;
+  return ADMIN_TIER_ROLES.includes(user.activeRole || "") || ADMIN_TIER_ROLES.includes(user.role || "");
+}
+
 export function verifyToken(token: string): { userId: string; email: string; role?: string; impersonatorId?: string } | null {
   try {
     const payload = verifyAccessToken(token);
@@ -88,6 +97,10 @@ export async function requireVerification(req: AuthedRequest, res: Response, nex
       sendError(res, "Authentication required.", 401, "UNAUTHORIZED");
       return;
     }
+    if (isAdminTier(req.user)) {
+      next();
+      return;
+    }
     const verification = await prisma.verification.findUnique({
       where: { userId: req.user.userId },
       select: { status: true },
@@ -160,6 +173,10 @@ export async function requireKycVerified(req: AuthedRequest, res: Response, next
   try {
     if (!req.user) {
       sendError(res, "Authentication required.", 401, "UNAUTHORIZED");
+      return;
+    }
+    if (isAdminTier(req.user)) {
+      next();
       return;
     }
     const verification = await prisma.verification.findUnique({
