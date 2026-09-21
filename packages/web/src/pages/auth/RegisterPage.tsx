@@ -230,7 +230,7 @@ export function RegisterPage() {
                   <div>
                     <label htmlFor="name" className="label">Full Name</label>
                     <div className="relative">
-                      <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-surface-400" />
+                      <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 shrink-0 pointer-events-none text-surface-400" />
                       <input {...register('name')} type="text" id="name" className="input pl-11" placeholder="John Doe" />
                     </div>
                     {errors.name && <p className="mt-2 text-xs text-danger-500 font-medium">{errors.name.message}</p>}
@@ -238,7 +238,7 @@ export function RegisterPage() {
                   <div>
                     <label htmlFor="email" className="label">Email address</label>
                     <div className="relative">
-                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-surface-400" />
+                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 shrink-0 pointer-events-none text-surface-400" />
                       <input {...register('email')} type="email" id="email" className="input pl-11" placeholder="you@example.com" />
                     </div>
                     {errors.email && <p className="mt-2 text-xs text-danger-500 font-medium">{errors.email.message}</p>}
@@ -246,7 +246,7 @@ export function RegisterPage() {
                   <div>
                     <label htmlFor="referralCode" className="label">Referral Code <span className="text-surface-400 font-normal">(optional)</span></label>
                     <div className="relative">
-                      <Sparkles className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-surface-400" />
+                      <Sparkles className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 shrink-0 pointer-events-none text-surface-400" />
                       <input {...register('referralCode')} type="text" id="referralCode" className="input pl-11 uppercase" placeholder="RB-XXXXXXXX" />
                     </div>
                     <p className="mt-2 text-xs text-surface-500">Enter a friend's code to earn a sign-up reward on both sides.</p>
@@ -286,7 +286,7 @@ export function RegisterPage() {
                   <div>
                     <label htmlFor="dateOfBirth" className="label">Date of Birth</label>
                     <div className="relative">
-                      <Cake className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-surface-400" />
+                      <Cake className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 shrink-0 pointer-events-none text-surface-400" />
                       <input
                         {...register('dateOfBirth')}
                         type="date"
@@ -321,7 +321,7 @@ export function RegisterPage() {
                   <div>
                     <label htmlFor="phone" className="label">Phone Number</label>
                     <div className="relative">
-                      <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-surface-400" />
+                      <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 shrink-0 pointer-events-none text-surface-400" />
                       <input {...register('phone')} type="tel" id="phone" className="input pl-11" placeholder="+91 98765 43210" />
                     </div>
                     {errors.phone && <p className="mt-2 text-xs text-danger-500 font-medium">{errors.phone.message}</p>}
@@ -329,10 +329,10 @@ export function RegisterPage() {
                   <div>
                     <label htmlFor="password" className="label">Password</label>
                     <div className="relative">
-                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-surface-400" />
+                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 shrink-0 pointer-events-none text-surface-400" />
                       <input {...register('password')} type={showPassword ? 'text' : 'password'} id="password" className="input pl-11 pr-11" placeholder="Create a password" />
                       <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-surface-400 hover:text-surface-600 dark:hover:text-surface-300 transition-colors">
-                        {showPassword ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
+                        {showPassword ? <EyeOff className="w-5 h-5 shrink-0 pointer-events-none" /> : <Eye className="w-5 h-5 shrink-0 pointer-events-none" />}
                       </button>
                     </div>
                     {errors.password && <p className="mt-2 text-xs text-danger-500 font-medium">{errors.password.message}</p>}
@@ -340,7 +340,7 @@ export function RegisterPage() {
                   <div>
                     <label htmlFor="confirmPassword" className="label">Confirm Password</label>
                     <div className="relative">
-                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-surface-400" />
+                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 shrink-0 pointer-events-none text-surface-400" />
                       <input {...register('confirmPassword')} type="password" id="confirmPassword" className="input pl-11" placeholder="Confirm your password" />
                     </div>
                     {errors.confirmPassword && <p className="mt-2 text-xs text-danger-500 font-medium">{errors.confirmPassword.message}</p>}

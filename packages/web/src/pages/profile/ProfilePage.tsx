@@ -205,7 +205,7 @@ export function ProfilePage() {
               <div>
                 <label className="label">Full Name</label>
                 <div className="relative">
-                  <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-surface-400" />
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 shrink-0 pointer-events-none text-surface-400" />
                   <input {...register('name', { required: 'Name is required' })} disabled={!editing} className="input pl-11" placeholder="Your full name" />
                 </div>
                 {errors.name && <p className="mt-2 text-xs text-danger-500 font-medium">{errors.name.message}</p>}
@@ -214,7 +214,7 @@ export function ProfilePage() {
               <div>
                 <label className="label">Email Address</label>
                 <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-surface-400" />
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 shrink-0 pointer-events-none text-surface-400" />
                   <input {...register('email', { required: 'Email is required' })} disabled={!editing} className="input pl-11" placeholder="your@email.com" />
                 </div>
                 {errors.email && <p className="mt-2 text-xs text-danger-500 font-medium">{errors.email.message}</p>}
@@ -223,7 +223,7 @@ export function ProfilePage() {
               <div>
                 <label className="label">Phone Number</label>
                 <div className="relative">
-                  <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-surface-400" />
+                  <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 shrink-0 pointer-events-none text-surface-400" />
                   <input {...register('phone')} disabled={!editing} className="input pl-11" placeholder="+91 98765 43210" />
                 </div>
               </div>

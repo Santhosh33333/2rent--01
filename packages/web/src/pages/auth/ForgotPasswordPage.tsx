@@ -102,7 +102,7 @@ export function ForgotPasswordPage() {
                 <div>
                   <label className="label">Email address</label>
                   <div className="relative">
-                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-surface-400" />
+                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 shrink-0 pointer-events-none text-surface-400" />
                     <input {...emailForm.register('email')} type="email" className="input pl-11" placeholder="you@example.com" />
                   </div>
                   {emailForm.formState.errors.email && <p className="mt-2 text-xs text-danger-500 font-medium">{emailForm.formState.errors.email.message}</p>}
@@ -176,10 +176,10 @@ export function ForgotPasswordPage() {
                 <div>
                   <label className="label">New Password</label>
                   <div className="relative">
-                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-surface-400" />
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 shrink-0 pointer-events-none text-surface-400" />
                     <input {...resetForm.register('password')} type={showPassword ? 'text' : 'password'} className="input pl-11 pr-11" placeholder="New password" />
                     <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-surface-400 hover:text-surface-600 dark:hover:text-surface-300 transition-colors">
-                      {showPassword ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
+                      {showPassword ? <EyeOff className="w-5 h-5 shrink-0 pointer-events-none" /> : <Eye className="w-5 h-5 shrink-0 pointer-events-none" />}
                     </button>
                   </div>
                   {resetForm.formState.errors.password && <p className="mt-2 text-xs text-danger-500 font-medium">{resetForm.formState.errors.password.message}</p>}
@@ -187,7 +187,7 @@ export function ForgotPasswordPage() {
                 <div>
                   <label className="label">Confirm Password</label>
                   <div className="relative">
-                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-surface-400" />
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 shrink-0 pointer-events-none text-surface-400" />
                     <input {...resetForm.register('confirmPassword')} type="password" className="input pl-11" placeholder="Confirm password" />
                   </div>
                   {resetForm.formState.errors.confirmPassword && <p className="mt-2 text-xs text-danger-500 font-medium">{resetForm.formState.errors.confirmPassword.message}</p>}

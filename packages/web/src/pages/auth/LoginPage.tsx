@@ -5,7 +5,7 @@ import { useAuth } from '../../lib/auth'
 import { isClerkConfigured } from '../../lib/clerkAuth'
 import { initGoogleSignIn, signInWithGoogle } from '../../lib/googleAuth'
 import { AnimatedPage } from '../../components/AnimatedPage'
-import { ArrowRight, Sparkles, Mail, Lock, Loader2, Phone } from 'lucide-react'
+import { ArrowRight, Mail, Lock, Loader2, Phone, Eye, EyeOff } from 'lucide-react'
 import { api } from '../../lib/api'
 import toast from 'react-hot-toast'
 
@@ -37,6 +37,7 @@ export function LoginPage() {
   const [phone, setPhone] = useState('')
   const [otpSent, setOtpSent] = useState(false)
   const [otp, setOtp] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
 
   useEffect(() => {
     initGoogleSignIn(handleGoogleCredential)
@@ -190,7 +191,7 @@ export function LoginPage() {
             </p>
           </div>
 
-          <div className="glass-elevated p-8">
+          <div className="glass-elevated p-5 sm:p-8">
             <button
               onClick={handleGoogleClick}
               disabled={googleLoading}
@@ -211,11 +212,8 @@ export function LoginPage() {
               </span>
             </button>
 
-            <div className="divider my-7">
-              <span className="flex items-center gap-1.5">
-                <Sparkles className="w-3 h-3" />
-                or sign in with
-              </span>
+            <div className="divider my-6 sm:my-7">
+              <span>or</span>
             </div>
 
             <div className="flex gap-2 mb-5">
@@ -250,7 +248,7 @@ export function LoginPage() {
               <div>
                 <label htmlFor="email" className="label">Email address</label>
                 <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-surface-400" />
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 shrink-0 pointer-events-none text-surface-400" />
                   <input
                     name="email"
                     type="email"
@@ -274,16 +272,24 @@ export function LoginPage() {
                   </Link>
                 </div>
                 <div className="relative">
-                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-surface-400" />
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 shrink-0 pointer-events-none text-surface-400" />
                   <input
                     name="password"
-                    type="password"
+                    type={showPassword ? 'text' : 'password'}
                     id="password"
-                    className="input pl-11"
+                    className="input pl-11 pr-11"
                     placeholder="Enter your password"
                     autoComplete="current-password"
                     required
                   />
+                  <button
+                    type="button"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    onClick={() => setShowPassword(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-surface-400 hover:text-surface-600 dark:hover:text-surface-200 transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
                 </div>
               </div>
 
@@ -316,7 +322,7 @@ export function LoginPage() {
               <div>
                 <label htmlFor="phone" className="label">Phone number</label>
                 <div className="relative">
-                  <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-surface-400" />
+                  <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 shrink-0 pointer-events-none text-surface-400" />
                   <input
                     name="phone"
                     type="tel"
@@ -362,21 +368,19 @@ export function LoginPage() {
               </p>
               <div>
                 <label htmlFor="otp" className="label">Verification code</label>
-                <div className="relative">
-                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-surface-400" />
-                  <input
-                    name="otp"
-                    type="text"
-                    id="otp"
-                    className="input pl-11 text-center text-2xl tracking-widest font-mono"
-                    placeholder="000000"
-                    maxLength={6}
-                    value={otp}
-                    onChange={e => setOtp(e.target.value)}
-                    autoComplete="one-time-code"
-                    required
-                  />
-                </div>
+                <input
+                  name="otp"
+                  type="text"
+                  id="otp"
+                  inputMode="numeric"
+                  className="input text-center text-2xl tracking-[0.5em] font-mono pl-4"
+                  placeholder="000000"
+                  maxLength={6}
+                  value={otp}
+                  onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
+                  autoComplete="one-time-code"
+                  required
+                />
               </div>
 
               {apiError && (
@@ -413,17 +417,12 @@ export function LoginPage() {
             )}
 
             {isClerkConfigured() && (
-              <div className="mt-5">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="h-px flex-1 bg-surface-200 dark:bg-surface-700" />
-                  <span className="text-xs text-surface-400">or</span>
-                  <div className="h-px flex-1 bg-surface-200 dark:bg-surface-700" />
-                </div>
+              <div className="mt-5 text-center">
                 <Link
                   to="/sign-in"
-                  className="w-full py-3 rounded-xl border border-surface-300 dark:border-surface-600 text-sm font-semibold text-surface-700 dark:text-surface-200 hover:border-primary-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors flex items-center justify-center"
+                  className="text-sm font-medium text-surface-500 dark:text-surface-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
                 >
-                  Continue with Clerk&nbsp;·&nbsp;Google, OTP & more
+                  More sign-in options
                 </Link>
               </div>
             )}

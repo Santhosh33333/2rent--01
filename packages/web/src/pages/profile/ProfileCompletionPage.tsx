@@ -216,7 +216,7 @@ export function ProfileCompletionPage() {
                         <div>
                           <label className="label">Full Name</label>
                           <div className="relative">
-                            <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-surface-400" />
+                            <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 shrink-0 pointer-events-none text-surface-400" />
                             <input
                               {...register('fullName')}
                               type="text"
@@ -242,7 +242,7 @@ export function ProfileCompletionPage() {
                         <div>
                           <label className="label">Date of Birth</label>
                           <div className="relative">
-                            <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-surface-400" />
+                            <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 shrink-0 pointer-events-none text-surface-400" />
                             <input
                               {...register('dateOfBirth')}
                               type="date"
@@ -260,7 +260,7 @@ export function ProfileCompletionPage() {
                         <div>
                           <label className="label">City</label>
                           <div className="relative">
-                            <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-surface-400" />
+                            <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 shrink-0 pointer-events-none text-surface-400" />
                             <input
                               {...register('city')}
                               type="text"
@@ -273,7 +273,7 @@ export function ProfileCompletionPage() {
                         <div>
                           <label className="label">Country</label>
                           <div className="relative">
-                            <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-surface-400" />
+                            <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 shrink-0 pointer-events-none text-surface-400" />
                             <input
                               {...register('country')}
                               type="text"
