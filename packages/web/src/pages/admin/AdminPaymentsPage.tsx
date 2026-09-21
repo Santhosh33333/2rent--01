@@ -1,4 +1,4 @@
-﻿import { getErrorMessage } from '../../lib/error'
+import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, Search, ChevronLeft, ChevronRight, CreditCard, IndianRupee, Clock, XCircle, Percent, Banknote, Wallet, Download, Phone, Mail, User as UserIcon, FileDown } from 'lucide-react'
@@ -157,7 +157,7 @@ export function AdminPaymentsPage() {
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-white">Payment Center</h1>
+            <h1 className="text-2xl font-bold font-display text-white">Payment Center</h1>
             <p className="text-gray-400 text-sm mt-1">Real Razorpay orders and payments</p>
           </div>
         </div>

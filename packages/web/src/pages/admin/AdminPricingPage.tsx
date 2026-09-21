@@ -1,4 +1,4 @@
-﻿import { getErrorMessage } from '../../lib/error'
+import { getErrorMessage } from '../../lib/error'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, Beaker, Loader2, Percent, Plus, Save, ShieldCheck } from 'lucide-react'
@@ -146,7 +146,7 @@ export function AdminPricingPage() {
       <div className="max-w-5xl mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+            <h1 className="text-2xl font-bold font-display text-slate-900 flex items-center gap-2">
               <Percent className="w-6 h-6 text-indigo-600" /> Pricing &amp; Fees
             </h1>
             <p className="text-sm text-slate-500 mt-1">

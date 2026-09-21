@@ -1,4 +1,4 @@
-﻿import { getErrorMessage } from '../../lib/error'
+import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, ChevronLeft, ChevronRight, Check, X, Phone, Mail, ShieldCheck, AlertTriangle, FileDown } from 'lucide-react'
@@ -169,7 +169,7 @@ export function AdminKycPage() {
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-white">KYC Verification</h1>
+            <h1 className="text-2xl font-bold font-display text-white">KYC Verification</h1>
             <p className="text-gray-400 text-sm mt-1">Review identity documents submitted by users</p>
           </div>
           <button

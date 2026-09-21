@@ -80,7 +80,7 @@ export function AdminLiveTrackingPage() {
         <div className="flex items-center gap-3 mb-6">
           <Radio className="w-6 h-6 text-emerald-400" />
           <div>
-            <h1 className="text-2xl font-bold text-white">Live Tracking</h1>
+            <h1 className="text-2xl font-bold font-display text-white">Live Tracking</h1>
             <p className="text-gray-400 text-sm mt-1">
               Monitor user &amp; partner live locations for active bookings (safety)
             </p>

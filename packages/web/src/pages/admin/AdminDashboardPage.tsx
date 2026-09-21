@@ -1,4 +1,4 @@
-﻿import { getErrorMessage } from '../../lib/error'
+import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, Users, Handshake, CalendarCheck, Wallet, ShieldCheck, Banknote, FileDown } from 'lucide-react'
@@ -46,7 +46,7 @@ export function AdminDashboardPage() {
             <Link to="/admin/portal" className="p-2 rounded-lg bg-gray-800 text-gray-400">
               <ArrowLeft className="w-5 h-5" />
             </Link>
-            <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+            <h1 className="text-2xl font-bold font-display text-white">Dashboard</h1>
           </div>
           <div className="text-center py-20">
             <div className="w-8 h-8 rounded-full border-2 border-gray-700 border-t-blue-500 animate-spin mx-auto" />
@@ -65,7 +65,7 @@ export function AdminDashboardPage() {
             <Link to="/admin/portal" className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition">
               <ArrowLeft className="w-5 h-5" />
             </Link>
-            <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+            <h1 className="text-2xl font-bold font-display text-white">Dashboard</h1>
           </div>
           <div className="bg-red-900/20 border border-red-800 text-red-300 p-4 rounded-xl text-center">
             {error}
@@ -123,7 +123,7 @@ export function AdminDashboardPage() {
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+            <h1 className="text-2xl font-bold font-display text-white">Dashboard</h1>
             <p className="text-gray-400 text-sm mt-1">Platform overview & analytics</p>
           </div>
           <button

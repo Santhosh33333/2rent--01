@@ -75,7 +75,7 @@ export function DiscoveryCategoryPage({ categoryKey }: DiscoveryCategoryPageProp
         </button>
         <div className="flex-1">
           <p className="text-xs uppercase tracking-[0.2em] text-primary-500 font-semibold">Discover</p>
-          <h1 className="text-2xl font-bold tracking-tight">{category.label}</h1>
+          <h1 className="text-2xl font-bold font-display tracking-tight">{category.label}</h1>
         </div>
       </div>
 

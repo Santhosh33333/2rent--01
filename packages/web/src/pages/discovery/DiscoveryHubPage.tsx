@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight, ChevronRight, GripVertical, Loader2, MapPin, Navigation, Search, SlidersHorizontal, Sparkles, Star } from 'lucide-react'
 import { DISCOVERY_CATEGORIES, QUICK_ACTIONS, type DiscoveryCategoryKey } from '../../lib/discoveryData'
@@ -216,7 +216,7 @@ export function DiscoveryHubPage() {
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-primary-500 font-semibold">Discover</p>
-          <h1 className="text-2xl font-bold tracking-tight">Explore your ecosystem</h1>
+          <h1 className="text-2xl font-bold font-display tracking-tight">Explore your ecosystem</h1>
         </div>
         <Link to="/search" className="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-3 py-2 text-sm font-medium text-white shadow-lg shadow-primary-500/25">
           <Search className="w-4 h-4" />

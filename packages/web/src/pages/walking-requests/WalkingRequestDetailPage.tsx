@@ -175,7 +175,7 @@ export function WalkingRequestDetailPage() {
           </div>
 
           {/* Title */}
-          <h1 className="text-2xl font-bold text-surface-900 dark:text-white capitalize mb-1">
+          <h1 className="text-2xl font-bold font-display text-surface-900 dark:text-white capitalize mb-1">
             {request.type} Request
           </h1>
           <p className="text-sm text-surface-500">Request #{request.id}</p>

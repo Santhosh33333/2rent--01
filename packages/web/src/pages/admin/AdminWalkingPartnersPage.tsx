@@ -1,4 +1,4 @@
-﻿import { getErrorMessage } from '../../lib/error'
+import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, ChevronLeft, ChevronRight, Check, X, Wallet, CreditCard, FileDown } from 'lucide-react'
@@ -148,7 +148,7 @@ export function AdminWalkingPartnersPage() {
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-white">Partners</h1>
+            <h1 className="text-2xl font-bold font-display text-white">Partners</h1>
             <p className="text-gray-400 text-sm mt-1">Approve & manage partner applications</p>
           </div>
           <button

@@ -199,7 +199,7 @@ export function EventDetailPage() {
 
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
-              <h1 className="text-2xl font-bold text-surface-900 dark:text-white">
+              <h1 className="text-2xl font-bold font-display text-surface-900 dark:text-white">
                 {event.name}
               </h1>
               {event.category && (

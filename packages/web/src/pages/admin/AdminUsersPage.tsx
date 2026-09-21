@@ -1,4 +1,4 @@
-﻿import { getErrorMessage } from '../../lib/error'
+import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Search, ChevronLeft, ChevronRight, Ban, Unlock, Trash2, Loader2, X, FileDown, Crown, UserMinus, Eye } from 'lucide-react'
@@ -191,7 +191,7 @@ export function AdminUsersPage() {
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-white">Users</h1>
+            <h1 className="text-2xl font-bold font-display text-white">Users</h1>
             <p className="text-gray-400 text-sm mt-1">Manage user accounts</p>
           </div>
           <button

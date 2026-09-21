@@ -60,7 +60,7 @@ export function CreateWalkingRequestPage() {
               <Sparkles className="w-7 h-7 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-surface-900 dark:text-white">New Request</h1>
+              <h1 className="text-2xl font-bold font-display text-surface-900 dark:text-white">New Request</h1>
               <p className="text-sm text-surface-500 dark:text-surface-400 mt-1">
                 Create a walking or companionship request
               </p>

@@ -382,7 +382,7 @@ export function CommunityDetailPage() {
                 <Hash className="w-7 h-7 text-primary-600 dark:text-primary-400" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-surface-900 dark:text-white">
+                <h1 className="text-2xl font-bold font-display text-surface-900 dark:text-white">
                   {community.name}
                 </h1>
               </div>

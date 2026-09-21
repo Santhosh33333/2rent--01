@@ -1,4 +1,4 @@
-﻿import { getErrorMessage } from '../../lib/error'
+import { getErrorMessage } from '../../lib/error'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, Percent, Save, Loader2, CheckCircle2 } from 'lucide-react'
@@ -86,7 +86,7 @@ export function AdminSettingsPage() {
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-white">Platform Settings</h1>
+            <h1 className="text-2xl font-bold font-display text-white">Platform Settings</h1>
             <p className="text-gray-400 text-sm mt-1">Fees and pricing — changes apply immediately</p>
           </div>
         </div>

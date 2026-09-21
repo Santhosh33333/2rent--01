@@ -1,4 +1,4 @@
-﻿import { getErrorMessage } from '../../lib/error'
+import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect, FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, ShieldCheck, UserPlus, X, Loader2, KeyRound, Check, FileDown } from 'lucide-react'
@@ -246,7 +246,7 @@ export function AdminAdminsPage() {
               <ArrowLeft className="w-5 h-5" />
             </Link>
             <div>
-              <h1 className="text-2xl font-bold text-white">Admin Accounts</h1>
+              <h1 className="text-2xl font-bold font-display text-white">Admin Accounts</h1>
               <p className="text-gray-400 text-sm mt-1">Provision platform administrators and control their access</p>
             </div>
             <button

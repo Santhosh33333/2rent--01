@@ -81,6 +81,32 @@
     @apply glass-strong rounded-3xl p-6 shadow-float dark:shadow-float-dark;
   }
 
+  /* ===== SECTION HEROES (one identity per area — never the same gradient twice) ===== */
+  .hero {
+    @apply relative overflow-hidden rounded-3xl p-6 sm:p-8 text-white shadow-xl;
+  }
+  .hero-indigo {
+    @apply hero bg-gradient-to-br from-primary-700 via-primary-600 to-violet-600 shadow-primary-500/20;
+  }
+  .hero-emerald {
+    @apply hero bg-gradient-to-br from-emerald-700 via-emerald-600 to-teal-500 shadow-emerald-500/20;
+  }
+  .hero-amber {
+    @apply hero bg-gradient-to-br from-amber-600 via-orange-500 to-rose-500 shadow-orange-500/20;
+  }
+  .hero-rose {
+    @apply hero bg-gradient-to-br from-rose-600 via-rose-500 to-pink-500 shadow-rose-500/20;
+  }
+  .hero-sky {
+    @apply hero bg-gradient-to-br from-sky-600 via-sky-500 to-cyan-400 shadow-sky-500/20;
+  }
+  .hero-violet {
+    @apply hero bg-gradient-to-br from-violet-700 via-violet-600 to-primary-500 shadow-violet-500/20;
+  }
+  .hero-dots {
+    @apply absolute inset-0 opacity-30 pointer-events-none;
+  }
+
   /* ===== BUTTONS ===== */
   .btn {
     @apply inline-flex items-center justify-center gap-2.5 px-6 py-3 text-sm font-semibold rounded-2xl
@@ -113,8 +139,8 @@
            hover:border-surface-300 dark:hover:border-surface-600;
   }
   .btn-gradient {
-    @apply btn text-white bg-gradient-to-r from-primary-600 via-primary-500 to-accent-500
-           hover:from-primary-500 hover:via-primary-400 hover:to-accent-400
+    @apply btn text-white bg-gradient-to-r from-primary-600 via-violet-500 to-primary-500
+           hover:from-primary-500 hover:via-violet-400 hover:to-primary-400
            shadow-lg shadow-primary-500/30 hover:shadow-primary-400/50
            hover:-translate-y-0.5 active:translate-y-0;
     background-size: 200% 200%;

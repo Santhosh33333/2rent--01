@@ -35,7 +35,7 @@ export function AdminPortalPage() {
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div className="flex-1">
-            <h1 className="text-2xl font-bold text-white">Admin Portal</h1>
+            <h1 className="text-2xl font-bold font-display text-white">Admin Portal</h1>
             <p className="text-gray-400 text-sm mt-1">Manage your Side Bud platform</p>
           </div>
           {/* Switch between admin / user / partner account views */}

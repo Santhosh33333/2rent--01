@@ -1,4 +1,4 @@
-﻿import { getErrorMessage } from '../../lib/error'
+import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, ChevronLeft, ChevronRight, CheckCircle, FileDown } from 'lucide-react'
@@ -88,7 +88,7 @@ export function AdminReportsPage() {
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-white">Reports</h1>
+            <h1 className="text-2xl font-bold font-display text-white">Reports</h1>
             <p className="text-gray-400 text-sm mt-1">Review user reports</p>
           </div>
           <button
