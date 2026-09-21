@@ -8,6 +8,7 @@ import * as bookingEngine from "../services/bookingEngine";
 import { expireStaleSearches, onBookingClaimed, markDispatchesViewed } from "../services/dispatchService";
 import { notifyBookingStatusChange } from "../controllers/notificationController";
 import { buildReferralRewardService } from "./referralController";
+import { isDemoEmail, isDemoUserEmail } from "../utils/demo";
 import { ensureConversation } from "./messageController";
 import {
   isExpired,
@@ -98,7 +99,10 @@ export async function getNearbyBookings(req: AuthedRequest, res: Response): Prom
     // Never surface stale offers: expire unclaimed jobs past their window.
     await expireStaleSearches();
 
-    const partner = await prisma.partner.findUnique({ where: { userId: req.user!.userId } });
+    const partner = await prisma.partner.findUnique({
+      where: { userId: req.user!.userId },
+      include: { user: { select: { email: true } } },
+    });
     if (!partner || partner.status !== "APPROVED") {
       sendError(res, "Partner not approved.", 403, "PARTNER_NOT_APPROVED");
       return;
@@ -137,14 +141,21 @@ export async function getNearbyBookings(req: AuthedRequest, res: Response): Prom
         notes: true,
         // Privacy: exact coordinates/addresses are withheld until a partner is
         // assigned. Only coarse, non-identifying info is broadcast to the pool.
-        user: { select: { id: true, avatarUrl: true, city: true, fullName: true } },
+        user: { select: { id: true, avatarUrl: true, city: true, fullName: true, email: true } },
       },
       orderBy: { createdAt: "desc" },
       take: 20,
     });
 
+    // Demo sandbox fence: the demo partner only ever sees demo-user jobs,
+    // and real partners never see demo jobs.
+    const partnerIsDemo = isDemoEmail((partner as any).user?.email);
+    const inScope = bookings.filter((b: any) =>
+      partnerIsDemo ? isDemoUserEmail(b.user?.email) : !isDemoEmail(b.user?.email)
+    );
+
     // Mask the requester's full name down to a first name + initial for the feed.
-    const masked = bookings
+    const masked = inScope
       .filter((b: any) => !rejectedIds.has(b.id))
       .map((b: any) => ({
       ...b,

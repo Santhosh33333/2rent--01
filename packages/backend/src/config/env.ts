@@ -102,6 +102,10 @@ const envSchema = z.object({
   AI_MODEL: z.string().optional(),
   AI_USER_QUOTA_PER_HOUR: z.string().optional(),
 
+  // Demo sandbox accounts (fenced: invisible to real users and vice versa).
+  DEMO_USER_EMAIL: z.string().optional(),
+  DEMO_PARTNER_EMAIL: z.string().optional(),
+
   // Clerk (legacy — optional)
   CLERK_SECRET_KEY: z.string().optional(),
   CLERK_PUBLISHABLE_KEY: z.string().optional(),

@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { prisma } from "../config/database";
 import { AuthedRequest } from "../middleware/authTypes";
 import { sendSuccess, sendError } from "../utils/response";
+import { isDemoEmail, DEMO_EMAILS } from "../utils/demo";
 
 // Real, privacy-safe discovery: surfaces actual platform members (public profile
 // only) for the dating / movies / people categories. No fake or seeded profiles.
@@ -16,6 +17,10 @@ export async function getPeople(req: AuthedRequest, res: Response): Promise<void
       id: { not: selfId },
       role: { notIn: ["ADMIN", "SUPER_ADMIN"] },
       status: "ACTIVE",
+      // Demo sandbox fence: demos only ever see demos, real users never do.
+      ...(isDemoEmail(req.user!.email)
+        ? { email: { in: DEMO_EMAILS } }
+        : { email: { notIn: DEMO_EMAILS } }),
     };
     if (city) where.city = { equals: city, mode: "insensitive" };
 
@@ -97,13 +102,19 @@ export async function getNearbyPartners(req: AuthedRequest, res: Response): Prom
         completedJobs: true,
         latitude: true,
         longitude: true,
-        user: { select: { id: true, fullName: true, avatarUrl: true, city: true } },
+        user: { select: { id: true, fullName: true, avatarUrl: true, city: true, email: true } },
       },
       orderBy: { rating: "desc" },
       take: 200,
     });
 
-    const items = partners
+    // Demo sandbox fence (privacy-safe: decided on emails, never exposed).
+    const requesterIsDemo = isDemoEmail(req.user!.email);
+    const visible = partners.filter((p: any) =>
+      requesterIsDemo ? isDemoEmail(p.user?.email) : !isDemoEmail(p.user?.email)
+    );
+
+    const items = visible
       .map((p: any) => {
         const services: string[] = [];
         if (p.providesWalking) services.push("walking");
