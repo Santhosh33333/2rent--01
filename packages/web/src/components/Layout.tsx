@@ -320,15 +320,14 @@ export function Layout() {
               <Link
                 key={to}
                 to={to}
-                className={`flex flex-col items-center justify-center gap-0.5 rounded-xl transition-all min-w-0 flex-1 ${
+                aria-current={isActive ? 'page' : undefined}
+                className={`flex flex-col items-center justify-center gap-0.5 rounded-2xl transition-all min-w-0 flex-1 py-1 ${
                   isActive
-                    ? 'text-primary-600 dark:text-primary-400'
+                    ? 'text-primary-600 dark:text-primary-300 bg-primary-500/10 dark:bg-primary-500/15'
                     : 'text-surface-400 dark:text-surface-500'
                 }`}
               >
-                <div className={`p-1 rounded-xl transition ${isActive ? 'bg-primary-50 dark:bg-primary-900/30' : ''}`}>
-                  <Icon className="w-5 h-5" />
-                </div>
+                <Icon className="w-5 h-5" />
                 <span className="text-[11px] font-semibold leading-none">{label}</span>
               </Link>
             );

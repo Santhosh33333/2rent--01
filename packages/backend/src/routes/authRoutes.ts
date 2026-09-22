@@ -72,6 +72,7 @@ router.post("/logout", authController.logout);
 
 // Email/SMS OTP (DB-backed, purpose-bound, provider-honest). Login and
 // password-reset codes are public; verification codes use resend-otp.
+router.get("/otp/channels", otpController.otpChannels);
 router.post(
   "/otp/request",
   otpSendLimiter,

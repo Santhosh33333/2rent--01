@@ -75,7 +75,7 @@ export function ForgotPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen flex bg-surface-50 dark:bg-surface-950 px-4 py-12">
+    <div className="auth-backdrop">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-96 h-96 bg-primary-400/15 rounded-full blur-[100px]" />
         <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-accent-400/15 rounded-full blur-[100px]" />

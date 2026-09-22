@@ -43,6 +43,19 @@ export function LoginPage() {
   const [emailCode, setEmailCode] = useState('')
   const [emailForCode, setEmailForCode] = useState('')
   const [resendIn, setResendIn] = useState(0)
+  const [emailCodeAvailable, setEmailCodeAvailable] = useState(true)
+
+  useEffect(() => {
+    // Hide the email-code option when the server cannot send mail, so users
+    // never tap into a dead end (password + phone paths always work).
+    api
+      .get('/auth/otp/channels')
+      .then((res) => {
+        const d = res.data?.data || res.data
+        if (d && typeof d.email === 'boolean') setEmailCodeAvailable(d.email)
+      })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (resendIn <= 0) return
@@ -227,7 +240,7 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex bg-surface-50 dark:bg-surface-950 px-4 py-12 transition-colors duration-400">
+    <div className="auth-backdrop">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-32 -right-32 w-[500px] h-[500px] bg-primary-400/10 rounded-full blur-[128px]" />
         <div className="absolute -bottom-32 -left-32 w-[500px] h-[500px] bg-accent-400/10 rounded-full blur-[128px]" />
@@ -382,13 +395,19 @@ export function LoginPage() {
                   </span>
                 )}
               </button>
-              <button
-                type="button"
-                onClick={() => { setEmailMode('code'); setEmailCodeSent(false); setApiError(null); }}
-                className="w-full text-sm text-surface-500 dark:text-surface-400 hover:text-primary-500 transition-colors"
-              >
-                Prefer email? Use a sign-in code instead
-              </button>
+              {emailCodeAvailable ? (
+                <button
+                  type="button"
+                  onClick={() => { setEmailMode('code'); setEmailCodeSent(false); setApiError(null); }}
+                  className="w-full text-sm text-surface-500 dark:text-surface-400 hover:text-primary-500 transition-colors"
+                >
+                  Prefer email? Use a sign-in code instead
+                </button>
+              ) : (
+                <p className="text-xs text-center text-surface-400">
+                  Email codes are unavailable right now — password sign-in works normally.
+                </p>
+              )}
             </form>
               ) : !emailCodeSent ? (
             <form onSubmit={handleSendEmailCode} className="space-y-5">

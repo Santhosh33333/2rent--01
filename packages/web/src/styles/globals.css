@@ -278,10 +278,32 @@
 
   /* ===== SECTION HEADERS ===== */
   .section-title {
-    @apply text-lg font-bold text-surface-900 dark:text-surface-100 font-display tracking-tight;
+    @apply text-lg font-bold text-surface-900 dark:text-surface-100 font-display tracking-tight
+           flex items-center gap-2.5;
+  }
+  .section-title::before {
+    content: '';
+    @apply block w-1 self-stretch rounded-full bg-gradient-to-b from-primary-500 to-violet-500 shrink-0;
+    min-height: 1.25rem;
   }
   .section-subtitle {
     @apply text-sm text-surface-500 dark:text-surface-400;
+  }
+
+  /* ===== AUTH BACKDROP (signature look, distinct from app interior) ===== */
+  .auth-backdrop {
+    @apply min-h-screen flex px-4 py-8 sm:py-12 relative overflow-hidden;
+    background:
+      radial-gradient(600px 400px at 15% 0%, rgba(99, 102, 241, 0.14), transparent 60%),
+      radial-gradient(500px 380px at 90% 20%, rgba(167, 139, 250, 0.12), transparent 60%),
+      radial-gradient(700px 500px at 50% 110%, rgba(249, 115, 22, 0.08), transparent 60%);
+  }
+  .dark .auth-backdrop {
+    background:
+      radial-gradient(700px 460px at 15% 0%, rgba(99, 102, 241, 0.22), transparent 60%),
+      radial-gradient(560px 420px at 90% 18%, rgba(139, 92, 246, 0.18), transparent 60%),
+      radial-gradient(760px 560px at 50% 112%, rgba(249, 115, 22, 0.10), transparent 60%),
+      #0a0a13;
   }
 
   /* ===== NAVIGATION ===== */

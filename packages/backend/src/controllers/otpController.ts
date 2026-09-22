@@ -180,6 +180,18 @@ function cryptoRandom(): string {
   return crypto.randomBytes(32).toString("hex");
 }
 
+// GET /auth/otp/channels — public availability probe (no secrets, no
+// account info). Lets clients hide code options the server cannot fulfill
+// instead of showing an error after the tap.
+export async function otpChannels(_req: Request, res: Response): Promise<void> {
+  const smsReady = Boolean(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_NUMBER);
+  sendSuccess(
+    res,
+    { email: emailStatus().configured, sms: smsReady },
+    "OTP channel availability."
+  );
+}
+
 // GET /admin/otp/status — providers, policy, today's delivery stats.
 // Never exposes codes (only hashes exist) or full identifiers.
 export async function otpStatus(_req: AuthedRequest, res: Response): Promise<void> {
