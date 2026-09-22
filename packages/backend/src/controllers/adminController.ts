@@ -301,9 +301,33 @@ export async function unblockUser(req: AuthedRequest, res: Response): Promise<vo
   }
 }
 
-// Resolve an SOS alert (admin confirms the situation is handled).
-export async function resolveSosAlert(req: AuthedRequest, res: Response): Promise<void> {
+// List SOS alerts for the safety queue (newest first). Lives alongside the
+// admin inbox so alerts are visible even when nobody caught the socket.
+export async function listSosAlerts(req: AuthedRequest, res: Response): Promise<void> {
   try {
+    const status = typeof req.query.status === "string" ? req.query.status : undefined;
+    const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const where: any = {};
+    if (status) where.status = status;
+    const [items, total] = await Promise.all([
+      prisma.sosAlert.findMany({
+        where,
+        include: { user: { select: { id: true, fullName: true, phone: true, avatarUrl: true } } },
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.sosAlert.count({ where }),
+    ]);
+    sendSuccess(res, { items, total, page, limit }, "SOS alerts retrieved.");
+  } catch (err) {
+    sendError(res, "Failed to retrieve SOS alerts.", 500, "INTERNAL_ERROR");
+  }
+}
+
+// Resolve an SOS alert (admin confirms the situation is handled).
+export async function resolveSosAlert(req: AuthedRequest, res: Response): Promise<void> {  try {
     const { id } = req.params;
     const alert = await prisma.sosAlert.findUnique({ where: { id } });
     if (!alert) {

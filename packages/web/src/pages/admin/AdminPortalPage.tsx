@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import {
   LayoutDashboard, Users, ShieldCheck, Handshake,
-  Banknote, Flag, ScrollText, ArrowLeft, Settings, Percent, CalendarCheck, Wallet, Radio, Users2, CalendarDays, Layers, ShieldAlert, QrCode
+  Banknote, Flag, ScrollText, ArrowLeft, Settings, Percent, CalendarCheck, Wallet, Radio, Users2, CalendarDays, Layers, ShieldAlert, QrCode, Siren
 } from 'lucide-react'
 import { RoleSwitcher } from '../../components/RoleSwitcher'
 
@@ -19,6 +19,7 @@ export function AdminPortalPage() {
     { path: '/admin/events', title: 'Events', desc: 'All events & attendance', icon: CalendarDays },
     { path: '/admin/services', title: 'Services', desc: 'Partner ecosystem & pricing', icon: Layers },
     { path: '/admin/chat-reports', title: 'Chat Reports', desc: 'Messaging safety moderation', icon: ShieldAlert },
+    { path: '/admin/sos', title: 'SOS Alerts', desc: 'Emergency queue & live locations', icon: Siren },
     { path: '/admin/payments', title: 'Payment Center', desc: 'Transactions & cash stats', icon: Banknote },
     { path: '/admin/upi-verification', title: 'UPI Verification', desc: 'Verify manual UPI payments', icon: QrCode },
     { path: '/admin/reports', title: 'Reports', desc: 'Review user reports', icon: Flag },

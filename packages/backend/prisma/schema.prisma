@@ -1018,6 +1018,23 @@ model LoginHistory {
   @@index([userId])
 }
 
+// Saved movies (TMDB ids + snapshot poster/title so the list renders
+// even if the provider is unreachable later).
+model MovieWatchlist {
+  id          String   @id @default(uuid())
+  userId      String
+  tmdbId      Int
+  title       String
+  posterUrl   String?
+  releaseDate String?
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tmdbId])
+  @@index([userId])
+}
+
 // Secure OTP records: hashed codes only, purpose-bound, single-use,
 // attempt-limited, with provider delivery tracking. Never plaintext.
 model OtpCode {

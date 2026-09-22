@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Calendar, Clapperboard, MapPin, Search, Star, Users } from 'lucide-react'
+import { Bookmark, BookmarkCheck, Calendar, Clapperboard, MapPin, Search, Star, Users } from 'lucide-react'
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
 import { api } from '../../lib/api'
@@ -10,12 +10,13 @@ import { EmptyState } from '../../components/EmptyState'
 import { useAsync } from '../../hooks/useAsync'
 import { getErrorMessage } from '../../lib/error'
 
-type MovieTab = 'now_playing' | 'popular' | 'upcoming'
+type MovieTab = 'now_playing' | 'popular' | 'upcoming' | 'watchlist'
 
 const TABS: Array<{ key: MovieTab; label: string }> = [
   { key: 'now_playing', label: 'Now Playing' },
   { key: 'popular', label: 'Popular' },
   { key: 'upcoming', label: 'Upcoming' },
+  { key: 'watchlist', label: 'Watchlist' },
 ]
 
 interface Movie {
@@ -43,13 +44,79 @@ export function MoviesPage() {
   const [movies, setMovies] = useState<Movie[]>([])
   const [unconfigured, setUnconfigured] = useState(false)
   const [meetups, setMeetups] = useState<MovieMeetup[]>([])
+  const [savedIds, setSavedIds] = useState<Set<number>>(new Set())
+
+  const loadWatchlistIds = async () => {
+    try {
+      const res = await api.get('/movies/watchlist')
+      const d = res.data?.data || res.data
+      const list: Array<{ tmdbId: number }> = Array.isArray(d.movies) ? d.movies : []
+      setSavedIds(new Set(list.map((m) => m.tmdbId)))
+      return list
+    } catch {
+      return []
+    }
+  }
+
+  const toggleSave = async (m: Movie) => {
+    const saved = savedIds.has(m.id)
+    try {
+      if (saved) {
+        await api.delete(`/movies/watchlist/${m.id}`)
+        setSavedIds((prev) => {
+          const next = new Set(prev)
+          next.delete(m.id)
+          return next
+        })
+        if (tab === 'watchlist') setMovies((prev) => prev.filter((x) => x.id !== m.id))
+        toast.success('Removed from watchlist')
+      } else {
+        await api.post('/movies/watchlist', {
+          tmdbId: m.id,
+          title: m.title,
+          posterUrl: m.posterUrl,
+          releaseDate: m.releaseDate,
+        })
+        setSavedIds((prev) => new Set(prev).add(m.id))
+        toast.success('Saved to watchlist')
+      }
+    } catch {
+      toast.error('Could not update watchlist')
+    }
+  }
+
+  const loadWatchlistTab = async () => {
+    setSearching(true)
+    try {
+      const list = await loadWatchlistIds()
+      setMovies(
+        list.map((w: any) => ({
+          id: w.tmdbId,
+          title: w.title,
+          overview: '',
+          posterUrl: w.posterUrl || null,
+          releaseDate: w.releaseDate || null,
+          rating: null,
+          language: null,
+        }))
+      )
+      setUnconfigured(false)
+    } finally {
+      setSearching(false)
+    }
+  }
 
   const { loading, error, retry, execute: reload } = useAsync(async () => {
+    if (tab === 'watchlist') {
+      await loadWatchlistTab()
+      return []
+    }
     const res = await api.get(`/movies/${tab}`)
     const d = res.data?.data || res.data || {}
     const list: Movie[] = Array.isArray(d.movies) ? d.movies : []
     setMovies(list)
     setUnconfigured(false)
+    await loadWatchlistIds()
     return list
   }, true)
 
@@ -156,11 +223,27 @@ export function MoviesPage() {
             </button>
           </div>
         ) : movies.length === 0 ? (
-          <EmptyState icon={Clapperboard} title="No movies found" description="Try a different search." />
+          <EmptyState
+            icon={Clapperboard}
+            title={tab === 'watchlist' ? 'Watchlist is empty' : 'No movies found'}
+            description={tab === 'watchlist' ? 'Tap the bookmark on any movie to save it here.' : 'Try a different search.'}
+          />
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {movies.map((m) => (
-              <div key={m.id} className="glass-card overflow-hidden">
+              <div key={m.id} className="glass-card overflow-hidden relative">
+                <button
+                  type="button"
+                  onClick={() => toggleSave(m)}
+                  aria-label={savedIds.has(m.id) ? 'Remove from watchlist' : 'Save to watchlist'}
+                  className={`absolute top-2 right-2 z-10 w-9 h-9 rounded-xl backdrop-blur-sm flex items-center justify-center transition-colors ${
+                    savedIds.has(m.id)
+                      ? 'bg-primary-600 text-white'
+                      : 'bg-black/50 text-white hover:bg-black/70'
+                  }`}
+                >
+                  {savedIds.has(m.id) ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
+                </button>
                 {m.posterUrl ? (
                   <img src={m.posterUrl} alt={m.title} className="w-full aspect-[2/3] object-cover" loading="lazy" />
                 ) : (

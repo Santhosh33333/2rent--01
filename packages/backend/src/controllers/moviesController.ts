@@ -1,4 +1,5 @@
 import { Response } from "express";
+import { prisma } from "../config/database";
 import { AuthedRequest } from "../middleware/authTypes";
 import { sendSuccess, sendError } from "../utils/response";
 import {
@@ -78,4 +79,62 @@ export async function moviesStatus(_req: AuthedRequest, res: Response): Promise<
       : { configured: false, provider: "TMDB", requiredEnv: info.requiredEnv },
     "Movies integration status."
   );
+}
+
+// Watchlist works WITHOUT the provider (ids + snapshots), so users can
+// save movies from any surface and browse them offline from TMDB outages.
+export async function getWatchlist(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const items = await prisma.movieWatchlist.findMany({
+      where: { userId: req.user!.userId },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    });
+    sendSuccess(res, { count: items.length, movies: items }, "Watchlist retrieved.");
+  } catch (err: any) {
+    sendError(res, "Failed to load watchlist.", 500, "INTERNAL_ERROR");
+  }
+}
+
+export async function addToWatchlist(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const tmdbId = Number(req.body?.tmdbId);
+    const title = String(req.body?.title || "").trim().slice(0, 200);
+    if (!Number.isInteger(tmdbId) || tmdbId <= 0 || !title) {
+      sendError(res, "tmdbId and title are required.", 400, "VALIDATION_ERROR");
+      return;
+    }
+    const item = await prisma.movieWatchlist.upsert({
+      where: { userId_tmdbId: { userId: req.user!.userId, tmdbId } },
+      update: {
+        title,
+        posterUrl: typeof req.body?.posterUrl === "string" ? req.body.posterUrl.slice(0, 500) : undefined,
+        releaseDate: typeof req.body?.releaseDate === "string" ? req.body.releaseDate.slice(0, 32) : undefined,
+      },
+      create: {
+        userId: req.user!.userId,
+        tmdbId,
+        title,
+        posterUrl: typeof req.body?.posterUrl === "string" ? req.body.posterUrl.slice(0, 500) : null,
+        releaseDate: typeof req.body?.releaseDate === "string" ? req.body.releaseDate.slice(0, 32) : null,
+      },
+    });
+    sendSuccess(res, item, "Saved to watchlist.", 201);
+  } catch (err: any) {
+    sendError(res, "Failed to save.", 500, "INTERNAL_ERROR");
+  }
+}
+
+export async function removeFromWatchlist(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const tmdbId = Number(req.params.tmdbId);
+    if (!Number.isInteger(tmdbId) || tmdbId <= 0) {
+      sendError(res, "Invalid movie id.", 400, "VALIDATION_ERROR");
+      return;
+    }
+    await prisma.movieWatchlist.deleteMany({ where: { userId: req.user!.userId, tmdbId } });
+    sendSuccess(res, undefined, "Removed from watchlist.");
+  } catch (err: any) {
+    sendError(res, "Failed to remove.", 500, "INTERNAL_ERROR");
+  }
 }

@@ -82,6 +82,7 @@ router.post(
 );
 router.post("/users/:id/unblock", users, adminController.unblockUser);
 router.post("/sos/:id/resolve", users, adminController.resolveSosAlert);
+router.get("/sos/alerts", users, adminController.listSosAlerts);
 router.post("/demo/refill", requireSuperAdmin, adminController.refillDemoWallet);
 router.post("/demo/purge-test-payments", requireSuperAdmin, adminController.purgeTestPayments);
 router.get("/otp/status", users, otpController.otpStatus);

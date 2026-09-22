@@ -74,6 +74,7 @@ const AdminCommunitiesPage = lazy(() => import('./pages/admin/AdminCommunitiesPa
 const AdminEventsPage = lazy(() => import('./pages/admin/AdminEventsPage').then(m => ({ default: m.AdminEventsPage })))
 const AdminServicesPage = lazy(() => import('./pages/admin/AdminServicesPage').then(m => ({ default: m.AdminServicesPage })))
 const AdminChatReportsPage = lazy(() => import('./pages/admin/AdminChatReportsPage').then(m => ({ default: m.AdminChatReportsPage })))
+const AdminSosPage = lazy(() => import('./pages/admin/AdminSosPage').then(m => ({ default: m.AdminSosPage })))
 const AdminReportsPage = lazy(() => import('./pages/admin/AdminReportsPage').then(m => ({ default: m.AdminReportsPage })))
 const AdminAuditLogsPage = lazy(() => import('./pages/admin/AdminAuditLogsPage').then(m => ({ default: m.AdminAuditLogsPage })))
 const AdminAdminsPage = lazy(() => import('./pages/admin/AdminAdminsPage').then(m => ({ default: m.AdminAdminsPage })))
@@ -250,6 +251,7 @@ export function App() {
               <Route path="/admin/events" element={<AdminEventsPage />} />
               <Route path="/admin/services" element={<AdminServicesPage />} />
               <Route path="/admin/chat-reports" element={<AdminChatReportsPage />} />
+              <Route path="/admin/sos" element={<AdminSosPage />} />
               <Route path="/admin/reports" element={<AdminReportsPage />} />
               <Route path="/admin/audit-logs" element={<AdminAuditLogsPage />} />
               <Route path="/admin/admins" element={<AdminAdminsPage />} />

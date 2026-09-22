@@ -190,6 +190,27 @@ if (!dbAvailable) {
     console.warn("Schema reconciliation warning (Message):", (err as Error)?.message);
   }
 
+  // Movie watchlist (migration 20260922_movie_watchlist). Idempotent.
+  try {
+    await prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "MovieWatchlist" (
+        "id" TEXT NOT NULL,
+        "userId" TEXT NOT NULL,
+        "tmdbId" INTEGER NOT NULL,
+        "title" TEXT NOT NULL,
+        "posterUrl" TEXT,
+        "releaseDate" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "MovieWatchlist_pkey" PRIMARY KEY ("id")
+      )`
+    );
+    await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "MovieWatchlist_userId_tmdbId_key" ON "MovieWatchlist"("userId", "tmdbId")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MovieWatchlist_userId_idx" ON "MovieWatchlist"("userId")`);
+    console.log("Schema reconciliation: MovieWatchlist ensured.");
+  } catch (err) {
+    console.warn("Schema reconciliation warning (MovieWatchlist):", (err as Error)?.message);
+  }
+
   initializeFirebase();
   initializeFirebaseAuth();
 
