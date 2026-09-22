@@ -5,7 +5,7 @@ import {
   CreditCard, CheckCircle, XCircle, User, Loader2, AlertTriangle, KeyRound
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { api, bookingApi } from '../../lib/api'
+import { api, assetUrl, bookingApi } from '../../lib/api'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
 import { SkeletonLoader } from '../../components/SkeletonLoader'
@@ -28,7 +28,7 @@ interface Booking {
   partnerPhone?: string
   paymentStatus?: string
   paymentId?: string
-  paymentMethod?: 'ONLINE' | 'CASH'
+  paymentMethod?: 'ONLINE' | 'CASH' | 'UPI_MANUAL'
   notes?: string
   createdAt: string
 }
@@ -66,6 +66,7 @@ export function BookingDetailPage() {
   const [completionCodeExpiry, setCompletionCodeExpiry] = useState<string | null>(null)
   const [invoice, setInvoice] = useState<any | null>(null)
   const [invoiceLoading, setInvoiceLoading] = useState(false)
+  const [upiAttempt, setUpiAttempt] = useState<any | null>(null)
 
   useEffect(() => {
     if (!id) return
@@ -81,6 +82,23 @@ export function BookingDetailPage() {
         })
         if (data?.notes) {
           try { const n = JSON.parse(data.notes); if (n.paymentMethod) setBooking(prev => prev ? { ...prev, paymentMethod: n.paymentMethod } : null) } catch {}
+        }
+        // UPI manual: surface the verification attempt + admin reply.
+        // Only fetched for UPI bookings to avoid an extra request otherwise.
+        try {
+          let method: string | undefined
+          try {
+            const n = JSON.parse(data.notes)
+            method = n.paymentMethod || data.paymentMethod
+          } catch { method = (data as any).paymentMethod }
+          const st = (data as any).paymentStatus
+          if (method === 'UPI_MANUAL' || st === 'VERIFICATION_PENDING' || st === 'REJECTED') {
+            const u = await api.get(`/bookings/${id}/upi-details`)
+            const info = u.data?.data || u.data
+            if (info?.attempt) setUpiAttempt(info.attempt)
+          }
+        } catch {
+          // UPI not configured or not a UPI booking — nothing to show.
         }
       } catch {
         toast.error('Failed to load booking details')
@@ -405,7 +423,7 @@ export function BookingDetailPage() {
                 <div className="flex justify-between text-sm">
                   <span className="text-surface-500">Payment Method</span>
                   <span className={`font-semibold px-2 py-0.5 rounded-full text-xs ${booking.paymentMethod === 'ONLINE' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
-                    {booking.paymentMethod === 'ONLINE' ? '💳 Online (Razorpay)' : '💵 Cash to Partner'}
+                    {booking.paymentMethod === 'ONLINE' ? 'Online (Razorpay)' : booking.paymentMethod === 'UPI_MANUAL' ? 'UPI manual' : 'Cash to Partner'}
                   </span>
                 </div>
               )}
@@ -413,6 +431,36 @@ export function BookingDetailPage() {
                 <div className="flex justify-between text-sm">
                   <span className="text-surface-500">Payment ID</span>
                   <span className="font-medium text-surface-900 dark:text-white text-xs">{booking.paymentId}</span>
+                </div>
+              )}
+              {upiAttempt && (
+                <div className="mt-3 rounded-2xl border border-surface-200 dark:border-surface-700 p-3 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-surface-500">UPI verification</span>
+                    <span className={`font-semibold text-xs px-2 py-0.5 rounded-full ${
+                      upiAttempt.status === 'VERIFIED'
+                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                        : upiAttempt.status === 'REJECTED'
+                          ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                          : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                    }`}>
+                      {upiAttempt.status === 'VERIFIED' ? 'Confirmed real' : upiAttempt.status === 'REJECTED' ? 'Marked fake' : 'Awaiting review'}
+                    </span>
+                  </div>
+                  {upiAttempt.referenceNumber && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-surface-500">UTR</span>
+                      <span className="font-mono text-xs">{upiAttempt.referenceNumber}</span>
+                    </div>
+                  )}
+                  {upiAttempt.verificationNote && (
+                    <p className="text-xs text-surface-600 dark:text-surface-300 bg-surface-50 dark:bg-surface-800/60 rounded-xl px-3 py-2">
+                      <span className="font-semibold">Admin reply: </span>{upiAttempt.verificationNote}
+                    </p>
+                  )}
+                  {upiAttempt.proofImageUrl && (
+                    <img src={assetUrl(upiAttempt.proofImageUrl) || ''} alt="Payment proof" loading="lazy" className="rounded-xl max-h-48 w-auto object-cover border border-surface-200 dark:border-surface-700" />
+                  )}
                 </div>
               )}
             </div>

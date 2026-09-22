@@ -1588,6 +1588,12 @@ export async function verifyUpiPayment(req: AuthedRequest, res: Response): Promi
       sendError(res, "UPI payment not found.", 404, "NOT_FOUND");
       return;
     }
+    // A rejection or info-request without a reason leaves the user guessing
+    // whether their proof was real or fake — the note IS the reply.
+    if ((action === "REJECT" || action === "REQUEST_INFO") && !String(note || "").trim()) {
+      sendError(res, "A note is required so the user knows why (real or fake, what to fix).", 400, "NOTE_REQUIRED");
+      return;
+    }
     if (upi.status === "VERIFIED" && action === "VERIFY") {
       sendSuccess(res, { status: "VERIFIED" }, "Already verified.");
       return;

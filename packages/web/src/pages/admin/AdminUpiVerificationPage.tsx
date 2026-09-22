@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
 import { QrCode, Search, Check, X, HelpCircle, IndianRupee, User as UserIcon, Clock } from 'lucide-react'
-import { adminApi } from '../../lib/api'
+import { adminApi, assetUrl } from '../../lib/api'
 import { getErrorMessage } from '../../lib/error'
 
 interface UpiRow {
   id: string
   referenceNumber: string | null
+  proofImageUrl?: string | null
+  verificationNote?: string | null
   amount: number
   currency: string
   status: string
@@ -70,6 +72,10 @@ export function AdminUpiVerificationPage() {
   }, [search])
 
   const act = async (id: string, action: 'VERIFY' | 'REJECT' | 'REQUEST_INFO') => {
+    if ((action === 'REJECT' || action === 'REQUEST_INFO') && !note[id]?.trim()) {
+      setError('A note is required — the user must know why (real or fake, what to fix).')
+      return
+    }
     setBusyId(id)
     setError('')
     try {
@@ -186,6 +192,19 @@ export function AdminUpiVerificationPage() {
                       {r.user?.fullName || r.user?.email || 'Unknown'} {r.user?.phone ? `· ${r.user.phone}` : ''}
                     </p>
                     <p className="text-sm text-surface-500">Ref: <b>{r.referenceNumber}</b></p>
+                    {r.proofImageUrl ? (
+                      <a href={assetUrl(r.proofImageUrl) || '#'} target="_blank" rel="noreferrer" className="block mt-2">
+                        <img
+                          src={assetUrl(r.proofImageUrl) || ''}
+                          alt="Payment proof"
+                          className="h-32 rounded-xl object-cover border border-surface-200 dark:border-surface-700"
+                          loading="lazy"
+                        />
+                        <span className="text-xs text-primary-400">Open full screenshot</span>
+                      </a>
+                    ) : (
+                      <p className="text-xs text-amber-500 mt-1">No screenshot attached — verify by UTR only.</p>
+                    )}
                     {r.booking ? (
                       <p className="text-xs text-surface-500">
                         {r.booking.serviceType} · {r.booking.startLocation} → {r.booking.endLocation} · {r.booking.status}

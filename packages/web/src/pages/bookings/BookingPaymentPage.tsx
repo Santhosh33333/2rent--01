@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   CreditCard, Banknote, CheckCircle, XCircle, Loader2, ArrowLeft,
-  Star, Clock, MapPin, Navigation, Footprints, Package, ShieldCheck
+  Star, Clock, MapPin, Navigation, Footprints, Package, ShieldCheck, ImagePlus, X
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { api } from '../../lib/api'
@@ -54,6 +54,9 @@ export function BookingPaymentPage() {
   const [upiInfo, setUpiInfo] = useState<UpiDetails | null>(null)
   const [upiRef, setUpiRef] = useState('')
   const [upiSubmitting, setUpiSubmitting] = useState(false)
+  const [proofFile, setProofFile] = useState<File | null>(null)
+  const [proofPreview, setProofPreview] = useState<string | null>(null)
+  const [proofUploading, setProofUploading] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -90,6 +93,41 @@ export function BookingPaymentPage() {
       .catch(() => {})
   }, [id])
 
+  const pickProof = (file: File | undefined) => {
+    if (!file) return
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+      toast.error('Please choose an image file.')
+      return
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      toast.error('Screenshot must be under 8 MB.')
+      return
+    }
+    if (proofPreview) URL.revokeObjectURL(proofPreview)
+    setProofFile(file)
+    setProofPreview(URL.createObjectURL(file))
+  }
+
+  const uploadProof = async () => {
+    if (!proofFile || !id) return
+    setProofUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('proof', proofFile)
+      await api.post(`/bookings/${id}/upi-proof`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 120000,
+      })
+      toast.success('Payment screenshot attached. Admin will verify it with your reference.')
+      if (proofPreview) URL.revokeObjectURL(proofPreview)
+      setProofFile(null)
+      setProofPreview(null)
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Failed to upload screenshot.')
+    } finally {
+      setProofUploading(false)
+    }
+  }
   const amount = booking?.estimatedAmount ?? booking?.finalAmount ?? 0
   const platformFee = booking?.platformFee ?? Math.ceil(amount * 0.1)
 
@@ -364,6 +402,46 @@ export function BookingPaymentPage() {
                 >
                   {upiSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Submit'}
                 </button>
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-surface-600 dark:text-surface-300 mb-2">
+                  Payment screenshot <span className="font-normal text-surface-400">(helps admin confirm it is real)</span>
+                </p>
+                {proofPreview ? (
+                  <div className="flex items-center gap-3">
+                    <img src={proofPreview} alt="Payment proof preview" className="h-24 rounded-xl object-cover border border-surface-200 dark:border-surface-700" />
+                    <div className="flex flex-col gap-2">
+                      <button onClick={uploadProof} disabled={proofUploading} className="btn-gradient px-4 py-2 text-sm disabled:opacity-50">
+                        {proofUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Upload screenshot'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (proofPreview) URL.revokeObjectURL(proofPreview)
+                          setProofPreview(null)
+                          setProofFile(null)
+                        }}
+                        className="text-xs text-surface-400 hover:text-surface-600 flex items-center gap-1"
+                      >
+                        <X className="w-3.5 h-3.5" /> Remove
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <label className="flex items-center justify-center gap-2 rounded-2xl border border-dashed border-surface-300 dark:border-surface-600 px-4 py-3 text-sm text-surface-500 cursor-pointer hover:border-primary-400 transition-colors">
+                    <ImagePlus className="w-4 h-4" />
+                    Attach payment screenshot
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      className="hidden"
+                      onChange={(e) => {
+                        pickProof(e.target.files?.[0])
+                        e.target.value = ''
+                      }}
+                    />
+                  </label>
+                )}
               </div>
             </div>
           )}

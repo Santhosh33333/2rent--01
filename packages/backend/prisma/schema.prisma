@@ -356,8 +356,9 @@ model UpiPayment {
   userId           String
   amount           Decimal
   currency         String   @default("INR")
-  referenceNumber  String?  @unique // UTR / bank reference; must be unique across bookings
-  status           String   @default("VERIFICATION_PENDING") // VERIFICATION_PENDING, VERIFIED, REJECTED, REQUEST_INFO
+    referenceNumber  String?  @unique // UTR / bank reference; must be unique across bookings
+    proofImageUrl    String? // payment screenshot uploaded by the user for manual verification
+    status           String   @default("VERIFICATION_PENDING") // VERIFICATION_PENDING, VERIFIED, REJECTED, REQUEST_INFO
   verifiedByAdminId String?
   verificationNote String?
   metadata         String?

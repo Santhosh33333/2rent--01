@@ -211,6 +211,14 @@ if (!dbAvailable) {
     console.warn("Schema reconciliation warning (MovieWatchlist):", (err as Error)?.message);
   }
 
+  // UPI payment proof screenshot (migration 20260922_upi_proof). Idempotent.
+  try {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "UpiPayment" ADD COLUMN IF NOT EXISTS "proofImageUrl" TEXT`);
+    console.log("Schema reconciliation: UpiPayment proof ensured.");
+  } catch (err) {
+    console.warn("Schema reconciliation warning (UpiPayment):", (err as Error)?.message);
+  }
+
   initializeFirebase();
   initializeFirebaseAuth();
 

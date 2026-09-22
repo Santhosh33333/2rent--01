@@ -2,6 +2,7 @@ import { Router } from "express";
 import { body } from "express-validator";
 import { authenticateToken, requireKycVerified } from "../middleware/auth";
 import { sanitizeInput, validateRequest } from "../middleware/validation";
+import { upload } from "../middleware/upload";
 import { preventDuplicateBooking, preventDuplicatePayment } from "../middleware/fraudPrevention";
 import * as bookingController from "../controllers/bookingController";
 import { SERVICE_KEYS } from "../services/serviceCatalog";
@@ -55,6 +56,7 @@ router.post("/:id/verify-payment", preventDuplicatePayment, bookingController.ve
 // Manual UPI / QR payment (temporary flow for personal UPI accounts)
 router.get("/:id/upi-details", bookingController.getUpiDetails);
 router.post("/:id/upi-reference", bookingController.submitUpiReference);
+router.post("/:id/upi-proof", upload.single("proof"), bookingController.uploadUpiProof);
 
 // Accept booking (partner)
 router.post("/:id/accept", bookingController.acceptBooking);

@@ -588,19 +588,24 @@ export async function getUpiDetails(req: AuthedRequest, res: Response): Promise<
       return;
     }
 
-    sendSuccess(
-      res,
-      {
-        upiId: upiId.value,
-        accountName: name?.value ?? null,
-        qrUrl: qr?.value ?? null,
-        amount: booking.estimatedAmount,
-        currency: "INR",
-        bookingId: id,
-        referenceNote: `RB${id.slice(0, 8).toUpperCase()}`,
-      },
-      "Scan the QR, pay externally, then enter the UTR/reference number."
-    );
+      sendSuccess(
+        res,
+        {
+          upiId: upiId.value,
+          accountName: name?.value ?? null,
+          qrUrl: qr?.value ?? null,
+          amount: booking.estimatedAmount,
+          currency: "INR",
+          bookingId: id,
+          referenceNote: `RB${id.slice(0, 8).toUpperCase()}`,
+          attempt: await prisma.upiPayment.findFirst({
+            where: { bookingId: id },
+            orderBy: { createdAt: "desc" },
+            select: { id: true, status: true, referenceNumber: true, proofImageUrl: true, verificationNote: true, createdAt: true },
+          }),
+        },
+        "Scan the QR, pay externally, then enter the UTR/reference number."
+      );
   } catch (err: any) {
     console.error("getUpiDetails error:", err);
     sendError(res, "Failed to load UPI details.", 500, "INTERNAL_ERROR");
@@ -672,6 +677,58 @@ export async function submitUpiReference(req: AuthedRequest, res: Response): Pro
   } catch (err: any) {
     console.error("submitUpiReference error:", err);
     sendError(res, "Failed to submit UPI reference.", 500, "INTERNAL_ERROR");
+  }
+}
+
+// User attaches a payment screenshot as proof for manual UPI verification.
+// Attaches to the latest open attempt for this booking (owner only).
+export async function uploadUpiProof(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    if (!req.file) {
+      sendError(res, "No proof image uploaded.", 400, "NO_FILE");
+      return;
+    }
+    const booking = await prisma.booking.findUnique({ where: { id } });
+    if (!booking) {
+      sendError(res, "Booking not found.", 404, "BOOKING_NOT_FOUND");
+      return;
+    }
+    if (booking.userId !== req.user!.userId) {
+      sendError(res, "Unauthorized.", 403, "FORBIDDEN");
+      return;
+    }
+    if (!["VERIFICATION_PENDING", "REJECTED", "REQUEST_INFO"].includes((booking as any).paymentStatus)) {
+      sendError(res, "This booking is not awaiting UPI verification.", 400, "INVALID_STATUS");
+      return;
+    }
+    const attempt = await prisma.upiPayment.findFirst({
+      where: { bookingId: id, status: { in: ["VERIFICATION_PENDING", "REJECTED", "REQUEST_INFO"] } },
+      orderBy: { createdAt: "desc" },
+    });
+    if (!attempt) {
+      sendError(res, "Submit the UTR / reference number first.", 400, "NO_ATTEMPT");
+      return;
+    }
+    const proofImageUrl = `/uploads/${(req.file as Express.Multer.File).filename}`;
+    const updated = await prisma.upiPayment.update({
+      where: { id: attempt.id },
+      data: { proofImageUrl },
+    });
+    await prisma.auditLog.create({
+      data: {
+        actorId: req.user!.userId,
+        actorType: "USER",
+        action: "UPI_PROOF_UPLOADED",
+        entityType: "UpiPayment",
+        entityId: attempt.id,
+        metadata: JSON.stringify({ bookingId: id }),
+      },
+    });
+    sendSuccess(res, { proofImageUrl, attemptId: attempt.id }, "Proof uploaded. Admin will verify it with your reference.");
+  } catch (err: any) {
+    console.error("uploadUpiProof error:", err);
+    sendError(res, "Failed to upload proof.", 500, "INTERNAL_ERROR");
   }
 }
 
