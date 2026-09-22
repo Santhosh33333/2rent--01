@@ -1974,6 +1974,82 @@ export async function refillDemoWallet(req: AuthedRequest, res: Response): Promi
 }
 
 // ============================================================================
+// PURGE TEST PAYMENT DATA — SUPER_ADMIN only. Removes test UPI references,
+// test bookings and test ledger entries belonging to DEMO sandbox or
+// @test.local accounts. Real users' records are NEVER touched: the email
+// must be a demo address or a @test.local address, enforced below.
+// ============================================================================
+
+export async function purgeTestPayments(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    const isTestScope = isDemoEmail(email) || email.endsWith("@test.local");
+    if (!email || !isTestScope) {
+      sendError(res, "Purge is only allowed for demo sandbox or @test.local accounts.", 403, "NOT_TEST_SCOPE");
+      return;
+    }
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      sendError(res, "Account not found.", 404, "NOT_FOUND");
+      return;
+    }
+
+    // Never delete money that moved: only test UPI rows (never VERIFIED with
+    // settled escrow beyond demo play funds) and non-completed bookings.
+    const upiRows = await prisma.upiPayment.findMany({ where: { userId: user.id }, select: { id: true } });
+    const bookings = await prisma.booking.findMany({
+      where: { userId: user.id, status: { notIn: ["COMPLETED"] } },
+      select: { id: true },
+    });
+    const bookingIds = bookings.map((b) => b.id);
+    const testTx = await prisma.transaction.findMany({
+      where: {
+        userId: user.id,
+        OR: [{ referenceId: { startsWith: "DEMO-" } }, { referenceId: { startsWith: "E2E-" } }, { description: { contains: "test", mode: "insensitive" } }],
+      },
+      select: { id: true },
+    });
+
+    let deletedUpi = 0;
+    let deletedBookings = 0;
+    let deletedTx = 0;
+
+    await prisma.$transaction(async (tx) => {
+      if (upiRows.length > 0) {
+        const r = await tx.upiPayment.deleteMany({ where: { id: { in: upiRows.map((u) => u.id) } } });
+        deletedUpi = r.count;
+      }
+      if (bookingIds.length > 0) {
+        await tx.dispatchRequest.deleteMany({ where: { bookingId: { in: bookingIds } } });
+        await tx.bookingTimeout.deleteMany({ where: { bookingId: { in: bookingIds } } });
+        await tx.bookingLog.deleteMany({ where: { bookingId: { in: bookingIds } } });
+        const r = await tx.booking.deleteMany({ where: { id: { in: bookingIds } } });
+        deletedBookings = r.count;
+      }
+      if (testTx.length > 0) {
+        const r = await tx.transaction.deleteMany({ where: { id: { in: testTx.map((t) => t.id) } } });
+        deletedTx = r.count;
+      }
+      await tx.auditLog.create({
+        data: {
+          actorId: req.user!.userId,
+          actorType: "ADMIN",
+          action: "TEST_PAYMENTS_PURGED",
+          entityType: "User",
+          entityId: user.id,
+          metadata: JSON.stringify({ email, deletedUpi, deletedBookings, deletedTx }),
+        },
+      });
+    });
+
+    sendSuccess(res, { email, deletedUpi, deletedBookings, deletedTransactions: deletedTx }, "Test payment data purged.");
+  } catch (err) {
+    console.error("purgeTestPayments error:", err);
+    sendError(res, "Failed to purge test data.", 500, "INTERNAL_ERROR");
+  }
+}
+
+// ============================================================================
 // PROMOTE USER TO SUPER_ADMIN (or any role) — SUPER_ADMIN only
 // ============================================================================
 
