@@ -109,6 +109,8 @@ router.post("/users/:userId/promote", requireSuperAdmin, [body("role").notEmpty(
 router.post("/users/:userId/demote", requireSuperAdmin, adminController.demoteUserRole);
 router.get("/audit-logs", auditView, adminController.getAuditLogs);
 router.post("/notifications", notificationsSend, [body("userId").notEmpty(), body("title").notEmpty(), body("body").notEmpty()], sanitizeInput, validateRequest, adminController.sendNotification);
+router.get("/notifications/inbox", users, adminController.getAdminNotifications);
+router.post("/notifications/inbox/:id/read", users, adminController.markAdminNotificationRead);
 
 // Pricing Config
 router.get("/pricing", pricingManage, adminController.getPricingConfigs);

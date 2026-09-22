@@ -909,6 +909,55 @@ export async function sendNotification(req: AuthedRequest, res: Response): Promi
   }
 }
 
+// Admin inbox: SOS alerts and system notices addressed to this admin.
+// (Rows are written by SOS fan-out, approvals, and system events.)
+export async function getAdminNotifications(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const profile = await prisma.adminUser.findUnique({ where: { userId: req.user!.userId }, select: { id: true } });
+    if (!profile) {
+      sendError(res, "Admin profile not found.", 404, "NOT_FOUND");
+      return;
+    }
+    const unreadOnly = req.query.unread === "true";
+    const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
+    const where: any = { adminUserId: profile.id };
+    if (unreadOnly) where.isRead = false;
+    const [items, unread] = await Promise.all([
+      prisma.adminNotification.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        take: limit,
+      }),
+      prisma.adminNotification.count({ where: { adminUserId: profile.id, isRead: false } }),
+    ]);
+    sendSuccess(res, { items, unread }, "Admin notifications retrieved.");
+  } catch (err) {
+    sendError(res, "Failed to retrieve admin notifications.", 500, "INTERNAL_ERROR");
+  }
+}
+
+export async function markAdminNotificationRead(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const profile = await prisma.adminUser.findUnique({ where: { userId: req.user!.userId }, select: { id: true } });
+    if (!profile) {
+      sendError(res, "Admin profile not found.", 404, "NOT_FOUND");
+      return;
+    }
+    const updated = await prisma.adminNotification.updateMany({
+      where: { id, adminUserId: profile.id },
+      data: { isRead: true },
+    });
+    if (updated.count !== 1) {
+      sendError(res, "Notification not found.", 404, "NOT_FOUND");
+      return;
+    }
+    sendSuccess(res, undefined, "Marked as read.");
+  } catch (err) {
+    sendError(res, "Failed to update notification.", 500, "INTERNAL_ERROR");
+  }
+}
+
 // ============================================================================
 // SECTION 2: PRICING CONFIG MANAGEMENT
 // ============================================================================

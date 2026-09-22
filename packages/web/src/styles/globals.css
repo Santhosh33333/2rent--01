@@ -321,8 +321,7 @@
 /* Bigger tap targets and legible type on phones. Landed behind the desktop
    classes by declaring after the component layer so `lg:` variants still win
    when they exist. */
-@media (max-width: 640px) {
-  .btn {
+@media (max-width: 640px) {  .btn {
     @apply min-h-[44px] px-5 py-3 text-sm;
   }
   .btn-lg {
@@ -359,6 +358,17 @@
   /* Keep micro-badges crisp but big enough to read/fat-finger on the go */
   .badge {
     @apply min-h-[24px] px-2.5 text-xs;
+  }
+}
+
+/* Respect OS reduced-motion: kill decorative animation, keep opacity fades
+   instant so content never gets stuck invisible. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
