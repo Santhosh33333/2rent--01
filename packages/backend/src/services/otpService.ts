@@ -90,6 +90,7 @@ export interface IssueResult {
   provider: string;
   messageId?: string;
   error?: string;
+  code?: string;
 }
 
 /**
@@ -232,7 +233,7 @@ export async function issueOtp(opts: {
 function fail(
   opts: { channel: OtpChannel; purpose: string },
   message: string,
-  error = "OTP_REQUEST_FAILED",
+  code = "OTP_REQUEST_FAILED",
   extra: Partial<IssueResult> = {}
 ): IssueResult {
   return {
@@ -244,6 +245,7 @@ function fail(
     resendInSec: 0,
     provider: "none",
     error: message,
+    code,
     ...extra,
   } as IssueResult;
 }

@@ -74,8 +74,9 @@ export async function requestOtp(req: Request, res: Response): Promise<void> {
       userAgent: req.headers["user-agent"],
     });
     if (!r.sent) {
-      const status = r.error === "OTP_RATE_LIMITED" ? 429 : r.error === "EMAIL_NOT_CONFIGURED" || r.error === "SMS_NOT_CONFIGURED" ? 503 : 400;
-      sendError(res, r.error || "Could not send the code.", status, r.error || "OTP_REQUEST_FAILED");
+      const status =
+        r.code === "OTP_RATE_LIMITED" ? 429 : r.code === "EMAIL_NOT_CONFIGURED" || r.code === "SMS_NOT_CONFIGURED" ? 503 : 400;
+      sendError(res, r.error || "Could not send the code.", status, r.code || "OTP_REQUEST_FAILED");
       return;
     }
     sendSuccess(
