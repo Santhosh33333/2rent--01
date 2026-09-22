@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { api, assetUrl } from '../../lib/api'
+import { useAuth } from '../../lib/auth'
 
 interface Member {
   id: string
@@ -76,6 +77,7 @@ function initials(name: string): string {
 export function CommunityDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [community, setCommunity] = useState<Community | null>(null)
   const [members, setMembers] = useState<Member[]>([])
   const [posts, setPosts] = useState<Post[]>([])
@@ -553,9 +555,18 @@ export function CommunityDetailPage() {
                       <span className="ml-2 text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">📢 Announcement</span>
                     )}
                   </div>
-                  <button onClick={() => removePost(post.id)} title="Delete post" className="w-8 h-8 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-700 flex items-center justify-center text-surface-400">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  {(() => {
+                    const myMembership = members.find((m) => m.user?.id === user?.id)
+                    const myRole = community.isOwner ? 'OWNER' : myMembership?.role
+                    const canDelete =
+                      post.authorId === user?.id || myRole === 'OWNER' || myRole === 'ADMIN' || myRole === 'MODERATOR'
+                    if (!canDelete) return null
+                    return (
+                      <button onClick={() => removePost(post.id)} title="Delete post" className="w-8 h-8 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-700 flex items-center justify-center text-surface-400">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )
+                  })()}
                   {reportBox(`post-${post.id}`, 'post', post.id)}
                 </div>
                 <p className="text-sm text-surface-700 dark:text-surface-300 mt-3 whitespace-pre-wrap">{post.content}</p>

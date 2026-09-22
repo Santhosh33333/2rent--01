@@ -8,6 +8,7 @@ import {
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
 import { api, assetUrl } from '../../lib/api'
+import { getErrorMessage } from '../../lib/error'
 
 interface EventDetail {
   id: number
@@ -22,6 +23,8 @@ interface EventDetail {
   maxAttendees?: number
   coverImageUrl?: string | null
   price?: number | null
+  status?: string
+  isOrganizer?: boolean
 }
 
 export function EventDetailPage() {
@@ -52,6 +55,8 @@ export function EventDetailPage() {
           maxAttendees: raw.capacity,
           coverImageUrl: raw.coverImageUrl ?? null,
           price: raw.price ?? null,
+          status: raw.status ?? 'PUBLISHED',
+          isOrganizer: !!raw.isOrganizer,
         } : null
         setEvent(data)
       } catch (err) {
@@ -267,10 +272,28 @@ export function EventDetailPage() {
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500/20 to-accent-500/20 flex items-center justify-center text-primary-600 dark:text-primary-400 font-semibold text-sm">
                 {event.organizer.split(' ').map(n => n[0]).join('').slice(0, 2)}
               </div>
-              <div>
+              <div className="flex-1">
                 <p className="text-xs text-surface-400">Organized by</p>
                 <p className="text-sm font-medium text-surface-900 dark:text-white">{event.organizer}</p>
               </div>
+              {event.isOrganizer && event.status !== 'CANCELLED' && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!window.confirm('Cancel this event? Registered participants will be notified.')) return
+                    try {
+                      await api.put(`/events/${event.id}`, { status: 'CANCELLED' })
+                      toast.success('Event cancelled')
+                      setEvent({ ...event, status: 'CANCELLED' })
+                    } catch (err) {
+                      toast.error(getErrorMessage(err, 'Could not cancel the event'))
+                    }
+                  }}
+                  className="shrink-0 rounded-xl px-3 py-1.5 text-xs font-semibold text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800/40 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                >
+                  Cancel event
+                </button>
+              )}
             </div>
           )}
 
