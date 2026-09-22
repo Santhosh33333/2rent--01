@@ -57,6 +57,19 @@ export function BookingPaymentPage() {
   const [proofFile, setProofFile] = useState<File | null>(null)
   const [proofPreview, setProofPreview] = useState<string | null>(null)
   const [proofUploading, setProofUploading] = useState(false)
+  const [onlineEnabled, setOnlineEnabled] = useState(false)
+
+  useEffect(() => {
+    // Auto-pay (Razorpay) is offered only when the backend confirms live
+    // credentials; otherwise UPI-manual + cash are the payment methods.
+    api
+      .get('/payments/config')
+      .then((res) => {
+        const d = res.data?.data || res.data
+        if (d && typeof d.razorpay === 'boolean') setOnlineEnabled(d.razorpay)
+      })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (!id) return
@@ -300,7 +313,8 @@ export function BookingPaymentPage() {
         <div>
           <h3 className="text-sm font-bold text-surface-500 dark:text-surface-400 uppercase tracking-wider mb-3 px-1">Choose Payment Method</h3>
           <div className="grid grid-cols-2 gap-3">
-            {/* Pay Online */}
+            {/* Pay Online — only when the gateway is live */}
+            {onlineEnabled && (
             <button
               onClick={() => setSelected('ONLINE')}
               className={`relative p-4 rounded-2xl border-2 text-left transition-all duration-200 ${selected === 'ONLINE' ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/10 shadow-lg shadow-emerald-500/10' : 'border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-900 hover:border-emerald-300'}`}
@@ -315,6 +329,7 @@ export function BookingPaymentPage() {
                 {['UPI', 'Card'].map(m => <span key={m} className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 font-medium">{m}</span>)}
               </div>
             </button>
+            )}
 
             {/* Pay Cash */}
             <button

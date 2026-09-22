@@ -219,6 +219,32 @@ if (!dbAvailable) {
     console.warn("Schema reconciliation warning (UpiPayment):", (err as Error)?.message);
   }
 
+  // Manual-UPI wallet top-ups (migration 20260922_topup_requests). Idempotent.
+  try {
+    await prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "TopupRequest" (
+        "id" TEXT NOT NULL,
+        "userId" TEXT NOT NULL,
+        "amount" DECIMAL(65,30) NOT NULL,
+        "currency" TEXT NOT NULL DEFAULT 'INR',
+        "referenceNumber" TEXT NOT NULL,
+        "proofImageUrl" TEXT,
+        "status" TEXT NOT NULL DEFAULT 'VERIFICATION_PENDING',
+        "verifiedByAdminId" TEXT,
+        "verificationNote" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "TopupRequest_pkey" PRIMARY KEY ("id")
+      )`
+    );
+    await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "TopupRequest_referenceNumber_key" ON "TopupRequest"("referenceNumber")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "TopupRequest_status_idx" ON "TopupRequest"("status")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "TopupRequest_userId_idx" ON "TopupRequest"("userId")`);
+    console.log("Schema reconciliation: TopupRequest ensured.");
+  } catch (err) {
+    console.warn("Schema reconciliation warning (TopupRequest):", (err as Error)?.message);
+  }
+
   initializeFirebase();
   initializeFirebaseAuth();
 

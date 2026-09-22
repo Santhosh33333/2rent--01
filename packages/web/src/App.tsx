@@ -149,6 +149,9 @@ export function App() {
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/verify-email" element={<VerifyEmailPage />} />
           <Route path="/verify-mobile" element={<VerifyMobilePage />} />
+          {/* Public legal pages (also reachable in-settings when logged in) */}
+          <Route path="/terms" element={<TermsOfServicePage />} />
+          <Route path="/privacy" element={<PrivacyPolicyPage />} />
 
           <Route element={<ProtectedRoute allowedRoles={['USER']} />}>
             <Route element={<Layout />}>

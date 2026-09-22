@@ -440,8 +440,29 @@ export async function webhookPayment(req: Request, res: Response): Promise<void>
 // GET PAYMENT HISTORY
 // ============================================================================
 
-export async function getPaymentHistory(req: AuthedRequest, res: Response): Promise<void> {
+// Public capability flags so clients only offer payment methods that can
+// actually work (no dead auto-pay buttons when Razorpay is unconfigured).
+export async function getPaymentConfig(_req: AuthedRequest, res: Response): Promise<void> {
   try {
+    const [upiId, upiQr] = await Promise.all([
+      prisma.pricingConfig.findUnique({ where: { key: "UPI_ID" } }),
+      prisma.pricingConfig.findUnique({ where: { key: "UPI_QR_URL" } }),
+    ]);
+    sendSuccess(
+      res,
+      {
+        razorpay: !(env.RAZORPAY_KEY_ID || "").includes("placeholder"),
+        upiManual: Boolean(upiId?.value || upiQr?.value),
+        cash: true,
+      },
+      "Payment configuration."
+    );
+  } catch (err: any) {
+    sendError(res, "Failed to load payment configuration.", 500, "INTERNAL_ERROR");
+  }
+}
+
+export async function getPaymentHistory(req: AuthedRequest, res: Response): Promise<void> {  try {
     const page = Number(req.query.page) || 1
     const limit = Number(req.query.limit) || 20
 

@@ -51,6 +51,101 @@ export async function getWallet(req: AuthedRequest, res: Response): Promise<void
 }
 
 // ============================================================================
+// MANUAL-UPI TOP-UP REQUESTS (no Razorpay involved)
+// User pays the platform QR externally, submits UTR + screenshot; an admin
+// verifies against the bank statement and the wallet is credited.
+// ============================================================================
+
+export async function requestTopup(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const amount = Number(req.body?.amount);
+    const referenceNumber = String(req.body?.referenceNumber ?? "").trim();
+    if (!Number.isFinite(amount) || amount < 10) {
+      sendError(res, "Minimum top-up is Rs 10.", 400, "INVALID_AMOUNT");
+      return;
+    }
+    if (!referenceNumber || referenceNumber.length < 6) {
+      sendError(res, "Enter a valid UTR / reference number (min 6 chars).", 400, "INVALID_REFERENCE");
+      return;
+    }
+    // UTRs must be unique across top-ups AND booking UPI payments.
+    const [dupTopup, dupUpi] = await Promise.all([
+      prisma.topupRequest.findFirst({
+        where: { referenceNumber, status: { in: ["VERIFICATION_PENDING", "VERIFIED", "REQUEST_INFO"] } },
+        select: { id: true },
+      }),
+      prisma.upiPayment.findFirst({
+        where: { referenceNumber, status: { in: ["VERIFICATION_PENDING", "VERIFIED", "REQUEST_INFO"] } },
+        select: { id: true },
+      }),
+    ]);
+    if (dupTopup || dupUpi) {
+      sendError(res, "This reference number was already used.", 409, "DUPLICATE_REFERENCE");
+      return;
+    }
+    const created = await prisma.topupRequest.create({
+      data: { userId: req.user!.userId, amount, currency: "INR", referenceNumber, status: "VERIFICATION_PENDING" },
+    });
+    await prisma.auditLog.create({
+      data: {
+        actorId: req.user!.userId,
+        actorType: "USER",
+        action: "TOPUP_REQUESTED",
+        entityType: "TopupRequest",
+        entityId: created.id,
+        metadata: JSON.stringify({ amount, referenceNumber }),
+      },
+    });
+    sendSuccess(res, created, "Top-up submitted. Admin will verify and credit your wallet.", 201);
+  } catch (err: any) {
+    if (err?.code === "P2002") {
+      sendError(res, "This reference number was already used.", 409, "DUPLICATE_REFERENCE");
+      return;
+    }
+    console.error("requestTopup error:", err);
+    sendError(res, "Failed to submit top-up.", 500, "INTERNAL_ERROR");
+  }
+}
+
+export async function uploadTopupProof(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    if (!req.file) {
+      sendError(res, "No proof image uploaded.", 400, "NO_FILE");
+      return;
+    }
+    const attempt = await prisma.topupRequest.findUnique({ where: { id } });
+    if (!attempt || attempt.userId !== req.user!.userId) {
+      sendError(res, "Top-up request not found.", 404, "NOT_FOUND");
+      return;
+    }
+    if (!["VERIFICATION_PENDING", "REJECTED", "REQUEST_INFO"].includes(attempt.status)) {
+      sendError(res, "This request is already settled.", 400, "INVALID_STATUS");
+      return;
+    }
+    const proofImageUrl = `/uploads/${(req.file as Express.Multer.File).filename}`;
+    const updated = await prisma.topupRequest.update({ where: { id }, data: { proofImageUrl } });
+    sendSuccess(res, { proofImageUrl, id: updated.id }, "Proof attached.");
+  } catch (err: any) {
+    console.error("uploadTopupProof error:", err);
+    sendError(res, "Failed to upload proof.", 500, "INTERNAL_ERROR");
+  }
+}
+
+export async function getMyTopupRequests(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const items = await prisma.topupRequest.findMany({
+      where: { userId: req.user!.userId },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    });
+    sendSuccess(res, { items, total: items.length }, "Top-up requests retrieved.");
+  } catch (err: any) {
+    sendError(res, "Failed to retrieve top-up requests.", 500, "INTERNAL_ERROR");
+  }
+}
+
+// ============================================================================
 // TOPUP WALLET
 // ============================================================================
 

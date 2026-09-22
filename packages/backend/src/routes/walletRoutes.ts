@@ -2,6 +2,7 @@ import { Router } from "express";
 import { body } from "express-validator";
 import { authenticateToken, requireKycVerified } from "../middleware/auth";
 import { sanitizeInput, validateRequest } from "../middleware/validation";
+import { upload } from "../middleware/upload";
 import * as walletController from "../controllers/walletController";
 
 const router = Router();
@@ -19,6 +20,20 @@ router.post(
   validateRequest,
   walletController.topupWallet
 );
+
+// Manual-UPI top-up requests (pay platform QR externally, admin verifies)
+router.post(
+  "/topup-requests",
+  [
+    body("amount").isFloat({ min: 10 }).withMessage("Minimum top-up is Rs 10"),
+    body("referenceNumber").isString().trim().isLength({ min: 6 }).withMessage("Valid UTR required"),
+  ],
+  sanitizeInput,
+  validateRequest,
+  walletController.requestTopup
+);
+router.post("/:id/topup-proof", upload.single("proof"), walletController.uploadTopupProof);
+router.get("/topup-requests", walletController.getMyTopupRequests);
 
 // Wallet rules (limits shown to clients)
 router.get("/config", walletController.getWalletConfig);

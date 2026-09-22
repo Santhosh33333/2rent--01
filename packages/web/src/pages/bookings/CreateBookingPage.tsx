@@ -200,11 +200,14 @@ export function CreateBookingPage() {
     try {
       const normalizedPickup = booking.pickupLocation.trim()
       const normalizedDestination = (booking.dropLocation || booking.pickupLocation).trim()
+      // Send an explicit UTC instant: the naive "dateTtime" string would be
+      // parsed as UTC by the server, shifting IST picks by +5:30.
+      const scheduledInstant = new Date(`${booking.date}T${booking.time}:00`).toISOString()
       const res = await api.post('/bookings', {
         serviceType: selectedTypes.length > 0 ? selectedTypes : [booking.serviceType],
         startLocation: normalizedPickup,
         endLocation: normalizedDestination,
-        scheduledAt: `${booking.date}T${booking.time}:00`,
+        scheduledAt: scheduledInstant,
         durationMinutes: Number.parseInt(booking.duration, 10),
         distanceKm: booking.distance ? Number.parseFloat(booking.distance) || undefined : undefined,
         itemType: booking.itemType || undefined,

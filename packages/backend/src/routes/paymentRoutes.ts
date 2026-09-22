@@ -34,5 +34,6 @@ router.post(
 )
 
 router.get("/history", paymentController.getPaymentHistory)
+router.get("/config", paymentController.getPaymentConfig)
 
 export default router

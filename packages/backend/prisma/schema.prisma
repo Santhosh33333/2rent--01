@@ -96,6 +96,7 @@ model User {
   chatReportsFiled               ChatReport[]         @relation("ChatReportFiledBy")
   paymentOrders                  PaymentOrder[]
   creditLedgers                   CreditLedger[]
+  topupRequests                  TopupRequest[]
 
   @@index([status])
   @@index([role])
@@ -365,10 +366,33 @@ model UpiPayment {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+    booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+    @@index([status])
+    @@index([bookingId])
+    @@index([referenceNumber])
+}
+
+// Wallet top-up via manual UPI (no booking attached): user pays the
+// platform QR externally, submits UTR + screenshot, admin verifies and
+// the wallet is credited. Separate from booking-coupled UPI payments.
+model TopupRequest {
+  id                String   @id @default(uuid())
+  userId            String
+  amount            Decimal
+  currency          String   @default("INR")
+  referenceNumber   String   @unique // UTR; unique across top-ups AND UPI payments (checked in code)
+  proofImageUrl     String?
+  status            String   @default("VERIFICATION_PENDING") // VERIFICATION_PENDING, VERIFIED, REJECTED, REQUEST_INFO
+  verifiedByAdminId String?
+  verificationNote  String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([status])
-  @@index([bookingId])
+  @@index([userId])
   @@index([referenceNumber])
 }
 

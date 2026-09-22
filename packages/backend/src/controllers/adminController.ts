@@ -2058,6 +2058,192 @@ export async function refillDemoWallet(req: AuthedRequest, res: Response): Promi
 }
 
 // ============================================================================
+// MANUAL-UPI TOP-UP REVIEW — list + verify (credits the wallet).
+// ============================================================================
+
+export async function listTopupRequests(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const status = typeof req.query.status === "string" ? req.query.status : "VERIFICATION_PENDING";
+    const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
+    const items = await prisma.topupRequest.findMany({
+      where: { status },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    });
+    const userIds = Array.from(new Set(items.map((i) => i.userId)));
+    const users = userIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, fullName: true, email: true, phone: true },
+        })
+      : [];
+    const byId = new Map(users.map((u) => [u.id, u]));
+    sendSuccess(res, { items: items.map((i) => ({ ...i, user: byId.get(i.userId) ?? null })), total: items.length }, "Top-up requests retrieved.");
+  } catch (err) {
+    sendError(res, "Failed to list top-up requests.", 500, "INTERNAL_ERROR");
+  }
+}
+
+export async function verifyTopupRequest(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const { action, note } = req.body; // VERIFY | REJECT | REQUEST_INFO
+    const row = await prisma.topupRequest.findUnique({ where: { id } });
+    if (!row) {
+      sendError(res, "Top-up request not found.", 404, "NOT_FOUND");
+      return;
+    }
+    if ((action === "REJECT" || action === "REQUEST_INFO") && !String(note || "").trim()) {
+      sendError(res, "A note is required so the user knows why.", 400, "NOTE_REQUIRED");
+      return;
+    }
+    if (action === "VERIFY") {
+      await moneyTransaction(async (tx) => {
+        const claimed = await tx.topupRequest.updateMany({
+          where: { id, status: "VERIFICATION_PENDING" },
+          data: { status: "VERIFIED", verifiedByAdminId: req.user!.userId, verificationNote: note ?? null },
+        });
+        if (claimed.count !== 1) throw new Error("ALREADY_SETTLED");
+        const wallet = await tx.wallet.upsert({
+          where: { userId: row.userId },
+          update: { balance: { increment: Number(row.amount) } },
+          create: { userId: row.userId, balance: Number(row.amount) },
+        });
+        await tx.transaction.create({
+          data: {
+            userId: row.userId,
+            walletId: wallet.id,
+            type: "TOPUP",
+            amount: Number(row.amount),
+            status: "SUCCESS",
+            description: `Manual UPI top-up (UTR ${row.referenceNumber})`,
+            referenceId: `TOPUP-${row.id.slice(0, 8)}`,
+          },
+        });
+        await tx.auditLog.create({
+          data: {
+            actorId: req.user!.userId,
+            actorType: "ADMIN",
+            action: "TOPUP_VERIFIED",
+            entityType: "TopupRequest",
+            entityId: id,
+            metadata: JSON.stringify({ amount: Number(row.amount), referenceNumber: row.referenceNumber }),
+          },
+        });
+      });
+      await prisma.notification.create({
+        data: {
+          userId: row.userId,
+          title: "Wallet topped up",
+          body: `Rs ${Number(row.amount)} added to your wallet. ${note || ""}`.trim(),
+          data: JSON.stringify({ kind: "TOPUP_VERIFIED", topupId: id }),
+        },
+      });
+      sendSuccess(res, { status: "VERIFIED" }, "Top-up verified. Wallet credited.");
+    } else if (action === "REJECT") {
+      await prisma.topupRequest.updateMany({
+        where: { id, status: "VERIFICATION_PENDING" },
+        data: { status: "REJECTED", verifiedByAdminId: req.user!.userId, verificationNote: note },
+      });
+      await prisma.notification.create({
+        data: {
+          userId: row.userId,
+          title: "Top-up rejected",
+          body: `Your top-up was not accepted. ${note}`.trim(),
+          data: JSON.stringify({ kind: "TOPUP_REJECTED", topupId: id }),
+        },
+      });
+      sendSuccess(res, { status: "REJECTED" }, "Top-up rejected.");
+    } else if (action === "REQUEST_INFO") {
+      await prisma.topupRequest.update({
+        where: { id },
+        data: { status: "REQUEST_INFO", verificationNote: note },
+      });
+      await prisma.notification.create({
+        data: {
+          userId: row.userId,
+          title: "More info needed",
+          body: `Admin needs more information for your top-up. ${note}`.trim(),
+          data: JSON.stringify({ kind: "TOPUP_INFO", topupId: id }),
+        },
+      });
+      sendSuccess(res, { status: "REQUEST_INFO" }, "Information requested.");
+    } else {
+      sendError(res, "Action must be VERIFY, REJECT or REQUEST_INFO.", 400, "VALIDATION_ERROR");
+    }
+  } catch (err: any) {
+    if (err?.message === "ALREADY_SETTLED") {
+      sendError(res, "This request was already settled.", 409, "ALREADY_SETTLED");
+      return;
+    }
+    console.error("verifyTopupRequest error:", err);
+    sendError(res, "Failed to verify top-up.", 500, "INTERNAL_ERROR");
+  }
+}
+
+// ============================================================================
+// MANUAL WALLET CREDIT — SUPER_ADMIN only. Add money to ANY account by
+// choice (goodwill, correction, campaign). Fully audited + notified.
+// ============================================================================
+
+export async function creditUserWallet(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const identifier = String(req.body?.identifier || "").trim();
+    const amount = Number(req.body?.amount);
+    const note = String(req.body?.note || "").trim().slice(0, 300);
+    if (!identifier || !Number.isFinite(amount) || amount <= 0 || amount > 1000000) {
+      sendError(res, "Identifier and a positive amount (max 10,00,000) are required.", 400, "VALIDATION_ERROR");
+      return;
+    }
+    const user = await prisma.user.findUnique({
+      where: identifier.includes("@") ? { email: identifier.toLowerCase() } : { id: identifier },
+    });
+    if (!user) {
+      sendError(res, "User not found.", 404, "NOT_FOUND");
+      return;
+    }
+    const wallet = await prisma.wallet.upsert({
+      where: { userId: user.id },
+      update: { balance: { increment: amount } },
+      create: { userId: user.id, balance: amount },
+    });
+    const tx = await prisma.transaction.create({
+      data: {
+        userId: user.id,
+        walletId: wallet.id,
+        type: "ADMIN_CREDIT",
+        amount,
+        status: "SUCCESS",
+        description: note ? `Admin credit: ${note}` : "Admin credit",
+        referenceId: `ADMIN-CREDIT-${Date.now()}`,
+      },
+    });
+    await prisma.auditLog.create({
+      data: {
+        actorId: req.user!.userId,
+        actorType: "ADMIN",
+        action: "WALLET_CREDITED",
+        entityType: "User",
+        entityId: user.id,
+        metadata: JSON.stringify({ amount, note, txId: tx.id }),
+      },
+    });
+    await prisma.notification.create({
+      data: {
+        userId: user.id,
+        title: "Wallet credited",
+        body: `Rs ${amount} added to your wallet. ${note}`.trim(),
+        data: JSON.stringify({ kind: "ADMIN_CREDIT", amount }),
+      },
+    });
+    sendSuccess(res, { email: user.email, balance: Number(wallet.balance), credited: amount }, "Wallet credited.");
+  } catch (err) {
+    console.error("creditUserWallet error:", err);
+    sendError(res, "Failed to credit wallet.", 500, "INTERNAL_ERROR");
+  }
+}
+
+// ============================================================================
 // PURGE TEST PAYMENT DATA — SUPER_ADMIN only. Removes test UPI references,
 // test bookings and test ledger entries belonging to DEMO sandbox or
 // @test.local accounts. Real users' records are NEVER touched: the email
