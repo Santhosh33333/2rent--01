@@ -114,7 +114,7 @@ router.post(
 
 router.post(
   "/forgot-password",
-  authRateLimiter,
+  otpSendLimiter,
   [body("email").isEmail().normalizeEmail().withMessage("Valid email is required")],
   validateRequest,
   authController.forgotPassword
@@ -122,7 +122,7 @@ router.post(
 
 router.post(
   "/reset-password",
-  authRateLimiter,
+  otpVerifyLimiter,
   [body("email").isEmail().normalizeEmail(), body("otp").isLength({ min: 4, max: 8 }), body("newPassword").isLength({ min: 8 })],
   validateRequest,
   authController.resetPassword
@@ -130,7 +130,7 @@ router.post(
 
 router.post(
   "/verify-email",
-  authRateLimiter,
+  otpVerifyLimiter,
   [body("userId").notEmpty(), body("otp").isLength({ min: 4, max: 8 })],
   validateRequest,
   authController.verifyEmail
@@ -138,7 +138,7 @@ router.post(
 
 router.post(
   "/verify-mobile",
-  authRateLimiter,
+  otpVerifyLimiter,
   [body("userId").notEmpty(), body("otp").isLength({ min: 4, max: 8 })],
   validateRequest,
   authController.verifyMobile
@@ -146,7 +146,7 @@ router.post(
 
 router.post(
   "/resend-otp",
-  authRateLimiter,
+  otpSendLimiter,
   [body("userId").notEmpty(), body("channel").isIn(["email", "mobile"])],
   validateRequest,
   authController.resendOTP

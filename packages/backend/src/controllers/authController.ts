@@ -7,6 +7,7 @@ import { env } from "../config/env";
 import { generateAccessToken, generateRefreshToken, generateImpersonationAccessToken, verifyRefreshToken } from "../utils/jwt";
 import { generateOTP } from "../utils/otp";
 import { issueOtp, verifyOtp, consumeOtp, maskIdentifier } from "../services/otpService";
+import { emailStatus } from "../services/emailService";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
 import { getFirebaseAuth, verifyIdToken, getUserByPhone, getUserByEmail, createUserWithPhone, createUserWithEmail } from "../services/firebaseAuthService";
@@ -766,6 +767,13 @@ const accessToken = payload.impersonatorId
 export async function forgotPassword(req: Request, res: Response): Promise<void> {
   try {
     const { email } = req.body;
+    // Provider honesty without account enumeration: when email delivery is
+    // globally unconfigured, EVERYONE gets the same 503 (no account info
+    // leaks, and nobody is told a mail was sent when it wasn't).
+    if (emailStatus().provider === "none") {
+      sendError(res, "Password reset by email is currently unavailable. Contact support.", 503, "EMAIL_NOT_CONFIGURED");
+      return;
+    }
     const user = await prisma.user.findUnique({ where: { email } });
     if (user) {
       await issueOtp({
@@ -889,6 +897,12 @@ export async function resendOTP(req: Request, res: Response): Promise<void> {
     const isMobile = channel === "mobile";
     if (isMobile && !user.phone) {
       sendError(res, "No phone number on this account.", 400, "MISSING_PHONE");
+      return;
+    }
+    // Same honesty rule as forgot-password: globally-down providers get a
+    // uniform 503 (identical for every account — nothing leaks).
+    if (!isMobile && emailStatus().provider === "none") {
+      sendError(res, "Email sending is currently unavailable. Contact support.", 503, "EMAIL_NOT_CONFIGURED");
       return;
     }
     const r = await issueOtp({
