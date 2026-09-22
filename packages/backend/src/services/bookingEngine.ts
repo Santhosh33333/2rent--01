@@ -702,8 +702,11 @@ async function postCancellationRefund(
 export async function cancelBooking(bookingId: string, cancelledBy: "USER" | "PARTNER", reason?: string) {  const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
   if (!booking) throw new Error("Booking not found");
 
-  // Idempotency: already-terminal bookings must never re-cancel or re-refund
-  const terminalStatuses = ["CANCELLED", "REFUND_INITIATED", "REFUND_COMPLETED"];
+  // Idempotency: already-terminal bookings must never re-cancel or re-refund.
+  // COMPLETED is final: a finished job can only move money via the refund
+  // flow, never via cancellation (this once flipped completed jobs back to
+  // CANCELLED when a stale search-timeout fired after assignment).
+  const terminalStatuses = ["COMPLETED", "CANCELLED", "REFUND_INITIATED", "REFUND_COMPLETED"];
   if (terminalStatuses.includes(booking.status)) {
     return { booking, refundProcessed: false };
   }
@@ -881,6 +884,16 @@ export async function processTimeoutBookings() {  const timeouts = await prisma.
 
   for (const timeout of timeouts) {
     try {
+      // Never torch a booking that found its partner or moved past search:
+      // the window only applies to still-unassigned, still-searching jobs.
+      const st = timeout.booking?.status;
+      if (timeout.booking?.partnerId || (st !== "PARTNER_SEARCHING" && st !== "PAYMENT_SUCCESSFUL" && st !== "PAYMENT_PENDING")) {
+        await prisma.bookingTimeout.update({
+          where: { id: timeout.id },
+          data: { isProcessed: true },
+        });
+        continue;
+      }
       await cancelBooking(timeout.bookingId, "USER", "Booking timeout");
       await prisma.bookingTimeout.update({
         where: { id: timeout.id },
