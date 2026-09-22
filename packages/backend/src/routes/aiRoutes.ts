@@ -1,10 +1,11 @@
 import { Router } from "express";
 import { authenticateToken, requireAdmin } from "../middleware/auth";
+import { aiRateLimiter } from "../middleware/rateLimiter";
 import * as aiController from "../controllers/aiController";
 
 const router = Router();
 
-router.use(authenticateToken);
+router.use(authenticateToken, aiRateLimiter);
 
 // Assistant + matching work without any AI provider key.
 router.post("/ask", aiController.askAssistant);

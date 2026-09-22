@@ -29,30 +29,21 @@ export function DashboardPage() {
   useEffect(() => {
     const fetchDashboard = async () => {
       try {
-        const [statsRes, communitiesRes, eventsRes, walkingRes] =
-          await Promise.allSettled([
-            api.get('/dashboard/stats'),
-            api.get('/communities'),
-            api.get('/events'),
-            api.get('/walking-requests'),
-          ])
-
-        const statsData = statsRes.status === 'fulfilled' ? (statsRes.value.data?.data || statsRes.value.data || {}) : {}
-        const communitiesData = communitiesRes.status === 'fulfilled' ? (communitiesRes.value.data?.data || communitiesRes.value.data || null) : null
-        const eventsData = eventsRes.status === 'fulfilled' ? (eventsRes.value.data?.data || eventsRes.value.data || null) : null
-        const walkingData = walkingRes.status === 'fulfilled' ? (walkingRes.value.data?.data || walkingRes.value.data || null) : null
-
-        const communitiesItems = Array.isArray(communitiesData) ? communitiesData : (Array.isArray(communitiesData?.items) ? communitiesData.items : null)
-        const eventsItems = Array.isArray(eventsData) ? eventsData : (Array.isArray(eventsData?.items) ? eventsData.items : null)
-        const walkingItems = Array.isArray(walkingData) ? walkingData : (Array.isArray(walkingData?.items) ? walkingData.items : null)
+        // Single request: /dashboard/stats already returns friends, bookings,
+        // communities, events, wallet and unread counts. Fetching the full
+        // lists as well cost 3 extra heavy queries per visit for numbers we
+        // already had.
+        const statsRes = await api.get('/dashboard/stats')
+        const statsData = statsRes.data?.data || statsRes.data || {}
+        const s = statsData?.stats || statsData || {}
 
         setStats({
-          wallet: statsData?.wallet ?? null,
-          friends: statsData?.friends ?? 0,
-          communities: communitiesItems ? communitiesItems.length : (communitiesData?.count ?? 0),
-          events: eventsItems ? eventsItems.length : (eventsData?.count ?? 0),
-          bookings: walkingItems ? walkingItems.length : (walkingData?.count ?? 0),
-          unreadMessages: statsData?.unreadMessages ?? 0,
+          wallet: { balance: s.walletBalance ?? 0 },
+          friends: s.friends ?? 0,
+          communities: s.communities ?? 0,
+          events: s.events ?? 0,
+          bookings: s.bookings ?? s.todayRequests ?? 0,
+          unreadMessages: s.unreadMessages ?? statsData?.unreadMessages ?? 0,
         })
       } catch (err) {
         console.error('Dashboard fetch error:', err)

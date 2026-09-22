@@ -11,6 +11,7 @@ import * as bookingEngine from "../services/bookingEngine";
 import { PRICING_VERSION_KEY } from "../services/bookingEngine";
 import { isDemoEmail, DEMO_WALLET_CEILING } from "../utils/demo";
 import { moneyTransaction } from "../utils/db";
+import { invalidateConfigCache } from "../services/pricingEngine";
 import { SERVICE_KEYS } from "../services/serviceCatalog";
 import * as partnerMatching from "../services/partnerMatchingEngine";
 
@@ -1020,6 +1021,7 @@ export async function updatePricingConfig(req: AuthedRequest, res: Response): Pr
     if (serviceType !== undefined) data.serviceType = serviceType || null;
     const config = await prisma.pricingConfig.update({ where: { id }, data });
     const version = await bumpPricingVersion(req.user!.userId);
+    invalidateConfigCache();
     await prisma.auditLog.create({
       data: {
         actorId: req.user!.userId,
@@ -1062,6 +1064,7 @@ export async function createPricingConfig(req: AuthedRequest, res: Response): Pr
         serviceType: serviceType || null,
       },
     });
+    invalidateConfigCache();
     await prisma.auditLog.create({
       data: { actorId: req.user!.userId, actorType: "ADMIN", action: "PRICING_CREATE", entityType: "PricingConfig", entityId: config.id, metadata: JSON.stringify({ key, value, serviceType: serviceType || null }) },
     });
@@ -1658,6 +1661,7 @@ export async function setUpiConfig(req: AuthedRequest, res: Response): Promise<v
         update: { value: e.value },
       });
     }
+    invalidateConfigCache();
     await prisma.auditLog.create({
       data: {
         actorId: req.user!.userId,

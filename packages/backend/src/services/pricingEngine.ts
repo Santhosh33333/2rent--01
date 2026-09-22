@@ -59,13 +59,31 @@ export interface PartnerEarningSummary {
   levelPoints: number;
 }
 
+// Pricing/admin knobs are read on nearly every booking/price call. A short
+// TTL cache removes a DB round-trip per read; admin writes call
+// invalidateConfigCache() for immediacy (60s staleness otherwise).
+const CONFIG_CACHE_TTL_MS = 60000;
+const configCache = new Map<string, { at: number; value: number }>();
+
+/** Invalidate cached pricing/admin knobs (call after admin updates). */
+export function invalidateConfigCache(key?: string): void {
+  if (key) configCache.delete(key);
+  else configCache.clear();
+}
+
 export async function getConfig(key: string, defaultValue: number): Promise<number> {
   try {
+    const now = Date.now();
+    const hit = configCache.get(key);
+    if (hit && now - hit.at < CONFIG_CACHE_TTL_MS) return hit.value;
     const config = await prisma.pricingConfig.findUnique({ where: { key } });
-    if (config && config.isActive) {
-      return parseFloat(config.value);
+    const value = config && config.isActive ? parseFloat(config.value) : defaultValue;
+    configCache.set(key, { at: now, value });
+    if (configCache.size > 500) {
+      const oldest = configCache.keys().next();
+      if (!oldest.done) configCache.delete(oldest.value);
     }
-    return defaultValue;
+    return value;
   } catch {
     return defaultValue;
   }

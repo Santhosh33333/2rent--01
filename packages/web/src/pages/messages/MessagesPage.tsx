@@ -83,11 +83,15 @@ export function MessagesPage() {
     return () => off && off()
   }, [myId, on, fetchConversations])
 
-  // Keep the list and unread badges fresh (also clears unread after you read a thread).
+  // Keep the list fresh as a safety net behind the socket (which pushes
+  // new_message live). Backed off + hidden-tab aware: the old 8s hot poll
+  // hammered the API from every open tab.
   useEffect(() => {
     const poll = setInterval(() => {
-      fetchConversations().catch(() => {})
-    }, 8000)
+      if (typeof document === 'undefined' || !document.hidden) {
+        fetchConversations().catch(() => {})
+      }
+    }, 25000)
     return () => clearInterval(poll)
   }, [fetchConversations])
 

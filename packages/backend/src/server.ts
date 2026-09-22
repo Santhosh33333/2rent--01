@@ -132,6 +132,20 @@ if (!dbAvailable) {
     console.warn("Schema reconciliation warning (Event):", (err as Error)?.message);
   }
 
+  // Hot-path indexes for throughput (migration 20260922_hotpath_indexes).
+  // CREATE INDEX IF NOT EXISTS never blocks writers and is safe to re-run.
+  try {
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Booking_userId_status_idx" ON "Booking"("userId", "status")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Booking_partnerId_status_idx" ON "Booking"("partnerId", "status")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Booking_status_scheduledAt_idx" ON "Booking"("status", "scheduledAt")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Message_conversationId_createdAt_idx" ON "Message"("conversationId", "createdAt")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Notification_userId_createdAt_idx" ON "Notification"("userId", "createdAt")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "BookingTimeout_isProcessed_timeoutAt_idx" ON "BookingTimeout"("isProcessed", "timeoutAt")`);
+    console.log("Schema reconciliation: hot-path indexes ensured.");
+  } catch (err) {
+    console.warn("Schema reconciliation warning (indexes):", (err as Error)?.message);
+  }
+
   initializeFirebase();
   initializeFirebaseAuth();
 

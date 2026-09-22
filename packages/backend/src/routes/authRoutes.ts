@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { body } from "express-validator";
-import { authRateLimiter } from "../middleware/rateLimiter";
+import { authRateLimiter, otpSendLimiter, otpVerifyLimiter } from "../middleware/rateLimiter";
 import { sanitizeInput, validateRequest } from "../middleware/validation";
 import { authenticateToken } from "../middleware/auth";
 import * as authController from "../controllers/authController";
@@ -35,7 +35,7 @@ router.post(
 // Phone OTP Login (Firebase)
 router.post(
   "/phone/send-otp",
-  authRateLimiter,
+  otpSendLimiter,
   [body("phone").isMobilePhone("any").withMessage("Valid phone is required")],
   validateRequest,
   authController.sendPhoneOTP
@@ -43,7 +43,7 @@ router.post(
 
 router.post(
   "/phone/verify-otp",
-  authRateLimiter,
+  otpVerifyLimiter,
   [body("phone").isMobilePhone("any").withMessage("Valid phone is required"), body("otp").isLength({ min: 6, max: 6 }).withMessage("6-digit OTP is required")],
   validateRequest,
   authController.verifyPhoneOTP
