@@ -12,6 +12,7 @@ import { PRICING_VERSION_KEY } from "../services/bookingEngine";
 import { isDemoEmail, DEMO_WALLET_CEILING } from "../utils/demo";
 import { moneyTransaction } from "../utils/db";
 import { invalidateConfigCache } from "../services/pricingEngine";
+import { ensureAdminUser } from "../services/adminProvision";
 import { SERVICE_KEYS } from "../services/serviceCatalog";
 import * as partnerMatching from "../services/partnerMatchingEngine";
 
@@ -937,14 +938,14 @@ export async function sendNotification(req: AuthedRequest, res: Response): Promi
 // (Rows are written by SOS fan-out, approvals, and system events.)
 export async function getAdminNotifications(req: AuthedRequest, res: Response): Promise<void> {
   try {
-    const profile = await prisma.adminUser.findUnique({ where: { userId: req.user!.userId }, select: { id: true } });
-    if (!profile) {
-      sendError(res, "Admin profile not found.", 404, "NOT_FOUND");
-      return;
-    }
+    const me = await prisma.user.findUnique({
+      where: { id: req.user!.userId },
+      select: { role: true, activeRole: true },
+    });
+    const profileId = await ensureAdminUser(req.user!.userId, me?.activeRole || me?.role || "ADMIN");
     const unreadOnly = req.query.unread === "true";
     const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
-    const where: any = { adminUserId: profile.id };
+    const where: any = { adminUserId: profileId };
     if (unreadOnly) where.isRead = false;
     const [items, unread] = await Promise.all([
       prisma.adminNotification.findMany({
@@ -952,7 +953,7 @@ export async function getAdminNotifications(req: AuthedRequest, res: Response): 
         orderBy: { createdAt: "desc" },
         take: limit,
       }),
-      prisma.adminNotification.count({ where: { adminUserId: profile.id, isRead: false } }),
+      prisma.adminNotification.count({ where: { adminUserId: profileId, isRead: false } }),
     ]);
     sendSuccess(res, { items, unread }, "Admin notifications retrieved.");
   } catch (err) {
@@ -963,13 +964,13 @@ export async function getAdminNotifications(req: AuthedRequest, res: Response): 
 export async function markAdminNotificationRead(req: AuthedRequest, res: Response): Promise<void> {
   try {
     const { id } = req.params;
-    const profile = await prisma.adminUser.findUnique({ where: { userId: req.user!.userId }, select: { id: true } });
-    if (!profile) {
-      sendError(res, "Admin profile not found.", 404, "NOT_FOUND");
-      return;
-    }
+    const me = await prisma.user.findUnique({
+      where: { id: req.user!.userId },
+      select: { role: true, activeRole: true },
+    });
+    const profileId = await ensureAdminUser(req.user!.userId, me?.activeRole || me?.role || "ADMIN");
     const updated = await prisma.adminNotification.updateMany({
-      where: { id, adminUserId: profile.id },
+      where: { id, adminUserId: profileId },
       data: { isRead: true },
     });
     if (updated.count !== 1) {

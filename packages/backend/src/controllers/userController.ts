@@ -4,6 +4,7 @@ import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
 import { getIO } from "../services/socketService";
 import { sendSmsMessage } from "../utils/otp";
+import { ensureAdminUsers, activeAdminUserIds } from "../services/adminProvision";
 
 export async function getProfile(req: AuthedRequest, res: Response): Promise<void> {
   try {
@@ -321,19 +322,18 @@ export async function triggerSos(req: AuthedRequest, res: Response): Promise<voi
     });
 
     // 1) Persistent admin inbox fallback: sockets only reach online admins.
+    // ensureAdminUsers self-heals missing AdminUser rows (fresh super-admins).
     try {
-      const admins = await prisma.adminUser.findMany({
-        where: { user: { status: "ACTIVE" } },
-        select: { id: true },
-      });
-      if (admins.length > 0) {
+      const ids = await activeAdminUserIds();
+      const idMap = await ensureAdminUsers(ids);
+      if (idMap.size > 0) {
         const sender = await prisma.user.findUnique({
           where: { id: req.user!.userId },
           select: { fullName: true },
         });
         await prisma.adminNotification.createMany({
-          data: admins.map((a) => ({
-            adminUserId: a.id,
+          data: [...idMap.values()].map((adminUserId) => ({
+            adminUserId,
             type: "SOS_ALERT",
             title: "SOS emergency alert",
             body: `${sender?.fullName || "A user"} triggered SOS${activeBooking ? " during an active booking" : ""}. Tap to see live location.`,
