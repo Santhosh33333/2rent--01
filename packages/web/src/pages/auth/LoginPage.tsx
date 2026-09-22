@@ -38,6 +38,17 @@ export function LoginPage() {
   const [otpSent, setOtpSent] = useState(false)
   const [otp, setOtp] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [emailMode, setEmailMode] = useState<'password' | 'code'>('password')
+  const [emailCodeSent, setEmailCodeSent] = useState(false)
+  const [emailCode, setEmailCode] = useState('')
+  const [emailForCode, setEmailForCode] = useState('')
+  const [resendIn, setResendIn] = useState(0)
+
+  useEffect(() => {
+    if (resendIn <= 0) return
+    const t = setTimeout(() => setResendIn((v) => v - 1), 1000)
+    return () => clearTimeout(t)
+  }, [resendIn])
 
   useEffect(() => {
     initGoogleSignIn(handleGoogleCredential)
@@ -161,6 +172,60 @@ export function LoginPage() {
     }
   }
 
+  const handleSendEmailCode = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const formData = new FormData(e.currentTarget as HTMLFormElement)
+    const email = String(formData.get('email') || '').trim()
+    if (!email) {
+      setApiError('Enter your email first.')
+      return
+    }
+    setLoading(true)
+    setApiError(null)
+    try {
+      const res = await api.post('/auth/otp/request', { channel: 'EMAIL', identifier: email, purpose: 'LOGIN' })
+      const data = res.data?.data || res.data || {}
+      setEmailForCode(email)
+      setEmailCodeSent(true)
+      setEmailCode('')
+      if (data.resendInSec) setResendIn(Number(data.resendInSec) || 0)
+      toast.success(`Code sent to ${data.maskedTo || email}`)
+    } catch (err: unknown) {
+      setApiError(getErrorMessage(err, 'Could not send the code'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleVerifyEmailCode = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (emailCode.replace(/\D/g, '').length !== 6) {
+      setApiError('Enter the 6-digit code.')
+      return
+    }
+    setLoading(true)
+    setApiError(null)
+    try {
+      const res = await api.post('/auth/otp/verify', {
+        channel: 'EMAIL',
+        identifier: emailForCode,
+        code: emailCode.replace(/\D/g, ''),
+        purpose: 'LOGIN',
+      })
+      const payload = res.data?.data || res.data || {}
+      if (payload.accessToken && payload.refreshToken) {
+        completeLogin({ accessToken: payload.accessToken, refreshToken: payload.refreshToken, user: payload.user })
+        toast.success('Welcome back!')
+      } else {
+        throw new Error('No tokens returned')
+      }
+    } catch (err: unknown) {
+      setApiError(getErrorMessage(err, 'Code verification failed'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="min-h-screen flex bg-surface-50 dark:bg-surface-950 px-4 py-12 transition-colors duration-400">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -244,6 +309,7 @@ export function LoginPage() {
             </div>
 
             {loginMode === 'email' ? (
+              emailMode === 'password' ? (
             <form onSubmit={handleEmailLogin} className="space-y-5">
               <div>
                 <label htmlFor="email" className="label">Email address</label>
@@ -316,7 +382,117 @@ export function LoginPage() {
                   </span>
                 )}
               </button>
+              <button
+                type="button"
+                onClick={() => { setEmailMode('code'); setEmailCodeSent(false); setApiError(null); }}
+                className="w-full text-sm text-surface-500 dark:text-surface-400 hover:text-primary-500 transition-colors"
+              >
+                Prefer email? Use a sign-in code instead
+              </button>
             </form>
+              ) : !emailCodeSent ? (
+            <form onSubmit={handleSendEmailCode} className="space-y-5">
+              <div>
+                <label htmlFor="email-code" className="label">Email address</label>
+                <div className="relative">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 shrink-0 pointer-events-none text-surface-400" />
+                  <input
+                    name="email"
+                    type="email"
+                    id="email-code"
+                    className="input pl-11"
+                    placeholder="you@example.com"
+                    autoComplete="email"
+                    required
+                  />
+                </div>
+              </div>
+
+              {apiError && (
+                <div className="rounded-2xl bg-danger-50 dark:bg-danger-500/10 border border-danger-200 dark:border-danger-500/20 px-4 py-3 animate-scale-in">
+                  <p className="text-sm text-danger-600 dark:text-danger-400">{apiError}</p>
+                </div>
+              )}
+
+              <button type="submit" disabled={loading} className="btn-gradient w-full btn-lg group">
+                {loading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                    Sending code...
+                  </span>
+                ) : (
+                  <span className="flex items-center justify-center gap-2">
+                    Send sign-in code
+                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setEmailMode('password'); setApiError(null); }}
+                className="w-full text-sm text-surface-500 dark:text-surface-400 hover:text-primary-500 transition-colors"
+              >
+                Back to password sign-in
+              </button>
+            </form>
+              ) : (
+            <form onSubmit={handleVerifyEmailCode} className="space-y-5">
+              <p className="text-sm text-surface-500 dark:text-surface-400">
+                Enter the 6-digit code sent to <span className="font-semibold text-surface-700 dark:text-surface-200">{emailForCode}</span>
+              </p>
+              <div>
+                <label htmlFor="email-otp" className="label">Verification code</label>
+                <input
+                  name="email-otp"
+                  type="text"
+                  id="email-otp"
+                  inputMode="numeric"
+                  className="input text-center text-2xl tracking-[0.5em] font-mono pl-4"
+                  placeholder="000000"
+                  maxLength={6}
+                  value={emailCode}
+                  onChange={e => setEmailCode(e.target.value.replace(/\D/g, ''))}
+                  autoComplete="one-time-code"
+                  required
+                />
+              </div>
+
+              {apiError && (
+                <div className="rounded-2xl bg-danger-50 dark:bg-danger-500/10 border border-danger-200 dark:border-danger-500/20 px-4 py-3 animate-scale-in">
+                  <p className="text-sm text-danger-600 dark:text-danger-400">{apiError}</p>
+                </div>
+              )}
+
+              <button type="submit" disabled={loading || emailCode.length !== 6} className="btn-gradient w-full btn-lg group">
+                {loading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                    Verifying...
+                  </span>
+                ) : (
+                  <span className="flex items-center justify-center gap-2">
+                    Sign in
+                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={handleSendEmailCode}
+                disabled={loading || resendIn > 0}
+                className="w-full text-sm text-surface-500 dark:text-surface-400 hover:text-primary-500 transition-colors disabled:opacity-50"
+              >
+                {resendIn > 0 ? `Resend code in ${resendIn}s` : 'Resend code'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setEmailCodeSent(false); setEmailCode(''); setApiError(null); }}
+                className="w-full text-sm text-surface-500 dark:text-surface-400 hover:text-primary-500 transition-colors"
+              >
+                Use a different email
+              </button>
+            </form>
+              )
             ) : !otpSent ? (
             <form onSubmit={handleSendOtp} className="space-y-5">
               <div>

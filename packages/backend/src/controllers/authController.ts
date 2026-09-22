@@ -5,7 +5,8 @@ import { createHash, createPublicKey, verify as cryptoVerify } from "crypto";
 import { prisma } from "../config/database";
 import { env } from "../config/env";
 import { generateAccessToken, generateRefreshToken, generateImpersonationAccessToken, verifyRefreshToken } from "../utils/jwt";
-import { generateOTP, hashOTP, verifyOTP, sendOTP } from "../utils/otp";
+import { generateOTP } from "../utils/otp";
+import { issueOtp, verifyOtp, consumeOtp, maskIdentifier } from "../services/otpService";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
 import { getFirebaseAuth, verifyIdToken, getUserByPhone, getUserByEmail, createUserWithPhone, createUserWithEmail } from "../services/firebaseAuthService";
@@ -14,47 +15,11 @@ import {
   recordFailedLogin, resetFailedLogin, createAdminSession, enforceAdminSessionLimit, flagNewDevice,
 } from "../rbac/adminSecurity";
 
-interface OtpRecord {
-  otpHash: string;
-  expiresAt: Date;
-  verified: boolean;
-  code?: string; // plaintext kept only in non-production for dev/testing
-}
-
-const otpStore = new Map<string, OtpRecord>();
-
-function setOtp(key: string): string {
-  const otp = generateOTP();
-  const expiresAt = new Date(Date.now() + (Number(env.OTP_EXPIRY_MINUTES) || 10) * 60 * 1000);
-  otpStore.set(key, { otpHash: hashOTP(otp), expiresAt, verified: false, code: env.isProduction ? undefined : otp });
-  return otp;
-}
-
-function getOtp(key: string): OtpRecord | undefined {
-  const record = otpStore.get(key);
-  if (!record) return undefined;
-  if (record.expiresAt.getTime() < Date.now()) {
-    otpStore.delete(key);
-    return undefined;
-  }
-  return record;
-}
-
-// Dev/test-only: read the plaintext OTP that was just issued.
-export function devPeekOtp(key: string): string | undefined {
-  const r = otpStore.get(key);
-  return r && r.expiresAt.getTime() > Date.now() ? r.code : undefined;
-}
-
 function maskPhone(phone: string): string {
-  const p = phone.replace(/\D/g, "");
-  if (p.length < 4) return phone;
-  return p.slice(0, 2) + "****" + p.slice(-2);
+  return maskIdentifier("SMS", phone);
 }
 
-
-
-async function createUserSession(userId: string, req: Request): Promise<{ accessToken: string; refreshToken: string }> {
+export async function createUserSession(userId: string, req: Request): Promise<{ accessToken: string; refreshToken: string }> {
   const accessToken = generateAccessToken({ userId, email: (await prisma.user.findUnique({ where: { id: userId }, select: { email: true } }))?.email ?? "" });
   const refreshToken = generateRefreshToken(userId);
 
@@ -105,7 +70,7 @@ export async function createImpersonationSession(
   return { accessToken, refreshToken };
 }
 
-async function recordLogin(userId: string, req: Request): Promise<void> {
+export async function recordLogin(userId: string, req: Request): Promise<void> {
   const ip = req.ip ?? req.socket.remoteAddress ?? null;
   const userAgent = req.headers["user-agent"] ?? null;
   await prisma.loginHistory.create({
@@ -256,13 +221,28 @@ export async function register(req: Request, res: Response): Promise<void> {
       return u;
     });
 
-    const otp = setOtp(`email:${user.id}`);
-    sendOTP(otp, { email: user.email });
+    // Verification codes go through the DB-backed OTP service (hashed,
+    // purpose-bound, rate-limited). Delivery honesty is enforced there:
+    // nothing is reported as sent unless the provider accepts it.
+    await issueOtp({
+      channel: "EMAIL",
+      identifier: user.email,
+      purpose: "EMAIL_VERIFICATION",
+      userId: user.id,
+      ip: getClientIp(req),
+      userAgent: req.headers["user-agent"],
+    });
 
-    // If a phone was provided, also issue a mobile OTP so verifyMobile works.
+    // If a phone was provided, also issue a mobile code so verifyMobile works.
     if (user.phone) {
-      const mobileOtp = setOtp(`mobile:${user.id}`);
-      sendOTP(mobileOtp, { phone: user.phone });
+      await issueOtp({
+        channel: "SMS",
+        identifier: user.phone,
+        purpose: "PHONE_VERIFICATION",
+        userId: user.id,
+        ip: getClientIp(req),
+        userAgent: req.headers["user-agent"],
+      });
     }
 
     const { accessToken, refreshToken } = await createUserSession(user.id, req);
@@ -384,16 +364,34 @@ export async function sendPhoneOTP(req: Request, res: Response): Promise<void> {
     
     const firebaseAuth = getFirebaseAuth();
     if (!firebaseAuth) {
-      // Dev fallback: OTP logged server-side (no real SMS). In production this
-      // must error loudly rather than report a delivery that never happens.
+      // No Firebase: issue through the DB-backed OTP service. In production
+      // this errors loudly (SMS_NOT_CONFIGURED) rather than reporting a
+      // delivery that never happens; in dev the email fallback keeps the
+      // flow testable without any SMS provider.
       if (env.isProduction) {
-        sendError(res, "Phone OTP delivery is not configured (no SMS provider).", 503, "SMS_NOT_CONFIGURED");
+        const r = await issueOtp({
+          channel: "SMS",
+          identifier: phone,
+          purpose: "LOGIN",
+          ip: getClientIp(req),
+          userAgent: req.headers["user-agent"],
+        });
+        if (!r.sent) {
+          sendError(res, r.error || "Phone OTP delivery is not configured (no SMS provider).", 503, "SMS_NOT_CONFIGURED");
+          return;
+        }
+        sendSuccess(res, { sent: true, maskedTo: r.maskedTo, resendInSec: r.resendInSec }, "OTP sent to your phone.");
         return;
       }
-      const otp = setOtp(`phone:${phone}`);
-      sendOTP(otp, { phone });
+      const r = await issueOtp({
+        channel: "SMS",
+        identifier: phone,
+        purpose: "LOGIN",
+        ip: getClientIp(req),
+        userAgent: req.headers["user-agent"],
+      });
       // OTP and phone numbers must never be written to logs (PII / account-takeover risk).
-      sendSuccess(res, { sent: true, dev: true }, "OTP sent via dev fallback (check server console).");
+      sendSuccess(res, { sent: r.sent, dev: true, maskedTo: r.maskedTo }, r.sent ? "OTP sent via dev fallback (check your SMS provider to go live)." : (r.error || "OTP could not be sent."));
       return;
     }
 
@@ -415,9 +413,14 @@ export async function sendPhoneOTP(req: Request, res: Response): Promise<void> {
       }
       // Dev fallback: Firebase unavailable/misconfigured — deliver OTP locally so
       // the flow remains testable. In production this would be a real misconfig.
-      const otp = setOtp(`phone:${phone}`);
-      sendOTP(otp, { phone });
-      sendSuccess(res, { sent: true, dev: true }, "OTP sent via dev fallback (check server console).");
+      const r = await issueOtp({
+        channel: "SMS",
+        identifier: phone,
+        purpose: "LOGIN",
+        ip: getClientIp(req),
+        userAgent: req.headers["user-agent"],
+      });
+      sendSuccess(res, { sent: r.sent, dev: true, maskedTo: r.maskedTo }, r.sent ? "OTP sent via dev fallback (configure an SMS provider to go live)." : (r.error || "OTP could not be sent."));
     }
   } catch (err) {
     console.error("sendPhoneOTP error:", err);
@@ -432,13 +435,12 @@ export async function verifyPhoneOTP(req: Request, res: Response): Promise<void>
     
     const firebaseAuth = getFirebaseAuth();
     if (!firebaseAuth) {
-      // Fallback to local OTP verification
-      const record = getOtp(`phone:${phone}`);
-      if (!record || !verifyOTP(otp, record.otpHash)) {
-        sendError(res, "Invalid or expired OTP.", 400, "INVALID_OTP");
+      // Fallback to DB-backed OTP verification (purpose-bound LOGIN code).
+      const v = await verifyOtp({ channel: "SMS", identifier: phone, purpose: "LOGIN", code: otp });
+      if (!v.ok) {
+        sendError(res, v.error || "Invalid or expired OTP.", 400, "INVALID_OTP");
         return;
       }
-      otpStore.delete(`phone:${phone}`);
       
       // Atomic: find-or-create user with upsert to prevent race condition
       const placeholderEmail = `${phone.replace(/\D/g, '')}@phone.placeholder`;
@@ -766,14 +768,17 @@ export async function forgotPassword(req: Request, res: Response): Promise<void>
     const { email } = req.body;
     const user = await prisma.user.findUnique({ where: { email } });
     if (user) {
-      const otp = setOtp(`reset:${user.id}`);
-      sendOTP(otp, { email });
-      // Never return the OTP or userId in the HTTP response — logging only,
+      await issueOtp({
+        channel: "EMAIL",
+        identifier: email,
+        purpose: "PASSWORD_RESET",
+        userId: user.id,
+        ip: getClientIp(req),
+        userAgent: req.headers["user-agent"],
+      });
+      // Never return the OTP or userId in the HTTP response - logging only,
       // and the response is IDENTICAL for existing/unknown accounts to prevent
       // account enumeration.
-      if (process.env.NODE_ENV !== "production") {
-        console.log(`[DEV ONLY] Password reset OTP for ${email}: ${otp}`);
-      }
     }
     sendSuccess(res, undefined, "If the account exists, a reset OTP has been sent.");
   } catch (err) {
@@ -784,19 +789,23 @@ export async function forgotPassword(req: Request, res: Response): Promise<void>
 export async function resetPassword(req: Request, res: Response): Promise<void> {
   try {
     const { email, otp, newPassword } = req.body;
+    if (!newPassword || String(newPassword).length < 8) {
+      sendError(res, "Password must be at least 8 characters.", 400, "VALIDATION_ERROR");
+      return;
+    }
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
       sendError(res, "Invalid request.", 400, "INVALID_REQUEST");
       return;
     }
-    const record = getOtp(`reset:${user.id}`);
-    if (!record || !verifyOTP(otp, record.otpHash)) {
-      sendError(res, "Invalid or expired OTP.", 400, "INVALID_OTP");
+    const v = await verifyOtp({ channel: "EMAIL", identifier: email, purpose: "PASSWORD_RESET", code: otp });
+    if (!v.ok) {
+      sendError(res, v.error || "Invalid or expired OTP.", 400, "INVALID_OTP");
       return;
     }
     const passwordHash = await bcrypt.hash(newPassword, env.BCRYPT_SALT_ROUNDS);
     await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
-    otpStore.delete(`reset:${user.id}`);
+    await consumeOtp(email.toLowerCase(), "PASSWORD_RESET").catch(() => {});
     sendSuccess(res, undefined, "Password reset successful.");
   } catch (err) {
     sendError(res, "Password reset failed.", 500, "INTERNAL_ERROR");
@@ -814,24 +823,20 @@ export async function verifyEmail(req: Request, res: Response): Promise<void> {
       sendError(res, "OTP is required.", 400, "MISSING_OTP");
       return;
     }
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true } });
     if (!user) {
       sendError(res, "User not found.", 404, "USER_NOT_FOUND");
       return;
     }
-    const record = getOtp(`email:${userId}`);
-    if (!record) {
-      // Do NOT auto-send OTP here — that enables email bombing via unauthenticated
-      // requests. User must call /auth/resend-otp to request a new code.
-      sendError(res, "No active OTP found. Please request a new code.", 400, "OTP_EXPIRED");
-      return;
-    }
-    if (!verifyOTP(otp, record.otpHash)) {
-      sendError(res, "Invalid or expired OTP.", 400, "INVALID_OTP");
+    // Do NOT auto-send OTP here - that enables email bombing via unauthenticated
+    // requests. User must call /auth/resend-otp to request a new code.
+    const v = await verifyOtp({ channel: "EMAIL", identifier: user.email, purpose: "EMAIL_VERIFICATION", code: otp });
+    if (!v.ok) {
+      sendError(res, v.error || "Invalid or expired OTP.", 400, "INVALID_OTP");
       return;
     }
     await prisma.user.update({ where: { id: userId }, data: { emailVerified: true } });
-    otpStore.delete(`email:${userId}`);
+    await consumeOtp(user.email.toLowerCase(), "EMAIL_VERIFICATION").catch(() => {});
     sendSuccess(res, undefined, "Email verified successfully.");
   } catch (err) {
     sendError(res, "Email verification failed.", 500, "INTERNAL_ERROR");
@@ -849,24 +854,24 @@ export async function verifyMobile(req: Request, res: Response): Promise<void> {
       sendError(res, "OTP is required.", 400, "MISSING_OTP");
       return;
     }
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, phone: true } });
     if (!user) {
       sendError(res, "User not found.", 404, "USER_NOT_FOUND");
       return;
     }
-    const record = getOtp(`mobile:${userId}`);
-    if (!record) {
-      // Do NOT auto-send OTP here — that enables SMS bombing via unauthenticated
-      // requests. User must call /auth/resend-otp to request a new code.
-      sendError(res, "No active OTP found. Please request a new code.", 400, "OTP_EXPIRED");
+    // Do NOT auto-send OTP here - that enables SMS bombing via unauthenticated
+    // requests. User must call /auth/resend-otp to request a new code.
+    if (!user.phone) {
+      sendError(res, "No phone number on this account.", 400, "MISSING_PHONE");
       return;
     }
-    if (!verifyOTP(otp, record.otpHash)) {
-      sendError(res, "Invalid or expired OTP.", 400, "INVALID_OTP");
+    const v = await verifyOtp({ channel: "SMS", identifier: user.phone, purpose: "PHONE_VERIFICATION", code: otp });
+    if (!v.ok) {
+      sendError(res, v.error || "Invalid or expired OTP.", 400, "INVALID_OTP");
       return;
     }
     await prisma.user.update({ where: { id: userId }, data: { mobileVerified: true } });
-    otpStore.delete(`mobile:${userId}`);
+    await consumeOtp(user.phone, "PHONE_VERIFICATION").catch(() => {});
     sendSuccess(res, undefined, "Mobile verified successfully.");
   } catch (err) {
     sendError(res, "Mobile verification failed.", 500, "INTERNAL_ERROR");
@@ -881,10 +886,24 @@ export async function resendOTP(req: Request, res: Response): Promise<void> {
       sendError(res, "User not found.", 404, "USER_NOT_FOUND");
       return;
     }
-    const key = channel === "mobile" ? `mobile:${userId}` : `email:${userId}`;
-    const otp = setOtp(key);
-    sendOTP(otp, channel === "mobile" ? { phone: user.phone } : { email: user.email });
-    sendSuccess(res, undefined, `OTP resent to ${channel}.`);
+    const isMobile = channel === "mobile";
+    if (isMobile && !user.phone) {
+      sendError(res, "No phone number on this account.", 400, "MISSING_PHONE");
+      return;
+    }
+    const r = await issueOtp({
+      channel: isMobile ? "SMS" : "EMAIL",
+      identifier: isMobile ? user.phone! : user.email,
+      purpose: isMobile ? "PHONE_VERIFICATION" : "EMAIL_VERIFICATION",
+      userId,
+      ip: getClientIp(req),
+      userAgent: req.headers["user-agent"],
+    });
+    if (!r.sent) {
+      sendError(res, r.error || "Could not resend the code.", 429, "OTP_RATE_LIMITED");
+      return;
+    }
+    sendSuccess(res, { maskedTo: r.maskedTo, resendInSec: r.resendInSec }, `OTP resent to ${channel}.`);
   } catch (err) {
     sendError(res, "Failed to resend OTP.", 500, "INTERNAL_ERROR");
   }

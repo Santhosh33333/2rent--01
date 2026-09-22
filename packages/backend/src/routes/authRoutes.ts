@@ -4,6 +4,7 @@ import { authRateLimiter, otpSendLimiter, otpVerifyLimiter } from "../middleware
 import { sanitizeInput, validateRequest } from "../middleware/validation";
 import { authenticateToken } from "../middleware/auth";
 import * as authController from "../controllers/authController";
+import * as otpController from "../controllers/otpController";
 import * as clerkAuthController from "../controllers/clerkAuthController";
 
 const router = Router();
@@ -68,6 +69,32 @@ router.post(
 );
 
 router.post("/logout", authController.logout);
+
+// Email/SMS OTP (DB-backed, purpose-bound, provider-honest). Login and
+// password-reset codes are public; verification codes use resend-otp.
+router.post(
+  "/otp/request",
+  otpSendLimiter,
+  [
+    body("channel").isIn(["EMAIL", "SMS", "email", "sms"]).withMessage("Channel must be EMAIL or SMS"),
+    body("identifier").notEmpty().withMessage("Email or phone is required"),
+    body("purpose").isIn(["LOGIN", "PASSWORD_RESET", "login", "password_reset"]).withMessage("Purpose must be LOGIN or PASSWORD_RESET"),
+  ],
+  validateRequest,
+  otpController.requestOtp
+);
+router.post(
+  "/otp/verify",
+  otpVerifyLimiter,
+  [
+    body("channel").isIn(["EMAIL", "SMS", "email", "sms"]).withMessage("Channel must be EMAIL or SMS"),
+    body("identifier").notEmpty().withMessage("Email or phone is required"),
+    body("code").notEmpty().isLength({ min: 4, max: 10 }).withMessage("Code is required"),
+    body("purpose").isIn(["LOGIN", "PASSWORD_RESET", "login", "password_reset"]).withMessage("Purpose must be LOGIN or PASSWORD_RESET"),
+  ],
+  validateRequest,
+  otpController.verifyOtpLogin
+);
 
 // Switch active account role (USER <-> PARTNER); backend-enforced
 router.post(

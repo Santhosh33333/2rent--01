@@ -1014,6 +1014,34 @@ model LoginHistory {
   @@index([userId])
 }
 
+// Secure OTP records: hashed codes only, purpose-bound, single-use,
+// attempt-limited, with provider delivery tracking. Never plaintext.
+model OtpCode {
+  id              String    @id @default(uuid())
+  userId          String?
+  identifier      String // normalized email (lowercase) or phone (E.164-ish)
+  channel         String // EMAIL, SMS
+  purpose         String // SIGNUP LOGIN EMAIL_VERIFICATION PHONE_VERIFICATION PASSWORD_RESET CHANGE_PHONE CHANGE_EMAIL PARTNER_VERIFICATION SENSITIVE_ACTION
+  codeHash        String
+  expiresAt       DateTime
+  attemptCount    Int       @default(0)
+  maxAttempts     Int       @default(5)
+  status          String    @default("CREATED") // CREATED SENDING SENT DELIVERED FAILED VERIFIED EXPIRED LOCKED CANCELLED
+  requestIp       String?
+  userAgent       String?
+  provider        String? // resend smtp twilio none
+  providerMessageId String?
+  deliveryStatus  String?
+  failureReason   String?
+  verifiedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([identifier, purpose, status])
+  @@index([createdAt])
+  @@index([expiresAt])
+}
+
 // ============================================================
 // ADMIN CONSOLE
 // ============================================================

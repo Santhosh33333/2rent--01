@@ -21,7 +21,6 @@ const envSchema = z.object({
 
   // Security
   BCRYPT_SALT_ROUNDS: z.string().default("10").transform(Number),
-  OTP_EXPIRY_MINUTES: z.string().default("10").transform(Number),
 
   // CORS
   CORS_ORIGIN: z.string().default("http://localhost:5173"),
@@ -79,6 +78,26 @@ const envSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().default("Side Bud <noreply@Sidebud.app>"),
+
+  // Email provider abstraction: none | smtp | resend. `none` (default)
+  // honestly reports EMAIL_NOT_CONFIGURED instead of pretending to send.
+  EMAIL_PROVIDER: z.string().default("none"),
+  RESEND_API_KEY: z.string().optional(),
+  EMAIL_FROM: z.string().default("Side Bud <noreply@Sidebud.app>"),
+
+  // OTP policy (admin-tunable via AppSettings otp.* keys, env = fallback).
+  OTP_EXPIRY_MINUTES: z.string().default("10").transform(Number),
+  OTP_MAX_ATTEMPTS: z.string().default("5").transform(Number),
+  OTP_RESEND_SECONDS: z.string().default("30").transform(Number),
+  OTP_MAX_PER_15MIN: z.string().default("3").transform(Number),
+  OTP_MAX_PER_HOUR: z.string().default("5").transform(Number),
+  OTP_MAX_PER_IP_HOUR: z.string().default("20").transform(Number),
+
+  // SMS provider abstraction: twilio | none. Without Twilio env, SMS OTP
+  // honestly reports SMS_NOT_CONFIGURED (email fallback offered instead).
+  SMS_PROVIDER: z.string().default("twilio"),
+  SMS_SENDER_ID: z.string().optional(),
+  SMS_REGION: z.string().default("IN"),
 
   // SMS (Twilio) — optional
   TWILIO_ACCOUNT_SID: z.string().optional(),

@@ -7,6 +7,7 @@ import { requireSectionAction } from "../rbac/permissions";
 import * as adminController from "../controllers/adminController";
 import * as communityController from "../controllers/communityController";
 import * as eventController from "../controllers/eventController";
+import * as otpController from "../controllers/otpController";
 
 const router = Router();
 
@@ -83,6 +84,7 @@ router.post("/users/:id/unblock", users, adminController.unblockUser);
 router.post("/sos/:id/resolve", users, adminController.resolveSosAlert);
 router.post("/demo/refill", requireSuperAdmin, adminController.refillDemoWallet);
 router.post("/demo/purge-test-payments", requireSuperAdmin, adminController.purgeTestPayments);
+router.get("/otp/status", users, otpController.otpStatus);
 router.delete("/users/:id", requireSuperAdmin, adminController.deleteUser);
 router.get("/kyc-queue", kycReview, adminController.getKycQueue);
 router.post("/kyc/:id/approve", requireSectionAction("KYC", "APPROVE"), adminController.approveKyc);
