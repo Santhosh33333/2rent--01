@@ -4,6 +4,7 @@ import { getConfig } from "./pricingEngine";
 import { assertTransition } from "./bookingStateMachine";
 import { catalogDefaults, getServiceDef } from "./serviceCatalog";
 import { notifyBookingStatusChange } from "../controllers/notificationController";
+import { moneyTransaction, shortTransaction } from "../utils/db";
 
 // All real rates come from the admin-controlled PricingConfig table, scoped per
 // service. catalogDefaults() supplies the per-service fallback when no admin row
@@ -477,7 +478,7 @@ export async function createBooking(
   const isUpi = payMethod === "UPI_MANUAL";
   const skipDebit = isCash || isUpi;
 
-  const result = await prisma.$transaction(async (tx) => {
+  const result = await moneyTransaction(async (tx) => {
     let wallet = await tx.wallet.findUnique({ where: { userId } });
     if (!wallet) {
       wallet = await tx.wallet.create({ data: { userId } });
@@ -656,7 +657,7 @@ async function postCancellationRefund(
 ): Promise<boolean> {
   const refundAmount = Math.max(0, Math.round((gross - fee) * 100) / 100);
   if (refundAmount <= 0) return false;
-  await prisma.$transaction(async (tx) => {
+  await shortTransaction(async (tx) => {
     const wallet = await tx.wallet.upsert({
       where: { userId },
       create: { userId, balance: refundAmount },
@@ -737,7 +738,7 @@ export async function cancelBooking(bookingId: string, cancelledBy: "USER" | "PA
   if (refundableStatuses.includes(booking.status)) {
     const refundAmount = booking.estimatedAmount ?? 0;
     if (refundAmount > 0) {
-      await prisma.$transaction(async (tx) => {
+      await moneyTransaction(async (tx) => {
         const wallet = await tx.wallet.upsert({
           where: { userId: booking.userId },
           create: { userId: booking.userId, balance: refundAmount },

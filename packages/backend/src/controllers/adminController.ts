@@ -10,6 +10,7 @@ import { env } from "../config/env";
 import * as bookingEngine from "../services/bookingEngine";
 import { PRICING_VERSION_KEY } from "../services/bookingEngine";
 import { isDemoEmail, DEMO_WALLET_CEILING } from "../utils/demo";
+import { moneyTransaction } from "../utils/db";
 import { SERVICE_KEYS } from "../services/serviceCatalog";
 import * as partnerMatching from "../services/partnerMatchingEngine";
 
@@ -1520,7 +1521,7 @@ export async function verifyUpiPayment(req: AuthedRequest, res: Response): Promi
     const amount = Number(upi.amount);
 
     if (action === "VERIFY") {
-      await prisma.$transaction(async (tx) => {
+      await moneyTransaction(async (tx) => {
         // Hold escrow only if this booking hasn't already been paid (idempotent).
         if (booking.paymentStatus !== "PAID") {
           const wallet = await tx.wallet.findUnique({ where: { userId: upi.userId } });

@@ -4,6 +4,7 @@ import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
 import { getPartnerEarnings, getConfig } from "../services/pricingEngine";
 import { isDemoEmail } from "../utils/demo";
+import { moneyTransaction } from "../utils/db";
 
 // Serializes concurrent money-affecting operations per user so the app-level
 // "one open withdrawal at a time" rule cannot be raced by two parallel requests
@@ -268,7 +269,7 @@ export async function requestWithdrawal(req: AuthedRequest, res: Response): Prom
     }
 
     const withdrawal = await withUserLock(req.user!.userId, () =>
-      prisma.$transaction(async (tx) => {
+      moneyTransaction(async (tx) => {
         const lockedWallet = await tx.wallet.findUnique({
           where: { id: wallet.id },
         });
@@ -368,7 +369,7 @@ export async function cancelWithdrawal(req: AuthedRequest, res: Response): Promi
       return;
     }
 
-    await prisma.$transaction(async (tx) => {
+    await moneyTransaction(async (tx) => {
       // Conditional claim: only one concurrent cancel can flip PENDING -> CANCELLED
       const claimed = await tx.withdrawalRequest.updateMany({
         where: { id, userId: req.user!.userId, status: "PENDING" },

@@ -10,6 +10,7 @@ import { dispatchBooking, onBookingClaimed } from "../services/dispatchService"
 import { ensureConversation } from "./messageController"
 import { SERVICE_KEYS, getServiceDef } from "../services/serviceCatalog"
 import { logBookingTransition } from "../services/bookingLogService"
+import { moneyTransaction, shortTransaction } from "../utils/db"
 import {
   getEarlyStartMinutes,
   isExpired,
@@ -445,7 +446,7 @@ export async function verifyPayment(req: AuthedRequest, res: Response): Promise<
     // Begin transaction: latch booking state, create transaction record.
     // The conditional update guarantees only ONE verification wins even under
     // parallel replays — no double ledger entries, no double matching trigger.
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await moneyTransaction(async (tx) => {
       const claimed = await tx.booking.updateMany({
         where: { id, userId: req.user!.userId, status: "PAYMENT_INITIATED", razorpayOrderId },
         data: {
@@ -1025,7 +1026,7 @@ export async function completeBooking(req: AuthedRequest, res: Response): Promis
     let netEarnings = 0;
     let actualDurationMinutes = 0;
     const { waitingMinutes } = req.body;
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await moneyTransaction(async (tx) => {
       const claimed = await tx.booking.updateMany({
         where: {
           id,
@@ -1807,7 +1808,7 @@ export async function confirmCashReceived(req: AuthedRequest, res: Response): Pr
     // Latch paymentStatus so repeated confirms cannot double-credit earnings.
     // Earnings stats are already credited once in completeBooking, so this only
     // records the cash acknowledgement (no second wallet/earnings credit).
-    await prisma.$transaction(async (tx) => {
+    await shortTransaction(async (tx) => {
       const claimed = await (tx.booking as any).updateMany({
         where: { id, paymentStatus: 'PENDING_CASH' },
         data: { paymentStatus: 'CASH_RECEIVED', notes: JSON.stringify({ ...bookingNotes, cashConfirmedAt: new Date().toISOString() }) },
