@@ -97,6 +97,7 @@ model User {
   paymentOrders                  PaymentOrder[]
   creditLedgers                   CreditLedger[]
   topupRequests                  TopupRequest[]
+  movieWatchlist                 MovieWatchlist[]
 
   @@index([status])
   @@index([role])
