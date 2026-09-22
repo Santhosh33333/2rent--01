@@ -5,7 +5,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Send, Loader2, AlertTriangle,
   CheckCheck, MessageCircle, ImagePlus, Mic, Square,
-  Trash2, Flag, Ban, X
+  Trash2, Flag, Ban, X, MessageCircleReply
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
@@ -21,7 +21,22 @@ interface Message {
   status?: string
   createdAt: string
   sender?: { fullName: string; avatarUrl?: string }
+  replyToId?: string | null
+  replyTo?: { id: string; content: string; senderId: string; messageType?: string; status?: string } | null
+  reactions?: Record<string, string[]>
 }
+
+const REACTION_GLYPHS: Record<string, string> = {
+  love: '❤️',
+  like: '👍',
+  laugh: '😂',
+  wow: '😮',
+  sad: '😢',
+  thanks: '🙏',
+  fire: '🔥',
+  clap: '👏',
+}
+const REACTION_KEYS = Object.keys(REACTION_GLYPHS)
 
 /** Loads an authenticated attachment (server checks membership) as a blob URL. */
 function ChatAttachment({ mediaUrl, kind }: { mediaUrl: string; kind: string }) {
@@ -68,6 +83,7 @@ export function ConversationPage() {
   const [reportReason, setReportReason] = useState('Spam')
   const [reportDesc, setReportDesc] = useState('')
   const [modBusy, setModBusy] = useState(false)
+  const [replyTarget, setReplyTarget] = useState<Message | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
@@ -173,6 +189,9 @@ export function ConversationPage() {
           senderId: data.senderId,
           content: data.content,
           status: 'SENT',
+          replyToId: (data as any).replyToId || undefined,
+          replyTo: (data as any).replyTo || undefined,
+          reactions: (data as any).reactions || undefined,
           createdAt:
             typeof data.timestamp === 'string'
               ? data.timestamp
@@ -195,6 +214,16 @@ export function ConversationPage() {
         prev.map((m) =>
           m.id === data.messageId ? { ...m, content: '[deleted]', status: 'DELETED' } : m
         )
+      )
+    }))
+
+    offs.push(chat.listenToMessageReacted((data) => {
+      if (data.conversationId !== conversationId) return
+      setMessages((prev) =>
+        prev.map((m) => (m.id === data.messageId ? { ...m, reactions: data.reactions || {} } : m))
+      )
+      setSelectedMsg((prev) =>
+        prev && prev.id === data.messageId ? { ...prev, reactions: data.reactions || {} } : prev
       )
     }))
 
@@ -228,18 +257,42 @@ export function ConversationPage() {
     setSending(true)
     const tempId = `temp-${Date.now()}`
     const content = text
+    const replyingTo = replyTarget
     setMessages((prev) => [
       ...prev,
-      { id: tempId, senderId: myId || 'me', content, createdAt: new Date().toISOString(), status: 'SENT' },
+      {
+        id: tempId,
+        senderId: myId || 'me',
+        content,
+        createdAt: new Date().toISOString(),
+        status: 'SENT',
+        replyToId: replyingTo?.id,
+        replyTo: replyingTo
+          ? { id: replyingTo.id, content: replyingTo.content, senderId: replyingTo.senderId, messageType: replyingTo.messageType }
+          : undefined,
+      },
     ])
     setText('')
+    setReplyTarget(null)
     if (conversationId) chat.setTyping(false)
     try {
-      // Real-time send. For a brand-new thread we pass receiverId so the server
-      // creates the conversation; message_sent returns the real conversationId.
-      chat.sendMessage(content, conversationId ? undefined : userId)
+      if (replyingTo) {
+        // Replies go over REST so the server can validate the parent lives
+        // in this conversation; realtime fan-out still happens server-side.
+        const res = await api.post('/messages', { receiverId: userId, content, replyToId: replyingTo.id })
+        const saved = res.data?.data?.message || res.data?.data || res.data
+        const realId = saved?.id || saved?.message?.id
+        if (realId) {
+          setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, id: realId } : m)))
+        }
+      } else {
+        // Real-time send. For a brand-new thread we pass receiverId so the server
+        // creates the conversation; message_sent returns the real conversationId.
+        chat.sendMessage(content, conversationId ? undefined : userId)
+      }
     } catch {
       setMessages((prev) => prev.filter((m) => m.id !== tempId))
+      toast.error('Message not sent. Try again.')
     } finally {
       setSending(false)
     }
@@ -292,6 +345,21 @@ export function ConversationPage() {
       navigate('/messages')
     } catch (err) {
       toast.error(getErrorMessage(err, 'Could not block user'))
+    } finally {
+      setModBusy(false)
+    }
+  }
+
+  const reactToMessage = async (emoji: string) => {
+    if (!selectedMsg || modBusy) return
+    setModBusy(true)
+    try {
+      const res = await api.post(`/messages/${selectedMsg.id}/react`, { emoji })
+      const reactions = res.data?.data?.reactions || res.data?.reactions || {}
+      setMessages((prev) => prev.map((m) => (m.id === selectedMsg.id ? { ...m, reactions } : m)))
+      setSelectedMsg((prev) => (prev ? { ...prev, reactions } : prev))
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Could not react'))
     } finally {
       setModBusy(false)
     }
@@ -446,7 +514,29 @@ export function ConversationPage() {
                       ) : (
                         <p className="text-sm leading-relaxed">{msg.content}</p>
                       )}
+                      {msg.replyTo && msg.replyTo.status !== 'DELETED' && (
+                        <div className={`mt-1.5 rounded-xl px-2.5 py-1.5 text-xs border-l-2 ${own ? 'border-white/50 bg-black/10' : 'border-primary-500 bg-surface-200/60 dark:bg-black/20'}`}>
+                          <p className={`font-semibold ${own ? 'text-white/90' : 'text-primary-600 dark:text-primary-400'}`}>
+                            {msg.replyTo.senderId === myId || msg.replyTo.senderId === 'me' ? 'You' : partnerName}
+                          </p>
+                          <p className={`truncate ${own ? 'text-white/80' : 'text-surface-500'}`}>
+                            {msg.replyTo.content || (msg.replyTo.messageType === 'IMAGE' ? 'A photo' : 'A voice note')}
+                          </p>
+                        </div>
+                      )}
                     </button>
+                    {msg.reactions && Object.keys(msg.reactions).length > 0 && (
+                      <div className={`flex flex-wrap gap-1 mt-1 ${own ? 'justify-end' : 'justify-start'}`}>
+                        {Object.entries(msg.reactions)
+                          .filter(([, voters]) => Array.isArray(voters) && voters.length > 0)
+                          .map(([key, voters]) => (
+                            <span key={key} className="inline-flex items-center gap-0.5 rounded-full bg-surface-100 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 px-1.5 py-0.5 text-xs">
+                              {REACTION_GLYPHS[key] || key}
+                              <span className="text-surface-500">{(voters as string[]).length}</span>
+                            </span>
+                          ))}
+                      </div>
+                    )}
                     <div className={`flex items-center gap-1 mt-0.5 ${own ? 'justify-end' : 'justify-start'} px-1`}>
                       <span className="text-[10px] text-surface-400">
                         {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -479,6 +569,33 @@ export function ConversationPage() {
                   <X className="w-5 h-5" />
                 </button>
               </div>
+              <div className="flex items-center justify-between gap-1 rounded-2xl bg-surface-50 dark:bg-surface-800/60 px-2 py-2">
+                {REACTION_KEYS.map((key) => {
+                  const mine = selectedMsg.reactions?.[key]?.includes(myId || '')
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      disabled={modBusy}
+                      onClick={() => reactToMessage(key)}
+                      aria-label={`React ${key}`}
+                      className={`text-xl leading-none p-1.5 rounded-xl transition-all hover:scale-125 disabled:opacity-50 ${mine ? 'bg-primary-500/15 ring-1 ring-primary-500/40' : ''}`}
+                    >
+                      {REACTION_GLYPHS[key]}
+                    </button>
+                  )
+                })}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setReplyTarget(selectedMsg)
+                  setSelectedMsg(null)
+                }}
+                className="w-full flex items-center gap-2 rounded-2xl bg-surface-100 dark:bg-surface-800 px-4 py-3 text-sm font-semibold"
+              >
+                <MessageCircleReply className="w-4 h-4 text-primary-500" /> Reply to this message
+              </button>
               {isOwn(selectedMsg.senderId) ? (
                 <button
                   type="button"
@@ -540,6 +657,17 @@ export function ConversationPage() {
 
         {/* Input Area */}
         <div className="p-4 border-t border-surface-100 dark:border-surface-800">
+          {replyTarget && (
+            <div className="mb-2 flex items-center gap-2 rounded-2xl bg-surface-100 dark:bg-surface-800 px-3 py-2">
+              <div className="w-1 self-stretch rounded-full bg-primary-500 shrink-0" />
+              <p className="flex-1 min-w-0 text-xs text-surface-500 truncate">
+                Replying to: {replyTarget.content || (replyTarget.messageType === 'IMAGE' ? 'a photo' : 'a voice note')}
+              </p>
+              <button type="button" onClick={() => setReplyTarget(null)} aria-label="Cancel reply" className="p-1 rounded-lg text-surface-400 hover:text-surface-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
           <form onSubmit={sendMessage} className="flex items-end gap-2">
             <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={onPickImage} />
             <button

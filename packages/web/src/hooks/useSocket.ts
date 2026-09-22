@@ -11,6 +11,7 @@ import type {
   MessagesReadData,
   MessageSentData,
   MessageDeletedData,
+  MessageReactedData,
   UserActiveData,
   NotificationData,
   CallData,
@@ -375,6 +376,13 @@ export function useChat(conversationId: string) {
     [on]
   );
 
+  const listenToMessageReacted = useCallback(
+    (callback: (data: MessageReactedData) => void) => {
+      return on('message_reacted', callback as (...args: unknown[]) => void);
+    },
+    [on]
+  );
+
   const listenToUserActive = useCallback(
     (callback: (data: UserActiveData) => void) => {
       return on('user_active', callback as (...args: unknown[]) => void);
@@ -413,6 +421,7 @@ export function useChat(conversationId: string) {
     listenToMessagesRead,
     listenToMessageSent,
     listenToMessageDeleted,
+    listenToMessageReacted,
     listenToUserActive,
     listenToUserInactive,
   };

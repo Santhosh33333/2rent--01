@@ -44,5 +44,11 @@ router.post("/:id/read", messageController.markAsRead);
 // Delete message
 router.delete("/:id", messageController.deleteMessage);
 
+// Toggle reaction
+router.post(
+  "/:id/react",
+  messageController.toggleReaction
+);
+
 export default router;
 

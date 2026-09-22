@@ -180,6 +180,16 @@ if (!dbAvailable) {
     console.warn("Schema reconciliation warning (OtpCode):", (err as Error)?.message);
   }
 
+  // Chat replies + reactions (migration 20260922_message_reply_react).
+  try {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "replyToId" TEXT`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "reactions" JSONB`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Message_replyToId_idx" ON "Message"("replyToId")`);
+    console.log("Schema reconciliation: Message reply/react ensured.");
+  } catch (err) {
+    console.warn("Schema reconciliation warning (Message):", (err as Error)?.message);
+  }
+
   initializeFirebase();
   initializeFirebaseAuth();
 

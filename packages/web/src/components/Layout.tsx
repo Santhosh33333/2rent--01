@@ -9,6 +9,7 @@ import { useAuth } from '../lib/auth';
 import { isClerkConfigured } from '../lib/clerkAuth';
 import { UserButton, useUser } from '@clerk/clerk-react';
 import { ImpersonationBanner } from './ImpersonationBanner';
+import { OfflineBanner } from './OfflineBanner';
 
 function ClerkUserButton() {
   const { isSignedIn } = useUser();
@@ -150,6 +151,7 @@ export function Layout() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-surface-50 via-surface-100/60 to-surface-100/30 dark:from-surface-950 dark:via-surface-950 dark:to-surface-950">
       <ImpersonationBanner />
+      <OfflineBanner />
       {/* Header */}
       <header className="sticky top-0 z-50 backdrop-blur-xl bg-white/80 dark:bg-surface-950/80 border-b border-surface-200/50 dark:border-surface-800/50 pt-[env(safe-area-inset-top)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

@@ -55,10 +55,16 @@ export interface MessageSentData {
   conversationId: string
 }
 
-export interface MessageDeletedData {
-  conversationId: string
-  messageId: string
-}
+  export interface MessageDeletedData {
+    conversationId: string
+    messageId: string
+  }
+
+  export interface MessageReactedData {
+    conversationId: string
+    messageId: string
+    reactions: Record<string, string[]>
+  }
 
 export interface UserActiveData {
   userId: string

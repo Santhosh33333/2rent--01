@@ -31,7 +31,7 @@ const USER_SELECT = { id: true, fullName: true, avatarUrl: true } as const;
 
 export async function sendMessage(req: AuthedRequest, res: Response): Promise<void> {
   try {
-    const { receiverId, content, messageType, mediaUrl, bookingId } = req.body;
+    const { receiverId, content, messageType, mediaUrl, bookingId, replyToId } = req.body;
 
     const type = typeof messageType === "string" ? messageType.toUpperCase() : "TEXT";
     if (!["TEXT", "IMAGE", "VOICE"].includes(type)) {
@@ -92,6 +92,21 @@ export async function sendMessage(req: AuthedRequest, res: Response): Promise<vo
 
     const conversation = await ensureConversation(req.user!.userId, receiverId);
 
+    // Replies must target a real message in the SAME conversation (no
+    // cross-thread forgeries, no replying to deleted content).
+    let replyParent: { id: string; content: string; senderId: string; messageType: string } | null = null;
+    if (replyToId) {
+      const parent = await prisma.message.findUnique({
+        where: { id: String(replyToId) },
+        select: { id: true, content: true, senderId: true, messageType: true, conversationId: true, status: true },
+      });
+      if (!parent || parent.conversationId !== conversation.id || parent.status === "DELETED") {
+        sendError(res, "The message being replied to no longer exists.", 400, "INVALID_REPLY");
+        return;
+      }
+      replyParent = parent;
+    }
+
     // Optional booking link: both parties must belong to the booking (the
     // customer, or the assigned partner's user). Forged bookingIds rejected.
     let linkedBookingId: string | null = null;
@@ -124,6 +139,7 @@ export async function sendMessage(req: AuthedRequest, res: Response): Promise<vo
         messageType: type,
         mediaUrl: resolvedMedia ? (typeof mediaUrl === "string" ? mediaUrl : null) : null,
         bookingId: linkedBookingId,
+        replyToId: replyParent ? replyParent.id : null,
         status: "SENT",
       },
       include: {
@@ -151,6 +167,10 @@ export async function sendMessage(req: AuthedRequest, res: Response): Promise<vo
       messageType: message.messageType,
       mediaUrl: message.mediaUrl,
       bookingId: message.bookingId,
+      replyToId: (message as any).replyToId || null,
+      replyTo: replyParent
+        ? { id: replyParent.id, content: replyParent.content, senderId: replyParent.senderId, messageType: replyParent.messageType }
+        : null,
       timestamp: message.createdAt,
     });
 
@@ -333,6 +353,7 @@ export async function getMessages(req: AuthedRequest, res: Response): Promise<vo
         take: limit,
         include: {
           sender: { select: USER_SELECT },
+          replyTo: { select: { id: true, content: true, senderId: true, messageType: true, status: true } },
         },
       }),
       prisma.message.count({ where: { conversationId: convId } }),
@@ -571,5 +592,46 @@ export async function deleteMessage(req: AuthedRequest, res: Response): Promise<
     sendSuccess(res, updated, "Message deleted.");
   } catch (err: any) {
     sendError(res, "Failed to delete message.", 500, "INTERNAL_ERROR");
+  }
+}
+
+const ALLOWED_REACTIONS = ["love", "like", "laugh", "wow", "sad", "thanks", "fire", "clap"];
+
+// Toggle the caller's reaction on a message. Reactions are stored as
+// { <key>: [userId, ...] } on the message row — no extra tables, and the
+// update is conditional on membership so strangers cannot react.
+export async function toggleReaction(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const { emoji } = req.body;
+    if (typeof emoji !== "string" || !ALLOWED_REACTIONS.includes(emoji)) {
+      sendError(res, "Reaction must be one of: " + ALLOWED_REACTIONS.join(", ") + ".", 400, "VALIDATION_ERROR");
+      return;
+    }
+    const message = await prisma.message.findUnique({ where: { id } });
+    if (!message || message.status === "DELETED") {
+      sendError(res, "Message not found.", 404, "MESSAGE_NOT_FOUND");
+      return;
+    }
+    const me = req.user!.userId;
+    if (message.senderId !== me && message.receiverId !== me) {
+      sendError(res, "Access denied to this conversation.", 403, "FORBIDDEN");
+      return;
+    }
+    const current = ((message as any).reactions || {}) as Record<string, string[]>;
+    const voters = Array.isArray(current[emoji]) ? [...current[emoji]] : [];
+    const has = voters.includes(me);
+    const next = { ...current, [emoji]: has ? voters.filter((v) => v !== me) : [...voters, me] };
+    if (next[emoji].length === 0) delete (next as any)[emoji];
+    const updated = await prisma.message.update({ where: { id }, data: { reactions: next } });
+    const other = message.senderId === me ? message.receiverId : message.senderId;
+    emitToUser(other, "message_reacted", {
+      conversationId: message.conversationId,
+      messageId: message.id,
+      reactions: (updated as any).reactions || {},
+    });
+    sendSuccess(res, { reactions: (updated as any).reactions || {} }, has ? "Reaction removed." : "Reaction added.");
+  } catch (err: any) {
+    sendError(res, "Failed to react to message.", 500, "INTERNAL_ERROR");
   }
 }
