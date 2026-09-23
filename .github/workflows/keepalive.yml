@@ -1,0 +1,22 @@
+name: Keep Render API awake
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Nabri API health to prevent Render free-tier sleep
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 90 \
+            https://rentbuddy-api-s7rz.onrender.com/api/health || true)
+          echo "health status: ${code}"
+          # 401 is fine (endpoint is auth-guarded); a total failure (000/empty)
+          # flags a real outage worth investigating.
+          if [ "$code" = "000" ] || [ -z "$code" ]; then
+            echo "::error::API unreachable during keepalive ping"
+            exit 1
+          fi
