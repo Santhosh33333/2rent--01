@@ -1,6 +1,6 @@
-﻿import { useEffect, useRef, useCallback, ReactNode } from 'react'
+﻿import { useEffect, useRef, useCallback, ReactNode, Component } from 'react'
 import { ClerkProvider, useSession, useUser } from '@clerk/clerk-react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { api } from './api'
 import { useAuth as useAppAuth } from './auth'
@@ -80,8 +80,7 @@ function ClerkBridge() {
   return null
 }
 
-export function AppClerkProvider({ children }: { children: ReactNode }) {
-  if (!isClerkConfigured()) {
+export function AppClerkProvider({ children }: { children: ReactNode }) {  if (!isClerkConfigured()) {
     // Clerk not configured: render app unchanged (password auth keeps working).
     return <>{children}</>
   }
@@ -93,8 +92,49 @@ export function AppClerkProvider({ children }: { children: ReactNode }) {
       publishableKey={CLERK_PUBLISHABLE_KEY!}
       appearance={{ variables: { colorPrimary: '#6366f1' } }}
     >
-      <ClerkBridge />
-      {children}
+      <ClerkBoundary>
+        <ClerkBridge />
+        {children}
+      </ClerkBoundary>
     </ClerkProvider>
   )
+}
+
+/**
+ * If Clerk's SDK fails to load or throws (version skew, blocked CDN,
+ * bad key), the whole app must NOT die: show a working fallback to the
+ * backend-native Email/Phone login instead of a dead error screen.
+ */
+export class ClerkBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false }
+
+  static getDerivedStateFromError(): { failed: boolean } {
+    return { failed: true }
+  }
+
+  componentDidCatch(err: unknown) {
+    console.error('Clerk failed:', err)
+  }
+
+  render() {
+    if (this.state.failed) {
+      return (
+        <div className="min-h-screen flex items-center justify-center px-4 bg-surface-50 dark:bg-surface-950">
+          <div className="w-full max-w-md text-center">
+            <p className="text-lg font-bold text-surface-900 dark:text-white">Online sign-in is unavailable</p>
+            <p className="mt-2 text-sm text-surface-500 dark:text-surface-400">
+              Please use email or phone sign-in instead — your account works the same.
+            </p>
+            <Link
+              to="/login"
+              className="mt-6 inline-flex items-center justify-center gap-2 rounded-2xl bg-primary-600 px-6 py-3 text-sm font-semibold text-white"
+            >
+              Go to Email / Phone sign-in
+            </Link>
+          </div>
+        </div>
+      )
+    }
+    return this.props.children
+  }
 }

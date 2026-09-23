@@ -1,8 +1,10 @@
 import { SignUp } from '@clerk/clerk-react'
 import { Link } from 'react-router-dom'
+import { ClerkBoundary } from '../../lib/clerkAuth'
 
 export function ClerkSignUpPage() {
   return (
+    <ClerkBoundary>
     <div className="min-h-screen flex flex-col px-4 py-12 bg-surface-50 dark:bg-surface-950">
       <div className="w-full max-w-md m-auto">
         <div className="text-center mb-8">
@@ -23,5 +25,6 @@ export function ClerkSignUpPage() {
         </p>
       </div>
     </div>
+    </ClerkBoundary>
   )
 }
