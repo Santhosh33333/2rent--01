@@ -1,16 +1,19 @@
 /** @type {import('tailwindcss').Config} */
-const coralScale = {
-  50: '#fff0eb',
-  100: '#ffd9cc',
-  200: '#ffb49c',
-  300: '#ff8c6c',
-  400: '#ff6848',
-  500: '#f04f32',
-  600: '#d83d27',
-  700: '#b52f20',
-  800: '#8f291f',
-  900: '#74271f',
-  950: '#40100d',
+// Brand colors are runtime CSS variables (--c-50..--c-950) styled per accent
+// theme via `html[data-accent="..."]`, so the whole app follows the chosen
+// theme without rebuilding utility classes.
+const accentScale = {
+  50: 'rgb(var(--c-50) / <alpha-value>)',
+  100: 'rgb(var(--c-100) / <alpha-value>)',
+  200: 'rgb(var(--c-200) / <alpha-value>)',
+  300: 'rgb(var(--c-300) / <alpha-value>)',
+  400: 'rgb(var(--c-400) / <alpha-value>)',
+  500: 'rgb(var(--c-500) / <alpha-value>)',
+  600: 'rgb(var(--c-600) / <alpha-value>)',
+  700: 'rgb(var(--c-700) / <alpha-value>)',
+  800: 'rgb(var(--c-800) / <alpha-value>)',
+  900: 'rgb(var(--c-900) / <alpha-value>)',
+  950: 'rgb(var(--c-950) / <alpha-value>)',
 }
 
 export default {
@@ -22,11 +25,11 @@ export default {
   theme: {
     extend: {
       colors: {
-        primary: coralScale,
+        primary: accentScale,
         // Legacy page classes continue to resolve into the current brand.
-        indigo: coralScale,
-        violet: coralScale,
-        purple: coralScale,
+        indigo: accentScale,
+        violet: accentScale,
+        purple: accentScale,
         accent: {
           50: '#f8ffd9',
           100: '#eeffad',

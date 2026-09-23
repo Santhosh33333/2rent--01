@@ -2,6 +2,93 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ===== ACCENT THEMES =====
+   `primary-*`, `indigo-*`, `violet-*`, `purple-*` utilities resolve to these
+   CSS variables, so the accent is switched purely by `data-accent` on <html>. */
+:root {
+  --c-50: 255 240 235;
+  --c-100: 255 217 204;
+  --c-200: 255 180 156;
+  --c-300: 255 140 108;
+  --c-400: 255 104 72;
+  --c-500: 240 79 50;
+  --c-600: 216 61 39;
+  --c-700: 181 47 32;
+  --c-800: 143 41 31;
+  --c-900: 116 39 31;
+  --c-950: 64 16 13;
+}
+
+html[data-accent='indigo'] {
+  --c-50: 238 242 255;
+  --c-100: 224 231 255;
+  --c-200: 199 210 254;
+  --c-300: 165 180 252;
+  --c-400: 129 140 248;
+  --c-500: 99 102 241;
+  --c-600: 79 70 229;
+  --c-700: 67 56 202;
+  --c-800: 55 48 163;
+  --c-900: 49 46 129;
+  --c-950: 30 27 75;
+}
+
+html[data-accent='emerald'] {
+  --c-50: 236 253 245;
+  --c-100: 209 250 229;
+  --c-200: 167 243 208;
+  --c-300: 110 231 183;
+  --c-400: 52 211 153;
+  --c-500: 16 185 129;
+  --c-600: 5 150 105;
+  --c-700: 4 120 87;
+  --c-800: 6 95 70;
+  --c-900: 6 78 59;
+  --c-950: 2 44 34;
+}
+
+html[data-accent='rose'] {
+  --c-50: 255 241 242;
+  --c-100: 255 228 230;
+  --c-200: 254 205 211;
+  --c-300: 253 164 175;
+  --c-400: 251 113 133;
+  --c-500: 244 63 94;
+  --c-600: 225 29 72;
+  --c-700: 190 18 60;
+  --c-800: 159 18 57;
+  --c-900: 136 19 55;
+  --c-950: 76 5 25;
+}
+
+html[data-accent='amber'] {
+  --c-50: 255 251 235;
+  --c-100: 254 243 199;
+  --c-200: 253 230 138;
+  --c-300: 252 211 77;
+  --c-400: 251 191 36;
+  --c-500: 245 158 11;
+  --c-600: 217 119 6;
+  --c-700: 180 83 9;
+  --c-800: 146 64 14;
+  --c-900: 120 53 15;
+  --c-950: 69 26 3;
+}
+
+html[data-accent='sky'] {
+  --c-50: 240 249 255;
+  --c-100: 224 242 254;
+  --c-200: 186 230 253;
+  --c-300: 125 211 252;
+  --c-400: 56 189 248;
+  --c-500: 14 165 233;
+  --c-600: 2 132 199;
+  --c-700: 3 105 161;
+  --c-800: 7 89 133;
+  --c-900: 12 74 110;
+  --c-950: 8 47 73;
+}
+
 @layer base {
   * {
     @apply border-surface-200 dark:border-surface-800;
@@ -34,7 +121,7 @@
   html.dark { color-scheme: dark; }
 
   html.dark .text-primary-500 {
-    color: theme('colors.primary.300');
+    color: rgb(var(--c-300));
   }
 
   #root {
@@ -64,7 +151,7 @@
   }
 
   :focus-visible {
-    outline: 3px solid #d83d27;
+    outline: 3px solid rgb(var(--c-600));
     outline-offset: 3px;
   }
   html.dark :focus-visible {
@@ -256,7 +343,7 @@
     margin-right: 0.65rem;
     vertical-align: -0.04em;
     border-radius: 2px;
-    background: linear-gradient(180deg, #d2f53c, #f04f32);
+    background: linear-gradient(180deg, #d2f53c, rgb(var(--c-500)));
   }
   .route-content {
     animation: pageEnter 280ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
@@ -265,7 +352,7 @@
   /* ===== AVATAR ===== */
   .avatar {
     @apply rounded-full object-cover ring-2 ring-white dark:ring-surface-800;
-    background: linear-gradient(135deg, #f04f32 0%, #d2f53c 100%);
+    background: linear-gradient(135deg, rgb(var(--c-500)) 0%, #d2f53c 100%);
   }
   .avatar-sm { @apply w-8 h-8 ring-2; }
   .avatar-md { @apply w-10 h-10 ring-2; }
@@ -342,10 +429,10 @@
   .auth-mobile-mast { @apply flex lg:hidden items-center justify-between px-5 pt-5 pb-4; }
   .auth-clerk-panel { @apply flex items-center justify-center px-4 py-7 sm:px-8 lg:px-12; }
   .auth-clerk-panel .cl-rootBox { width: 100%; max-width: 25rem; }
-  .auth-clerk-panel .cl-card { box-shadow: 0 18px 50px rgba(28,25,23,.08); border: 1px solid theme('colors.surface.200'); border-top: 3px solid #d83d27; background: #fff; border-radius: 4px; }
+  .auth-clerk-panel .cl-card { box-shadow: 0 18px 50px rgba(28,25,23,.08); border: 1px solid theme('colors.surface.200'); border-top: 3px solid rgb(var(--c-600)); background: #fff; border-radius: 4px; }
   .dark .auth-clerk-panel .cl-card { border-color: theme('colors.surface.700'); background: theme('colors.surface.900'); }
   .auth-clerk-panel .cl-headerTitle, .auth-clerk-panel .cl-headerSubtitle { font-family: 'Plus Jakarta Sans', Inter, sans-serif; }
-  .auth-clerk-panel .cl-formButtonPrimary { background: #d83d27; box-shadow: none; }
+  .auth-clerk-panel .cl-formButtonPrimary { background: rgb(var(--c-600)); box-shadow: none; }
   .auth-clerk-panel .cl-formButtonPrimary:hover { background: #b52f20; }
   .auth-clerk-panel .cl-footer, .auth-clerk-panel .cl-footerAction { background: transparent; }
 
@@ -384,9 +471,9 @@
   .glass-elevated { border-radius: .375rem; box-shadow: 0 16px 42px rgba(28,25,23,.08); }
   .auth-mobile-mast { border-bottom: 1px solid rgba(28,25,23,.12); }
   .auth-clerk-panel { animation: pageEnter 420ms cubic-bezier(.2,.7,.2,1) both; }
-  .auth-backdrop .glass-elevated { border-top: 3px solid #d83d27; }
+  .auth-backdrop .glass-elevated { border-top: 3px solid rgb(var(--c-600)); }
   .auth-backdrop > div:not(.absolute) { width: min(100%, 28rem); margin: auto; }
-  .auth-backdrop .text-center.mb-10, .auth-backdrop .text-center.mb-8 { text-align: left; border-left: 3px solid #d83d27; padding-left: 1rem; }
+  .auth-backdrop .text-center.mb-10, .auth-backdrop .text-center.mb-8 { text-align: left; border-left: 3px solid rgb(var(--c-600)); padding-left: 1rem; }
   .auth-backdrop .glass-elevated { background-color: #fff; }
   .dark .auth-backdrop .glass-elevated { background-color: #1c1917; }
   .auth-backdrop .animate-float { animation: markArrival 700ms cubic-bezier(.2,.8,.2,1) both; }
@@ -394,9 +481,9 @@
   .navigation-drawer { animation: drawerEnter 260ms cubic-bezier(.2,.8,.2,1) both; }
   .drawer-scrim { animation: scrimEnter 200ms ease-out both; }
   .bottom-nav-active { position: relative; }
-  .bottom-nav-active::before { content: ''; position: absolute; inset: 2px 7px auto; height: 2px; background: #d83d27; animation: navSignal 220ms cubic-bezier(.2,.8,.2,1) both; }
-  .btn-primary, .btn-gradient { box-shadow: 0 4px 0 #8f291f; }
-  .btn-primary:active, .btn-gradient:active { box-shadow: 0 1px 0 #8f291f; }
+  .bottom-nav-active::before { content: ''; position: absolute; inset: 2px 7px auto; height: 2px; background: rgb(var(--c-600)); animation: navSignal 220ms cubic-bezier(.2,.8,.2,1) both; }
+  .btn-primary, .btn-gradient { box-shadow: 0 4px 0 rgb(var(--c-800)); }
+  .btn-primary:active, .btn-gradient:active { box-shadow: 0 1px 0 rgb(var(--c-800)); }
 }
 
 /* ===== MOBILE / SMALL-SCREEN TUNING ===== */

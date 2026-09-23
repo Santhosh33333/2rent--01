@@ -5,10 +5,11 @@ import toast from 'react-hot-toast'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
 import { api } from '../../lib/api'
-import { useTheme } from '../../lib/themeContext'
+import { useTheme, ACCENTS, Accent } from '../../lib/themeContext'
 
 interface Settings {
   theme: string
+  accent: string
   fontSize: string
   notificationsEnabled: boolean
   notificationSound: boolean
@@ -29,7 +30,7 @@ interface Settings {
 }
 
 const defaultSettings: Settings = {
-  theme: 'system', fontSize: 'medium',
+  theme: 'system', accent: 'coral', fontSize: 'medium',
   notificationsEnabled: true, notificationSound: true, chatNotifications: true, eventReminders: true,
   walkingAlerts: true, communityUpdates: true, pushEnabled: true,
   emailNotifications: true, smsNotifications: false, dataSaver: false,
@@ -48,6 +49,15 @@ const fontSizes = [
   { value: 'medium', label: 'Medium' },
   { value: 'large', label: 'Large' },
 ]
+
+const accentSwatches: Record<string, string> = {
+  coral: '#f04f32',
+  indigo: '#6366f1',
+  emerald: '#10b981',
+  rose: '#f43f5e',
+  amber: '#f59e0b',
+  sky: '#0ea5e9',
+}
 
 function ToggleSwitch({ enabled, onChange }: { enabled: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -79,7 +89,7 @@ export function SettingsPage() {
   const [settings, setSettings] = useState<Settings>(defaultSettings)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const { setTheme } = useTheme()
+  const { setTheme, setAccent } = useTheme()
 
   useEffect(() => {
     api.get('/settings').then(r => {
@@ -92,6 +102,7 @@ export function SettingsPage() {
       // Honor a previously saved explicit theme on reload.
       if (data?.theme === 'light') setTheme('light')
       else if (data?.theme === 'dark') setTheme('dark')
+      if (ACCENTS.some(a => a.value === data?.accent)) setAccent(data.accent as Accent)
     }).catch(() => setLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -116,6 +127,11 @@ export function SettingsPage() {
     if (theme === 'light') setTheme('light')
     else if (theme === 'dark') setTheme('dark')
     else if (theme === 'system') setTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+  }
+
+  const applyAccent = (accent: string) => {
+    update('accent', accent)
+    setAccent(accent as Accent)
   }
 
   const applyFontSize = (size: string) => {
@@ -156,13 +172,21 @@ export function SettingsPage() {
 
           {/* Appearance */}
           <h2 className="text-xs font-semibold text-surface-400 uppercase tracking-wider mb-3">Appearance</h2>
-          <div className="mb-6">
+          <div className="mb-4">
             <div className="flex gap-2">
               {themes.map(t => (
                 <button key={t.value} onClick={() => applyTheme(t.value)} className={`flex-1 flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all ${settings.theme === t.value ? 'border-primary-500 bg-primary-50 dark:bg-primary-500/10' : 'border-surface-200 dark:border-surface-700 hover:border-surface-300'}`}>
                   <t.icon className="w-5 h-5" />
                   <span className="text-xs font-medium">{t.label}</span>
                 </button>
+              ))}
+            </div>
+          </div>
+          <div className="mb-2">
+            <p className="text-xs text-surface-500 mb-2">Accent color</p>
+            <div className="flex gap-2">
+              {ACCENTS.map(a => (
+                <button key={a.value} onClick={() => applyAccent(a.value)} title={a.label} aria-label={`${a.label} accent`} className={`w-9 h-9 rounded-full ring-offset-2 ring-offset-surface-50 dark:ring-offset-surface-900 transition-all ${settings.accent === a.value ? 'ring-2 ring-surface-900 dark:ring-white scale-110' : 'hover:scale-105'}`} style={{ backgroundColor: accentSwatches[a.value] }} />
               ))}
             </div>
           </div>

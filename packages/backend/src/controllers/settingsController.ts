@@ -5,6 +5,7 @@ import { AuthedRequest } from "../middleware/authTypes";
 
 interface UserSettings {
   theme: string;
+  accent: string;
   fontSize: string;
   language: string;
   notificationsEnabled: boolean;
@@ -27,6 +28,7 @@ interface UserSettings {
 
 const DEFAULT_SETTINGS: UserSettings = {
   theme: "system",
+  accent: "coral",
   fontSize: "medium",
   language: "en",
   notificationsEnabled: true,
