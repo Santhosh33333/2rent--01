@@ -101,6 +101,10 @@ html[data-accent='sky'] {
     scroll-behavior: smooth;
     -webkit-tap-highlight-color: transparent;
     color-scheme: light;
+    /* When the mobile keyboard opens and the browser auto-scrolls a focused
+       input into view, keep it BELOW the sticky Nabri header (h-16 = 4rem +
+       notch inset) instead of letting it slide underneath the logo. */
+    scroll-padding-top: calc(4rem + env(safe-area-inset-top) + 0.75rem);
   }
 
   html[data-font-size='small'] {
