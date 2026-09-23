@@ -5,7 +5,7 @@ import { useAuth } from '../../lib/auth'
 import { isClerkConfigured } from '../../lib/clerkAuth'
 import { initGoogleSignIn, signInWithGoogle } from '../../lib/googleAuth'
 import { AnimatedPage } from '../../components/AnimatedPage'
-import { ArrowRight, Mail, Lock, Loader2, Phone, Eye, EyeOff } from 'lucide-react'
+import { ArrowRight, Mail, Lock, Loader2, Phone, Eye, EyeOff, Smartphone } from 'lucide-react'
 import { api } from '../../lib/api'
 import toast from 'react-hot-toast'
 
@@ -630,6 +630,15 @@ export function LoginPage() {
               className="font-semibold text-primary-600 dark:text-primary-400 hover:text-primary-500 transition-colors"
             >
               Create one
+            </Link>
+          </p>
+          <p className="mt-3 text-center">
+            <Link
+              to="/download"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-surface-400 dark:text-surface-500 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+            >
+              <Smartphone className="w-3.5 h-3.5" />
+              Get the Android app
             </Link>
           </p>
           </AnimatedPage>

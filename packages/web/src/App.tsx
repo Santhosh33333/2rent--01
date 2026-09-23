@@ -15,6 +15,7 @@ const RegisterPage = lazy(() => import('./pages/auth/RegisterPage').then(m => ({
 const AccountTypePage = lazy(() => import('./pages/auth/AccountTypePage').then(m => ({ default: m.AccountTypePage })))
 const AdminLoginPage = lazy(() => import('./pages/admin/AdminLoginPage').then(m => ({ default: m.AdminLoginPage })))
 const ForgotPasswordPage = lazy(() => import('./pages/auth/ForgotPasswordPage').then(m => ({ default: m.ForgotPasswordPage })))
+const DownloadPage = lazy(() => import('./pages/download/DownloadPage').then(m => ({ default: m.DownloadPage })))
 const VerifyEmailPage = lazy(() => import('./pages/auth/VerifyEmailPage').then(m => ({ default: m.VerifyEmailPage })))
 const VerifyMobilePage = lazy(() => import('./pages/auth/VerifyMobilePage').then(m => ({ default: m.VerifyMobilePage })))
 
@@ -167,6 +168,7 @@ export function App() {
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/verify-email" element={<VerifyEmailPage />} />
           <Route path="/verify-mobile" element={<VerifyMobilePage />} />
+          <Route path="/download" element={<DownloadPage />} />
           {/* Public legal pages (also reachable in-settings when logged in) */}
           <Route path="/terms" element={<TermsOfServicePage />} />
           <Route path="/privacy" element={<PrivacyPolicyPage />} />
