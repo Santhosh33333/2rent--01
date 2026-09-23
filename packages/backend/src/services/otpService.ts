@@ -213,7 +213,7 @@ export async function issueOtp(opts: {
     return fail(opts, "SMS is not configured yet. Use email code instead.", "SMS_NOT_CONFIGURED", { provider: "none" });
   }
   try {
-    await sendSmsMessage(identifier, `Your Side Bud ${opts.purpose.toLowerCase().replace(/_/g, " ")} code is: ${code}. Expires in ${policy.expiryMinutes} min. Do not share it.`);
+    await sendSmsMessage(identifier, `Your Nabri ${opts.purpose.toLowerCase().replace(/_/g, " ")} code is: ${code}. Expires in ${policy.expiryMinutes} min. Do not share it.`);
     await prisma.otpCode.update({ where: { id: row.id }, data: { status: "SENT", provider: "twilio", deliveryStatus: "SENT" } });
     return {
       sent: true,

@@ -1,9 +1,10 @@
-import { getErrorMessage } from '../../lib/error'
+﻿import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, ChevronLeft, ChevronRight, Check, X, FileDown } from 'lucide-react'
-import { adminApi } from '../../lib/api'
+import { ArrowLeft, ChevronLeft, ChevronRight, Check, X, FileDown, ImagePlus, Loader2 } from 'lucide-react'
+import { adminApi, assetUrl } from '../../lib/api'
 import { exportTableToPdf } from '../../lib/pdfExport'
+import toast from 'react-hot-toast'
 
 interface Withdrawal {
   id: string
@@ -14,6 +15,7 @@ interface Withdrawal {
   status: string
   method?: string
   accountDetail?: string
+  payoutProofImageUrl?: string | null
   createdAt: string
 }
 
@@ -23,8 +25,9 @@ export function AdminWithdrawalsPage() {
   const [error, setError] = useState('')
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
-  const [statusFilter, setStatusFilter] = useState('PENDING')
+const [statusFilter, setStatusFilter] = useState('PENDING')
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [proofFile, setProofFile] = useState<Record<string, File>>({})
 
   const fetchWithdrawals = async () => {
     setLoading(true)
@@ -43,7 +46,8 @@ export function AdminWithdrawalsPage() {
         amount: w.amount,
         status: w.status,
         method: w.method || '',
-        accountDetail: w.accountDetail || w.upiId || w.bankAccount || '',
+accountDetail: w.accountDetail || w.upiId || w.bankAccount || '',
+        payoutProofImageUrl: w.payoutProofImageUrl || null,
         createdAt: w.createdAt,
       })))
       const total = Number(d?.total) || 0
@@ -59,11 +63,32 @@ export function AdminWithdrawalsPage() {
     fetchWithdrawals()
   }, [page, statusFilter])
 
-  const handleApprove = async (id: string) => {
+const handleApprove = async (id: string) => {
     setActionLoading(id)
     try {
       await adminApi.approveWithdrawal(id)
       setWithdrawals((prev) => prev.map((w) => w.id === id ? { ...w, status: 'APPROVED' } : w))
+      toast('Withdrawal approved.')
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to approve withdrawal'))
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleApproveWithProof = async (id: string) => {
+    const proof = proofFile[id]
+    if (!proof) {
+      setError('Attach a payout proof screenshot before marking as paid.')
+      return
+    }
+    setActionLoading(id)
+    try {
+      const res = await adminApi.approveWithdrawalWithProof(id, proof)
+      const d = res.data?.data || res.data
+      setWithdrawals((prev) => prev.map((w) => w.id === id ? { ...w, status: 'APPROVED', payoutProofImageUrl: d?.payoutProofImageUrl || null } : w))
+      setProofFile((f) => { const c = { ...f }; delete c[id]; return c })
+      toast('Withdrawal marked as paid with proof.')
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to approve withdrawal'))
     } finally {
@@ -113,13 +138,13 @@ export function AdminWithdrawalsPage() {
                 rows: withdrawals.map((w) => [
                   w.userName || '-',
                   w.userEmail || '-',
-                  `₹${w.amount}`,
+                  `â‚¹${w.amount}`,
                   w.method || '-',
                   w.accountDetail || '-',
                   w.status || '-',
                   w.createdAt ? new Date(w.createdAt).toLocaleString('en-IN') : '-',
                 ]),
-                fileName: `Sidebud-withdrawals-${new Date().toISOString().slice(0, 10)}`,
+                fileName: `nabri-withdrawals-${new Date().toISOString().slice(0, 10)}`,
                 landscape: true,
               })
             }
@@ -190,7 +215,7 @@ export function AdminWithdrawalsPage() {
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          <span className="text-white font-semibold">₹{Number(w.amount || 0).toLocaleString('en-IN')}</span>
+                          <span className="text-white font-semibold">â‚¹{Number(w.amount || 0).toLocaleString('en-IN')}</span>
                         </td>
                         <td className="px-4 py-3">
                           <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${statusBadge(w.status)}`}>
@@ -202,26 +227,52 @@ export function AdminWithdrawalsPage() {
                             {w.createdAt ? new Date(w.createdAt).toLocaleDateString('en-IN') : '-'}
                           </span>
                         </td>
-                        <td className="px-4 py-3">
-                          {w.status === 'PENDING' && (
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => handleApprove(w.id)}
-                                disabled={actionLoading === w.id}
-                                className="p-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 disabled:opacity-50 text-emerald-400 rounded-lg transition"
-                                title="Approve"
-                              >
-                                <Check className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => handleReject(w.id)}
-                                disabled={actionLoading === w.id}
-                                className="p-1.5 bg-red-500/20 hover:bg-red-500/30 disabled:opacity-50 text-red-400 rounded-lg transition"
-                                title="Reject"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
+<td className="px-4 py-3">
+                          {w.payoutProofImageUrl && (
+                            <div className="mb-2">
+                              <a href={assetUrl(w.payoutProofImageUrl)} target="_blank" rel="noreferrer" title="View payout proof">
+                                <img src={assetUrl(w.payoutProofImageUrl)} alt="Payout proof" className="h-14 w-14 rounded-lg object-cover border border-gray-700" />
+                              </a>
                             </div>
+                          )}
+                          {w.status === 'PENDING' && (
+                            <div className="space-y-2">
+                              <label className="flex items-center gap-1.5 text-gray-400 hover:text-white text-xs cursor-pointer">
+                                <ImagePlus className="w-4 h-4" />
+                                {proofFile[w.id] ? proofFile[w.id].name : 'Payout proof (paid)'}
+                                <input
+                                  type="file"
+                                  accept="image/jpeg,image/png,image/webp,image/gif"
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    const f = e.target.files?.[0]
+                                    if (f) setProofFile((p) => ({ ...p, [w.id]: f }))
+                                    e.target.value = ''
+                                  }}
+                                />
+                              </label>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => proofFile[w.id] ? handleApproveWithProof(w.id) : handleApprove(w.id)}
+                                  disabled={actionLoading === w.id}
+                                  className={`p-1.5 ${proofFile[w.id] ? 'bg-sky-500/30 hover:bg-sky-500/40 text-sky-300' : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400'} disabled:opacity-50 rounded-lg transition`}
+                                  title={proofFile[w.id] ? 'Approve with payout proof' : 'Approve (no proof)'}
+                                >
+                                  {actionLoading === w.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                                </button>
+                                <button
+                                  onClick={() => handleReject(w.id)}
+                                  disabled={actionLoading === w.id}
+                                  className="p-1.5 bg-red-500/20 hover:bg-red-500/30 disabled:opacity-50 text-red-400 rounded-lg transition"
+                                  title="Reject"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                          {w.status !== 'PENDING' && w.status !== 'REJECTED' && w.payoutProofImageUrl && (
+                            <p className="text-[10px] text-gray-500 mt-1">Payout proof attached</p>
                           )}
                         </td>
                       </tr>

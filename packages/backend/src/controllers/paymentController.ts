@@ -444,8 +444,9 @@ export async function webhookPayment(req: Request, res: Response): Promise<void>
 // actually work (no dead auto-pay buttons when Razorpay is unconfigured).
 export async function getPaymentConfig(_req: AuthedRequest, res: Response): Promise<void> {
   try {
-    const [upiId, upiQr] = await Promise.all([
+    const [upiId, upiName, upiQr] = await Promise.all([
       prisma.pricingConfig.findUnique({ where: { key: "UPI_ID" } }),
+      prisma.pricingConfig.findUnique({ where: { key: "UPI_ACCOUNT_NAME" } }),
       prisma.pricingConfig.findUnique({ where: { key: "UPI_QR_URL" } }),
     ]);
     sendSuccess(
@@ -453,6 +454,9 @@ export async function getPaymentConfig(_req: AuthedRequest, res: Response): Prom
       {
         razorpay: !(env.RAZORPAY_KEY_ID || "").includes("placeholder"),
         upiManual: Boolean(upiId?.value || upiQr?.value),
+        upiId: upiId?.value ?? null,
+        upiAccountName: upiName?.value ?? null,
+        upiQrUrl: upiQr?.value ?? null,
         cash: true,
       },
       "Payment configuration."

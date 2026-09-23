@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { api } from './api'
+import { getErrorMessage } from './error'
 
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 const MAX_INPUT_BYTES = 12 * 1024 * 1024
@@ -128,7 +129,7 @@ export function useAvatarUpload(onUploaded: (avatarUrl: string) => void): Avatar
         return url
       })
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not use that photo.')
+      toast.error(getErrorMessage(err, 'Could not use that photo.'))
     }
   }, [])
 
@@ -152,7 +153,7 @@ export function useAvatarUpload(onUploaded: (avatarUrl: string) => void): Avatar
       cancel()
       return avatarUrl
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Upload failed — tap to retry.', {
+      toast.error(getErrorMessage(err, 'Upload failed. Please retry.'), {
         id: toastId.current,
       })
       return null

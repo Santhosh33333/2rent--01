@@ -111,7 +111,7 @@ export function AiAssistantPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="SideBud AI" subtitle="Real answers from live platform data — never invented" />
+      <PageHeader title="Nabri AI" subtitle="Real answers from live platform data — never invented" />
 
       <AnimatedPage>
         <div className="glass-card p-5">

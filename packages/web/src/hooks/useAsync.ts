@@ -8,6 +8,7 @@ interface UseAsyncState<T> {
 
 interface UseAsyncOptions<T> {
   immediate?: boolean
+  cancelPrevious?: boolean
   onSuccess?: (data: T) => void
   onError?: (error: Error) => void
 }
@@ -19,7 +20,7 @@ interface UseAsyncOptions<T> {
  * @returns Object with data, loading, error, and execute/retry functions
  */
 export function useAsync<T>(
-  asyncFunction: () => Promise<T>,
+  asyncFunction: (signal: AbortSignal) => Promise<T>,
   immediate = true,
   options?: UseAsyncOptions<T>
 ) {
@@ -28,35 +29,64 @@ export function useAsync<T>(
     loading: immediate,
     error: null,
   })
+  const inFlight = useRef<Promise<T> | null>(null)
+  const controller = useRef<AbortController | null>(null)
+  const mounted = useRef(false)
+  const asyncFunctionRef = useRef(asyncFunction)
+  const optionsRef = useRef(options)
+  asyncFunctionRef.current = asyncFunction
+  optionsRef.current = options
 
-  const execute = useCallback(async () => {
-    setState({ data: null, loading: true, error: null })
-    try {
-      const response = await asyncFunction()
-      setState({ data: response, loading: false, error: null })
-      options?.onSuccess?.(response)
-      return response
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error))
-      setState({ data: null, loading: false, error: err })
-      options?.onError?.(err)
-      throw err
+  const execute = useCallback(() => {
+    if (inFlight.current) {
+      if (!optionsRef.current?.cancelPrevious) return inFlight.current
+      controller.current?.abort()
+      inFlight.current = null
     }
-  }, [asyncFunction, options])
+    const requestController = new AbortController()
+    controller.current = requestController
+    if (mounted.current) setState({ data: null, loading: true, error: null })
+    const request = Promise.resolve()
+      .then(() => asyncFunctionRef.current(requestController.signal))
+      .then((response) => {
+        if (mounted.current && !requestController.signal.aborted) {
+          setState({ data: response, loading: false, error: null })
+          optionsRef.current?.onSuccess?.(response)
+        }
+        return response
+      })
+      .catch((error: unknown) => {
+        const err = error instanceof Error ? error : new Error(String(error))
+        if (mounted.current && !requestController.signal.aborted) {
+          setState({ data: null, loading: false, error: err })
+          optionsRef.current?.onError?.(err)
+        }
+        throw err
+      })
+      .finally(() => {
+        if (inFlight.current === request) inFlight.current = null
+        if (controller.current === requestController) controller.current = null
+      })
+    inFlight.current = request
+    return request
+  }, [])
 
   const retry = useCallback(() => {
-    execute()
+    void execute().catch(() => {})
   }, [execute])
 
-  // Fire-once on mount. The asyncFunction is typically inlined at the call
-  // site (new identity every render) — without this guard the effect below
-  // re-runs forever and the page never leaves its loading state.
-  const fired = useRef(false)
   useEffect(() => {
-    if (immediate && !fired.current) {
-      fired.current = true
-      execute()
+    mounted.current = true
+    return () => {
+      mounted.current = false
+      controller.current?.abort()
+      controller.current = null
+      inFlight.current = null
     }
+  }, [])
+
+  useEffect(() => {
+    if (immediate) void execute().catch(() => {})
   }, [execute, immediate])
 
   return {

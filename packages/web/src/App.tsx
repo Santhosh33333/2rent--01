@@ -80,6 +80,7 @@ const AdminAuditLogsPage = lazy(() => import('./pages/admin/AdminAuditLogsPage')
 const AdminAdminsPage = lazy(() => import('./pages/admin/AdminAdminsPage').then(m => ({ default: m.AdminAdminsPage })))
 const AdminPaymentsPage = lazy(() => import('./pages/admin/AdminPaymentsPage').then(m => ({ default: m.AdminPaymentsPage })))
 const AdminUpiVerificationPage = lazy(() => import('./pages/admin/AdminUpiVerificationPage').then(m => ({ default: m.AdminUpiVerificationPage })))
+const AdminTopupsPage = lazy(() => import('./pages/admin/AdminTopupsPage').then(m => ({ default: m.AdminTopupsPage })))
 const AdminSettingsPage = lazy(() => import('./pages/admin/AdminSettingsPage').then(m => ({ default: m.AdminSettingsPage })))
 const AdminPricingPage = lazy(() => import('./pages/admin/AdminPricingPage').then(m => ({ default: m.AdminPricingPage })))
 const AdminLiveTrackingPage = lazy(() => import('./pages/admin/AdminLiveTrackingPage').then(m => ({ default: m.AdminLiveTrackingPage })))
@@ -132,7 +133,24 @@ function DiscoveryCategoryRoute() {
 export function App() {
   return (
     <ThemeProvider>
-      <ErrorBoundary>
+      <ErrorBoundary fallback={(error) => (
+        <div className="flex min-h-screen items-center justify-center p-4 bg-surface-50 dark:bg-surface-950">
+          <div className="max-w-md text-center">
+            <h1 className="text-xl font-bold text-surface-900 dark:text-white">This page could not load</h1>
+            <p className="mt-2 text-sm text-surface-500 dark:text-surface-400">
+              { /chunk|import|fetch/i.test(error.message)
+                ? 'The app was updated while this page was open. Reload to get the latest version.'
+                : 'Please reload the app and try again.' }
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-6 rounded-2xl bg-primary-600 px-6 py-3 text-sm font-semibold text-white"
+            >
+              Reload app
+            </button>
+          </div>
+        </div>
+      )}>
         <Toaster position="top-center" toastOptions={{ duration: 3000, style: { background: '#18181b', color: '#fafafa', borderRadius: '16px' } }} />
         <Suspense fallback={<LoadingSpinner />}>
           <Routes>
@@ -260,6 +278,7 @@ export function App() {
               <Route path="/admin/admins" element={<AdminAdminsPage />} />
                <Route path="/admin/payments" element={<AdminPaymentsPage />} />
                <Route path="/admin/upi-verification" element={<AdminUpiVerificationPage />} />
+               <Route path="/admin/topups" element={<AdminTopupsPage />} />
               <Route path="/admin/settings" element={<AdminSettingsPage />} />
               <Route path="/admin/pricing" element={<AdminPricingPage />} />
               <Route path="/admin/live-tracking" element={<AdminLiveTrackingPage />} />

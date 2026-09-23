@@ -1,5 +1,5 @@
 ﻿import { getErrorMessage, getErrorDetail } from '../../lib/error'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Footprints, Package, MapPin, Calendar, Clock, Timer,
@@ -76,19 +76,41 @@ export function CreateBookingPage() {
 
   const [step, setStep] = useState<Step>(1)
   const [submitting, setSubmitting] = useState(false)
+  const submissionLock = useRef(false)
   const [walletBalance, setWalletBalance] = useState<number | null>(null)
+  const [walletLoading, setWalletLoading] = useState(true)
+  const [walletError, setWalletError] = useState(false)
+  const walletRequest = useRef<AbortController | null>(null)
   const [estimate, setEstimate] = useState<PriceEstimate | null>(null)
   const [estimateLoading, setEstimateLoading] = useState(false)
+  const [estimateError, setEstimateError] = useState(false)
+  const [estimateRetry, setEstimateRetry] = useState(0)
 
   // Wallet-first: bookings are paid from the topped-up wallet balance.
-  useEffect(() => {
-    api.get('/wallet')
-      .then(r => {
-        const raw = r.data?.data?.balance ?? r.data?.balance
-        setWalletBalance(raw !== undefined && raw !== null ? Number(raw) : null)
-      })
-      .catch(() => {})
+  const fetchWalletBalance = useCallback(async () => {
+    walletRequest.current?.abort()
+    const controller = new AbortController()
+    walletRequest.current = controller
+    setWalletLoading(true)
+    setWalletError(false)
+    try {
+      const response = await api.get('/wallet', { signal: controller.signal, timeout: 15000 })
+      const raw = response.data?.data?.balance ?? response.data?.balance
+      const balance = Number(raw)
+      if (!Number.isFinite(balance)) throw new Error('Wallet balance is unavailable.')
+      setWalletBalance(balance)
+    } catch {
+      if (!controller.signal.aborted) setWalletError(true)
+    } finally {
+      if (!controller.signal.aborted) setWalletLoading(false)
+      if (walletRequest.current === controller) walletRequest.current = null
+    }
   }, [])
+
+  useEffect(() => {
+    void fetchWalletBalance()
+    return () => walletRequest.current?.abort()
+  }, [fetchWalletBalance])
 
   const [selectedTypes, setSelectedTypes] = useState<ServiceType[]>([initialType])
   const [booking, setBooking] = useState<BookingData>({
@@ -125,13 +147,20 @@ export function CreateBookingPage() {
   useEffect(() => {
     if (!booking.serviceType) {
       setEstimate(null)
+      setEstimateLoading(false)
       return
     }
     setEstimateLoading(true)
+    setEstimateError(false)
+    setEstimate(null)
     const duration = Number.parseInt(booking.duration, 10) || 30
     const distance = Number.parseFloat(booking.distance) || 0
+    const controller = new AbortController()
+    let current = true
     const timer = setTimeout(() => {
       api.get('/bookings/price-estimate', {
+        signal: controller.signal,
+        timeout: 15000,
         params: {
           serviceType: booking.serviceType,
           durationMinutes: duration,
@@ -140,13 +169,22 @@ export function CreateBookingPage() {
       })
         .then(r => {
           const d = r.data?.data || r.data
-          if (d?.estimatedAmount !== undefined) setEstimate(d)
+          if (current && d?.estimatedAmount !== undefined) setEstimate(d)
         })
-        .catch(() => setEstimate(null))
-        .finally(() => setEstimateLoading(false))
+        .catch(() => {
+          if (current && !controller.signal.aborted) setEstimateError(true)
+        })
+        .finally(() => {
+          if (current) setEstimateLoading(false)
+        })
     }, 250)
-    return () => clearTimeout(timer)
-  }, [booking.serviceType, booking.duration, booking.distance])
+    return () => {
+      current = false
+      clearTimeout(timer)
+      controller.abort()
+      setEstimateLoading(false)
+    }
+  }, [booking.serviceType, booking.duration, booking.distance, estimateRetry])
 
 
   const toggleServiceType = (type: ServiceType) => {
@@ -173,6 +211,7 @@ export function CreateBookingPage() {
   }
 
   const handleSubmit = async () => {
+    if (submissionLock.current) return
     // Booking window: now → +2 months (mirrors backend enforcement)
     const scheduledAt = new Date(`${booking.date}T${booking.time}:00`)
     if (!booking.date || !booking.time || Number.isNaN(scheduledAt.getTime())) {
@@ -188,7 +227,11 @@ export function CreateBookingPage() {
       return
     }
     if (estimateLoading || estimate === null) {
-      toast.error('Still calculating your price...')
+      toast.error(estimateError ? 'Price is unavailable. Retry the estimate first.' : 'Still calculating your price...')
+      return
+    }
+    if (walletBalance === null) {
+      toast.error('Wallet balance is unavailable. Retry before booking.')
       return
     }
     if (walletBalance !== null && walletBalance < total) {
@@ -196,6 +239,7 @@ export function CreateBookingPage() {
       return
     }
 
+    submissionLock.current = true
     setSubmitting(true)
     try {
       const normalizedPickup = booking.pickupLocation.trim()
@@ -236,6 +280,7 @@ export function CreateBookingPage() {
         toast.error(getErrorMessage(err, 'Failed to create booking'))
       }
     } finally {
+      submissionLock.current = false
       setSubmitting(false)
     }
   }
@@ -594,7 +639,12 @@ export function CreateBookingPage() {
                   </div>
                 </div>
               ) : (
-                <p className="text-sm text-danger-500">Could not calculate the price. Please try again.</p>
+                <div className="space-y-3" role="alert">
+                  <p className="text-sm text-danger-600 dark:text-danger-300">Could not calculate the price. Check your connection and retry.</p>
+                  <button type="button" onClick={() => setEstimateRetry((count) => count + 1)} disabled={estimateLoading} className="btn-outline btn-sm">
+                    {estimateLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Retry price
+                  </button>
+                </div>
               )}
             </div>
           )}
@@ -635,9 +685,15 @@ export function CreateBookingPage() {
                   </div>
                   <div className="flex justify-between pt-1">
                     <span className="text-sm text-surface-500">Wallet balance</span>
-                    <span className={`text-sm font-semibold ${insufficientBalance ? 'text-danger-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                      {walletBalance === null ? '…' : `₹${walletBalance.toLocaleString('en-IN')}`}
-                    </span>
+                    {walletLoading ? (
+                      <span className="inline-flex items-center gap-2 text-sm text-surface-500"><Loader2 className="w-4 h-4 animate-spin" />Checking balance</span>
+                    ) : walletError ? (
+                      <button type="button" onClick={() => void fetchWalletBalance()} className="text-sm font-semibold text-primary-700 dark:text-primary-300 underline underline-offset-2">Retry balance</button>
+                    ) : (
+                      <span className={`text-sm font-semibold ${insufficientBalance ? 'text-danger-500' : 'text-emerald-700 dark:text-emerald-400'}`}>
+                        ₹{walletBalance?.toLocaleString('en-IN')}
+                      </span>
+                    )}
                   </div>
                   {insufficientBalance && (
                     <div className="rounded-xl border border-danger-200 dark:border-danger-800/40 bg-danger-50 dark:bg-danger-500/10 p-3 mt-1">
@@ -682,7 +738,7 @@ export function CreateBookingPage() {
           {step === 6 && (
             <button
               onClick={handleSubmit}
-              disabled={submitting || insufficientBalance}
+              disabled={submitting || insufficientBalance || walletLoading || walletBalance === null || walletError || estimateLoading || estimate === null}
               className="flex-1 btn-gradient flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {submitting ? (

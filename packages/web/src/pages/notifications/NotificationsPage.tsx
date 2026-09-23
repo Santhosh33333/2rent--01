@@ -98,8 +98,8 @@ export function NotificationsPage() {
   const [unreadCount, setUnreadCount] = useState(0)
 
   const { loading, error, retry } = useAsync(
-    async () => {
-      const res = await api.get('/notifications', { params: { limit: 50 } })
+    async (signal) => {
+      const res = await api.get('/notifications', { params: { limit: 50 }, signal, timeout: 15000 })
       const data = res.data?.data
       setNotifications(normalizeList(data?.notifications || []))
       setUnreadCount(data?.unreadCount || 0)

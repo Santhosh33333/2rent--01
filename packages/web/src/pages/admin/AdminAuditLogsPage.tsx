@@ -1,4 +1,4 @@
-import { getErrorMessage } from '../../lib/error'
+﻿import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, ChevronLeft, ChevronRight, FileDown } from 'lucide-react'
@@ -78,7 +78,7 @@ export function AdminAuditLogsPage() {
                   `${l.entityType || '-'}:${l.entityId || '-'}`,
                   l.details || '-',
                 ]),
-                fileName: `Sidebud-audit-logs-${new Date().toISOString().slice(0, 10)}`,
+                fileName: `nabri-audit-logs-${new Date().toISOString().slice(0, 10)}`,
                 landscape: true,
               })
             }

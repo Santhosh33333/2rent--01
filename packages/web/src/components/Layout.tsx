@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, type MouseEvent } from 'react';
 import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
 import {
   Home, User, Wallet, Users, Sun, Moon, Menu, X, Bell,
@@ -115,6 +115,17 @@ export function Layout() {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [, setMobileMenuOpen] = useState(false);
+  const drawerCloseRef = useRef<HTMLButtonElement>(null);
+  const drawerRef = useRef<HTMLElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
+  const bottomNavRef = useRef<HTMLElement>(null);
+  const drawerOpenerRef = useRef<HTMLElement | null>(null);
+
+  const openDrawer = (event: MouseEvent<HTMLElement>) => {
+    drawerOpenerRef.current = event.currentTarget;
+    setSidebarOpen(true);
+  };
 
   const navItems = activeRole === 'PARTNER' ? partnerNav
     : ['ADMIN', 'SUPER_ADMIN', 'MODERATOR', 'SUPPORT', 'FINANCE', 'SUPPORT_ADMIN', 'FINANCE_ADMIN', 'KYC_ADMIN', 'MARKETING_ADMIN', 'PARTNER_ADMIN'].includes(activeRole) ? adminNav
@@ -143,32 +154,81 @@ export function Layout() {
     setMobileMenuOpen(false);
   }, [location.pathname]);
 
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    drawerCloseRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setSidebarOpen(false);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const drawer = drawerRef.current;
+      if (!drawer) return;
+      const tabbable = Array.from(drawer.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )).filter((element) => !element.hidden && element.getAttribute('aria-hidden') !== 'true');
+      if (!tabbable.length) {
+        event.preventDefault();
+        drawer.focus();
+        return;
+      }
+      const first = tabbable[0];
+      const last = tabbable[tabbable.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !drawer.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !drawer.contains(document.activeElement))) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    const previousOverflow = document.body.style.overflow;
+    const background = [headerRef.current, mainRef.current, bottomNavRef.current].filter(
+      (element): element is HTMLElement => element !== null
+    );
+    const previousInert = background.map((element) => element.inert);
+    document.body.style.overflow = 'hidden';
+    background.forEach((element) => { element.inert = true; });
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      background.forEach((element, index) => { element.inert = previousInert[index]; });
+      window.removeEventListener('keydown', onKeyDown);
+      drawerOpenerRef.current?.focus();
+      drawerOpenerRef.current = null;
+    };
+  }, [sidebarOpen]);
+
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-surface-50 via-surface-100/60 to-surface-100/30 dark:from-surface-950 dark:via-surface-950 dark:to-surface-950">
+    <div className="min-h-screen bg-surface-50 dark:bg-surface-950">
       <ImpersonationBanner />
       <OfflineBanner />
       {/* Header */}
-      <header className="sticky top-0 z-50 backdrop-blur-xl bg-white/80 dark:bg-surface-950/80 border-b border-surface-200/50 dark:border-surface-800/50 pt-[env(safe-area-inset-top)]">
+      <header ref={headerRef} className="sticky top-0 z-50 bg-surface-50/95 dark:bg-surface-950/95 border-b border-surface-200 dark:border-surface-800 pt-[env(safe-area-inset-top)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             {/* Left */}
             <div className="flex items-center gap-3">
               <button
-                onClick={() => setSidebarOpen(true)}
+                onClick={openDrawer}
                 className="p-2 rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 transition btn-icon lg:hidden"
                 aria-label="Open menu"
+                aria-expanded={sidebarOpen}
+                aria-controls="sidebud-navigation-drawer"
               >
                 <Menu className="w-5 h-5" />
               </button>
               <Link to="/dashboard" className="flex items-center gap-2.5">
-                <img src="/logo-mark.svg" alt="Side Bud logo" className="w-9 h-9 rounded-xl shadow-md shadow-primary-500/25" />
-                <span className="text-lg font-extrabold font-display tracking-tight bg-gradient-to-r from-primary-600 via-violet-600 to-accent-500 bg-clip-text text-transparent hidden sm:block">
-                  Side Bud
+                <img src="/logo-mark.svg" alt="Nabri logo" className="w-9 h-9 transition-transform duration-300 hover:-rotate-6 hover:scale-105" />
+                <span className="text-lg font-extrabold font-display tracking-[-0.06em] text-surface-900 dark:text-surface-50 hidden sm:block">
+                  NABRI
                 </span>
               </Link>
             </div>
@@ -194,11 +254,13 @@ export function Layout() {
                 <UnreadBadge />
               </Link>
               <button
-                onClick={() => setSidebarOpen(true)}
+                onClick={openDrawer}
                 className="btn-icon rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 transition hidden lg:block"
                 aria-label="Open profile menu"
+                aria-expanded={sidebarOpen}
+                aria-controls="sidebud-navigation-drawer"
               >
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-violet-600 flex items-center justify-center text-surface-100 text-sm font-bold">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-accent-300 flex items-center justify-center text-white text-sm font-bold">
                   {user?.name?.charAt(0) || 'U'}
                 </div>
               </button>
@@ -210,11 +272,11 @@ export function Layout() {
       {/* Sidebar */}
       {sidebarOpen && (
         <>
-          <div className="fixed inset-0 bg-surface-900/60 dark:bg-black/60 z-50 lg:hidden" onClick={() => setSidebarOpen(false)} />
-          <div className="fixed inset-y-0 left-0 w-72 max-w-[85vw] bg-white dark:bg-surface-900 z-50 shadow-2xl p-4 overflow-y-auto animate-slide-in-left duration-200">
+          <button className="drawer-scrim fixed inset-0 bg-surface-900/55 dark:bg-black/65 z-50 cursor-default" onClick={() => setSidebarOpen(false)} aria-label="Close menu" />
+          <aside id="sidebud-navigation-drawer" ref={drawerRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Navigation menu" className="navigation-drawer fixed inset-y-0 left-0 w-80 max-w-[88vw] bg-surface-50 dark:bg-surface-900 z-50 shadow-2xl p-4 overflow-y-auto overscroll-contain pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-violet-600 flex items-center justify-center text-surface-100 font-bold">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-accent-300 flex items-center justify-center text-white font-bold">
                   {user?.name?.charAt(0) || 'U'}
                 </div>
                 <div className="min-w-0">
@@ -222,7 +284,7 @@ export function Layout() {
                   <p className="text-xs text-surface-500 truncate">{user?.email}</p>
                 </div>
               </div>
-              <button onClick={() => setSidebarOpen(false)} className="btn-icon rounded-lg hover:bg-surface-100 dark:hover:bg-surface-800" aria-label="Close menu">
+              <button ref={drawerCloseRef} onClick={() => setSidebarOpen(false)} className="btn-icon rounded-lg hover:bg-surface-100 dark:hover:bg-surface-800" aria-label="Close menu">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -236,8 +298,8 @@ export function Layout() {
                       key={to}
                       to={to}
                       className={`flex items-center gap-3 px-3 py-3 rounded-xl text-sm transition ${
-                        location.pathname === to
-                          ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 font-medium'
+                      location.pathname === to
+                        ? 'bg-primary-100 dark:bg-primary-900/40 text-primary-800 dark:text-primary-200 font-semibold'
                           : 'text-surface-600 dark:text-surface-400 hover:bg-surface-50 dark:hover:bg-surface-800'
                       }`}
                     >
@@ -250,20 +312,20 @@ export function Layout() {
               )}
               {superAdminNav.length > 0 && (
                 <>
-                  <p className="px-3 pt-1 pb-1 text-xs font-semibold uppercase tracking-wide text-purple-500">Super Admin</p>
+                  <p className="px-3 pt-1 pb-1 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-300">Super Admin</p>
                   {superAdminNav.map(({ to, icon: Icon, label }) => (
                     <Link
                       key={to}
                       to={to}
                       className={`flex items-center gap-3 px-3 py-3 rounded-xl text-sm transition ${
                         location.pathname === to
-                          ? 'bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 font-medium'
+                          ? 'bg-primary-100 dark:bg-primary-900/40 text-primary-800 dark:text-primary-200 font-semibold'
                           : 'text-surface-600 dark:text-surface-400 hover:bg-surface-50 dark:hover:bg-surface-800'
                       }`}
                     >
                       <Icon className="w-4 h-4" />
                       {label}
-                      <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 font-medium">SUPER</span>
+                      <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-300 font-medium">SUPER</span>
                     </Link>
                   ))}
                   <div className="h-px bg-surface-200 dark:bg-surface-800 my-2" />
@@ -275,7 +337,7 @@ export function Layout() {
                   to={to}
                   className={`flex items-center gap-3 px-3 py-3 rounded-xl text-sm transition ${
                     location.pathname === to
-                      ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 font-medium'
+                          ? 'bg-primary-100 dark:bg-primary-900/40 text-primary-800 dark:text-primary-200 font-semibold'
                       : 'text-surface-600 dark:text-surface-400 hover:bg-surface-50 dark:hover:bg-surface-800'
                   }`}
                 >
@@ -296,24 +358,24 @@ export function Layout() {
             </button>
 
             {isClerkConfigured() && <ClerkUserButton />}
-          </div>
+          </aside>
         </>
       )}
 
       {/* Main Content */}
-      <main className="pb-28 lg:pb-8">
+      <main ref={mainRef} className="pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-8">
         {/* Partners silently stream live GPS for their active booking so the
             user can track them in real time (no UI of its own). */}
         <PartnerLiveLocationSharer />
         <UserLiveLocationSharer />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div key={location.pathname} className="route-content max-w-7xl mx-auto px-4 py-5 sm:px-6 sm:py-7 lg:px-8 lg:py-8">
           <Outlet />
         </div>
       </main>
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 inset-x-0 bg-white/90 dark:bg-surface-950/90 backdrop-blur-xl border-t border-surface-200/50 dark:border-surface-800/50 z-40 lg:hidden pb-[env(safe-area-inset-bottom)]">
-        <div className="flex items-stretch justify-around h-16 px-2">
+      <nav ref={bottomNavRef} aria-label="Primary navigation" className="fixed bottom-0 inset-x-0 bg-white dark:bg-surface-950 border-t border-surface-200 dark:border-surface-800 z-40 lg:hidden pb-[env(safe-area-inset-bottom)]">
+        <div className="flex items-stretch justify-around h-16 px-2 max-w-xl mx-auto">
           {bottomNavItems.map(({ to, icon: Icon, label }) => {
             const isActive = location.pathname === to || location.pathname.startsWith(`${to}/`);
             return (
@@ -323,7 +385,7 @@ export function Layout() {
                 aria-current={isActive ? 'page' : undefined}
                 className={`flex flex-col items-center justify-center gap-0.5 rounded-2xl transition-all min-w-0 flex-1 py-1 ${
                   isActive
-                    ? 'text-primary-600 dark:text-primary-300 bg-primary-500/10 dark:bg-primary-500/15'
+                    ? 'bottom-nav-active text-primary-700 dark:text-primary-300 bg-primary-500/10 dark:bg-primary-500/15'
                     : 'text-surface-400 dark:text-surface-500'
                 }`}
               >
@@ -334,7 +396,7 @@ export function Layout() {
           })}
           {hasMoreNav && (
             <button
-              onClick={() => setSidebarOpen(true)}
+              onClick={openDrawer}
               className={`flex flex-col items-center justify-center gap-0.5 rounded-xl transition-all min-w-0 flex-1 text-surface-400 dark:text-surface-500`}
               aria-label="More menu"
             >

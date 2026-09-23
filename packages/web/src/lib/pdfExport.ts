@@ -16,7 +16,7 @@ export function exportTableToPdf({ title, subtitle, columns, rows, fileName, lan
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(15)
-  doc.text('Side Bud Admin', 40, 40)
+  doc.text('Nabri Admin', 40, 40)
   doc.setFontSize(11)
   doc.text(title, 40, 58)
   doc.setFont('helvetica', 'normal')

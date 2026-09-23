@@ -37,8 +37,8 @@ export function MessagesPage() {
   const myId = user?.id
   const { on } = useSocket({ autoConnect: true })
 
-  const fetchConversations = useCallback(async () => {
-    const res = await api.get('/messages/conversations')
+  const fetchConversations = useCallback(async (signal?: AbortSignal) => {
+    const res = await api.get('/messages/conversations', { signal, timeout: 15000 })
     const d = res.data?.data || {}
     const items: Conversation[] = Array.isArray(d) ? d : d.items || []
     setConversations(items.filter((c) => c.partnerId))

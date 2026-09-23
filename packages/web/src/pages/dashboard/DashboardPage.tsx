@@ -228,7 +228,7 @@ export function DashboardPage() {
                   <div className="w-16 h-16 mx-auto rounded-2xl bg-surface-100 dark:bg-surface-800 flex items-center justify-center mb-4">
                     <Home className="w-8 h-8 text-surface-400" />
                   </div>
-                  <h3 className="font-bold text-surface-900 dark:text-surface-100 mb-1 font-display">Welcome to Side Bud</h3>
+                  <h3 className="font-bold text-surface-900 dark:text-surface-100 mb-1 font-display">Welcome to Nabri</h3>
                   <p className="text-sm text-surface-500 dark:text-surface-400 mb-5">Start exploring to see your activity here</p>
                   <Link to="/walking-requests" className="btn-primary btn-sm">
                     <Footprints className="w-4 h-4" />

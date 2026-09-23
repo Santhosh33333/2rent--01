@@ -5,6 +5,11 @@ import { assertTransition } from "./bookingStateMachine";
 import { catalogDefaults, getServiceDef } from "./serviceCatalog";
 import { notifyBookingStatusChange } from "../controllers/notificationController";
 import { moneyTransaction, shortTransaction } from "../utils/db";
+import {
+  CancellationCutoffError,
+  BOOKING_CANCELLATION_CUTOFF_MS,
+  isBookingCancellationAllowed,
+} from "./bookingCancellationPolicy";
 
 // All real rates come from the admin-controlled PricingConfig table, scoped per
 // service. catalogDefaults() supplies the per-service fallback when no admin row
@@ -652,7 +657,7 @@ async function postCancellationRefund(
   fee: number,
   type: "PARTIAL",
   description: string,
-  cancelledBy: "USER" | "PARTNER",
+  cancelledBy: "USER" | "PARTNER" | "SYSTEM",
   reason?: string
 ): Promise<boolean> {
   const refundAmount = Math.max(0, Math.round((gross - fee) * 100) / 100);
@@ -699,7 +704,8 @@ async function postCancellationRefund(
   return true;
 }
 
-export async function cancelBooking(bookingId: string, cancelledBy: "USER" | "PARTNER", reason?: string) {  const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
+export async function cancelBooking(bookingId: string, cancelledBy: "USER" | "PARTNER" | "SYSTEM", reason?: string) {
+  const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
   if (!booking) throw new Error("Booking not found");
 
   // Idempotency: already-terminal bookings must never re-cancel or re-refund.
@@ -711,16 +717,18 @@ export async function cancelBooking(bookingId: string, cancelledBy: "USER" | "PA
     return { booking, refundProcessed: false };
   }
 
-  // Atomic claim so exactly ONE concurrent caller performs cancellation+refund
-  const claimed = await prisma.booking.updateMany({
-    where: { id: bookingId, status: { notIn: terminalStatuses } },
-    data: {
-      status: "CANCELLED",
-      cancelledBy,
-      cancelReason: reason,
-      cancelledAt: new Date(),
-    },
-  });
+  // Claim atomically against the database clock so the request cannot cross
+  // the cutoff between an application-side check and the status update.
+  const claimed = await prisma.$executeRaw`
+    UPDATE "Booking"
+    SET "status" = 'CANCELLED',
+        "cancelledBy" = ${cancelledBy},
+        "cancelReason" = ${reason ?? null},
+        "cancelledAt" = CURRENT_TIMESTAMP
+    WHERE "id" = ${bookingId}
+      AND "status" NOT IN ('COMPLETED', 'CANCELLED', 'REFUND_INITIATED', 'REFUND_COMPLETED')
+      AND (${cancelledBy} = 'SYSTEM' OR "scheduledAt" > CURRENT_TIMESTAMP + INTERVAL '1 hour')
+  `;
 
   let refundProcessed = false;
   // Full-refund stages: user paid but no partner commitment exists yet.
@@ -730,9 +738,19 @@ export async function cancelBooking(bookingId: string, cancelledBy: "USER" | "PA
   const refundableStatuses = ["PAYMENT_PENDING", "PAYMENT_INITIATED", "PAYMENT_SUCCESSFUL", "PARTNER_SEARCHING", "EXPIRED"];
   const partialRefundStatuses = ["PARTNER_ACCEPTED"];
 
-  if (claimed.count !== 1) {
+  if (claimed !== 1) {
     // Lost the race — another request already cancelled this booking
     const fresh = await prisma.booking.findUnique({ where: { id: bookingId } });
+    if (fresh && !terminalStatuses.includes(fresh.status)) {
+      if (cancelledBy !== "SYSTEM") {
+        const [clock] = await prisma.$queryRaw<Array<{ serverNow: Date }>>`
+          SELECT CURRENT_TIMESTAMP AS "serverNow"
+        `;
+        if (!isBookingCancellationAllowed(fresh.scheduledAt, clock.serverNow)) {
+          throw new CancellationCutoffError();
+        }
+      }
+    }
     return { booking: fresh ?? booking, refundProcessed: false };
   }
 
@@ -894,7 +912,7 @@ export async function processTimeoutBookings() {  const timeouts = await prisma.
         });
         continue;
       }
-      await cancelBooking(timeout.bookingId, "USER", "Booking timeout");
+      await cancelBooking(timeout.bookingId, "SYSTEM", "Booking timeout");
       await prisma.bookingTimeout.update({
         where: { id: timeout.id },
         data: { isProcessed: true },

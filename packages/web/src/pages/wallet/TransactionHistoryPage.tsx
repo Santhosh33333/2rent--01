@@ -8,11 +8,21 @@ import { PageHeader } from '../../components/PageHeader'
 import { AnimatedPage } from '../../components/AnimatedPage'
 
 interface Transaction {
-  id: number
+  id: string
   type: 'credit' | 'debit'
   amount: number
   description: string
   date: string
+  status: string
+}
+
+const creditTypes = new Set(['CREDIT', 'TOPUP', 'REFUND'])
+
+function formatTransactionDate(value: string): string {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime())
+    ? 'Date unavailable'
+    : date.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
 }
 
 export function TransactionHistoryPage() {
@@ -20,10 +30,21 @@ export function TransactionHistoryPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
 
   const { loading, error, retry } = useAsync(
-    async () => {
-      const res = await api.get('/wallet/transactions')
+    async (signal) => {
+      const res = await api.get('/wallet/transactions', { signal, timeout: 15000 })
       const raw = res.data?.data || res.data || []
-      const data: Transaction[] = Array.isArray(raw) ? raw : (raw.items || [])
+      const rows = Array.isArray(raw) ? raw : (raw.items || [])
+      const data: Transaction[] = rows.map((row: any) => {
+        const rawType = String(row.type || '').toUpperCase()
+        return {
+          id: String(row.id),
+          type: creditTypes.has(rawType) ? 'credit' : 'debit',
+          amount: Math.abs(Number(row.amount) || 0),
+          description: row.description || rawType.replace(/_/g, ' ').toLowerCase(),
+          date: row.createdAt || row.date || '',
+          status: String(row.status || 'COMPLETED').toUpperCase(),
+        }
+      })
       setTransactions(data)
       return data
     },
@@ -104,7 +125,7 @@ export function TransactionHistoryPage() {
               <tbody className="divide-y divide-surface-200 dark:divide-surface-700">
                 {filtered.map(tx => (
                   <tr key={tx.id} className="hover:bg-surface-50 dark:hover:bg-surface-800/30 transition-colors">
-                    <td className="px-6 py-4 text-sm text-surface-600 dark:text-surface-300">{tx.date}</td>
+                    <td className="px-6 py-4 text-sm text-surface-600 dark:text-surface-300 whitespace-nowrap">{formatTransactionDate(tx.date)}</td>
                     <td className="px-6 py-4 text-sm font-medium text-surface-900 dark:text-white">{tx.description}</td>
                     <td className="px-6 py-4 text-sm capitalize">
                       <span className={`inline-block px-2.5 py-1 rounded-lg text-xs font-semibold ${
@@ -112,7 +133,7 @@ export function TransactionHistoryPage() {
                           ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
                           : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
                       }`}>
-                        {tx.type}
+                        {tx.status === 'COMPLETED' || tx.status === 'SUCCESS' ? tx.type : tx.status.toLowerCase().replace(/_/g, ' ')}
                       </span>
                     </td>
                     <td className={`px-6 py-4 text-right text-sm font-bold ${tx.type === 'credit' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>

@@ -16,23 +16,30 @@ import {
 import { useAvatarUpload } from '../../lib/photo'
 import toast from 'react-hot-toast'
 import { api, assetUrl } from '../../lib/api'
+import { getErrorMessage } from '../../lib/error'
 
 export function ProfilePage() {
   const { user, updateUser, logout } = useAuth()
   const { approvedRoles, activeRole } = useRole()
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
+  const saveLock = useRef(false)
   const avatar = useAvatarUpload((avatarUrl) => updateUser({ avatarUrl }))
   const [profileStats, setProfileStats] = useState<{ walksCompleted?: number; eventsJoined?: number; averageRating?: number; joinedYear?: number } | null>(null)
   const [verificationStatus, setVerificationStatus] = useState<Record<string, unknown> | null>(null)
   const [statsLoading, setStatsLoading] = useState(true)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const { register, handleSubmit, formState: { errors } } = useForm({
+  const { register, handleSubmit, reset, formState: { errors } } = useForm({
     defaultValues: {
       name: user?.name || '',
       email: user?.email || '',
       phone: user?.phone || '',
+      dateOfBirth: user?.dateOfBirth?.slice(0, 10) || '',
+      bio: user?.bio || '',
+      city: user?.city || '',
+      country: user?.country || '',
+      gender: user?.gender || 'OTHER',
     },
   })
 
@@ -56,24 +63,51 @@ export function ProfilePage() {
     return () => { cancelled = true }
   }, [])
 
-  const onSubmit = async (data: { name?: string; email?: string; phone?: string; bio?: string; city?: string; country?: string; gender?: string }) => {
+  const onSubmit = async (data: { name?: string; email?: string; phone?: string; dateOfBirth?: string; bio?: string; city?: string; country?: string; gender?: string }) => {
+    if (saveLock.current) return
+    saveLock.current = true
     setSaving(true)
     try {
       await api.put('/users/profile', {
-        fullName: data.name,
+        fullName: data.name?.trim(),
+        ...(data.dateOfBirth ? { dateOfBirth: data.dateOfBirth } : {}),
+        bio: data.bio || '',
+        city: data.city || '',
+        country: data.country || '',
+        gender: data.gender || 'OTHER',
+      })
+      updateUser({
+        name: data.name?.trim(),
+        fullName: data.name?.trim(),
+        dateOfBirth: data.dateOfBirth,
         bio: data.bio,
         city: data.city,
         country: data.country,
         gender: data.gender,
       })
-      updateUser({ name: data.name, email: data.email, phone: data.phone })
+      reset({ ...data, name: data.name?.trim() || '' })
       setEditing(false)
       toast.success('Profile updated successfully')
-    } catch {
-      toast.error('Failed to update profile')
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to update profile'))
     } finally {
+      saveLock.current = false
       setSaving(false)
     }
+  }
+
+  const cancelEditing = () => {
+    reset({
+      name: user?.name || '',
+      email: user?.email || '',
+      phone: user?.phone || '',
+      dateOfBirth: user?.dateOfBirth?.slice(0, 10) || '',
+      bio: user?.bio || '',
+      city: user?.city || '',
+      country: user?.country || '',
+      gender: user?.gender || 'OTHER',
+    })
+    setEditing(false)
   }
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -203,7 +237,7 @@ export function ProfilePage() {
                 Profile Information
               </h2>
               {editing && (
-                <button onClick={() => setEditing(false)} className="btn-ghost btn-sm">
+                <button type="button" onClick={cancelEditing} className="btn-ghost btn-sm">
                   <X className="w-4 h-4" /> Cancel
                 </button>
               )}
@@ -223,17 +257,48 @@ export function ProfilePage() {
                 <label className="label">Email Address</label>
                 <div className="relative">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 shrink-0 pointer-events-none text-surface-400" />
-                  <input {...register('email', { required: 'Email is required' })} disabled={!editing} className="input pl-11" placeholder="your@email.com" />
+                  <input {...register('email')} disabled className="input pl-11" placeholder="your@email.com" />
                 </div>
-                {errors.email && <p className="mt-2 text-xs text-danger-500 font-medium">{errors.email.message}</p>}
+                {editing && <p className="mt-1 text-xs text-surface-500">Contact support to change your sign-in email.</p>}
               </div>
 
               <div>
                 <label className="label">Phone Number</label>
                 <div className="relative">
                   <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 shrink-0 pointer-events-none text-surface-400" />
-                  <input {...register('phone')} disabled={!editing} className="input pl-11" placeholder="+91 98765 43210" />
+                  <input {...register('phone')} disabled className="input pl-11" placeholder="+91 98765 43210" />
                 </div>
+                {editing && <p className="mt-1 text-xs text-surface-500">Phone changes require verification and cannot be changed here.</p>}
+              </div>
+
+              <div>
+                <label className="label">Date of Birth</label>
+                <input {...register('dateOfBirth')} type="date" disabled={!editing} className="input" />
+              </div>
+
+              <div>
+                <label className="label">About you</label>
+                <textarea {...register('bio')} disabled={!editing} maxLength={500} className="input min-h-24 resize-y" placeholder="Tell people a little about yourself" />
+              </div>
+
+              <div className="grid gap-5 sm:grid-cols-2">
+                <div>
+                  <label className="label">City</label>
+                  <input {...register('city')} disabled={!editing} maxLength={100} className="input" placeholder="Your city" />
+                </div>
+                <div>
+                  <label className="label">Country</label>
+                  <input {...register('country')} disabled={!editing} maxLength={100} className="input" placeholder="Country" />
+                </div>
+              </div>
+
+              <div>
+                <label className="label">Gender</label>
+                <select {...register('gender')} disabled={!editing} className="input">
+                  <option value="MALE">Male</option>
+                  <option value="FEMALE">Female</option>
+                  <option value="OTHER">Other</option>
+                </select>
               </div>
 
               {editing && (
@@ -245,7 +310,7 @@ export function ProfilePage() {
                       <span className="flex items-center gap-2"><Save className="w-4 h-4" />Save Changes</span>
                     )}
                   </button>
-                  <button type="button" onClick={() => setEditing(false)} className="btn-secondary">Cancel</button>
+                  <button type="button" onClick={cancelEditing} className="btn-secondary">Cancel</button>
                 </div>
               )}
             </form>

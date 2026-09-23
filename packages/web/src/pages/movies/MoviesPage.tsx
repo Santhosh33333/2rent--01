@@ -46,12 +46,12 @@ export function MoviesPage() {
   const [meetups, setMeetups] = useState<MovieMeetup[]>([])
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set())
 
-  const loadWatchlistIds = async () => {
+  const loadWatchlistIds = async (signal?: AbortSignal) => {
     try {
-      const res = await api.get('/movies/watchlist')
+      const res = await api.get('/movies/watchlist', { signal, timeout: 15000 })
       const d = res.data?.data || res.data
       const list: Array<{ tmdbId: number }> = Array.isArray(d.movies) ? d.movies : []
-      setSavedIds(new Set(list.map((m) => m.tmdbId)))
+      if (!signal?.aborted) setSavedIds(new Set(list.map((m) => m.tmdbId)))
       return list
     } catch {
       return []
@@ -85,10 +85,11 @@ export function MoviesPage() {
     }
   }
 
-  const loadWatchlistTab = async () => {
+  const loadWatchlistTab = async (signal: AbortSignal) => {
     setSearching(true)
     try {
-      const list = await loadWatchlistIds()
+      const list = await loadWatchlistIds(signal)
+      if (signal.aborted) return
       setMovies(
         list.map((w: any) => ({
           id: w.tmdbId,
@@ -102,23 +103,23 @@ export function MoviesPage() {
       )
       setUnconfigured(false)
     } finally {
-      setSearching(false)
+      if (!signal.aborted) setSearching(false)
     }
   }
 
-  const { loading, error, retry, execute: reload } = useAsync(async () => {
+  const { loading, error, retry, execute: reload } = useAsync(async (signal) => {
     if (tab === 'watchlist') {
-      await loadWatchlistTab()
+      await loadWatchlistTab(signal)
       return []
     }
-    const res = await api.get(`/movies/${tab}`)
+    const res = await api.get(`/movies/${tab}`, { signal, timeout: 15000 })
     const d = res.data?.data || res.data || {}
     const list: Movie[] = Array.isArray(d.movies) ? d.movies : []
     setMovies(list)
     setUnconfigured(false)
-    await loadWatchlistIds()
+    await loadWatchlistIds(signal)
     return list
-  }, true)
+  }, true, { cancelPrevious: true })
 
   const firstLoad = useRef(true)
   useEffect(() => {

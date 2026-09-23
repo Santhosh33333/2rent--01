@@ -47,8 +47,8 @@ export function BookingsListPage() {
   const [bookings, setBookings] = useState<Booking[]>([])
 
   const { loading, error, retry } = useAsync(
-    async () => {
-      const res = await api.get('/bookings')
+    async (signal) => {
+      const res = await api.get('/bookings', { signal, timeout: 15000 })
       const raw = res.data?.data || res.data || {}
       const data = Array.isArray(raw) ? raw : raw.items || []
       setBookings(data.map((b: any) => ({ ...b, partnerName: b?.partner?.user?.fullName })))

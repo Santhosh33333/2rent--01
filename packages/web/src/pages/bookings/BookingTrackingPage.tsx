@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { api, assetUrl } from '../../lib/api'
+import { getErrorMessage } from '../../lib/error'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { useBookingTracking } from '../../hooks/useSocket'
 import { GlassCard } from '../../components/GlassCard'
@@ -32,6 +33,9 @@ interface Booking {
   }
   estimatedAmount?: number
   scheduledAt: string
+  cancellationAllowed?: boolean
+  cancellationDeadlineAt?: string
+  cancellationServerTime?: string
 }
 
 interface LocationData {
@@ -46,6 +50,8 @@ export function BookingTrackingPage() {
   const navigate = useNavigate()
   const [booking, setBooking] = useState<Booking | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const [reloadToken, setReloadToken] = useState(0)
   const [cancelling, setCancelling] = useState(false)
   const [currentLocation, setCurrentLocation] = useState<LocationData | null>(null)
   const [trail, setTrail] = useState<{ lat: number; lng: number }[]>([]);
@@ -59,11 +65,21 @@ export function BookingTrackingPage() {
 
   useEffect(() => {
     if (!id) return
+    let alive = true
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let controller: AbortController | null = null
+    setLoading(true)
+    setLoadError(false)
+
     const fetchBooking = async () => {
+      controller = new AbortController()
+      let keepPolling = true
       try {
-        const res = await api.get(`/bookings/${id}`)
+        const res = await api.get(`/bookings/${id}`, { signal: controller.signal })
         const data = res.data?.data || res.data
+        if (!alive) return
         setBooking(data)
+        setLoadError(false)
         // Seed the map with the partner's last-known real GPS immediately.
         if (data?.partnerLocation && Number.isFinite(data.partnerLocation.latitude)) {
           const seed = {
@@ -76,15 +92,23 @@ export function BookingTrackingPage() {
           )
         }
       } catch {
-        toast.error('Failed to load booking')
+        if (!alive || controller?.signal.aborted) return
+        keepPolling = false
+        setLoadError(true)
       } finally {
-        setLoading(false)
+        if (alive) {
+          setLoading(false)
+          if (keepPolling) timer = setTimeout(fetchBooking, 30000)
+        }
       }
     }
-    fetchBooking()
-    const interval = setInterval(fetchBooking, 30000)
-    return () => clearInterval(interval)
-  }, [id])
+    void fetchBooking()
+    return () => {
+      alive = false
+      if (timer) clearTimeout(timer)
+      controller?.abort()
+    }
+  }, [id, reloadToken])
 
   // Listen to location updates
   useEffect(() => {
@@ -151,8 +175,8 @@ export function BookingTrackingPage() {
       setBooking((prev) => prev ? { ...prev, status: 'CANCELLED' } : null)
       toast.success('Booking cancelled')
       setTimeout(() => navigate('/bookings'), 1500)
-    } catch {
-      toast.error('Failed to cancel')
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to cancel booking'))
     } finally {
       setCancelling(false)
     }
@@ -220,9 +244,10 @@ export function BookingTrackingPage() {
         <div className="text-center">
           <AlertTriangle className="w-12 h-12 text-surface-400 mx-auto mb-4" />
           <h2 className="text-lg font-bold font-display text-surface-900 dark:text-white mb-2">
-            {booking?.status === 'CANCELLED' ? 'Booking Cancelled' : 'Booking not found'}
+            {booking?.status === 'CANCELLED' ? 'Booking Cancelled' : loadError ? 'Could not load this booking' : 'Booking not found'}
           </h2>
-          <button onClick={() => navigate('/bookings')} className="btn-primary btn-sm mt-4">View Bookings</button>
+          {loadError && <button onClick={() => setReloadToken((token) => token + 1)} className="btn-primary btn-sm mt-4">Retry</button>}
+          <button onClick={() => navigate('/bookings')} className="btn-outline btn-sm mt-4 ml-2">View Bookings</button>
         </div>
       </div>
     )
@@ -257,6 +282,13 @@ export function BookingTrackingPage() {
           {getStatusLabel(booking.status)}
         </div>
       </div>
+
+      {loadError && (
+        <div role="status" className="absolute top-20 left-4 right-4 z-20 mx-auto max-w-xl rounded-xl border border-primary-200 bg-surface-50 p-3 text-sm text-surface-800 shadow-lg dark:border-primary-800 dark:bg-surface-900 dark:text-surface-100">
+          Booking updates paused because the server could not be reached.
+          <button onClick={() => setReloadToken((token) => token + 1)} className="ml-3 font-semibold text-primary-700 underline underline-offset-2 dark:text-primary-300">Retry</button>
+        </div>
+      )}
 
       {/* Bottom sheet with booking details */}
       <div className="absolute bottom-0 left-0 right-0 z-10 max-h-[60vh] overflow-y-auto">
@@ -387,7 +419,7 @@ export function BookingTrackingPage() {
             <div className="flex gap-3 pt-2">
               <button
                 onClick={handleCancel}
-                disabled={cancelling || booking.status !== 'IN_PROGRESS'}
+                disabled={cancelling || booking.cancellationAllowed !== true}
                 className="flex-1 py-3 rounded-xl border border-red-200 dark:border-red-800/30 text-red-500 text-sm font-semibold hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {cancelling ? (
@@ -400,6 +432,13 @@ export function BookingTrackingPage() {
                   </>
                 )}
               </button>
+              {booking.cancellationAllowed === true ? (
+                <p className="text-xs text-surface-500">Cancellation is available until 1 hour before the booking.</p>
+              ) : !['COMPLETED', 'CANCELLED', 'REFUND_INITIATED', 'REFUND_COMPLETED'].includes(booking.status) ? (
+                <p role="status" className="text-xs text-danger-600 dark:text-danger-300">
+                  Cancellation is no longer available. Bookings cannot be cancelled within 1 hour of the scheduled start time.
+                </p>
+              ) : null}
               <button
                 onClick={handleSOS}
                 className="px-6 py-3 rounded-xl bg-red-500 text-white text-sm font-semibold hover:bg-red-600 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-red-500/30"

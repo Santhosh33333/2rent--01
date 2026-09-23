@@ -49,14 +49,16 @@ export function SearchPage() {
 
   // Fetch search results with pagination
   const { loading: searchLoading, error: searchError, retry: retrySearch } = useAsync(
-    async () => {
+    async (signal) => {
       if (!query || query.length < 2) {
         setResults([])
         setPaginationData(null)
         return null
       }
       const res = await api.get('/search', {
-        params: { q: query, filter, page, limit }
+        params: { q: query, filter, page, limit },
+        signal,
+        timeout: 15000,
       })
       const data = res.data?.data || {}
       setResults(data.results || [])
@@ -70,13 +72,13 @@ export function SearchPage() {
       return data
     },
     !!query,
-    { immediate: false }
+    { immediate: false, cancelPrevious: true }
   )
 
   // Fetch trending on mount
   const { loading: trendingLoading } = useAsync(
-    async () => {
-      const res = await api.get('/search/trending')
+    async (signal) => {
+      const res = await api.get('/search/trending', { signal, timeout: 15000 })
       const data = res.data?.data || {}
       setTrending(data)
       return data
@@ -87,16 +89,21 @@ export function SearchPage() {
 
   // Fetch suggestions
   useEffect(() => {
+    const controller = new AbortController()
     const timer = setTimeout(async () => {
       if (localQuery.length >= 2) {
         try {
           const res = await api.get('/search/suggest', {
-            params: { q: localQuery }
+            params: { q: localQuery },
+            signal: controller.signal,
+            timeout: 10000,
           })
-          setSuggestions(res.data?.data?.suggestions || [])
-          setShowSuggestions(true)
-        } catch (error) {
-          setSuggestions([])
+          if (!controller.signal.aborted) {
+            setSuggestions(res.data?.data?.suggestions || [])
+            setShowSuggestions(true)
+          }
+        } catch {
+          if (!controller.signal.aborted) setSuggestions([])
         }
       } else {
         setSuggestions([])
@@ -104,7 +111,10 @@ export function SearchPage() {
       }
     }, 300)
 
-    return () => clearTimeout(timer)
+    return () => {
+      clearTimeout(timer)
+      controller.abort()
+    }
   }, [localQuery])
 
   // Trigger search when query/filter/page changes

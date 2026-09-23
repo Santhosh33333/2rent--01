@@ -69,7 +69,7 @@ export async function openRazorpayCheckout({
       key: RAZORPAY_KEY || '',
       amount: amount * 100,
       currency: currency || 'INR',
-      name: 'Side Bud',
+      name: 'Nabri',
       description,
       order_id: orderId,
       notes,
@@ -83,7 +83,7 @@ export async function openRazorpayCheckout({
       },
       prefill: {},
       theme: {
-        color: '#6366f1',
+        color: '#55795b',
       },
       retry: {
         enabled: true,
@@ -125,7 +125,7 @@ export async function openRazorpayBookingCheckout({
       key: RAZORPAY_KEY || '',
       amount: amount * 100,
       currency: currency || 'INR',
-      name: 'Side Bud',
+      name: 'Nabri',
       description: `Booking Payment - ${bookingId}`,
       order_id: orderId,
       notes: {
@@ -141,7 +141,7 @@ export async function openRazorpayBookingCheckout({
       },
       prefill: {},
       theme: {
-        color: '#6366f1',
+        color: '#55795b',
       },
       retry: {
         enabled: true,

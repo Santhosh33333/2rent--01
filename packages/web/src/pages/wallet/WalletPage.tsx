@@ -25,10 +25,10 @@ export function WalletPage() {
   const [balance, setBalance] = useState<number | null>(null)
 
   const { loading, error, retry } = useAsync(
-    async () => {
+    async (signal) => {
       const [txRes, wRes] = await Promise.all([
-        api.get('/wallet/transactions?limit=100'),
-        api.get('/wallet').catch(() => null),
+        api.get('/wallet/transactions?limit=100', { signal, timeout: 15000 }),
+        api.get('/wallet', { signal, timeout: 15000 }).catch(() => null),
       ])
       const txData = txRes.data?.data || txRes.data || {}
       const items: Transaction[] = txData.items || []

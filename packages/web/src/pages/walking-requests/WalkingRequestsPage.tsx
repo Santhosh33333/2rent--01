@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { format } from 'date-fns'
 import {
@@ -11,6 +11,7 @@ import { AnimatedPage } from '../../components/AnimatedPage'
 import { PageHeader } from '../../components/PageHeader'
 import { EmptyState } from '../../components/EmptyState'
 import { FloatingActionButton } from '../../components/FloatingActionButton'
+import { getErrorMessage } from '../../lib/error'
 
 interface Request {
   id: number
@@ -33,24 +34,30 @@ export function WalkingRequestsPage() {
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const requestController = useRef<AbortController | null>(null)
 
-  const fetchRequests = async () => {
+  const fetchRequests = useCallback(async () => {
+    requestController.current?.abort()
+    const controller = new AbortController()
+    requestController.current = controller
     try {
       setLoading(true)
       setError(null)
-      const res = await api.get('/walking-requests')
+      const res = await api.get('/walking-requests', { signal: controller.signal, timeout: 15000 })
       const data = res.data?.data || res.data || []
-      setRequests(Array.isArray(data) ? data : (data.items || []))
-    } catch {
-      setError('Failed to load walking requests')
+      if (!controller.signal.aborted) setRequests(Array.isArray(data) ? data : (data.items || []))
+    } catch (err: unknown) {
+      if (!controller.signal.aborted) setError(getErrorMessage(err, 'Could not load walking requests.'))
     } finally {
-      setLoading(false)
+      if (!controller.signal.aborted) setLoading(false)
+      if (requestController.current === controller) requestController.current = null
     }
-  }
+  }, [])
 
   useEffect(() => {
-    fetchRequests()
-  }, [])
+    void fetchRequests()
+    return () => requestController.current?.abort()
+  }, [fetchRequests])
 
   if (loading) {
     return (

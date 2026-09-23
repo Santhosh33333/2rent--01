@@ -32,6 +32,7 @@ export function EventsPage() {
   const [events, setEvents] = useState<Event[]>([])
   const [showCreate, setShowCreate] = useState(false)
   const [creating, setCreating] = useState(false)
+  const createLock = useRef(false)
   const [form, setForm] = useState({ title: '', description: '', location: '', startTime: '', endTime: '', capacity: '', category: '', price: '' })
   const [categories, setCategories] = useState<Array<{ key: string; enabled: boolean }>>([])
   const [coverFile, setCoverFile] = useState<Blob | null>(null)
@@ -62,6 +63,7 @@ export function EventsPage() {
   }
 
   const createEvent = async () => {
+    if (createLock.current) return
     if (form.title.trim().length < 3) {
       toast.error('Title must be at least 3 characters')
       return
@@ -70,6 +72,7 @@ export function EventsPage() {
       toast.error('Pick a valid start date and time')
       return
     }
+    createLock.current = true
     setCreating(true)
     try {
       const res = await api.post('/events', {
@@ -107,16 +110,17 @@ export function EventsPage() {
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Failed to create event')
     } finally {
+      createLock.current = false
       setCreating(false)
     }
   }
 
   const { loading, error, retry, execute: reloadEvents } = useAsync(
-    async () => {
+    async (signal) => {
       const params: Record<string, string | number> = {}
       if (datePreset === 'today' || datePreset === 'week') params.preset = datePreset
       if (datePreset === 'free') params.free = 'true'
-      const res = await api.get('/events', { params })
+      const res = await api.get('/events', { params, signal, timeout: 15000 })
       const d = res.data?.data || res.data || {}
       const raw = Array.isArray(d) ? d : d.items || []
       const data = raw.map((ev: any) => ({
@@ -135,7 +139,8 @@ export function EventsPage() {
       setEvents(data)
       return data
     },
-    true
+    true,
+    { cancelPrevious: true }
   )
 
   // Server-side date preset: refetch when the pill changes (first load is

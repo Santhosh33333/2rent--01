@@ -32,8 +32,8 @@ export function CommunitiesPage() {
   const [form, setForm] = useState({ name: '', description: '', privacy: 'PUBLIC', city: '' })
 
   const { loading, error, retry } = useAsync(
-    async () => {
-      const res = await api.get('/communities')
+    async (signal) => {
+      const res = await api.get('/communities', { signal, timeout: 15000 })
       const data = res.data?.data || res.data || []
       const items = Array.isArray(data) ? data : (data.items || [])
       // Normalize backend shape (memberCount/isMember/city) to view shape.

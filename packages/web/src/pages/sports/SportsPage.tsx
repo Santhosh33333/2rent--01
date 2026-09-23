@@ -47,13 +47,14 @@ export function SportsPage() {
   const [when, setWhen] = useState<'all' | 'today' | 'week'>('all')
   const [showCreate, setShowCreate] = useState(false)
   const [creating, setCreating] = useState(false)
+  const createLock = useRef(false)
   const [form, setForm] = useState({ title: '', sport: 'cricket', location: '', date: '', time: '', capacity: '' })
 
-  const { loading, error, retry, execute: reload } = useAsync(async () => {
+  const { loading, error, retry, execute: reload } = useAsync(async (signal) => {
     const params: Record<string, string> = { category: 'sports' }
     if (sport !== 'all') params.subcategory = sport
     if (when !== 'all') params.preset = when
-    const res = await api.get('/events', { params })
+    const res = await api.get('/events', { params, signal, timeout: 15000 })
     const d = res.data?.data || res.data || {}
     const raw = Array.isArray(d) ? d : d.items || []
     const data: SportGame[] = raw.map((ev: any) => ({
@@ -69,7 +70,7 @@ export function SportsPage() {
     }))
     setGames(data)
     return data
-  }, true)
+  }, true, { cancelPrevious: true })
 
   const firstLoad = useRef(true)
   useEffect(() => {
@@ -81,6 +82,7 @@ export function SportsPage() {
   }, [sport, when, reload])
 
   const createGame = async () => {
+    if (createLock.current) return
     if (form.title.trim().length < 3) {
       toast.error('Give the game a title (min 3 characters)')
       return
@@ -94,6 +96,7 @@ export function SportsPage() {
       toast.error('Pick a future date and time')
       return
     }
+    createLock.current = true
     setCreating(true)
     try {
       const res = await api.post('/events', {
@@ -113,6 +116,7 @@ export function SportsPage() {
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Failed to create game')
     } finally {
+      createLock.current = false
       setCreating(false)
     }
   }

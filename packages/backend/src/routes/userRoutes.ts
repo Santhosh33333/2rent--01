@@ -19,6 +19,7 @@ router.put(
   "/profile",
   [
     body("fullName").optional().notEmpty().trim().isLength({ min: 2, max: 100 }),
+    body("dateOfBirth").optional().isISO8601({ strict: true, strictSeparator: true }),
     body("bio").optional().isString().trim().isLength({ max: 500 }),
     body("city").optional().isString().trim().isLength({ max: 100 }),
     body("country").optional().isString().trim().isLength({ max: 100 }),

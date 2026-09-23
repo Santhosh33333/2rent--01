@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from '../lib/auth';
+import { installNotificationAudioUnlock, playNotificationSound } from '../lib/notificationSound';
 import type {
   LocationData,
   BookingStatusData,
@@ -48,6 +49,7 @@ export function useSocket(options: UseSocketOptions = {}) {
   const isConnectingRef = useRef(false);
 
   useEffect(() => {
+    if (autoConnect) installNotificationAudioUnlock();
     // Logout cleanup: no user -> tear down any live socket
     if (!user && globalSocket) {
       disconnectGlobalSocket();
@@ -443,7 +445,10 @@ export function useNotifications() {
 
   const listenToNotifications = useCallback(
     (callback: (data: NotificationData) => void) => {
-      return on('notification', callback as (...args: unknown[]) => void);
+      return on('notification', ((data: NotificationData) => {
+        playNotificationSound(data.id);
+        callback(data);
+      }) as (...args: unknown[]) => void);
     },
     [on]
   );

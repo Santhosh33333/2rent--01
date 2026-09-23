@@ -30,6 +30,7 @@ import { calculateDistance } from "../utils/location"
 import { getConfig } from "../services/pricingEngine"
 import { buildReferralRewardService } from "./referralController"
 import { env } from "../config/env"
+import { CancellationCutoffError, getBookingCancellationState } from "../services/bookingCancellationPolicy"
 
 const settleReferralReward = buildReferralRewardService()
 
@@ -239,7 +240,11 @@ export async function getBookingDetail(req: AuthedRequest, res: Response): Promi
       ? await prisma.partnerLocation.findUnique({ where: { partnerId: booking.partnerId } })
       : null;
 
-    sendSuccess(res, { ...booking, partnerLocation: partnerLocation ?? null }, "Booking details retrieved.");
+    sendSuccess(res, {
+      ...booking,
+      ...getBookingCancellationState(booking.scheduledAt, booking.status),
+      partnerLocation: partnerLocation ?? null,
+    }, "Booking details retrieved.");
   } catch (err: any) {
     sendError(res, "Failed to retrieve booking details.", 500, "INTERNAL_ERROR");
   }
@@ -901,6 +906,10 @@ export async function rejectBooking(req: AuthedRequest, res: Response): Promise<
 
     sendSuccess(res, undefined, "Booking rejected.");
   } catch (err: any) {
+    if (err instanceof CancellationCutoffError) {
+      sendError(res, err.message, 400, err.code);
+      return;
+    }
     sendError(res, "Failed to reject booking.", 500, "INTERNAL_ERROR");
   }
 }
@@ -1292,6 +1301,10 @@ export async function cancelBookingHandler(req: AuthedRequest, res: Response): P
 
     sendSuccess(res, result, "Booking cancelled.");
   } catch (err: any) {
+    if (err instanceof CancellationCutoffError) {
+      sendError(res, err.message, 400, err.code);
+      return;
+    }
     sendError(res, "Failed to cancel booking.", 500, "INTERNAL_ERROR");
   }
 }

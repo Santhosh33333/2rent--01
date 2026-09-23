@@ -153,13 +153,13 @@ export function DiscoveryCategoryPage({ categoryKey }: DiscoveryCategoryPageProp
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-surface-900 dark:text-white">{p.name}</p>
                     <p className="text-xs text-surface-500">
-                      {[p.city, ageFrom(p.dateOfBirth) ? `${ageFrom(p.dateOfBirth)} yrs` : null].filter(Boolean).join(' · ') || 'Side Bud member'}
+                      {[p.city, ageFrom(p.dateOfBirth) ? `${ageFrom(p.dateOfBirth)} yrs` : null].filter(Boolean).join(' · ') || 'Nabri member'}
                     </p>
                   </div>
                 </div>
                 {p.bio && <p className="mt-3 text-sm text-surface-600 dark:text-surface-300 line-clamp-2">{p.bio}</p>}
                 <div className="mt-4 flex items-center justify-between text-xs text-surface-500">
-                  <span>Side Bud member</span>
+                  <span>Nabri member</span>
                   <button
                     onClick={() => navigate(`/messages?user=${p.id}`)}
                     className="inline-flex items-center gap-1 font-medium text-primary-600 dark:text-primary-400"

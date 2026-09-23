@@ -22,6 +22,7 @@ export function AdminPortalPage() {
     { path: '/admin/sos', title: 'SOS Alerts', desc: 'Emergency queue & live locations', icon: Siren },
     { path: '/admin/payments', title: 'Payment Center', desc: 'Transactions & cash stats', icon: Banknote },
     { path: '/admin/upi-verification', title: 'UPI Verification', desc: 'Verify manual UPI payments', icon: QrCode },
+    { path: '/admin/topups', title: 'Wallet Top-ups', desc: 'Verify manual UPI top-ups & credit', icon: Wallet },
     { path: '/admin/reports', title: 'Reports', desc: 'Review user reports', icon: Flag },
     { path: '/admin/audit-logs', title: 'Audit Logs', desc: 'System activity logs', icon: ScrollText },
     { path: '/admin/pricing', title: 'Pricing & Fees', desc: 'User & partner fee control', icon: Percent },
@@ -37,7 +38,7 @@ export function AdminPortalPage() {
           </Link>
           <div className="flex-1">
             <h1 className="text-2xl font-bold font-display text-white">Admin Portal</h1>
-            <p className="text-gray-400 text-sm mt-1">Manage your Side Bud platform</p>
+            <p className="text-gray-400 text-sm mt-1">Manage your Nabri platform</p>
           </div>
           {/* Switch between admin / user / partner account views */}
           <RoleSwitcher />

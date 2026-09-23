@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useNavigate, Link } from 'react-router-dom'
 import {
@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { api } from '../../lib/api'
+import { getErrorMessage } from '../../lib/error'
 
 interface FormData {
   type: 'walking' | 'companionship'
@@ -20,6 +21,7 @@ interface FormData {
 export function CreateWalkingRequestPage() {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
+  const submissionLock = useRef(false)
   const { register, handleSubmit, formState: { errors }, watch } = useForm<FormData>({
     defaultValues: { type: 'walking', location: '', date: '', time: '', reward: undefined, description: '' },
   })
@@ -27,14 +29,17 @@ export function CreateWalkingRequestPage() {
   const selectedType = watch('type')
 
   const onSubmit = async (data: FormData) => {
+    if (submissionLock.current) return
+    submissionLock.current = true
     setLoading(true)
     try {
       await api.post('/walking-requests', data)
       toast.success('Walking request created successfully!')
       navigate('/walking-requests')
-    } catch {
-      toast.error('Failed to create request. Please try again.')
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to create request. Please try again.'))
     } finally {
+      submissionLock.current = false
       setLoading(false)
     }
   }

@@ -28,17 +28,17 @@ export function TermsOfServicePage() {
           <div className="prose prose-sm dark:prose-invert max-w-none space-y-6 text-surface-700 dark:text-surface-300">
             <section>
               <h2 className="text-lg font-bold font-display text-surface-900 dark:text-white mb-3">1. Acceptance of Terms</h2>
-              <p className="text-sm leading-relaxed">By accessing or using Side Bud, you agree to be bound by these Terms of Service. If you do not agree, do not use the application.</p>
+              <p className="text-sm leading-relaxed">By accessing or using Nabri, you agree to be bound by these Terms of Service. If you do not agree, do not use the application.</p>
             </section>
 
             <section>
               <h2 className="text-lg font-bold font-display text-surface-900 dark:text-white mb-3">2. Eligibility</h2>
-              <p className="text-sm leading-relaxed">You must be at least 18 years old to use Sidebud. You must provide accurate and complete registration information. One account per person.</p>
+              <p className="text-sm leading-relaxed">You must be at least 18 years old to use Nabri. You must provide accurate and complete registration information. One account per person.</p>
             </section>
 
             <section>
               <h2 className="text-lg font-bold font-display text-surface-900 dark:text-white mb-3">3. Services</h2>
-              <p className="text-sm leading-relaxed">Side Bud connects users with service providers (partners) for walking companions, carry assistance, and other community services. We are a platform — we do not directly provide the services listed.</p>
+              <p className="text-sm leading-relaxed">Nabri connects users with service providers (partners) for walking companions, carry assistance, and other community services. We are a platform — we do not directly provide the services listed.</p>
             </section>
 
             <section>
@@ -53,12 +53,12 @@ export function TermsOfServicePage() {
 
             <section>
               <h2 className="text-lg font-bold font-display text-surface-900 dark:text-white mb-3">6. Partner Obligations</h2>
-              <p className="text-sm leading-relaxed">Partners must maintain accurate profiles, complete KYC verification, provide services professionally, and comply with all applicable laws. Partners are independent contractors, not employees of Sidebud.</p>
+              <p className="text-sm leading-relaxed">Partners must maintain accurate profiles, complete KYC verification, provide services professionally, and comply with all applicable laws. Partners are independent contractors, not employees of Nabri.</p>
             </section>
 
             <section>
               <h2 className="text-lg font-bold font-display text-surface-900 dark:text-white mb-3">7. Liability</h2>
-              <p className="text-sm leading-relaxed">Side Bud is not liable for injuries, damages, or losses during service delivery. Our liability is limited to the amount of fees paid for the specific booking in question. We provide the platform "as is" without warranties.</p>
+              <p className="text-sm leading-relaxed">Nabri is not liable for injuries, damages, or losses during service delivery. Our liability is limited to the amount of fees paid for the specific booking in question. We provide the platform "as is" without warranties.</p>
             </section>
 
             <section>
@@ -73,7 +73,7 @@ export function TermsOfServicePage() {
 
             <section>
               <h2 className="text-lg font-bold font-display text-surface-900 dark:text-white mb-3">10. Contact</h2>
-              <p className="text-sm leading-relaxed">For questions about these Terms, contact us at legal@Sidebud.app or through the in-app support channel.</p>
+              <p className="text-sm leading-relaxed">For questions about these Terms, contact us at legal@nabri.app or through the in-app support channel.</p>
             </section>
           </div>
         </GlassCard>

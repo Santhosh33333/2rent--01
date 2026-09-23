@@ -15,9 +15,12 @@ router.use(authenticateToken);
 router.post(
   "/personal-details",
   [
-    body("fullName").notEmpty().withMessage("Full name is required"),
-    body("dateOfBirth").notEmpty().withMessage("Date of birth is required"),
+    body("fullName").isString().trim().isLength({ min: 2, max: 100 }).withMessage("Full name must be 2 to 100 characters"),
+    body("dateOfBirth").isISO8601({ strict: true, strictSeparator: true }).withMessage("A valid date of birth is required"),
     body("gender").notEmpty().isIn(["MALE", "FEMALE", "OTHER"]).withMessage("Valid gender is required"),
+    body("city").optional().isString().trim().isLength({ max: 100 }),
+    body("country").optional().isString().trim().isLength({ max: 100 }),
+    body("address").optional().isString().trim().isLength({ max: 500 }),
   ],
   sanitizeInput,
   validateRequest,

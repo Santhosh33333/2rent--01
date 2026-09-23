@@ -202,7 +202,7 @@ export async function register(req: Request, res: Response): Promise<void> {
           role: "USER",
           activeRole: "USER",
         },
-        select: { id: true, email: true, phone: true, fullName: true, status: true, role: true, activeRole: true },
+        select: { id: true, email: true, phone: true, fullName: true, dateOfBirth: true, gender: true, avatarUrl: true, bio: true, city: true, country: true, status: true, role: true, activeRole: true },
       });
 
       if (normalizedAccountType === "PARTNER") {
@@ -252,6 +252,13 @@ export async function register(req: Request, res: Response): Promise<void> {
       id: user.id,
       email: user.email,
       fullName: user.fullName,
+      phone: user.phone,
+      dateOfBirth: user.dateOfBirth,
+      gender: user.gender,
+      avatarUrl: user.avatarUrl,
+      bio: user.bio,
+      city: user.city,
+      country: user.country,
       role: user.role,
       activeRole: user.activeRole || user.role,
       accountType: normalizedAccountType,
@@ -347,6 +354,13 @@ export async function login(req: Request, res: Response): Promise<void> {
       id: user.id,
       email: user.email,
       fullName: user.fullName,
+      phone: user.phone,
+      dateOfBirth: user.dateOfBirth,
+      gender: user.gender,
+      avatarUrl: user.avatarUrl,
+      bio: user.bio,
+      city: user.city,
+      country: user.country,
       role: user.role,
       activeRole: effectiveActiveRole,
       accountType: effectiveActiveRole || "USER",
@@ -481,7 +495,7 @@ export async function verifyPhoneOTP(req: Request, res: Response): Promise<void>
       const { accessToken, refreshToken } = await createUserSession(user.id, req);
       await recordLogin(user.id, req);
 
-      sendSuccess(res, { accessToken, refreshToken, user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role } }, "Phone verified and logged in.");
+      sendSuccess(res, { accessToken, refreshToken, user: { id: user.id, email: user.email, fullName: user.fullName, phone: user.phone, dateOfBirth: user.dateOfBirth, gender: user.gender, avatarUrl: user.avatarUrl, bio: user.bio, city: user.city, country: user.country, role: user.role, activeRole: user.activeRole } }, "Phone verified and logged in.");
       return;
     }
 
@@ -589,7 +603,7 @@ export async function googleSignIn(req: Request, res: Response): Promise<void> {
     const { accessToken, refreshToken } = await createUserSession(user.id, req);
     await recordLogin(user.id, req);
 
-    sendSuccess(res, { accessToken, refreshToken, user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role } }, "Google sign-in successful.");
+    sendSuccess(res, { accessToken, refreshToken, user: { id: user.id, email: user.email, fullName: user.fullName, phone: user.phone, dateOfBirth: user.dateOfBirth, gender: user.gender, avatarUrl: user.avatarUrl, bio: user.bio, city: user.city, country: user.country, role: user.role, activeRole: user.activeRole } }, "Google sign-in successful.");
   } catch (err) {
     console.error("googleSignIn error:", err);
     sendError(res, "Google sign-in failed.", 500, "INTERNAL_ERROR");
@@ -679,7 +693,7 @@ export async function appleSignIn(req: AuthedRequest, res: Response): Promise<vo
     await recordLogin(user.id, req);
     sendSuccess(
       res,
-      { accessToken, refreshToken, user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role } },
+      { accessToken, refreshToken, user: { id: user.id, email: user.email, fullName: user.fullName, phone: user.phone, dateOfBirth: user.dateOfBirth, gender: user.gender, avatarUrl: user.avatarUrl, bio: user.bio, city: user.city, country: user.country, role: user.role, activeRole: user.activeRole } },
       "Apple sign-in successful."
     );
   } catch (err) {
@@ -938,7 +952,7 @@ export async function verifyPassword(req: Request, res: Response): Promise<void>
     }
     const accessToken = generateAccessToken({ userId: user.id, email: user.email });
     const refreshToken = generateRefreshToken(user.id);
-    sendSuccess(res, { accessToken, refreshToken, user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role } }, "Password verified.");
+    sendSuccess(res, { accessToken, refreshToken, user: { id: user.id, email: user.email, fullName: user.fullName, phone: user.phone, dateOfBirth: user.dateOfBirth, gender: user.gender, avatarUrl: user.avatarUrl, bio: user.bio, city: user.city, country: user.country, role: user.role, activeRole: user.activeRole } }, "Password verified.");
   } catch (err) {
     sendError(res, "Password verification failed.", 500, "INTERNAL_ERROR");
   }

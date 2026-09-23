@@ -77,13 +77,13 @@ const envSchema = z.object({
   SMTP_PORT: z.string().default("587").transform(Number),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
-  SMTP_FROM: z.string().default("Side Bud <noreply@Sidebud.app>"),
+  SMTP_FROM: z.string().default("Nabri <noreply@nabri.app>"),
 
   // Email provider abstraction: none | smtp | resend. `none` (default)
   // honestly reports EMAIL_NOT_CONFIGURED instead of pretending to send.
   EMAIL_PROVIDER: z.string().default("none"),
   RESEND_API_KEY: z.string().optional(),
-  EMAIL_FROM: z.string().default("Side Bud <noreply@Sidebud.app>"),
+  EMAIL_FROM: z.string().default("Nabri <noreply@nabri.app>"),
 
   // OTP policy (admin-tunable via AppSettings otp.* keys, env = fallback).
   OTP_EXPIRY_MINUTES: z.string().default("10").transform(Number),

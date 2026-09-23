@@ -17,6 +17,7 @@ interface User {
   kycRejectionReason?: string | null
   partnerStatus?: string | null
   fullName?: string
+  dateOfBirth?: string
   city?: string
   bio?: string
   country?: string
@@ -52,7 +53,7 @@ function buildUserFromPayload(payload: Record<string, unknown>, fallbackName?: s
   return {
     id: (payload?.id as string) || `local-${Date.now()}`,
     email: (payload?.email as string) || fallbackName || 'user@Sidebud.local',
-    name: (payload?.fullName as string) || (payload?.name as string) || fallbackName || 'Side Bud User',
+    name: (payload?.fullName as string) || (payload?.name as string) || fallbackName || 'Nabri User',
     phone: payload?.phone as string,
     role,
     activeRole: normalizeRole((payload?.activeRole || payload?.role || role) as string),
@@ -62,7 +63,8 @@ function buildUserFromPayload(payload: Record<string, unknown>, fallbackName?: s
     kycStatus: payload?.kycStatus as string,
     kycRejectionReason: (payload?.kycRejectionReason as string) ?? null,
     partnerStatus: (payload?.partnerStatus as string) ?? null,
-    fullName: (payload?.fullName as string) || (payload?.name as string) || fallbackName || 'Side Bud User',
+    fullName: (payload?.fullName as string) || (payload?.name as string) || fallbackName || 'Nabri User',
+    dateOfBirth: payload?.dateOfBirth as string,
     city: payload?.city as string,
     bio: payload?.bio as string,
     country: payload?.country as string,

@@ -1,4 +1,4 @@
-import { getErrorMessage } from '../../lib/error'
+﻿import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, Search, ChevronLeft, ChevronRight, CreditCard, IndianRupee, Clock, XCircle, Percent, Banknote, Wallet, Download, Phone, Mail, User as UserIcon, FileDown } from 'lucide-react'
@@ -55,7 +55,7 @@ export function AdminPaymentsPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [downloading, setDownloading] = useState(false)
 
-  const inr = (n: number) => `₹${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
+  const inr = (n: number) => `â‚¹${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
 
   const load = async () => {
     setLoading(true)
@@ -124,7 +124,7 @@ export function AdminPaymentsPage() {
       const a = document.createElement('a')
       a.href = url
       const stamp = new Date().toISOString().slice(0, 10)
-      const parts = ['Sidebud-payments', stamp]
+      const parts = ['nabri-payments', stamp]
       if (statusFilter) parts.push(statusFilter.toLowerCase())
       if (typeFilter) parts.push(typeFilter.toLowerCase())
       if (search.trim()) parts.push('search')
@@ -142,7 +142,7 @@ export function AdminPaymentsPage() {
 
   const statCards = stats ? [    { label: 'Total Collected', value: inr(stats.totalCollected), sub: `${stats.completedTransactions} completed`, icon: IndianRupee, color: 'text-emerald-400 bg-emerald-900/30' },
     { label: 'Platform Fees Earned', value: inr(stats.platformFeesEarned), sub: 'from completed bookings', icon: Percent, color: 'text-violet-400 bg-violet-900/30' },
-    { label: 'Cash Collected by Partners', value: inr(stats.cashCollectedByPartners), sub: `${stats.cashBookingCount} cash bookings · fees due ${inr(stats.cashPlatformFeesDue)}`, icon: Banknote, color: 'text-amber-400 bg-amber-900/30' },
+    { label: 'Cash Collected by Partners', value: inr(stats.cashCollectedByPartners), sub: `${stats.cashBookingCount} cash bookings Â· fees due ${inr(stats.cashPlatformFeesDue)}`, icon: Banknote, color: 'text-amber-400 bg-amber-900/30' },
     { label: 'Wallet Top-ups', value: inr(stats.walletTopups), sub: `${stats.topupCount} top-ups`, icon: Wallet, color: 'text-sky-400 bg-sky-900/30' },
     { label: 'Partner Payouts', value: inr(stats.partnerPayouts), sub: 'earnings credited', icon: CreditCard, color: 'text-indigo-400 bg-indigo-900/30' },
     { label: 'Pending Withdrawals', value: inr(stats.pendingWithdrawalsAmount), sub: 'awaiting payout', icon: Clock, color: 'text-orange-400 bg-orange-900/30' },
@@ -184,7 +184,7 @@ export function AdminPaymentsPage() {
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search order/payment ID…"
+                placeholder="Search order/payment IDâ€¦"
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-gray-900 border border-gray-800 text-white placeholder:text-gray-600 focus:border-emerald-500 focus:outline-none"
               />
             </div>
@@ -215,23 +215,23 @@ export function AdminPaymentsPage() {
               exportTableToPdf({
                 title: 'Payments',
                 subtitle: [
-                  stats ? `Collected ₹${stats.totalCollected.toLocaleString('en-IN')}` : null,
-                  stats ? `Fees ₹${stats.platformFeesEarned.toLocaleString('en-IN')}` : null,
+                  stats ? `Collected â‚¹${stats.totalCollected.toLocaleString('en-IN')}` : null,
+                  stats ? `Fees â‚¹${stats.platformFeesEarned.toLocaleString('en-IN')}` : null,
                   `${rows.length} transaction(s) on this page`,
                 ]
                   .filter(Boolean)
-                  .join(' · '),
+                  .join(' Â· '),
                 columns: ['Date', 'Payer', 'Email', 'Amount', 'Type', 'Status', 'Booking'],
                 rows: rows.map((r) => [
                   r.createdAt ? new Date(r.createdAt).toLocaleString('en-IN') : '-',
                   r.user?.fullName || '-',
                   r.user?.email || '-',
-                  `₹${r.amount}`,
+                  `â‚¹${r.amount}`,
                   r.type || '-',
                   r.status || '-',
                   r.booking?.serviceType || '-',
                 ]),
-                fileName: `Sidebud-payments-${new Date().toISOString().slice(0, 10)}${statusFilter ? `-${statusFilter.toLowerCase()}` : ''}${typeFilter ? `-${typeFilter.toLowerCase()}` : ''}`,
+                fileName: `nabri-payments-${new Date().toISOString().slice(0, 10)}${statusFilter ? `-${statusFilter.toLowerCase()}` : ''}${typeFilter ? `-${typeFilter.toLowerCase()}` : ''}`,
                 landscape: true,
               })
             }
@@ -246,7 +246,7 @@ export function AdminPaymentsPage() {
         {error && <div className="mb-4 p-4 rounded-xl bg-red-900/20 border border-red-800/50 text-red-300 text-sm">{error}</div>}
 
         {loading ? (
-          <div className="py-16 text-center text-gray-500">Loading payments…</div>
+          <div className="py-16 text-center text-gray-500">Loading paymentsâ€¦</div>
         ) : rows.length === 0 ? (
           <div className="py-16 text-center">
             <CreditCard className="w-12 h-12 mx-auto text-gray-700 mb-3" />
@@ -262,7 +262,7 @@ export function AdminPaymentsPage() {
                   onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}
                 >
                   <div className="w-11 h-11 shrink-0 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center font-bold text-white">
-                    ₹{Number(r.amount).toLocaleString('en-IN')}
+                    â‚¹{Number(r.amount).toLocaleString('en-IN')}
                   </div>
                   <div className="flex-1 min-w-0 grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-1 text-sm">
                     <div>
@@ -271,11 +271,11 @@ export function AdminPaymentsPage() {
                     </div>
                     <div>
                       <p className="text-gray-500 text-[11px] uppercase tracking-wide">Payment ID</p>
-                      <p className="font-mono text-gray-200 truncate">{r.razorpayPaymentId || '—'}</p>
+                      <p className="font-mono text-gray-200 truncate">{r.razorpayPaymentId || 'â€”'}</p>
                     </div>
                     <div>
                       <p className="text-gray-500 text-[11px] uppercase tracking-wide">Paid By</p>
-                      <p className="text-gray-200 truncate">{r.user?.fullName || r.user?.email || '—'}</p>
+                      <p className="text-gray-200 truncate">{r.user?.fullName || r.user?.email || 'â€”'}</p>
                     </div>
                   <div>
                     <p className="text-gray-500 text-[11px] uppercase tracking-wide">Type / Status</p>
@@ -287,9 +287,9 @@ export function AdminPaymentsPage() {
                   <div>
                     <p className="text-gray-500 text-[11px] uppercase tracking-wide">Booking</p>
                     {r.booking ? (
-                      <span className="text-gray-200">{r.booking.serviceType} · {r.booking.status}</span>
+                      <span className="text-gray-200">{r.booking.serviceType} Â· {r.booking.status}</span>
                     ) : (
-                      <span className="text-gray-500">{r.type === 'TOPUP' ? 'Wallet top-up' : '—'}</span>
+                      <span className="text-gray-500">{r.type === 'TOPUP' ? 'Wallet top-up' : 'â€”'}</span>
                     )}
                   </div>
                   <div>
@@ -305,19 +305,19 @@ export function AdminPaymentsPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm bg-gray-950/60 p-4 rounded-xl border border-gray-800/60">
                       <div>
                         <p className="text-gray-500 text-xs flex items-center gap-1"><UserIcon className="w-3 h-3" /> Name</p>
-                        <p className="text-white">{r.user?.fullName || '—'}</p>
+                        <p className="text-white">{r.user?.fullName || 'â€”'}</p>
                       </div>
                       <div>
                         <p className="text-gray-500 text-xs flex items-center gap-1"><Mail className="w-3 h-3" /> Email</p>
-                        <p className="text-white truncate">{r.user?.email || '—'}</p>
+                        <p className="text-white truncate">{r.user?.email || 'â€”'}</p>
                       </div>
                       <div>
                         <p className="text-gray-500 text-xs flex items-center gap-1"><Phone className="w-3 h-3" /> Phone</p>
-                        <p className="text-white">{r.user?.phone || '—'}</p>
+                        <p className="text-white">{r.user?.phone || 'â€”'}</p>
                       </div>
                       <div>
                         <p className="text-gray-500 text-[11px] uppercase tracking-wide">User ID</p>
-                        <p className="font-mono text-gray-300 text-xs break-all">{r.user?.id || '—'}</p>
+                        <p className="font-mono text-gray-300 text-xs break-all">{r.user?.id || 'â€”'}</p>
                       </div>
                     </div>
                   </div>

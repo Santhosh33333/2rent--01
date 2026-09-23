@@ -42,7 +42,7 @@ export function generateTotpSecret(): string {
   return base32Encode(crypto.randomBytes(20));
 }
 
-export function buildOtpAuthUrl(secret: string, account: string, issuer = "Side Bud"): string {
+export function buildOtpAuthUrl(secret: string, account: string, issuer = "Nabri"): string {
   const label = encodeURIComponent(`${issuer}:${account}`);
   return `otpauth://totp/${label}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30`;
 }

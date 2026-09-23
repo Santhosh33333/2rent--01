@@ -131,7 +131,7 @@ export function SplashPage() {
             <div className="w-24 h-24 flex items-center justify-center">
               <img
                 src="/logo-mark.svg"
-                alt="Side Bud logo"
+                alt="Nabri logo"
                 className="w-full h-full relative z-10 drop-shadow-2xl"
                 style={{ animation: 'float-gentle 4s ease-in-out infinite' }}
               />
@@ -157,7 +157,7 @@ export function SplashPage() {
           </div>
 
           <h1 className="text-4xl font-bold font-display tracking-tight stagger-brand">
-            <span className="text-gradient">Side Bud</span>
+            <span className="text-gradient">Nabri</span>
           </h1>
           <p className="text-surface-500 mt-3 text-sm tracking-wide stagger-tagline">
             Your Partner for Every Side of Life.

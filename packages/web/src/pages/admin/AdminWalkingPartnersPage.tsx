@@ -1,4 +1,4 @@
-import { getErrorMessage } from '../../lib/error'
+﻿import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, ChevronLeft, ChevronRight, Check, X, Wallet, CreditCard, FileDown } from 'lucide-react'
@@ -50,7 +50,7 @@ export function AdminWalkingPartnersPage() {
           p.providesWalking === true || p.providesWalking === 'true' ? 'WALKING' : null,
           p.providesCarry === true || p.providesCarry === 'true' ? 'CARRY_BUDDY' : null,
         ].filter(Boolean) as string[],
-        bankAccount: [p.bankAccountName, p.bankAccountNumber, p.bankIfsc].filter(Boolean).join(' · ') || p.bankAccount || '',
+        bankAccount: [p.bankAccountName, p.bankAccountNumber, p.bankIfsc].filter(Boolean).join(' Â· ') || p.bankAccount || '',
         upiId: p.upiId || '',
         createdAt: p.createdAt,
       })))
@@ -165,7 +165,7 @@ export function AdminWalkingPartnersPage() {
                   (p.services || []).join(', ') || '-',
                   p.createdAt ? new Date(p.createdAt).toLocaleDateString('en-IN') : '-',
                 ]),
-                fileName: `Sidebud-partners-${new Date().toISOString().slice(0, 10)}`,
+                fileName: `nabri-partners-${new Date().toISOString().slice(0, 10)}`,
                 landscape: true,
               })
             }

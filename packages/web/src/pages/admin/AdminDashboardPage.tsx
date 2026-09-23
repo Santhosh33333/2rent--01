@@ -1,4 +1,4 @@
-import { getErrorMessage } from '../../lib/error'
+﻿import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, Users, Handshake, CalendarCheck, Wallet, ShieldCheck, Banknote, FileDown } from 'lucide-react'
@@ -90,10 +90,10 @@ export function AdminDashboardPage() {
     },
     {
       label: 'Total Bookings', value: data?.totalBookings ?? 0, icon: CalendarCheck, color: 'text-violet-400',
-      sub: `${data?.activeBookings ?? 0} active · ${data?.completedBookings ?? 0} completed`
+      sub: `${data?.activeBookings ?? 0} active Â· ${data?.completedBookings ?? 0} completed`
     },
     {
-      label: 'Wallet Balance', value: `₹${(data?.totalWalletBalance ?? 0).toLocaleString('en-IN')}`, icon: Wallet, color: 'text-cyan-400',
+      label: 'Wallet Balance', value: `â‚¹${(data?.totalWalletBalance ?? 0).toLocaleString('en-IN')}`, icon: Wallet, color: 'text-cyan-400',
       sub: 'platform total'
     },
     {
@@ -111,7 +111,7 @@ export function AdminDashboardPage() {
       title: 'Platform Overview',
       columns: ['Metric', 'Value', 'Details'],
       rows: stats.map((s) => [s.label, s.value, s.sub]),
-      fileName: `Sidebud-dashboard-${new Date().toISOString().slice(0, 10)}`,
+      fileName: `nabri-dashboard-${new Date().toISOString().slice(0, 10)}`,
     })
   }
 

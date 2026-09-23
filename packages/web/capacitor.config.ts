@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'app.rentbuddy.app',
-  appName: 'Side Bud',
+  appName: 'Nabri',
   webDir: 'dist',
   server: {
     androidScheme: 'https',

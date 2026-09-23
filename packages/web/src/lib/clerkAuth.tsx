@@ -88,15 +88,15 @@ export function AppClerkProvider({ children }: { children: ReactNode }) {  if (!
     // ClerkProvider loads the matching clerk-js from the Clerk CDN itself.
     // (A previous self-hosted bundle drifted a major version ahead of
     // @clerk/clerk-react and broke the SignIn/SignUp UI — never vendor it.)
-    <ClerkProvider
-      publishableKey={CLERK_PUBLISHABLE_KEY!}
-      appearance={{ variables: { colorPrimary: '#6366f1' } }}
-    >
-      <ClerkBoundary>
+    <ClerkBoundary>
+      <ClerkProvider
+        publishableKey={CLERK_PUBLISHABLE_KEY!}
+        appearance={{ variables: { colorPrimary: '#d83d27', colorBackground: '#fbf7ef', colorText: '#1c1917', colorInputBackground: '#ffffff', colorInputText: '#1c1917', borderRadius: '0.75rem' } }}
+      >
         <ClerkBridge />
         {children}
-      </ClerkBoundary>
-    </ClerkProvider>
+      </ClerkProvider>
+    </ClerkBoundary>
   )
 }
 

@@ -28,37 +28,52 @@ export async function submitPersonalDetails(req: AuthedRequest, res: Response): 
     }
 
     const verification = await upsertVerification(req.user!.userId);
+    const existingPersonal = verification.personalDetails && typeof verification.personalDetails === "object"
+      ? verification.personalDetails as Record<string, unknown>
+      : {};
 
-    // Store personal details as JSON in a metadata field (using updatedAt as checkpoint)
     const personal = {
-      fullName,
-      dateOfBirth,
+      fullName: String(fullName).trim(),
+      dateOfBirth: String(dateOfBirth),
       gender,
-      city: city || null,
-      country: country || null,
-      address: address || null,
+      city: city ? String(city).trim() : (existingPersonal.city as string | null) ?? null,
+      country: country ? String(country).trim() : (existingPersonal.country as string | null) ?? null,
+      address: address ? String(address).trim() : (existingPersonal.address as string | null) ?? null,
       submittedAt: new Date().toISOString(),
     };
+    const birthDate = new Date(`${personal.dateOfBirth}T00:00:00.000Z`);
+    if (Number.isNaN(birthDate.getTime()) || birthDate.toISOString().slice(0, 10) !== personal.dateOfBirth || birthDate > new Date()) {
+      sendError(res, "Enter a valid date of birth in the past.", 400, "VALIDATION_ERROR");
+      return;
+    }
 
     // Update verification status to DRAFT if it's NOT_STARTED
     const newStatus = verification.status === "NOT_STARTED" ? "DRAFT" : verification.status;
 
-    // Note: Store personal data in a metadata field (we'll add this to schema in future migration)
-    // For now, we'll just update the timestamp and mark as in progress
-    await prisma.verification.update({
-      where: { id: verification.id },
-      data: { status: newStatus, updatedAt: new Date() },
-    });
-
-    // Create audit log
-    await prisma.verificationHistory.create({
-      data: {
-        verificationId: verification.id,
-        status: "PERSONAL_DETAILS_SUBMITTED",
-        note: `Personal details submitted: ${fullName}`,
-        changedBy: req.user!.userId,
-      },
-    });
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: req.user!.userId },
+        data: {
+          fullName: personal.fullName,
+          dateOfBirth: birthDate,
+          gender: personal.gender,
+          ...(personal.city ? { city: personal.city } : {}),
+          ...(personal.country ? { country: personal.country } : {}),
+        },
+      }),
+      prisma.verification.update({
+        where: { id: verification.id },
+        data: { personalDetails: personal, status: newStatus, updatedAt: new Date() },
+      }),
+      prisma.verificationHistory.create({
+        data: {
+          verificationId: verification.id,
+          status: "PERSONAL_DETAILS_SUBMITTED",
+          note: `Personal details submitted: ${personal.fullName}`,
+          changedBy: req.user!.userId,
+        },
+      }),
+    ]);
 
     sendSuccess(
       res,
@@ -366,6 +381,7 @@ export async function getVerificationStatus(req: AuthedRequest, res: Response): 
           progress: 0,
           step: 0,
           totalSteps: 7,
+          personalDetailsData: null,
           documents: {
             personalDetails: false,
             govId: false,
@@ -381,7 +397,7 @@ export async function getVerificationStatus(req: AuthedRequest, res: Response): 
     }
 
     // Calculate progress
-    const hasPersonalDetails = true; // If verification exists, personal details were submitted
+    const hasPersonalDetails = verification.personalDetails !== null;
     const hasGovId = !!verification.govIdUrl;
     const hasSelfie = !!verification.selfieUrl;
     const hasAddressProof = !!verification.addressProofUrl;
@@ -406,6 +422,7 @@ export async function getVerificationStatus(req: AuthedRequest, res: Response): 
         step: currentStep,
         totalSteps: 7,
         personalDetails: hasPersonalDetails,
+        personalDetailsData: verification.personalDetails,
         govId: hasGovId,
         selfie: hasSelfie,
         addressProof: hasAddressProof,
@@ -416,6 +433,7 @@ export async function getVerificationStatus(req: AuthedRequest, res: Response): 
         govIdType: verification.govIdType || null,
         documents: {
           personalDetails: hasPersonalDetails,
+          personalDetailsData: verification.personalDetails,
           govId: hasGovId,
           govIdUrl: verification.govIdUrl || null,
           govIdType: verification.govIdType,

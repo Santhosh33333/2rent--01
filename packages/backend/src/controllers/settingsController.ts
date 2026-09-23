@@ -8,6 +8,7 @@ interface UserSettings {
   fontSize: string;
   language: string;
   notificationsEnabled: boolean;
+  notificationSound: boolean;
   chatNotifications: boolean;
   eventReminders: boolean;
   walkingAlerts: boolean;
@@ -29,6 +30,7 @@ const DEFAULT_SETTINGS: UserSettings = {
   fontSize: "medium",
   language: "en",
   notificationsEnabled: true,
+  notificationSound: true,
   chatNotifications: true,
   eventReminders: true,
   walkingAlerts: true,

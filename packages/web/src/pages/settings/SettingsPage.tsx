@@ -11,6 +11,7 @@ interface Settings {
   theme: string
   fontSize: string
   notificationsEnabled: boolean
+  notificationSound: boolean
   chatNotifications: boolean
   eventReminders: boolean
   walkingAlerts: boolean
@@ -29,7 +30,7 @@ interface Settings {
 
 const defaultSettings: Settings = {
   theme: 'system', fontSize: 'medium',
-  notificationsEnabled: true, chatNotifications: true, eventReminders: true,
+  notificationsEnabled: true, notificationSound: true, chatNotifications: true, eventReminders: true,
   walkingAlerts: true, communityUpdates: true, pushEnabled: true,
   emailNotifications: true, smsNotifications: false, dataSaver: false,
   autoDownloadImages: true, autoDownloadVideos: false, showOnlineStatus: true,
@@ -83,7 +84,11 @@ export function SettingsPage() {
   useEffect(() => {
     api.get('/settings').then(r => {
       const data = r.data.data
-      setSettings(data); setLoading(false)
+      const merged = { ...defaultSettings, ...data }
+      setSettings(merged)
+      localStorage.setItem('notification-sound-enabled', String(merged.notificationSound && merged.notificationsEnabled))
+      localStorage.setItem('notifications-enabled', String(merged.notificationsEnabled))
+      setLoading(false)
       // Honor a previously saved explicit theme on reload.
       if (data?.theme === 'light') setTheme('light')
       else if (data?.theme === 'dark') setTheme('dark')
@@ -92,6 +97,16 @@ export function SettingsPage() {
   }, [])
 
   const update = (key: keyof Settings, value: any) => setSettings(prev => ({ ...prev, [key]: value }))
+
+  const updateNotificationSound = (enabled: boolean) => {
+    update('notificationSound', enabled)
+    localStorage.setItem('notification-sound-enabled', String(enabled))
+  }
+
+  const updateAllNotifications = (enabled: boolean) => {
+    update('notificationsEnabled', enabled)
+    localStorage.setItem('notifications-enabled', String(enabled))
+  }
 
   const applyTheme = (theme: string) => {
     update('theme', theme)
@@ -115,6 +130,8 @@ export function SettingsPage() {
     setSaving(true)
     try {
       await api.put('/settings', settings)
+      localStorage.setItem('notification-sound-enabled', String(settings.notificationSound && settings.notificationsEnabled))
+      localStorage.setItem('notifications-enabled', String(settings.notificationsEnabled))
       toast.success('Settings saved successfully')
     } catch { toast.error('Failed to save settings') }
     finally { setSaving(false) }
@@ -165,7 +182,10 @@ export function SettingsPage() {
           {/* Notifications */}
           <h2 className="text-xs font-semibold text-surface-400 uppercase tracking-wider mb-3 mt-8">Notifications</h2>
           <SettingRow icon={Bell} label="All Notifications" description="Enable or disable all notifications">
-            <ToggleSwitch enabled={settings.notificationsEnabled} onChange={v => update('notificationsEnabled', v)} />
+            <ToggleSwitch enabled={settings.notificationsEnabled} onChange={updateAllNotifications} />
+          </SettingRow>
+          <SettingRow icon={Bell} label="Notification Sound" description="Play a short sound for new in-app notifications">
+            <ToggleSwitch enabled={settings.notificationSound} onChange={updateNotificationSound} />
           </SettingRow>
           {settings.notificationsEnabled && (
             <>

@@ -203,6 +203,14 @@ export const adminApi = {
   getBookingDetail: (id: string) => api.get(`/admin/bookings/${id}`),
   getWithdrawals: (params?: PaginationParams) => api.get('/admin/withdrawals', { params }),
   approveWithdrawal: (id: string) => api.post(`/admin/withdrawals/${id}/approve`),
+  approveWithdrawalWithProof: (id: string, proof: File) => {
+    const fd = new FormData()
+    fd.append('proof', proof)
+    return api.post(`/admin/withdrawals/${id}/approve-with-proof`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
+    })
+  },
   rejectWithdrawal: (id: string, reason?: string) => api.post(`/admin/withdrawals/${id}/reject`, { reason }),
   getWallets: (params?: PaginationParams) => api.get('/admin/wallets', { params }),
   getDispatchBoard: (params?: PaginationParams) => api.get('/admin/dispatch-board', { params }),
@@ -221,6 +229,10 @@ export const adminApi = {
   getUpiPayments: (params?: PaginationParams) => api.get('/admin/payments/upi', { params }),
   verifyUpiPayment: (id: string, data: { action: 'VERIFY' | 'REJECT' | 'REQUEST_INFO'; note?: string }) =>
     api.post(`/admin/payments/upi/${id}/verify`, data),
+  // Manual-UPI top-up review (user pays platform QR, admin credits the wallet)
+  getTopupRequests: (params?: PaginationParams) => api.get('/admin/topup-requests', { params }),
+  verifyTopupRequest: (id: string, data: { action: 'VERIFY' | 'REJECT' | 'REQUEST_INFO'; note?: string }) =>
+    api.post(`/admin/topup-requests/${id}/verify`, data),
   getUpiConfig: () => api.get('/admin/settings/upi'),
   setUpiConfig: (data: { upiId: string; accountName?: string; qrUrl?: string }) => api.put('/admin/settings/upi', data),
   // Platform settings (dynamic pricing config, e.g. PLATFORM_FEE_PERCENT)
@@ -244,4 +256,24 @@ export const adminApi = {
 // Account role switching (USER <-> PARTNER), backend-enforced
 export const authRoleApi = {
   switchRole: (role: string) => api.post('/auth/switch-role', { role }),
+}
+
+// Manual-UPI wallet top-ups (no Razorpay — pay the platform QR, then UTR)
+export const walletApi = {
+  get: () => api.get('/wallet'),
+  getConfig: () => api.get('/wallet/config'),
+  getTransactions: (params?: PaginationParams) => api.get('/wallet/transactions', { params }),
+  getWithdrawals: (params?: PaginationParams) => api.get('/wallet/withdrawals', { params }),
+  getMyTopupRequests: () => api.get('/wallet/topup-requests'),
+  requestTopup: (data: { amount: number; referenceNumber: string }) => api.post('/wallet/topup-requests', data),
+  uploadTopupProof: (id: string, proof: File) => {
+    const fd = new FormData()
+    fd.append('proof', proof)
+    return api.post(`/wallet/topup-requests/${id}/topup-proof`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
+    })
+  },
+  requestWithdrawal: (data: { amount: number; method: string; accountDetail: string }) => api.post('/wallet/withdraw', data),
+  cancelWithdrawal: (id: string) => api.delete(`/wallet/withdraw/${id}`),
 }

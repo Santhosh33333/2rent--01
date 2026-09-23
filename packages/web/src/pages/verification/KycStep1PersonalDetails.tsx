@@ -1,26 +1,63 @@
 ﻿import { getErrorMessage } from '../../lib/error'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, ArrowRight, User } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { api } from '../../lib/api'
+import { useAuth } from '../../lib/auth'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
 
 export function KycStep1PersonalDetails() {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [loading, setLoading] = useState(false)
-  const [formData, setFormData] = useState({
-    fullName: '',
-    dateOfBirth: '',
-    gender: '',
-    city: '',
-    country: 'India',
+  const [loadingSaved, setLoadingSaved] = useState(true)
+  const [savedLoadError, setSavedLoadError] = useState(false)
+  const [loadAttempt, setLoadAttempt] = useState(0)
+  const edited = useRef(false)
+  const submissionLock = useRef(false)
+  const [formData, setFormData] = useState(() => ({
+    fullName: user?.fullName || user?.name || '',
+    dateOfBirth: user?.dateOfBirth?.slice(0, 10) || '',
+    gender: user?.gender || '',
+    city: user?.city || '',
+    country: user?.country || 'India',
     address: '',
-  })
+  }))
+
+  useEffect(() => {
+    const controller = new AbortController()
+    setLoadingSaved(true)
+    setSavedLoadError(false)
+    api.get('/verification/status', { signal: controller.signal, timeout: 15000 })
+      .then((response) => {
+        if (edited.current) return
+        const status = response.data?.data || response.data
+        const details = status?.personalDetailsData
+        if (!details) return
+        setFormData((current) => ({
+          ...current,
+          fullName: details.fullName || current.fullName,
+          dateOfBirth: details.dateOfBirth?.slice(0, 10) || current.dateOfBirth,
+          gender: details.gender || current.gender,
+          city: details.city || current.city,
+          country: details.country || current.country,
+          address: details.address || current.address,
+        }))
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setSavedLoadError(true)
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoadingSaved(false)
+      })
+    return () => controller.abort()
+  }, [loadAttempt])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
+    edited.current = true
     setFormData(prev => ({ ...prev, [name]: value }))
   }
 
@@ -31,7 +68,9 @@ export function KycStep1PersonalDetails() {
       toast.error('Please fill all required fields')
       return
     }
+    if (submissionLock.current) return
 
+    submissionLock.current = true
     setLoading(true)
     try {
       await api.post('/verification/personal-details', formData)
@@ -40,6 +79,7 @@ export function KycStep1PersonalDetails() {
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to save personal details'))
     } finally {
+      submissionLock.current = false
       setLoading(false)
     }
   }
@@ -76,6 +116,13 @@ export function KycStep1PersonalDetails() {
 
       <AnimatedPage delay={100}>
         <GlassCard variant="elevated" padding="lg">
+          {loadingSaved && <p role="status" className="mb-4 text-sm text-surface-500">Loading saved personal details…</p>}
+          {savedLoadError && (
+            <div role="alert" className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-danger-200 bg-danger-50 p-3 text-sm text-danger-700 dark:border-danger-800 dark:bg-danger-900/20 dark:text-danger-300">
+              <span>Saved details could not be loaded. You can continue, or retry before editing.</span>
+              <button type="button" onClick={() => setLoadAttempt((attempt) => attempt + 1)} className="font-semibold underline underline-offset-2">Retry</button>
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Full Name */}
             <div>

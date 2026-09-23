@@ -287,7 +287,7 @@ if (!dbAvailable) {
   startReminderSweeper();
 
   server.listen(env.PORT, () => {
-    console.log(`Side Bud API server listening on port ${env.PORT} [${env.NODE_ENV}]`);
+    console.log(`Nabri API server listening on port ${env.PORT} [${env.NODE_ENV}]`);
   });
 
   const shutdown = async (signal: string): Promise<void> => {

@@ -117,6 +117,7 @@ export async function getUserById(req: AuthedRequest, res: Response): Promise<vo
         emailVerified: true, mobileVerified: true, trustScore: true, createdAt: true, updatedAt: true,
         verification: {
           select: {
+            personalDetails: true,
             status: true, selfieUrl: true, govIdUrl: true, govIdType: true, addressProofUrl: true,
             rejectionReason: true, reviewedAt: true, createdAt: true,
           },
@@ -819,11 +820,84 @@ export async function approveWithdrawal(req: AuthedRequest, res: Response): Prom
         data: { actorId: req.user!.userId, actorType: "ADMIN", action: "WITHDRAWAL_APPROVE", entityType: "WithdrawalRequest", entityId: id },
       });
     });
-    sendSuccess(res, undefined, "Withdrawal approved.");
+sendSuccess(res, undefined, "Withdrawal approved.");
   } catch (err: any) {
     if (err?.message === "WITHDRAWAL_NOT_PENDING") {
       sendError(res, "Withdrawal already processed.", 400, "INVALID_STATUS");
     } else {
+      sendError(res, "Failed to approve withdrawal.", 500, "INTERNAL_ERROR");
+    }
+  }
+}
+
+// Admin marks a withdrawal as paid and attaches the payout proof image
+// (e.g. a transfer/UTI screenshot) in one step. Funds were already held
+// (debited) when the user requested; approval only settles the lifecycle.
+export async function approveWithdrawalWithProof(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    if (!req.file) {
+      sendError(res, "No payout proof image uploaded.", 400, "NO_FILE");
+      return;
+    }
+    const request = await prisma.withdrawalRequest.findUnique({ where: { id } });
+    if (!request) {
+      sendError(res, "Withdrawal request not found.", 404, "WITHDRAWAL_NOT_FOUND");
+      return;
+    }
+    if (request.status !== "PENDING") {
+      sendError(res, "Withdrawal already processed.", 400, "INVALID_STATUS");
+      return;
+    }
+    const payoutProofImageUrl = `/uploads/${(req.file as Express.Multer.File).filename}`;
+    await prisma.$transaction(async (tx) => {
+      const claimed = await tx.withdrawalRequest.updateMany({
+        where: { id, status: "PENDING" },
+        data: {
+          status: "APPROVED",
+          reviewedBy: req.user!.userId,
+          reviewedAt: new Date(),
+          payoutProofImageUrl,
+        },
+      });
+
+      if (claimed.count !== 1) {
+        throw new Error("WITHDRAWAL_NOT_PENDING");
+      }
+
+      // Settle the paired hold ledger row
+      await tx.transaction.updateMany({
+        where: { referenceId: id, type: "WITHDRAWAL", status: "PENDING" },
+        data: { status: "COMPLETED", description: "Withdrawal paid (proof attached)" },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId: req.user!.userId,
+          actorType: "ADMIN",
+          action: "WITHDRAWAL_APPROVE_WITH_PROOF",
+          entityType: "WithdrawalRequest",
+          entityId: id,
+          metadata: JSON.stringify({ payoutProofImageUrl }),
+        },
+      });
+    });
+
+    await prisma.notification.create({
+      data: {
+        userId: request.userId,
+        title: "Withdrawal paid",
+        body: `Rs ${Number(request.amount)} was paid out to your ${request.method === "UPI" ? "UPI" : "bank"} account. A payout proof has been attached.`,
+        data: JSON.stringify({ kind: "WITHDRAWAL_PAID", withdrawalId: id }),
+      },
+    });
+
+    sendSuccess(res, { payoutProofImageUrl }, "Withdrawal approved and payout proof attached.");
+  } catch (err: any) {
+    if (err?.message === "WITHDRAWAL_NOT_PENDING") {
+      sendError(res, "Withdrawal already processed.", 400, "INVALID_STATUS");
+    } else {
+      console.error("approveWithdrawalWithProof error:", err);
       sendError(res, "Failed to approve withdrawal.", 500, "INTERNAL_ERROR");
     }
   }
@@ -2427,5 +2501,4 @@ export async function demoteUserRole(req: AuthedRequest, res: Response): Promise
     sendError(res, "Failed to demote user.", 500, "INTERNAL_ERROR");
   }
 }
-
 

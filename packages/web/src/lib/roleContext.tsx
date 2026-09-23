@@ -24,11 +24,11 @@ export interface RoleInfo {
 }
 
 export const ROLE_META: Record<string, RoleInfo> = {
-  USER: { label: 'User', icon: '👤', color: '#6366f1', description: 'Browse, book, connect' },
+  USER: { label: 'User', icon: '👤', color: '#55795b', description: 'Browse, book, connect' },
   PARTNER: { label: 'Partner', icon: '🤝', color: '#22c55e', description: 'Accept jobs, earn money' },
   ADMIN: { label: 'Admin', icon: '👨‍💼', color: '#ef4444', description: 'Platform administration' },
   SUPER_ADMIN: { label: 'Super Admin', icon: '👑', color: '#ef4444', description: 'Full platform control' },
-  MODERATOR: { label: 'Moderator', icon: '🛡️', color: '#f97316', description: 'Content moderation' },
+  MODERATOR: { label: 'Moderator', icon: '🛡️', color: '#8c7925', description: 'Content moderation' },
   SUPPORT: { label: 'Support', icon: '🎧', color: '#14b8a6', description: 'Help & support' },
   FINANCE: { label: 'Finance', icon: '💰', color: '#10b981', description: 'Financial management' },
   SUPPORT_ADMIN: { label: 'Support Admin', icon: '🎧', color: '#06b6d4', description: 'Support management' },

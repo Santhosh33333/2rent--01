@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { api, assetUrl, bookingApi } from '../../lib/api'
+import { getErrorMessage } from '../../lib/error'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
 import { SkeletonLoader } from '../../components/SkeletonLoader'
@@ -29,6 +30,9 @@ interface Booking {
   paymentStatus?: string
   paymentId?: string
   paymentMethod?: 'ONLINE' | 'CASH' | 'UPI_MANUAL'
+  cancellationAllowed?: boolean
+  cancellationDeadlineAt?: string
+  cancellationServerTime?: string
   notes?: string
   createdAt: string
 }
@@ -116,14 +120,17 @@ export function BookingDetailPage() {
       await api.post(`/bookings/${id}/cancel`)
       setBooking((prev) => prev ? { ...prev, status: 'CANCELLED' } : null)
       toast.success('Booking cancelled')
-    } catch {
-      toast.error('Failed to cancel booking')
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to cancel booking'))
     } finally {
       setCancelling(false)
     }
   }
 
-  const canCancel = booking && ['PENDING', 'CONFIRMED'].includes(booking.status)
+  const canCancel = booking?.cancellationAllowed === true
+  const cancellationWindowClosed = booking &&
+    !booking.cancellationAllowed &&
+    !['COMPLETED', 'CANCELLED', 'REFUND_INITIATED', 'REFUND_COMPLETED'].includes(booking.status)
   const canRate = booking?.status === 'COMPLETED'
   const canTrack = booking?.status === 'IN_PROGRESS'
   const canSos = booking?.status === 'IN_PROGRESS' || booking?.status === 'COMPLETION_REQUESTED'
@@ -528,14 +535,22 @@ export function BookingDetailPage() {
             </Link>
           )}
           {canCancel && (
-            <button
-              onClick={handleCancel}
-              disabled={cancelling}
-              className="flex-1 btn-outline text-danger-500 hover:bg-danger-50 dark:hover:bg-danger-500/10 border-danger-200 dark:border-danger-800/30 flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              {cancelling ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
-              Cancel
-            </button>
+            <div className="flex-1 space-y-2">
+              <p className="text-xs text-surface-500">Cancellation is available until 1 hour before the booking.</p>
+              <button
+                onClick={handleCancel}
+                disabled={cancelling}
+                className="w-full btn-outline text-danger-500 hover:bg-danger-50 dark:hover:bg-danger-500/10 border-danger-200 dark:border-danger-800/30 flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {cancelling ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                Cancel
+              </button>
+            </div>
+          )}
+          {cancellationWindowClosed && (
+            <p role="status" className="w-full text-sm text-danger-600 dark:text-danger-300">
+              Cancellation is no longer available. Bookings cannot be cancelled within 1 hour of the scheduled start time.
+            </p>
           )}
         </div>
       </AnimatedPage>

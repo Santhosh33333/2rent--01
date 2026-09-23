@@ -13,9 +13,9 @@ export function AboutPage() {
     { icon: FileText, label: 'Terms & Conditions', desc: 'Read our terms of service', action: () => navigate('/about/terms') },
     { icon: Shield, label: 'Privacy Policy', desc: 'How we protect your data', action: () => navigate('/about/privacy') },
     { icon: Lock, label: 'Data Safety', desc: 'How your data is collected and used', action: () => navigate('/about/data-safety') },
-    { icon: Scale, label: 'Community Guidelines', desc: 'Rules for using Side Bud', action: () => navigate('/about/community-guidelines') },
-    { icon: Mail, label: 'Contact Us', desc: 'support@Sidebud.app', action: () => window.location.href = 'mailto:support@Sidebud.app' },
-    { icon: Globe, label: 'Website', desc: 'www.Sidebud.app', action: () => window.open('https://www.Sidebud.app', '_blank') },
+    { icon: Scale, label: 'Community Guidelines', desc: 'Rules for using Nabri', action: () => navigate('/about/community-guidelines') },
+    { icon: Mail, label: 'Contact Us', desc: 'support@nabri.app', action: () => window.location.href = 'mailto:support@nabri.app' },
+    { icon: Globe, label: 'Website', desc: 'www.nabri.app', action: () => window.open('https://www.nabri.app', '_blank') },
   ]
 
   return (
@@ -29,10 +29,10 @@ export function AboutPage() {
         <GlassCard variant="elevated" padding="lg" className="text-center">
           <img
             src="/logo-mark.svg"
-            alt="Side Bud logo"
+            alt="Nabri logo"
             className="w-20 h-20 mx-auto rounded-3xl shadow-xl shadow-primary-500/30 mb-4"
           />
-          <h1 className="text-2xl font-bold font-display text-surface-900 dark:text-white">Side Bud</h1>
+          <h1 className="text-2xl font-bold font-display text-surface-900 dark:text-white">Nabri</h1>
           <p className="text-sm text-surface-500 mt-1">Trust-based social platform</p>
           <div className="flex items-center justify-center gap-4 mt-3 text-xs text-surface-400">
             <span>Version {APP_VERSION}</span>
@@ -76,7 +76,7 @@ export function AboutPage() {
       <AnimatedPage delay={300}>
         <p className="text-center text-xs text-surface-400 py-4">
           Made with <Heart className="w-3 h-3 inline text-danger-500" /> in India
-          <br />Â© 2026 Sidebud. All rights reserved.
+          <br />© 2026 Nabri. All rights reserved.
         </p>
       </AnimatedPage>
     </div>

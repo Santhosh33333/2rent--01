@@ -182,7 +182,7 @@ async function nominatimFetch(path: string, params: Record<string, string>): Pro
       signal: controller.signal,
       headers: {
         Accept: "application/json",
-        "User-Agent": `SideBud/1.0 (${env.ADMIN_EMAIL || "support"})`,
+        "User-Agent": `Nabri/1.0 (${env.ADMIN_EMAIL || "support"})`,
       },
     });
     if (!res.ok) throw new Error(`Nominatim responded ${res.status}.`);

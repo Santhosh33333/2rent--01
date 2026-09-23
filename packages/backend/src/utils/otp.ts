@@ -60,7 +60,7 @@ export async function sendOTP(otp: string, channel: OtpChannel): Promise<void> {
   }
   if (channel.phone) {
     try {
-      await sendSMS(channel.phone, `Your Side Bud verification code is: ${otp}. It expires in 10 minutes. Do not share this code.`);
+      await sendSMS(channel.phone, `Your Nabri verification code is: ${otp}. It expires in 10 minutes. Do not share this code.`);
     } catch (err) {
       console.error(`[OTP] SMS delivery failed for ${channel.phone}:`, err);
       // In dev, log the OTP so developers can test without Twilio

@@ -57,7 +57,7 @@ export async function getProfile(req: AuthedRequest, res: Response): Promise<voi
 
 export async function updateProfile(req: AuthedRequest, res: Response): Promise<void> {
   try {
-    const { fullName, bio, city, country, gender } = req.body;
+    const { fullName, dateOfBirth, bio, city, country, gender } = req.body;
 
     // Input validation with length limits
     const sanitized: Record<string, any> = {};
@@ -67,6 +67,18 @@ export async function updateProfile(req: AuthedRequest, res: Response): Promise<
         return;
       }
       sanitized.fullName = fullName.trim();
+    }
+    if (dateOfBirth !== undefined) {
+      if (typeof dateOfBirth !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth)) {
+        sendError(res, "Date of birth must use YYYY-MM-DD format.", 400, "VALIDATION_ERROR");
+        return;
+      }
+      const parsedDate = new Date(`${dateOfBirth}T00:00:00.000Z`);
+      if (Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== dateOfBirth || parsedDate > new Date()) {
+        sendError(res, "Date of birth must be a valid date in the past.", 400, "VALIDATION_ERROR");
+        return;
+      }
+      sanitized.dateOfBirth = parsedDate;
     }
     if (bio !== undefined) {
       if (typeof bio !== 'string' || bio.length > 500) {
@@ -105,7 +117,7 @@ export async function updateProfile(req: AuthedRequest, res: Response): Promise<
     const updated = await prisma.user.update({
       where: { id: req.user!.userId },
       data: sanitized,
-      select: { id: true, fullName: true, bio: true, city: true, country: true, gender: true, role: true, activeRole: true },
+      select: { id: true, fullName: true, dateOfBirth: true, bio: true, city: true, country: true, gender: true, role: true, activeRole: true },
     });
     sendSuccess(res, updated, "Profile updated.");
   } catch (err) {
@@ -359,7 +371,7 @@ export async function triggerSos(req: AuthedRequest, res: Response): Promise<voi
         const mapsLink = `https://maps.google.com/?q=${latitude},${longitude}`;
         await sendSmsMessage(
           contactPhone,
-          `SOS! Your contact needs emergency help. Location: ${mapsLink} Msg: ${alert.message || "Emergency SOS"} - Side Bud Safety`
+          `SOS! Your contact needs emergency help. Location: ${mapsLink} Msg: ${alert.message || "Emergency SOS"} - Nabri Safety`
         );
         smsSent = true;
       } else {

@@ -112,6 +112,7 @@ model User {
 model Verification {
   id                       String    @id @default(uuid())
   userId                   String    @unique
+  personalDetails          Json?
   selfieUrl                String?
   govIdUrl                 String?
   govIdType                String?
@@ -313,6 +314,7 @@ model WithdrawalRequest {
   status          String    @default("PENDING")
   method          String
   accountDetail   String?
+  payoutProofImageUrl String?
   reviewedBy      String?
   reviewedAt      DateTime?
   rejectionReason String?

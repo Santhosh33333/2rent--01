@@ -6,7 +6,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
 import { useAuth } from '../../lib/auth'
-import { api } from '../../lib/api'
+import { api, assetUrl } from '../../lib/api'
+import { useAvatarUpload } from '../../lib/photo'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { LocationInput } from '../../components/LocationInput'
 import {
@@ -46,16 +47,19 @@ export function ProfileCompletionPage() {
   const [completed, setCompleted] = useState(false)
   const [profileCompleteSet, setProfileCompleteSet] = useState(false)
   const animKey = useRef(0)
+  const saveLock = useRef(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const avatar = useAvatarUpload((avatarUrl) => updateUser({ avatarUrl }))
 
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<ProfileForm>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
       fullName: user?.name || user?.fullName || '',
-      bio: '',
-      dateOfBirth: '',
-      city: '',
-      country: 'India',
-      gender: undefined,
+      bio: user?.bio || '',
+      dateOfBirth: user?.dateOfBirth?.slice(0, 10) || '',
+      city: user?.city || '',
+      country: user?.country || 'India',
+      gender: (user?.gender as ProfileForm['gender']) || undefined,
     },
   })
 
@@ -91,32 +95,34 @@ export function ProfileCompletionPage() {
       goNext()
       return
     }
+    if (!data.city?.trim()) {
+      setStep(2)
+      toast.error('Add your city so your profile is saved and setup does not repeat.')
+      return
+    }
+    if (saveLock.current) return
+    saveLock.current = true
     setSaving(true)
     try {
-      const payload: Record<string, any> = {}
-      if (data.fullName) payload.fullName = data.fullName
-      if (data.bio) payload.bio = data.bio
-      if (data.dateOfBirth) payload.dateOfBirth = data.dateOfBirth
-      if (data.city) payload.city = data.city
-      if (data.country) payload.country = data.country
-      if (data.gender) payload.gender = data.gender
-
-      try {
-        await api.put('/users/profile', payload)
-      } catch (err) {
-        // fallback for local demo/offline flows
-      }
-
+      const response = await api.put('/users/profile', {
+        fullName: data.fullName.trim(),
+        ...(data.dateOfBirth ? { dateOfBirth: data.dateOfBirth } : {}),
+        bio: data.bio || '',
+        city: data.city.trim(),
+        country: data.country || '',
+        gender: data.gender || user?.gender || 'OTHER',
+      })
+      const saved = response.data?.data || response.data
       const nextUser = {
         ...(user || {}),
-        name: data.fullName || user?.name || 'Side Bud User',
-        fullName: data.fullName || user?.fullName || 'Side Bud User',
-        bio: data.bio || user?.bio,
-        city: data.city || user?.city,
-        country: data.country || user?.country,
-        gender: data.gender || user?.gender,
+        ...saved,
+        name: saved.fullName || data.fullName.trim(),
+        fullName: saved.fullName || data.fullName.trim(),
+        city: saved.city || data.city.trim(),
+        country: saved.country ?? data.country,
+        bio: saved.bio ?? data.bio,
+        gender: saved.gender ?? data.gender,
       }
-
       updateUser(nextUser)
       localStorage.setItem('profile_complete', 'true')
       localStorage.setItem('user', JSON.stringify(nextUser))
@@ -124,15 +130,9 @@ export function ProfileCompletionPage() {
       setProfileCompleteSet(true)
       setCompleted(true)
     } catch (err: unknown) {
-      localStorage.setItem('profile_complete', 'true')
-      if (user) {
-        const fallbackUser = { ...user, name: user.name || 'Side Bud User', fullName: user.fullName || user.name || 'Side Bud User' }
-        updateUser(fallbackUser)
-      }
-      toast.error(getErrorMessage(err, 'Failed to save profile, but your session was saved locally.'))
-      setProfileCompleteSet(true)
-      setCompleted(true)
+      toast.error(getErrorMessage(err, 'Could not save your profile. Check your connection and try again.'))
     } finally {
+      saveLock.current = false
       setSaving(false)
     }
   }
@@ -153,7 +153,7 @@ export function ProfileCompletionPage() {
           <div className="text-center mb-8">
             <img
               src="/logo-mark.svg"
-              alt="Side Bud logo"
+              alt="Nabri logo"
               className="inline-block w-14 h-14 rounded-2xl shadow-xl shadow-primary-500/25 mb-5 animate-float"
             />
             <h1 className="text-3xl font-bold font-display text-surface-900 dark:text-white tracking-tight">Complete Your Profile</h1>
@@ -193,7 +193,7 @@ export function ProfileCompletionPage() {
                   <Check className="w-10 h-10 text-emerald-500" />
                 </div>
                 <h3 className="text-xl font-bold font-display text-surface-900 dark:text-white mb-2">Your profile is ready!</h3>
-                <p className="text-sm text-surface-500 dark:text-surface-400 mb-6">You're all set to explore Side Bud</p>
+                <p className="text-sm text-surface-500 dark:text-surface-400 mb-6">You're all set to explore Nabri</p>
                 <button
                   onClick={() => navigate('/dashboard', { replace: true })}
                   className="btn-gradient w-full btn-lg group"
@@ -316,10 +316,20 @@ export function ProfileCompletionPage() {
                         <div>
                           <label className="label mb-3 block">Profile Photo</label>
                           <div className="flex justify-center">
-                            <button type="button" className="w-28 h-28 rounded-full border-2 border-dashed border-surface-300 dark:border-surface-600 flex flex-col items-center justify-center gap-2 text-surface-400 hover:border-primary-400 hover:text-primary-500 transition-colors duration-300">
-                              <Camera className="w-8 h-8" />
-                              <span className="text-xs font-medium">Add Photo</span>
-                            </button>
+                            <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={(event) => { void avatar.pick(event.target.files?.[0]); event.target.value = '' }} />
+                            {avatar.previewUrl ? (
+                              <div className="flex flex-col items-center gap-2">
+                                <img src={avatar.previewUrl} alt="Profile preview" className="w-28 h-28 rounded-full object-cover" />
+                                <div className="flex gap-2">
+                                  <button type="button" onClick={() => void avatar.confirm()} disabled={avatar.uploading} className="btn-primary btn-sm">{avatar.uploading ? 'Uploading...' : 'Save photo'}</button>
+                                  <button type="button" onClick={avatar.cancel} disabled={avatar.uploading} className="btn-outline btn-sm">Cancel</button>
+                                </div>
+                              </div>
+                            ) : (
+                              <button type="button" onClick={() => fileInputRef.current?.click()} className="w-28 h-28 rounded-full border-2 border-dashed border-surface-300 dark:border-surface-600 flex flex-col items-center justify-center gap-2 text-surface-400 hover:border-primary-400 hover:text-primary-500 transition-colors duration-300">
+                                {user?.avatarUrl ? <img src={assetUrl(user.avatarUrl)} alt="Current profile" className="w-full h-full rounded-full object-cover" /> : <><Camera className="w-8 h-8" /><span className="text-xs font-medium">Add Photo</span></>}
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>
