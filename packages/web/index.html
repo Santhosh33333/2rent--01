@@ -34,12 +34,29 @@
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
-      window.addEventListener('load', function() {
-        setTimeout(function() {
-          var el = document.getElementById('root-loader');
-          if (el) { el.classList.add('hide'); setTimeout(function() { el.remove(); }, 300); }
-        }, 200);
-      });
+      (function () {
+        var loader = document.getElementById('root-loader');
+        window.__nabriBooted = false;
+        window.addEventListener('load', function () {
+          setTimeout(function () {
+            var node = document.getElementById('root-loader');
+            if (node) { node.classList.add('hide'); setTimeout(function () { if (node.parentNode) node.parentNode.removeChild(node); }, 300); }
+          }, 200);
+        });
+        // If the bundle never boots (old WebView rejects modern syntax,
+        // network blocked, etc.) show a readable message instead of a black screen.
+        setTimeout(function () {
+          if (!window.__nabriBooted && loader) {
+            loader.classList.remove('hide');
+            loader.innerHTML = '<div style="max-width:300px;text-align:center;font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#fafafa">' +
+              '<img src="/logo-mark.svg" alt="Nabri" style="width:56px;height:56px;margin:0 auto 14px;display:block;opacity:.9" />' +
+              '<p style="font-size:15px;font-weight:600;margin:0 0 8px">Nabri could not start</p>' +
+              '<p style="font-size:13px;opacity:.85;margin:0 0 14px;line-height:1.4">This device needs a newer Android System WebView to run the app.</p>' +
+              '<p style="font-size:12px;opacity:.7;margin:0;line-height:1.5">Open the Play Store, search &quot;Android System WebView&quot;, tap Update, then open Nabri again.</p>' +
+              '</div>';
+          }
+        }, 6000);
+      }());
     </script>
     <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
   </body>

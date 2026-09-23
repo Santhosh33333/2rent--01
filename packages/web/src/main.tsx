@@ -1,11 +1,23 @@
 ﻿import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
+import { Capacitor } from '@capacitor/core'
+import { SplashScreen } from '@capacitor/splash-screen'
 import { AuthProvider } from './lib/auth'
 import { RoleProvider } from './lib/roleContext'
 import { AppClerkProvider } from './lib/clerkAuth'
 import { App } from './App'
 import './styles/globals.css'
+
+declare global {
+  interface Window {
+    __nabriBooted?: boolean
+  }
+}
+
+// Lets the inline ES5 guard in index.html know the bundle actually ran, so a
+// WebView that can't parse it shows a readable update prompt instead of black.
+window.__nabriBooted = true
 
 // Self-heal stale deploys: after a redeploy, a cached index.html can point
 // at chunk files the server no longer has ("Failed to fetch dynamically
@@ -81,3 +93,9 @@ createRoot(document.getElementById('root')!).render(
     </BrowserRouter>
   </StrictMode>,
 )
+
+// In the Capacitor app the native splash can outlive first paint when
+// launchAutoHide is disabled; drop it as soon as React is on screen.
+if (Capacitor.isNativePlatform()) {
+  SplashScreen.hide()
+}
