@@ -520,7 +520,12 @@ html[data-accent='sky'] {
     @apply p-3.5;
   }
   .input {
-    @apply min-h-[48px] px-4 py-3 text-base;
+    /* NOTE: don't re-declare horizontal padding here. This rule is unlayered
+       CSS, so it beats Tailwind's layered `pl-11`/`pl-12` utilities and would
+       crush the left icon area — the mail/key icons then sit on top of the
+       typed text on mobile. The base `.input` (components layer) already
+       supplies `px-4`, and `pl-*`/`pr-*` utilities keep winning over it. */
+    @apply min-h-[48px] py-3 text-base;
   }
   .label {
     @apply text-sm mb-1.5;
