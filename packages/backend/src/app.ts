@@ -30,6 +30,7 @@ import pricingRoutes from "./routes/pricingRoutes";
 import notificationRoutes from "./routes/notificationRoutes";
 import settingsRoutes from "./routes/settingsRoutes";
 import appContentRoutes from "./routes/appContentRoutes";
+import crashRoutes from "./routes/appCrashRoutes";
 import callRoutes from "./routes/callRoutes";
 import carryBuddyRoutes from "./routes/carryBuddyRoutes";
 import friendshipRoutes from "./routes/friendshipRoutes";
@@ -256,6 +257,7 @@ export function createApp(): http.Server {
   }, express.static(path.resolve(process.cwd(), "public/admin")));
 
   app.use("/api/auth", authRoutes);
+  app.use("/api/crash-report", crashRoutes);
   app.use("/api/users", userRoutes);
   app.use("/api/verification", verificationRoutes);
   app.use("/api/walking-partner", walkingPartnerRoutes);
