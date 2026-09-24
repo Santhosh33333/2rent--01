@@ -12,7 +12,7 @@
 // they just skip the entrance/glow effects. prefers-reduced-motion is
 // respected for accessibility.
 
-const WEB_ORIGIN = "https://2rent-01.vercel.app";
+export const WEB_ORIGIN = "https://2rent-01.vercel.app";
 
 // Base animation CSS merged into every email (plus any per-mail extras).
 const BASE_EMAIL_CSS = `
@@ -100,9 +100,10 @@ export function renderEmail(opts: RenderEmailOptions): string {
         <table class="nabri-card" role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;border-collapse:collapse;border-radius:22px;overflow:hidden;box-shadow:0 14px 40px rgba(28,25,23,0.10)">
           <!-- Header / brand bar -->
           <tr>
-            <td align="center" class="nabri-fade" style="background:#D83D27;background-image:linear-gradient(135deg,#C9331F 0%,#E2492F 58%,#F2694A 100%);padding:34px 24px 26px">
-              <div style="font-family:Arial,Helvetica,sans-serif;font-size:26px;font-weight:900;letter-spacing:7px;color:#FBF7EF;margin:0;line-height:1.2">NABRI<span class="nabri-dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#D2F53C;margin-left:9px;vertical-align:3px"></span></div>
-              <div style="width:52px;height:3px;border-radius:2px;background:rgba(210,245,60,.85);margin:12px auto 9px"></div>
+            <td align="center" class="nabri-fade" style="background:#D83D27;background-image:linear-gradient(135deg,#C9331F 0%,#E2492F 58%,#F2694A 100%);padding:30px 24px 26px">
+              <img src="${WEB_ORIGIN}/images/logo-mark.png" width="104" height="104" alt="Nabri" style="display:block;border:0;width:104px;height:104px;max-width:104px;border-radius:26px;background:#FFFFFF;padding:8px;box-sizing:border-box" />
+              <div style="font-family:Arial,Helvetica,sans-serif;font-size:20px;font-weight:900;letter-spacing:6px;color:#FBF7EF;margin:14px 0 0;line-height:1.2">NABRI<span class="nabri-dot" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#D2F53C;margin-left:8px;vertical-align:2px"></span></div>
+              <div style="width:52px;height:3px;border-radius:2px;background:rgba(210,245,60,.85);margin:11px auto 8px"></div>
               <div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:2.6px;color:#FCE4DF;text-transform:uppercase">Your Partner for Every Side of Life</div>
             </td>
           </tr>
@@ -159,5 +160,3 @@ function renderCta(text: string, url: string): string {
             </td>
           </tr>`;
 }
-
-export { WEB_ORIGIN };
