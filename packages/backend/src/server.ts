@@ -245,6 +245,24 @@ if (!dbAvailable) {
     console.warn("Schema reconciliation warning (TopupRequest):", (err as Error)?.message);
   }
 
+  // Withdrawal proof-of-payout column (migration 20260923_withdrawal_payout_proof).
+  // Same pattern as UploadedFile: some prod DBs record the migration without
+  // applying the DDL, so `migrate deploy` skips it and the query 500s.
+  try {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "WithdrawalRequest" ADD COLUMN IF NOT EXISTS "payoutProofImageUrl" TEXT`);
+    console.log("Schema reconciliation: WithdrawalRequest payout proof ensured.");
+  } catch (err) {
+    console.warn("Schema reconciliation warning (WithdrawalRequest):", (err as Error)?.message);
+  }
+
+  // Verification personal-details column (migration 20260923_verification_personal_details).
+  try {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Verification" ADD COLUMN IF NOT EXISTS "personalDetails" JSONB`);
+    console.log("Schema reconciliation: Verification personal details ensured.");
+  } catch (err) {
+    console.warn("Schema reconciliation warning (Verification):", (err as Error)?.message);
+  }
+
   initializeFirebase();
   initializeFirebaseAuth();
 
