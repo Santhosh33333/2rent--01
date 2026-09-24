@@ -14,10 +14,14 @@ export const OTP_PURPOSES = [
   "CHANGE_EMAIL",
   "PARTNER_VERIFICATION",
   "SENSITIVE_ACTION",
+  "GENERIC",
 ] as const;
 
 export type OtpPurpose = (typeof OTP_PURPOSES)[number];
 export type OtpChannel = "EMAIL" | "SMS";
+
+// Mirrors the reference otp-service charsets: numeric | alphanumeric | alphabet.
+export type OtpType = "numeric" | "alphanumeric" | "alphabet";
 
 export function normalizeIdentifier(channel: OtpChannel, raw: string): string {
   const v = String(raw || "").trim();
@@ -35,10 +39,13 @@ export function maskIdentifier(channel: OtpChannel, identifier: string): string 
   return `******${digits.slice(-4)}`;
 }
 
-function randomCode(): string {
-  const bytes = crypto.randomBytes(6);
+function randomCode(size = 6, type: OtpType = "numeric"): string {
+  const digits = "0123456789";
+  // Ambiguous 0/O, 1/I/l removed so typed alphanumeric codes stay readable.
+  const letters = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz";
+  const alphabet = type === "numeric" ? digits : type === "alphabet" ? letters : digits + letters;
   let code = "";
-  for (let i = 0; i < 6; i++) code += String(bytes[i] % 10);
+  for (let i = 0; i < size; i++) code += alphabet[crypto.randomInt(alphabet.length)];
   return code;
 }
 
@@ -105,6 +112,11 @@ export async function issueOtp(opts: {
   userId?: string;
   ip?: string;
   userAgent?: string;
+  size?: number;
+  type?: OtpType;
+  organization?: string;
+  purposeLabel?: string;
+  subject?: string;
 }): Promise<IssueResult> {
   const identifier = normalizeIdentifier(opts.channel, opts.identifier);
   if (!identifier || (opts.channel === "EMAIL" && !identifier.includes("@"))) {
@@ -156,7 +168,14 @@ export async function issueOtp(opts: {
     return fail(opts, "Too many requests from this network. Try again later.", "OTP_RATE_LIMITED");
   }
 
-  const code = randomCode();
+  const size = Math.min(10, Math.max(4, Math.floor(opts.size ?? 6)));
+  const otype: OtpType = opts.type ?? "numeric";
+  const code = randomCode(size, otype);
+  const organization = String(opts.organization || "Nabri").slice(0, 30);
+  // Friendly label shown in the email/SMS ("verification" by default).
+  const label = opts.purposeLabel
+    ? String(opts.purposeLabel).slice(0, 40)
+    : opts.purpose.toLowerCase().replace(/_/g, " ");
   const expiresAt = new Date(now.getTime() + policy.expiryMinutes * 60000);
   const row = await prisma.otpCode.create({
     data: {
@@ -181,8 +200,7 @@ export async function issueOtp(opts: {
       await prisma.otpCode.update({ where: { id: row.id }, data: { status: "FAILED", provider: "none", failureReason: "EMAIL_NOT_CONFIGURED" } });
       return fail(opts, "Email sending is not configured yet. Contact support or try another method.", "EMAIL_NOT_CONFIGURED", { provider: "none" });
     }
-    const label = opts.purpose.toLowerCase().replace(/_/g, " ");
-    const r = await sendOTPEmail(identifier, code, label);
+    const r = await sendOTPEmail(identifier, code, label, organization, opts.subject);
     await prisma.otpCode.update({
       where: { id: row.id },
       data: {
@@ -190,7 +208,7 @@ export async function issueOtp(opts: {
         provider: r.provider,
         providerMessageId: r.messageId,
         deliveryStatus: r.ok ? "SENT" : undefined,
-        failureReason: r.ok ? undefined : r.error,
+        failureReason: r.ok ? undefined : (r.detail || r.error),
       },
     });
     if (!r.ok) return fail(opts, "Email could not be sent. Try again or use another method.", r.error || "EMAIL_DELIVERY_FAILED", { provider: r.provider });
@@ -214,7 +232,7 @@ export async function issueOtp(opts: {
   }
   const smsProvider = smsProviderName();
   try {
-    await sendSmsMessage(identifier, `Your Nabri ${opts.purpose.toLowerCase().replace(/_/g, " ")} code is: ${code}. Expires in ${policy.expiryMinutes} min. Do not share it.`);
+    await sendSmsMessage(identifier, `Your ${organization} ${label} code is: ${code}. It expires in ${policy.expiryMinutes} minutes. Do not share it with anyone.`);
     await prisma.otpCode.update({ where: { id: row.id }, data: { status: "SENT", provider: smsProvider, deliveryStatus: "SENT" } });
     return {
       sent: true,
@@ -273,10 +291,21 @@ export async function verifyOtp(opts: {
   identifier: string;
   purpose: OtpPurpose;
   code: string;
+  /** GENERIC flow only: verify the code exactly as entered (needed for
+   * alphanumeric/alphabet codes). Numeric flows keep the forgiving strip. */
+  allowNonNumeric?: boolean;
 }): Promise<VerifyResult> {
   const identifier = normalizeIdentifier(opts.channel, opts.identifier);
-  const code = String(opts.code || "").replace(/\D/g, "");
-  if (code.length !== 6) return { ok: false, error: "Enter the 6-digit code." };
+  // Numeric flows forgive stray formatting ("123 456" -> "123456"); typed
+  // (alphanumeric/alphabet) codes must be compared exactly as issued.
+  const code = opts.allowNonNumeric
+    ? String(opts.code || "").trim()
+    : String(opts.code || "").replace(/\D/g, "");
+  if (!code) return { ok: false, error: "Enter the code." };
+  if (!opts.allowNonNumeric && code.length !== 6) return { ok: false, error: "Enter the 6-digit code." };
+  if (opts.allowNonNumeric && (code.length < 4 || code.length > 10)) {
+    return { ok: false, error: "Enter the code you received." };
+  }
 
   const row = await prisma.otpCode.findFirst({
     where: { identifier, purpose: opts.purpose, status: { in: ["SENT", "DELIVERED", "FAILED"] } },

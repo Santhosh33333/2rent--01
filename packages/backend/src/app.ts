@@ -47,6 +47,7 @@ import discoveryRoutes from "./routes/discoveryRoutes";
 import moviesRoutes from "./routes/moviesRoutes";
 import aiRoutes from "./routes/aiRoutes";
 import referralRoutes from "./routes/referralRoutes";
+import otpApiRoutes from "./routes/otpApiRoutes";
 
 export function createApp(): http.Server {
   const app = express();
@@ -283,7 +284,11 @@ export function createApp(): http.Server {
 app.use("/api/partner", partnerRoutes);
 app.use("/api/discovery", discoveryRoutes);
 app.use("/api/movies", moviesRoutes);
-app.use("/api/ai", aiRoutes);
+  app.use("/api/ai", aiRoutes);
+  // Public generic OTP API (generate/verify) — registered BEFORE the /api
+  // search router (which applies auth globally) so it stays unauthenticated,
+  // mirroring the reference otp-service's open endpoints.
+  app.use("/api/otp", otpApiRoutes);
   // Public service catalog (Expanded Partner Ecosystem) — registered BEFORE the
   // /api search router (which applies auth globally) so it stays unauthenticated.
   app.get("/api/services", (_req: Request, res: Response) => {

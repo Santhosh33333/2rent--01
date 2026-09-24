@@ -79,11 +79,15 @@ const envSchema = z.object({
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().default("Nabri <noreply@nabri.app>"),
 
-  // Email provider abstraction: none | smtp | resend. `none` (default)
-  // honestly reports EMAIL_NOT_CONFIGURED instead of pretending to send.
+  // Email provider abstraction: none | smtp | brevo | resend. SMTP (Brevo relay)
+  // can fail with 525 "Unauthorized IP" because Brevo binds relay to the sender
+  // IP — never stable on a cloud host with rotating egress. `brevo` uses the
+  // Transactional Email API (api-key auth, IP-independent) and is the reliable
+  // choice for production/Render. `none` (default) reports EMAIL_NOT_CONFIGURED.
   EMAIL_PROVIDER: z.string().default("none"),
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().default("Nabri <noreply@nabri.app>"),
+  BREVO_API_KEY: z.string().optional(),
 
   // OTP policy (admin-tunable via AppSettings otp.* keys, env = fallback).
   OTP_EXPIRY_MINUTES: z.string().default("10").transform(Number),
@@ -92,6 +96,11 @@ const envSchema = z.object({
   OTP_MAX_PER_15MIN: z.string().default("3").transform(Number),
   OTP_MAX_PER_HOUR: z.string().default("5").transform(Number),
   OTP_MAX_PER_IP_HOUR: z.string().default("20").transform(Number),
+
+  // Public OTP API (/api/otp): optional comma-separated keyword blocklist so
+  // the generate endpoint rejects spammy org/subject/purpose text, mirroring
+  // the reference otp-service spam gate. Defaults apply when unset.
+  SPAM_BLOCK_WORDS: z.string().optional(),
 
   // SMS provider abstraction: twilio | msg91 | none. Without provider env, SMS
   // OTP honestly reports SMS_NOT_CONFIGURED (email fallback offered instead).

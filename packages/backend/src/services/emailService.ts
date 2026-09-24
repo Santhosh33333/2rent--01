@@ -2,13 +2,16 @@ import { createTransport } from "nodemailer";
 import { env } from "../config/env";
 import { renderEmail, escHtml, WEB_ORIGIN } from "./emailTemplate";
 
-export type EmailProviderName = "none" | "smtp" | "resend";
+export type EmailProviderName = "none" | "smtp" | "brevo" | "resend";
 
 export function emailProvider(): EmailProviderName {
   const p = (env.EMAIL_PROVIDER || "none").toLowerCase();
+  // Brevo Transactional Email API: api-key auth, IP-independent (SMTP relay is
+  // bound to sender IP and breaks on cloud hosts with 525 Unauthorized IP).
+  if (p === "brevo" && env.BREVO_API_KEY) return "brevo";
   if (p === "smtp" && env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS) return "smtp";
   if (p === "resend" && env.RESEND_API_KEY) return "resend";
-  // Explicit smtp request without credentials, or unknown name, degrades
+  // Explicit provider request without credentials, or unknown name, degrades
   // honestly to "none" — never pretend to send.
   return "none";
 }
@@ -20,19 +23,24 @@ export function emailStatus(): {
   from: string;
 } {
   const provider = emailProvider();
-  if (provider === "smtp") return { provider, configured: true, requiredEnv: [], from: env.EMAIL_FROM };
-  if (provider === "resend")
+  if (provider === "brevo" || provider === "smtp" || provider === "resend") {
     return { provider, configured: true, requiredEnv: [], from: env.EMAIL_FROM };
+  }
   const want = (env.EMAIL_PROVIDER || "none").toLowerCase();
-  return {
-    provider: "none",
-    configured: false,
-    requiredEnv:
-      want === "resend"
-        ? ["RESEND_API_KEY", "EMAIL_FROM"]
-        : ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "EMAIL_FROM"],
-    from: env.EMAIL_FROM,
-  };
+  const required =
+    want === "resend"
+      ? ["RESEND_API_KEY", "EMAIL_FROM"]
+      : want === "brevo"
+        ? ["BREVO_API_KEY", "EMAIL_FROM"]
+        : ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "EMAIL_FROM"];
+  return { provider: "none", configured: false, requiredEnv: required, from: env.EMAIL_FROM };
+}
+
+/** Parse "Name <email>" from EMAIL_FROM with safe fallbacks. */
+function parseFrom(): { name: string; email: string } {
+  const m = /^([^<]*)<([^>]+)>/.exec(env.EMAIL_FROM || "");
+  if (m) return { name: m[1].trim() || "Nabri", email: m[2].trim() };
+  return { name: "Nabri", email: (env.EMAIL_FROM || "noreply@nabri.app").trim() };
 }
 
 let transporter: ReturnType<typeof createTransport> | null = null;
@@ -49,7 +57,44 @@ function getTransporter() {
   return transporter;
 }
 
-async function sendViaResend(to: string, subject: string, html: string, text: string): Promise<{ ok: boolean; messageId?: string; error?: string }> {
+async function sendViaBrevo(to: string, subject: string, html: string, text: string): Promise<{ ok: boolean; messageId?: string; error?: string; detail?: string }> {
+  try {
+    const { name, email } = parseFrom();
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 20000);
+    try {
+      const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+        method: "POST",
+        signal: ctrl.signal,
+        headers: {
+          "Content-Type": "application/json",
+          "api-key": env.BREVO_API_KEY || "",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          sender: { name, email },
+          to: [{ email: to }],
+          subject,
+          htmlContent: html,
+          textContent: text,
+        }),
+      });
+      const data: any = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const detail = `${res.status} ${Array.isArray(data?.message) ? data.message.join(" | ") : data?.message || ""}`.trim();
+        console.error("[EMAIL] Brevo API error:", JSON.stringify({ status: res.status, message: data?.message, code: data?.code, error: data?.error }));
+        return { ok: false, error: "EMAIL_DELIVERY_FAILED", detail };
+      }
+      return { ok: true, messageId: data?.messageId };
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch (err: any) {
+    return { ok: false, error: "EMAIL_DELIVERY_FAILED", detail: err?.name === "AbortError" ? "timed out" : (err?.message || "request failed") };
+  }
+}
+
+async function sendViaResend(to: string, subject: string, html: string, text: string): Promise<{ ok: boolean; messageId?: string; error?: string; detail?: string }> {
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 15000);
@@ -79,6 +124,8 @@ export interface EmailResult {
   provider: EmailProviderName;
   messageId?: string;
   error?: string;
+  /** Extra delivery detail (SMTP code/response) for diagnostics/logs. */
+  detail?: string;
 }
 
 function wrapHtml(title: string, body: string): string {
@@ -98,10 +145,15 @@ export async function sendEmail(to: string, subject: string, html: string, text?
     else console.warn("[EMAIL] not configured — email not delivered (suppressed from logs for PII safety).");
     return { ok: false, provider, error: "EMAIL_NOT_CONFIGURED" };
   }
+  if (provider === "brevo") {
+    const r = await sendViaBrevo(to, subject, html, plain);
+    if (!r.ok) console.error("[EMAIL] Brevo API failed:", r.error);
+    return { ok: r.ok, provider, messageId: r.messageId, error: r.error, detail: r.detail };
+  }
   if (provider === "resend") {
     const r = await sendViaResend(to, subject, html, plain);
     if (!r.ok) console.error("[EMAIL] Resend failed:", r.error);
-    return { ok: r.ok, provider, messageId: r.messageId, error: r.error };
+    return { ok: r.ok, provider, messageId: r.messageId, error: r.error, detail: r.detail };
   }
   const tx = getTransporter();
   if (!tx) return { ok: false, provider: "none", error: "EMAIL_NOT_CONFIGURED" };
@@ -109,21 +161,36 @@ export async function sendEmail(to: string, subject: string, html: string, text?
     const info: any = await tx.sendMail({ from: env.EMAIL_FROM, to, subject, html, text: plain });
     return { ok: true, provider, messageId: info?.messageId };
   } catch (err: any) {
-    console.error("[EMAIL] SMTP failed:", err?.message);
-    return { ok: false, provider, error: "EMAIL_DELIVERY_FAILED" };
+    // Nodemailer surfaces rejection codes/responses that a bare message hides.
+    const detail =
+      err?.response !== undefined && typeof err.response === "string"
+        ? err.response
+        : err?.responseCode
+          ? `${err.responseCode} ${String(err?.response || "")}`.trim()
+          : err?.code
+            ? String(err.code)
+            : err?.message || "unknown";
+    console.error("[EMAIL] SMTP failed:", detail);
+    return { ok: false, provider, error: "EMAIL_DELIVERY_FAILED", detail };
   }
 }
 
-export async function sendOTPEmail(email: string, otp: string, purpose = "verification"): Promise<EmailResult> {
-  const subject = `Your Nabri ${purpose} code`;
-  const bodyHtml = `<div style="background:#FBF7EF;border:1px solid #EFE4D4;border-radius:16px;padding:22px 16px;text-align:center;margin:8px 0 18px"><div style="font-family:Arial,Helvetica,sans-serif;font-size:34px;font-weight:900;letter-spacing:10px;color:#1C1917;padding-left:10px;margin:0">${escHtml(otp)}</div></div><p style="margin:0 0 12px;font-size:14px;color:#6B6558">Use this code to complete the <strong style="color:#1C1917">${escHtml(purpose)}</strong> step for your Nabri account. It expires in ${env.OTP_EXPIRY_MINUTES} minutes.</p><p style="margin:0;font-size:12px;color:#9A9184">If you didn't request this code, you can safely ignore this email.</p>`;
+export async function sendOTPEmail(
+  email: string,
+  otp: string,
+  purpose = "verification",
+  organization = "Nabri",
+  subjectOverride?: string
+): Promise<EmailResult> {
+  const subject = subjectOverride || `Your ${organization} ${purpose} code`;
+  const bodyHtml = `<div style="background:#FBF7EF;border:1px solid #EFE4D4;border-radius:16px;padding:22px 16px;text-align:center;margin:8px 0 18px"><div style="font-family:Arial,Helvetica,sans-serif;font-size:34px;font-weight:900;letter-spacing:10px;color:#1C1917;padding-left:10px;margin:0">${escHtml(otp)}</div></div><p style="margin:0 0 12px;font-size:14px;color:#6B6558">Use this code to complete the <strong style="color:#1C1917">${escHtml(purpose)}</strong> step for your ${escHtml(organization)} account. It expires in ${env.OTP_EXPIRY_MINUTES} minutes.</p><p style="margin:0;font-size:12px;color:#9A9184">If you didn't request this code, you can safely ignore this email.</p>`;
   return sendEmail(
     email,
     subject,
     renderEmail({
-      title: `Your Nabri ${purpose} code`,
+      title: subject,
       bodyHtml,
-      note: `This code expires in ${env.OTP_EXPIRY_MINUTES} minutes. Never share it with anyone, including Nabri support.`,
+      note: `This code expires in ${env.OTP_EXPIRY_MINUTES} minutes. Never share it with anyone, including ${organization} support.`,
     }),
     `Your ${purpose} code is ${otp}. Expires in ${env.OTP_EXPIRY_MINUTES} minutes.`
   );
