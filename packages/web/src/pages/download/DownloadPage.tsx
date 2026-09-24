@@ -2,8 +2,8 @@ import { Link } from 'react-router-dom'
 import { Check, Download, Monitor, ShieldCheck, Smartphone, Sparkles, Zap } from 'lucide-react'
 
 const APK_PATH = '/download/nabri.apk'
-const APK_SIZE = '4 MB'
-const APK_VERSION = '1.0.0'
+const APK_SIZE = '39 MB'
+const APK_VERSION = '1.0.5'
 
 const STEPS = [
   { icon: Smartphone, title: 'Open on your phone', text: 'Visit this page from your Android phone so the APK downloads straight to it.' },
@@ -22,15 +22,17 @@ export function DownloadPage() {
   return (
     <div className="min-h-screen bg-surface-50 dark:bg-surface-950">
       {/* Hero */}
-      <div className="relative overflow-hidden bg-surface-950 text-white">
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute -top-24 -right-24 w-96 h-96 bg-primary-500/15 rounded-full blur-[128px]" />
-          <div className="absolute bottom-0 left-1/3 w-80 h-80 bg-accent-500/15 rounded-full blur-[128px]" />
+      <div className="relative overflow-hidden bg-[#081F4F] text-white">
+        <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(135deg,#081F4F 0%,#0D378B 55%,#3B6ED8 100%)' }}>
+          <div className="absolute -top-24 -right-24 w-96 h-96 bg-white/10 rounded-full blur-[128px]" />
+          <div className="absolute bottom-0 left-1/3 w-80 h-80 bg-[#D2F53C]/10 rounded-full blur-[128px]" />
         </div>
 
         <div className="relative z-10 max-w-3xl mx-auto px-5 sm:px-8 py-12 sm:py-16 text-center">
-          <Link to="/" className="inline-flex items-center gap-2 text-lg font-extrabold font-display tracking-tight text-white">
-            <img src="/logo-mark.svg" alt="Nabri logo" className="w-8 h-8" />
+          <Link to="/" className="inline-flex items-center gap-2.5 text-lg font-extrabold font-display tracking-tight text-white">
+            <span className="flex items-center justify-center rounded-2xl bg-white p-2">
+              <img src="/logo-mark.png" alt="Nabri logo" className="w-8 h-8" />
+            </span>
             NABRI
           </Link>
 
@@ -45,7 +47,7 @@ export function DownloadPage() {
           <a
             href={APK_PATH}
             download
-            className="mt-8 inline-flex items-center justify-center gap-3 rounded-2xl bg-primary-500 hover:bg-primary-400 px-8 py-4 text-base font-bold text-white shadow-xl shadow-primary-500/25 transition-all hover:-translate-y-0.5"
+            className="mt-8 inline-flex items-center justify-center gap-3 rounded-2xl bg-white px-8 py-4 text-base font-bold text-[#0D378B] shadow-xl shadow-black/20 transition-all hover:-translate-y-0.5 hover:bg-[#E9F0FF]"
           >
             <Download className="w-5 h-5" />
             Download Android APK
@@ -109,7 +111,7 @@ export function DownloadPage() {
           <a
             href={APK_PATH}
             download
-            className="inline-flex items-center justify-center gap-3 rounded-2xl bg-primary-600 hover:bg-primary-500 px-8 py-4 text-base font-bold text-white shadow-lg shadow-primary-600/20 transition-all hover:-translate-y-0.5"
+            className="inline-flex items-center justify-center gap-3 rounded-2xl bg-[#0D378B] hover:bg-[#123F9C] px-8 py-4 text-base font-bold text-white shadow-lg shadow-[#0D378B]/25 transition-all hover:-translate-y-0.5"
           >
             <Download className="w-5 h-5" />
             Download now

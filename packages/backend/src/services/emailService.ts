@@ -268,7 +268,7 @@ export async function sendWelcomeEmail(email: string, name: string): Promise<Ema
 <tr><td style="padding:0 16px 14px;font-size:13px;color:#6B6558">Account<strong style="display:block;color:#1C1917"><span class="nabri-pulse" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#22A06B;margin-right:6px"></span>Successfully verified ✅</strong></td></tr></table>
 <p class="nabri-fade d3" style="margin:0 0 14px">Start exploring Nabri and discover what&rsquo;s happening around you.</p>
 <p style="margin:0 0 18px;font-style:italic;color:#4B453D">Welcome to Nabri — Connect. Discover. Experience.</p>
-<p style="margin:0 0 6px">Regards,<br/><strong style="color:#1C1917">Team Nabri</strong><br/><a href="mailto:${supportEmail}" style="color:#D83D27;text-decoration:none">${supportEmail}</a></p>`;
+<p style="margin:0 0 6px">Regards,<br/><strong style="color:#1C1917">Team Nabri</strong><br/><a href="mailto:${supportEmail}" style="color:#0D378B;text-decoration:none">${supportEmail}</a></p>`;
   return sendEmail(
     email,
     `Welcome to Nabri, ${firstName}! 🎉`,
@@ -325,7 +325,7 @@ export async function sendSecurityAlertEmail(email: string, subject: string, bod
     renderEmail({ supportEmail: env.SUPPORT_EMAIL,
       title: subject,
       kicker: "Security alert",
-      bodyHtml: `<p style="margin:0 0 14px">We detected unusual activity on your Nabri account.</p><table class="nabri-fade d2" role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#FFF7F5;border:1px solid #F5D9D3;border-radius:14px;margin:0 0 16px"><tr><td style="padding:16px 18px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.7;color:#4B453D">${paragraphHtml(body)}</td></tr></table><p style="margin:0 0 14px"><strong>If this was you</strong> — you're all set. <strong>If it wasn't</strong>, change your password immediately and contact <a href="mailto:${escHtml(env.SUPPORT_EMAIL)}" style="color:#D83D27;text-decoration:none">${escHtml(env.SUPPORT_EMAIL)}</a>.</p>`,
+      bodyHtml: `<p style="margin:0 0 14px">We detected unusual activity on your Nabri account.</p><table class="nabri-fade d2" role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#FFF7F5;border:1px solid #F5D9D3;border-radius:14px;margin:0 0 16px"><tr><td style="padding:16px 18px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.7;color:#4B453D">${paragraphHtml(body)}</td></tr></table><p style="margin:0 0 14px"><strong>If this was you</strong> — you're all set. <strong>If it wasn't</strong>, change your password immediately and contact <a href="mailto:${escHtml(env.SUPPORT_EMAIL)}" style="color:#0D378B;text-decoration:none">${escHtml(env.SUPPORT_EMAIL)}</a>.</p>`,
       note: "This message was sent automatically. Do not reply to this email.",
     }),
     `${subject}: ${body}. Support: ${env.SUPPORT_EMAIL}`
@@ -339,7 +339,7 @@ export async function sendBookingEmail(email: string, subject: string, body: str
     renderEmail({ supportEmail: env.SUPPORT_EMAIL,
       title: subject,
       kicker: "Nabri booking",
-      bodyHtml: `<p style="margin:0 0 14px">Here's an update on your Nabri booking:</p><div class="nabri-fade d2" style="background:#FBF7EF;border:1px solid #EFE4D4;border-radius:14px;padding:16px 18px;margin:0 0 16px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.7;color:#4B453D">${paragraphHtml(body)}</div><p style="margin:0">Need help? Reply to this email or reach us at <a href="mailto:${escHtml(env.SUPPORT_EMAIL)}" style="color:#D83D27;text-decoration:none">${escHtml(env.SUPPORT_EMAIL)}</a>.</p>`,
+      bodyHtml: `<p style="margin:0 0 14px">Here's an update on your Nabri booking:</p><div class="nabri-fade d2" style="background:#FBF7EF;border:1px solid #EFE4D4;border-radius:14px;padding:16px 18px;margin:0 0 16px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.7;color:#4B453D">${paragraphHtml(body)}</div><p style="margin:0">Need help? Reply to this email or reach us at <a href="mailto:${escHtml(env.SUPPORT_EMAIL)}" style="color:#0D378B;text-decoration:none">${escHtml(env.SUPPORT_EMAIL)}</a>.</p>`,
     }),
     `${subject}: ${body}`
   );
@@ -399,7 +399,7 @@ export async function sendBookingInvoiceEmail(email: string, name: string, invoi
         `<tr><td style="padding:10px 14px;border-top:1px solid #EFE8DC;font-size:13px;color:#6B6558">${escHtml(k)}</td><td style="padding:10px 14px;border-top:1px solid #EFE8DC;font-size:13px;color:#1C1917;font-weight:600;text-align:right">${escHtml(v)}</td></tr>`
     )
     .join("");
-  const bodyHtml = `<p style="margin:0 0 14px">Hi ${escHtml(name)},</p><p style="margin:0 0 14px">Your booking is confirmed and paid. Here&rsquo;s your invoice:</p><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #EFE8DC;border-radius:14px;overflow:hidden;margin:0 0 20px"><tr><td style="background:#FBF7EF;padding:12px 14px;font-size:12px;color:#D83D27;font-weight:800;letter-spacing:1px">NABRI · INVOICE ${invoiceNo}</td></tr>${rowsHtml}</table>`;
+  const bodyHtml = `<p style="margin:0 0 14px">Hi ${escHtml(name)},</p><p style="margin:0 0 14px">Your booking is confirmed and paid. Here&rsquo;s your invoice:</p><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #EFE8DC;border-radius:14px;overflow:hidden;margin:0 0 20px"><tr><td style="background:#FBF7EF;padding:12px 14px;font-size:12px;color:#0D378B;font-weight:800;letter-spacing:1px">NABRI · INVOICE ${invoiceNo}</td></tr>${rowsHtml}</table>`;
   return sendEmail(
     email,
     `Booking confirmed · Invoice ${invoiceNo}`,

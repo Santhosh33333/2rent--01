@@ -225,12 +225,14 @@ export function RegisterPage() {
       <div className="relative w-full max-w-md m-auto">
         <AnimatedPage>
           {/* Logo */}
-          <div className="text-center mb-8">
-            <img
-              src="/logo-mark.svg"
-              alt="Nabri logo"
-              className="inline-block w-14 h-14 rounded-2xl shadow-xl shadow-primary-500/25 mb-5 animate-float"
-            />
+<div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center rounded-3xl bg-white p-2.5 shadow-xl shadow-[#0D378B]/25 mb-5 animate-float">
+              <img
+                src="/logo-mark.png"
+                alt="Nabri logo"
+                className="w-12 h-12"
+              />
+            </div>
             <h1 className="text-3xl font-bold font-display text-surface-900 dark:text-white tracking-tight">Create account</h1>
             <p className="mt-2 text-surface-500 dark:text-surface-400 text-sm">Join the Nabri community</p>
           </div>

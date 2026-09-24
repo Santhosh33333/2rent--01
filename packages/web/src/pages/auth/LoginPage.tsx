@@ -254,17 +254,19 @@ export function LoginPage() {
           </div>
         ) : (
         <AnimatedPage>
-          <div className="text-center mb-10">
-            <img
-              src="/logo-mark.svg"
-              alt="Nabri logo"
-              className="inline-block w-16 h-16 rounded-2xl shadow-xl shadow-primary-500/25 mb-5 animate-float"
-            />
+<div className="text-center mb-10">
+            <div className="inline-flex items-center justify-center rounded-3xl bg-white p-2.5 shadow-xl shadow-[#0D378B]/25 mb-5 animate-float">
+              <img
+                src="/logo-mark.png"
+                alt="Nabri logo"
+                className="w-14 h-14"
+              />
+            </div>
             <h1 className="text-3xl font-bold font-display text-surface-900 dark:text-white tracking-tight">
               Welcome back
             </h1>
             <p className="mt-2 text-surface-500 dark:text-surface-400 text-sm">
-              Sign in to continue with Nabri
+              Good to see you again — sign in to continue
             </p>
           </div>
 
