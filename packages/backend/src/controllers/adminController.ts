@@ -15,7 +15,7 @@ import { invalidateConfigCache } from "../services/pricingEngine";
 import { ensureAdminUser } from "../services/adminProvision";
 import { SERVICE_KEYS } from "../services/serviceCatalog";
 import * as partnerMatching from "../services/partnerMatchingEngine";
-import { sendEmail, emailStatus, sendKycEmail } from "../services/emailService";
+import { sendEmail, emailStatus, sendKycEmail, sendWelcomeEmail } from "../services/emailService";
 import { renderEmail, paragraphHtml } from "../services/emailTemplate";
 
 // ============================================================================
@@ -1159,6 +1159,72 @@ export async function sendTestEmail(req: AuthedRequest, res: Response): Promise<
     return;
   }
   sendSuccess(res, { to, provider: result.provider, messageId: result.messageId }, "Test email sent.");
+}
+
+// Send the branded welcome email to a single address (admin review: confirm the
+// new welcome mail looks right in your own inbox before it goes out widely).
+export async function sendWelcomePreviewEmail(req: AuthedRequest, res: Response): Promise<void> {
+  const to = String(req.body?.to || "").trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+    sendError(res, "A valid recipient email is required.", 400, "VALIDATION_ERROR");
+    return;
+  }
+  const name = typeof req.body?.name === "string" && req.body.name.trim() ? req.body.name.trim().slice(0, 80) : "there";
+  const result = await sendWelcomeEmail(to, name);
+  if (!result.ok) {
+    sendError(
+      res,
+      `Welcome email not delivered — provider: ${result.provider}. ${result.error === "EMAIL_NOT_CONFIGURED" ? "Add SMTP or Resend credentials (email provider) on the server environment, then retry." : result.error}`,
+      502,
+      "EMAIL_DELIVERY_FAILED"
+    );
+    return;
+  }
+  sendSuccess(res, { to, provider: result.provider, messageId: result.messageId }, "Welcome email sent.");
+}
+
+// Send the branded welcome email to every real (non-demo, non-test) user so
+// existing accounts receive the same onboarding message new signups get.
+export async function broadcastWelcomeEmail(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const scopes: Record<string, string[]> = { ALL: ["USER", "PARTNER"], USERS: ["USER"], PARTNERS: ["PARTNER"] };
+    const roles = scopes[String(req.body?.audience || "ALL")] || scopes.ALL;
+
+    const users = await prisma.user.findMany({
+      where: { role: { in: roles } },
+      select: { email: true, fullName: true },
+    });
+
+    const recipients = users.filter(
+      (u) =>
+        (u.email || "").trim().length > 0 &&
+        !isDemoEmail(u.email) &&
+        !/sidebud|example\.com|\.test\b/i.test(u.email)
+    );
+
+    let sent = 0;
+    let failed = 0;
+    const CHUNK = 8;
+    for (let i = 0; i < recipients.length; i += CHUNK) {
+      const results = await Promise.all(
+        recipients.slice(i, i + CHUNK).map((u) => sendWelcomeEmail(u.email.trim(), u.fullName || u.email))
+      );
+      for (const r of results) {
+        if (r.ok) sent += 1;
+        else failed += 1;
+      }
+    }
+
+    if (sent === 0 && recipients.length > 0) {
+      sendError(res, "No welcome emails could be delivered. Check the email provider configuration.", 502, "EMAIL_DELIVERY_FAILED");
+      return;
+    }
+
+    sendSuccess(res, { total: recipients.length, sent, failed }, `Welcome email sent to ${sent} of ${recipients.length} users.`);
+  } catch (err) {
+    console.error("Welcome broadcast error:", err);
+    sendError(res, "Failed to send welcome emails.", 500, "INTERNAL_ERROR");
+  }
 }
 
 // ============================================================================

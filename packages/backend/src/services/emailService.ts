@@ -197,17 +197,77 @@ export async function sendOTPEmail(
 }
 
 export async function sendWelcomeEmail(email: string, name: string): Promise<EmailResult> {
+  const displayName = name && name !== email ? name : "there";
+  const firstName = displayName.split(/\s+/)[0] || displayName;
+  const supportEmail = escHtml(env.SUPPORT_EMAIL);
+  const features: Array<[string, string, string]> = [
+    ["🤝", "Connect", "with people and communities"],
+    ["🚶", "Find or join", "activities near you"],
+    ["✈️", "Discover travel", "opportunities"],
+    ["🎬", "Explore plans and", "experiences"],
+    ["📅", "Create and join", "events"],
+    ["💬", "Chat and connect", "with others"],
+    ["🔐", "Keep your profile", "and interactions secure"],
+  ];
+  const featureRows = features
+    .map(
+      ([emoji, head, desc]) =>
+        `<tr><td style="vertical-align:top;padding:0 0 12px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="width:34px;vertical-align:top"><div style="width:28px;height:28px;border-radius:9px;background:#FBF7EF;border:1px solid #EFE4D4;text-align:center;line-height:26px;font-size:14px">${emoji}</div></td><td style="padding:2px 0 0 10px;font-size:13.5px;line-height:1.5;color:#4B453D"><strong style="color:#1C1917">${escHtml(head)}</strong> ${escHtml(desc)}</td></tr></table></td></tr>`
+    )
+    .join("");
+  const bodyHtml = `<p style="margin:0 0 12px">Hi <strong style="color:#1C1917">${escHtml(firstName)}</strong>,</p>
+<p style="margin:0 0 14px"><span style="font-size:18px">🎉</span> <strong class="nabri-anim" style="color:#1C1917">Welcome to Nabri!</strong></p>
+<p class="nabri-anim" style="margin:0 0 14px">We&rsquo;re happy to have you with us. Nabri is built to help you connect, discover, travel, join activities, and create meaningful experiences with people around you. Your account has been successfully created.</p>
+<p style="margin:0 0 14px;font-weight:800;color:#1C1917">🚀 What you can do with Nabri</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px">${featureRows}</table>
+<table class="nabri-anim" role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#FBF7EF;border:1px solid #EFE4D4;border-radius:14px;margin:0 0 18px;padding:0"><tr><td style="padding:14px 16px;font-size:12px;color:#6B6558;font-weight:800;letter-spacing:1px">YOUR ACCOUNT</td></tr>
+<tr><td style="padding:0 16px 8px;font-size:13px;color:#6B6558">Name<strong style="display:block;color:#1C1917">${escHtml(displayName)}</strong></td></tr>
+<tr><td style="padding:0 16px 8px;font-size:13px;color:#6B6558">Email<strong style="display:block;color:#1C1917">${escHtml(email)}</strong></td></tr>
+<tr><td style="padding:0 16px 14px;font-size:13px;color:#6B6558">Account<strong style="display:block;color:#1C1917"><span class="nabri-badge" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#22A06B;margin-right:6px"></span>Successfully verified ✅</strong></td></tr></table>
+<p class="nabri-anim" style="margin:0 0 14px">Start exploring Nabri and discover what&rsquo;s happening around you.</p>
+<p style="margin:0 0 18px;font-style:italic;color:#4B453D">Welcome to Nabri — Connect. Discover. Experience.</p>
+<p style="margin:0 0 6px">Regards,<br/><strong style="color:#1C1917">Team Nabri</strong><br/><a href="mailto:${supportEmail}" style="color:#D83D27;text-decoration:none">${supportEmail}</a></p>`;
   return sendEmail(
     email,
-    "Welcome to Nabri",
+    `Welcome to Nabri, ${firstName}! 🎉`,
     renderEmail({
-      title: `Welcome, ${escHtml(name)}!`,
-      bodyHtml: `<p style="margin:0 0 14px">Your account is ready. Find trusted partners nearby, join local events, book homes and get quick help — all in one place.</p><p style="margin:0">Finish your profile and start exploring your city.</p>`,
-      ctaText: "Explore Nabri",
+      title: `Welcome to Nabri! 🎉`,
+      bodyHtml,
+      ctaText: "Start exploring",
       ctaUrl: WEB_ORIGIN,
-      note: "You created this account on Nabri. If it wasn't you, please contact support immediately.",
+      note: `If you didn't create this account, please contact our support team: ${env.SUPPORT_EMAIL}`,
+      headHtml: `@keyframes nabriFadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } } @keyframes nabriBadgeGlow { 0% { box-shadow: 0 0 0 0 rgba(34,160,107,0.4); } 70% { box-shadow: 0 0 0 8px rgba(34,160,107,0); } 100% { box-shadow: 0 0 0 0 rgba(34,160,107,0); } } @media screen { .nabri-anim { animation: nabriFadeIn 0.8s ease-out both; } .nabri-badge { animation: nabriBadgeGlow 1.6s ease-out infinite; } }`,
     }),
-    `Welcome to Nabri, ${name}! Your account is ready.`
+    `Hi ${firstName}, welcome to Nabri! Your account is ready. Connect, discover and experience what's around you. Support: ${env.SUPPORT_EMAIL}`
+  );
+}
+
+const INTRO_LINES: Array<[string, string]> = [
+  ["1. Make your profile", "Add your name, photo and contact details so helpers and partners can reach you easily."],
+  ["2. Get verified", "Complete the quick KYC check to unlock bookings and trusted-partner services."],
+  ["3. Book anything nearby", "Homes, ride help, services, events — reserve what you need with a clean invoice every time."],
+  ["4. Ask for help anytime", "Need assistance in a pinch? Request quick help from verified people and partners around you."],
+];
+
+/** Introduction email sent shortly after signup — walks the user through Nabri. */
+export async function sendIntroductionEmail(email: string, name: string): Promise<EmailResult> {
+  const displayName = name && name !== email ? name : "there";
+  const linesHtml = INTRO_LINES.map(
+    ([head, desc]) =>
+      `<tr><td style="vertical-align:top;padding:0 0 16px"><div style="font-size:15px;font-weight:800;color:#1C1917;margin:0 0 2px">${escHtml(head)}</div><div style="font-size:13px;color:#6B6558;line-height:1.5;margin:0">${escHtml(desc)}</div></td></tr>`
+  ).join("");
+  const bodyHtml = `<p style="margin:0 0 14px">Hi <strong style="color:#1C1917">${escHtml(displayName)}</strong>,</p><p style="margin:0 0 14px">Thanks for joining Nabri! Here's how to get the most out of it:</p><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 14px">${linesHtml}</table><p style="margin:0">Start by completing your profile — it takes under a minute and unlocks everything.</p>`;
+  return sendEmail(
+    email,
+    "Getting started with Nabri",
+    renderEmail({
+      title: "Welcome — let's get you started",
+      bodyHtml,
+      ctaText: "Open Nabri",
+      ctaUrl: WEB_ORIGIN,
+      note: "You're receiving this because you recently created a Nabri account.",
+    }),
+    `Hi ${displayName}, thanks for joining Nabri! Complete your profile and verify your account to unlock bookings and services.`
   );
 }
 

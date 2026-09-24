@@ -15,6 +15,8 @@ export interface RenderEmailOptions {
   ctaUrl?: string;
   /** Optional muted footer line, e.g. "This code expires in 10 minutes." */
   note?: string;
+  /** Optional extra <head> content (keyframes/CSS) appended before printing. */
+  headHtml?: string;
 }
 
 export function escHtml(s: string): string {
@@ -44,6 +46,7 @@ export function renderEmail(opts: RenderEmailOptions): string {
 <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
 <meta name="x-apple-disable-message-reformatting"/>
 <title>${escHtml(opts.title)}</title>
+${opts.headHtml ? `<style>${opts.headHtml}</style>` : ""}
 </head>
 <body style="margin:0;padding:0;background:#F4F0E8;word-spacing:normal">
   <div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all">${escHtml(opts.title)} · Nabri</div>

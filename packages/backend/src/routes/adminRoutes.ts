@@ -112,6 +112,22 @@ router.post(
   adminController.sendTestEmail
 );
 router.post(
+  "/email/welcome-preview",
+  notificationsSend,
+  [body("to").isEmail().withMessage("A valid recipient email is required."), body("name").optional().isString()],
+  sanitizeInput,
+  validateRequest,
+  adminController.sendWelcomePreviewEmail
+);
+router.post(
+  "/email/welcome-broadcast",
+  notificationsSend,
+  [body("audience").optional().isIn(["ALL", "USERS", "PARTNERS"])],
+  sanitizeInput,
+  validateRequest,
+  adminController.broadcastWelcomeEmail
+);
+router.post(
   "/email/broadcast",
   notificationsSend,
   [

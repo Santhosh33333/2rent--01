@@ -87,6 +87,7 @@ const envSchema = z.object({
   EMAIL_PROVIDER: z.string().default("none"),
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().default("Nabri <noreply@nabri.app>"),
+  SUPPORT_EMAIL: z.string().default("support@nabri.app"),
   BREVO_API_KEY: z.string().optional(),
 
   // OTP policy (admin-tunable via AppSettings otp.* keys, env = fallback).
