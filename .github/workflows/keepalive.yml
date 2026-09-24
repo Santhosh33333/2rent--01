@@ -23,7 +23,7 @@ jobs:
       - name: Ping DB liveness probe
         run: |
           body=$(curl -s --max-time 60 \
-            https://rentbuddy-api-s7rz.onrender.com/api/health/db || true)
+            https://rentbuddy-api-s7rz.onrender.com/health/db || true)
           echo "health/db response: ${body}"
           # A 503/5xx from /health/db means the API is up but the database is
           # unreachable (login, wallets, KYC, payments all 500). Surface that as
