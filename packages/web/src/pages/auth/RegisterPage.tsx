@@ -1,11 +1,11 @@
 import { getErrorMessage } from '../../lib/error'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
-import { User, Mail, Phone, Lock, Eye, EyeOff, ArrowRight, ArrowLeft, Check, Sparkles, Cake } from 'lucide-react'
+import { User, Mail, Phone, Lock, Eye, EyeOff, ArrowRight, ArrowLeft, Check, Sparkles, Cake, KeyRound, ShieldCheck, RefreshCw } from 'lucide-react'
 import { useAuth } from '../../lib/auth'
 import { api } from '../../lib/api'
 import { AnimatedPage } from '../../components/AnimatedPage'
@@ -49,6 +49,8 @@ const registerSchema = z.object({
 
 type RegisterForm = z.infer<typeof registerSchema>
 
+type OtpStatus = 'idle' | 'sending' | 'sent' | 'verifying' | 'verified' | 'error'
+
 const steps = [
   { id: 1, title: 'Account Type', subtitle: 'Choose how you want to use Nabri' },
   { id: 2, title: 'Personal Info', subtitle: 'Your name and email' },
@@ -68,6 +70,12 @@ export function RegisterPage() {
     (location.state as any)?.accountType === 'PARTNER' ? 'PARTNER' : 'USER'
   )
 
+  const [otpStatus, setOtpStatus] = useState<OtpStatus>('idle')
+  const [otpError, setOtpError] = useState('')
+  const [otpCode, setOtpCode] = useState('')
+  const [otpResendIn, setOtpResendIn] = useState(0)
+  const verifiedEmailRef = useRef('')
+
   useEffect(() => {
     if (authLoading || !user) return
     const role = user.activeRole || user.role || 'USER'
@@ -79,13 +87,78 @@ export function RegisterPage() {
     mode: 'onChange',
   })
 
+  const emailValue = watch('email')
+
+  // If the user changes the email after verifying, reset the inline OTP state.
+  useEffect(() => {
+    const current = (emailValue || '').trim().toLowerCase()
+    if (otpStatus === 'verified' && verifiedEmailRef.current && current !== verifiedEmailRef.current) {
+      setOtpStatus('idle')
+      setOtpCode('')
+      setOtpError('')
+      verifiedEmailRef.current = ''
+    }
+  }, [emailValue, otpStatus])
+
+  useEffect(() => {
+    if (otpResendIn <= 0) return
+    const timer = setTimeout(() => setOtpResendIn((s) => s - 1), 1000)
+    return () => clearTimeout(timer)
+  }, [otpResendIn])
+
+  const requestEmailOtp = async () => {
+    const valid = await trigger('email')
+    if (!valid) return
+    const email = (watch('email') || '').trim().toLowerCase()
+    try {
+      setOtpStatus('sending')
+      setOtpError('')
+      const res = await api.post('/auth/signup/request-otp', { email })
+      setOtpStatus('sent')
+      const data = res.data?.data || {}
+      setOtpResendIn(Number(data.resendInSec) || 30)
+      toast.success(`Verification code sent to ${data.maskedTo || email}`)
+    } catch (err: unknown) {
+      setOtpStatus('error')
+      setOtpError(getErrorMessage(err, 'Could not send the verification code.'))
+    }
+  }
+
+  const verifyEmailOtp = async () => {
+    const email = (watch('email') || '').trim().toLowerCase()
+    if (otpCode.replace(/\D/g, '').length < 4) {
+      setOtpError('Enter the 6-digit code from your email.')
+      return
+    }
+    try {
+      setOtpStatus('verifying')
+      setOtpError('')
+      await api.post('/auth/signup/verify-otp', { email, code: otpCode.replace(/\D/g, '') })
+      verifiedEmailRef.current = email
+      setOtpStatus('verified')
+      toast.success('Email verified!')
+    } catch (err: unknown) {
+      setOtpStatus('sent')
+      setOtpError(getErrorMessage(err, 'Invalid or expired code. Check and try again.'))
+    }
+  }
+
   const handleNext = async () => {
     let fields: (keyof RegisterForm)[] = []
     if (step === 1) {
       setStep(2)
       return
     }
-    if (step === 2) fields = ['name', 'email']
+    if (step === 2) {
+      const valid = await trigger(['name', 'email'])
+      if (!valid) return
+      if (otpStatus !== 'verified') {
+        toast.error('Verify your email first with the OTP code.')
+        return
+      }
+      setStep(3)
+      return
+    }
     if (step === 3) fields = ['gender', 'dateOfBirth']
     if (step === 4) fields = ['phone', 'password', 'confirmPassword']
     const valid = await trigger(fields)
@@ -116,13 +189,22 @@ export function RegisterPage() {
           /* best-effort — invalid codes are simply ignored */
         }
       }
-      toast.success('Registration successful! Verify your email and phone to activate your account.')
+      toast.success('Registration successful!')
       const userId = result?.userId || user?.id
       if (userId) {
-        navigate(
-          `/verify-email?userId=${encodeURIComponent(userId)}&email=${encodeURIComponent(result?.email || data.email)}&next=verify-mobile`,
-          { replace: true }
-        )
+        const emailVerified = result?.verification?.emailVerified === true
+        if (emailVerified) {
+          // Email was verified inline during signup — straight to mobile verify.
+          navigate(
+            `/verify-mobile?userId=${encodeURIComponent(userId)}&phone=${encodeURIComponent(data.phone)}`,
+            { replace: true }
+          )
+        } else {
+          navigate(
+            `/verify-email?userId=${encodeURIComponent(userId)}&email=${encodeURIComponent(result?.email || data.email)}&next=verify-mobile`,
+            { replace: true }
+          )
+        }
       } else {
         navigate(accountType === 'USER' ? '/profile/complete' : '/partner/dashboard', { replace: true })
       }
@@ -246,9 +328,93 @@ export function RegisterPage() {
                     <label htmlFor="email" className="label">Email address</label>
                     <div className="relative">
                       <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 shrink-0 pointer-events-none text-surface-400" />
-                      <input {...register('email')} type="email" id="email" className="input pl-11" placeholder="you@example.com" />
+                      <input {...register('email')} type="email" id="email" disabled={otpStatus === 'verified'} className={`input pl-11 ${otpStatus === 'verified' ? 'opacity-70 cursor-not-allowed' : ''}`} placeholder="you@example.com" />
                     </div>
                     {errors.email && <p className="mt-2 text-xs text-danger-500 font-medium">{errors.email.message}</p>}
+                  </div>
+
+                  {/* Inline email verification (OTP during signup) */}
+                  <div className={`rounded-2xl border p-4 transition ${otpStatus === 'verified' ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-700' : 'border-surface-200 bg-white dark:bg-surface-900 dark:border-surface-700'}`}>
+                    {otpStatus !== 'verified' ? (
+                      <>
+                        <div className="text-sm font-semibold text-surface-800 dark:text-surface-100 mb-1">Verify your email</div>
+                        <p className="text-xs text-surface-500 mb-3">We'll send a one-time code to your inbox to prove this address is yours.</p>
+                        {otpStatus === 'idle' || otpStatus === 'error' || otpStatus === 'sending' ? (
+                          <button
+                            type="button"
+                            onClick={requestEmailOtp}
+                            disabled={otpStatus === 'sending'}
+                            className="w-full rounded-xl bg-primary-50 text-primary-700 dark:bg-primary-950/40 dark:text-primary-300 border border-primary-200 dark:border-primary-700 px-4 py-2.5 text-sm font-semibold transition hover:bg-primary-100 disabled:opacity-60 disabled:cursor-not-allowed"
+                          >
+                            {otpStatus === 'sending' ? (
+                              <span className="flex items-center justify-center gap-2">
+                                <span className="w-3.5 h-3.5 rounded-full border-2 border-primary-300 border-t-primary-600 animate-spin" />
+                                Sending code...
+                              </span>
+                            ) : (
+                              <span className="flex items-center justify-center gap-2">Send verification code</span>
+                            )}
+                          </button>
+                        ) : otpStatus === 'sent' || otpStatus === 'verifying' ? (
+                          <div className="space-y-3">
+                            <div className="relative">
+                              <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 shrink-0 pointer-events-none text-surface-400" />
+                              <input
+                                value={otpCode}
+                                onChange={(e) => {
+                                  setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))
+                                  setOtpError('')
+                                }}
+                                inputMode="numeric"
+                                maxLength={6}
+                                placeholder="Enter 6-digit code"
+                                className="input pl-11"
+                              />
+                            </div>
+                            {otpError && <p className="text-xs text-danger-500 font-medium">{otpError}</p>}
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={verifyEmailOtp}
+                                disabled={otpStatus === 'verifying' || otpCode.replace(/\D/g, '').length < 4}
+                                className="flex-1 rounded-xl bg-primary-500 text-white px-4 py-2.5 text-sm font-semibold transition hover:bg-primary-600 disabled:opacity-60 disabled:cursor-not-allowed"
+                              >
+                                {otpStatus === 'verifying' ? (
+                                  <span className="flex items-center justify-center gap-2">
+                                    <span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                                    Verifying...
+                                  </span>
+                                ) : (
+                                  'Verify email'
+                                )}
+                              </button>
+                              {otpResendIn > 0 ? (
+                                <span className="flex items-center justify-center whitespace-nowrap text-xs text-surface-500 px-2">Resend in {otpResendIn}s</span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={requestEmailOtp}
+                                  className="flex items-center justify-center gap-1.5 rounded-xl border border-surface-200 dark:border-surface-700 px-3 py-2.5 text-xs font-semibold text-surface-600 dark:text-surface-300 transition hover:bg-surface-100 dark:hover:bg-surface-800"
+                                >
+                                  <RefreshCw className="w-3.5 h-3.5" />
+                                  Resend
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-danger-500 font-medium">{otpError || 'Something went wrong.'}</p>
+                        )}
+                      </>
+                    ) : (
+                      <div className="flex items-center gap-2.5">
+                        <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
+                        <div>
+                          <div className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">Email verified</div>
+                          <div className="text-xs text-emerald-600/80 dark:text-emerald-400/80">This address is confirmed. You can continue.</div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label htmlFor="referralCode" className="label">Referral Code <span className="text-surface-400 font-normal">(optional)</span></label>

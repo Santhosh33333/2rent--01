@@ -136,6 +136,22 @@ router.post(
   authController.verifyEmail
 );
 
+// Inline email verification during signup (before the account exists).
+router.post(
+  "/signup/request-otp",
+  otpSendLimiter,
+  [body("email").isEmail().normalizeEmail().withMessage("Valid email is required")],
+  validateRequest,
+  otpController.requestSignupEmailOtp
+);
+router.post(
+  "/signup/verify-otp",
+  otpVerifyLimiter,
+  [body("email").isEmail().normalizeEmail().withMessage("Valid email is required"), body("code").isLength({ min: 4, max: 8 }).withMessage("Code is required")],
+  validateRequest,
+  otpController.verifySignupEmailOtp
+);
+
 router.post(
   "/verify-mobile",
   otpVerifyLimiter,

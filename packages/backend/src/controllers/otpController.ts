@@ -199,6 +199,70 @@ export async function otpChannels(_req: Request, res: Response): Promise<void> {
   );
 }
 
+// POST /auth/signup/request-otp { email } — issues an EMAIL_VERIFICATION code
+// to a NOT-yet-registered address so signup can verify the mailbox INLINE,
+// before the account exists. Server-side proof (a VERIFIED otp row) is what
+// register() trusts — the client can never self-attest an email as verified.
+export async function requestSignupEmailOtp(req: Request, res: Response): Promise<void> {
+  try {
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      sendError(res, "Enter a valid email address.", 400, "VALIDATION_ERROR");
+      return;
+    }
+    const exists = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+    if (exists) {
+      sendError(res, "An account already uses this email. Sign in instead.", 409, "DUPLICATE_USER");
+      return;
+    }
+    const r = await issueOtp({
+      channel: "EMAIL",
+      identifier: email,
+      purpose: "EMAIL_VERIFICATION",
+      ip: getClientIp(req),
+      userAgent: req.headers["user-agent"],
+    });
+    if (!r.sent) {
+      const status =
+        r.code === "OTP_RATE_LIMITED" ? 429 : r.code === "EMAIL_NOT_CONFIGURED" || r.code === "SMS_NOT_CONFIGURED" ? 503 : 400;
+      sendError(res, r.error || "Could not send the code.", status, r.code || "OTP_REQUEST_FAILED");
+      return;
+    }
+    sendSuccess(
+      res,
+      { maskedTo: r.maskedTo, expiresInSec: r.expiresInSec, resendInSec: r.resendInSec, provider: r.provider },
+      `Verification code sent to ${r.maskedTo}.`
+    );
+  } catch (err) {
+    console.error("[otp] signup email request error:", (err as Error)?.message);
+    sendError(res, "Could not send the code.", 500, "INTERNAL_ERROR");
+  }
+}
+
+// POST /auth/signup/verify-otp { email, code } — checks the code WITHOUT
+// consuming it: register() then detects the VERIFIED row and marks the new
+// account's email as verified. Consumed only on successful registration so a
+// proof can't be replayed against another signup for the same address.
+export async function verifySignupEmailOtp(req: Request, res: Response): Promise<void> {
+  try {
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    const code = String(req.body?.code || "");
+    if (!email || !code) {
+      sendError(res, "Email and code are required.", 400, "VALIDATION_ERROR");
+      return;
+    }
+    const v = await verifyOtp({ channel: "EMAIL", identifier: email, purpose: "EMAIL_VERIFICATION", code });
+    if (!v.ok) {
+      sendError(res, v.error || "Invalid or expired code.", 400, "INVALID_OTP");
+      return;
+    }
+    sendSuccess(res, { verified: true, email }, "Email verified. You can create your account.");
+  } catch (err) {
+    console.error("[otp] signup email verify error:", (err as Error)?.message);
+    sendError(res, "Verification failed.", 500, "INTERNAL_ERROR");
+  }
+}
+
 // GET /admin/otp/status — providers, policy, today's delivery stats.
 // Never exposes codes (only hashes exist) or full identifiers.
 export async function otpStatus(_req: AuthedRequest, res: Response): Promise<void> {

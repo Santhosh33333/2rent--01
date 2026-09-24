@@ -190,7 +190,23 @@ export async function register(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const passwordHash = await bcrypt.hash(password, env.BCRYPT_SALT_ROUNDS);
+const passwordHash = await bcrypt.hash(password, env.BCRYPT_SALT_ROUNDS);
+
+    // Inline signup verification: if a VERIFIED email OTP exists for this
+    // address (created via /auth/signup/* before registration), the mailbox
+    // was proven server-side — trust the row, never a client boolean. The
+    // proof is consumed inside the transaction so it can't be replayed.
+    const verifiedProof = await prisma.otpCode.findFirst({
+      where: {
+        identifier: email.toLowerCase(),
+        purpose: "EMAIL_VERIFICATION",
+        status: "VERIFIED",
+        expiresAt: { gte: new Date() },
+      },
+      select: { id: true },
+    });
+    const emailVerifiedOnSignup = Boolean(verifiedProof);
+
     const user = await prisma.$transaction(async (tx) => {
       const u = await tx.user.create({
         data: {
@@ -202,9 +218,17 @@ export async function register(req: Request, res: Response): Promise<void> {
           gender: gender || "OTHER",
           role: "USER",
           activeRole: "USER",
+          emailVerified: emailVerifiedOnSignup,
         },
         select: { id: true, email: true, phone: true, fullName: true, dateOfBirth: true, gender: true, avatarUrl: true, bio: true, city: true, country: true, status: true, role: true, activeRole: true, emailVerified: true, mobileVerified: true },
       });
+
+      if (verifiedProof) {
+        await tx.otpCode.update({
+          where: { id: verifiedProof.id },
+          data: { status: "CANCELLED" },
+        }).catch(() => {});
+      }
 
       if (normalizedAccountType === "PARTNER") {
         await tx.partner.upsert({
@@ -225,15 +249,18 @@ export async function register(req: Request, res: Response): Promise<void> {
 
     // Verification codes go through the DB-backed OTP service (hashed,
     // purpose-bound, rate-limited). Delivery honesty is enforced there:
-    // nothing is reported as sent unless the provider accepts it.
-    await issueOtp({
-      channel: "EMAIL",
-      identifier: user.email,
-      purpose: "EMAIL_VERIFICATION",
-      userId: user.id,
-      ip: getClientIp(req),
-      userAgent: req.headers["user-agent"],
-    });
+    // nothing is reported as sent unless the provider accepts it. Email is
+    // only re-issued here when it was NOT verified inline during signup.
+    if (!emailVerifiedOnSignup) {
+      await issueOtp({
+        channel: "EMAIL",
+        identifier: user.email,
+        purpose: "EMAIL_VERIFICATION",
+        userId: user.id,
+        ip: getClientIp(req),
+        userAgent: req.headers["user-agent"],
+      });
+    }
 
     // If a phone was provided, also issue a mobile code so verifyMobile works.
     if (user.phone) {
@@ -288,11 +315,13 @@ const responseUser = {
           emailVerified: user.emailVerified,
           mobileVerified: user.mobileVerified,
           required: true,
-          emailOtpSent: true,
+          emailOtpSent: !emailVerifiedOnSignup,
           phoneOtpSent: !!user.phone,
         },
       },
-      "Registration successful. OTP sent for email and phone verification.",
+      emailVerifiedOnSignup
+        ? "Registration successful. Verify your phone to activate your account."
+        : "Registration successful. OTP sent for email and phone verification.",
       201
     );
   } catch (err) {
