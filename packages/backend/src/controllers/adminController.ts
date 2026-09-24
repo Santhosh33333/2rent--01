@@ -15,7 +15,7 @@ import { invalidateConfigCache } from "../services/pricingEngine";
 import { ensureAdminUser } from "../services/adminProvision";
 import { SERVICE_KEYS } from "../services/serviceCatalog";
 import * as partnerMatching from "../services/partnerMatchingEngine";
-import { sendEmail, emailStatus } from "../services/emailService";
+import { sendEmail, emailStatus, sendKycEmail } from "../services/emailService";
 import { renderEmail, paragraphHtml } from "../services/emailTemplate";
 
 // ============================================================================
@@ -429,8 +429,20 @@ async function reviewKyc(req: AuthedRequest, id: string, approve: boolean, reaso
     // Verification.status=VERIFIED (what requireVerification gates on), it says
     // nothing about email ownership.
     prisma.verificationHistory.create({ data: { verificationId: id, status: approve ? "VERIFIED" : "REJECTED", note: reason, changedBy: req.user!.userId } }),
-    prisma.auditLog.create({ data: { actorId: req.user!.userId, actorType: "ADMIN", action: approve ? "KYC_APPROVE" : "KYC_REJECT", entityType: "Verification", entityId: id, metadata: reason ? JSON.stringify({ rejectionReason: reason }) : null } }),
+prisma.auditLog.create({ data: { actorId: req.user!.userId, actorType: "ADMIN", action: approve ? "KYC_APPROVE" : "KYC_REJECT", entityType: "Verification", entityId: id, metadata: reason ? JSON.stringify({ rejectionReason: reason }) : null } }),
   ]);
+
+  // Notify the applicant by email (fire-and-forget — a delivery hiccup must
+  // never fail the admin's approve/reject request).
+  const applicant = await prisma.user.findUnique({
+    where: { id: verification.userId },
+    select: { email: true, fullName: true },
+  });
+  if (applicant?.email) {
+    void sendKycEmail(applicant.email, applicant.fullName || "there", approve, approve ? undefined : reason).catch((err) =>
+      console.error("[EMAIL] KYC decision email failed:", err)
+    );
+  }
 }
 
 export async function approveKyc(req: AuthedRequest, res: Response): Promise<void> {

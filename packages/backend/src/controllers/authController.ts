@@ -7,7 +7,7 @@ import { env } from "../config/env";
 import { generateAccessToken, generateRefreshToken, generateImpersonationAccessToken, verifyRefreshToken } from "../utils/jwt";
 import { generateOTP } from "../utils/otp";
 import { issueOtp, verifyOtp, consumeOtp, maskIdentifier } from "../services/otpService";
-import { emailStatus } from "../services/emailService";
+import { emailStatus, sendWelcomeEmail } from "../services/emailService";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
 import { getFirebaseAuth, verifyIdToken, getUserByPhone, getUserByEmail, createUserWithPhone, createUserWithEmail } from "../services/firebaseAuthService";
@@ -246,6 +246,12 @@ export async function register(req: Request, res: Response): Promise<void> {
         userAgent: req.headers["user-agent"],
       });
     }
+
+    // Welcome email after signup (fire-and-forget, never blocks registration
+    // and never fails it — delivery is best-effort via the provider).
+    void sendWelcomeEmail(user.email, user.fullName || user.email).catch((err) =>
+      console.error("[EMAIL] Welcome email send failed:", err)
+    );
 
     const { accessToken, refreshToken } = await createUserSession(user.id, req);
 

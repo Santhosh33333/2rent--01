@@ -10,6 +10,7 @@ import { dispatchBooking, onBookingClaimed } from "../services/dispatchService"
 import { ensureConversation } from "./messageController"
 import { SERVICE_KEYS, getServiceDef } from "../services/serviceCatalog"
 import { logBookingTransition } from "../services/bookingLogService"
+import { sendBookingInvoiceEmail } from "../services/emailService"
 import { moneyTransaction, shortTransaction } from "../utils/db"
 import {
   getEarlyStartMinutes,
@@ -534,6 +535,19 @@ export async function verifyPayment(req: AuthedRequest, res: Response): Promise<
         data: JSON.stringify({ bookingId: id, paymentId: razorpayPaymentId }),
       },
     })
+
+    // Booking confirmation + invoice email (fire-and-forget; never blocks or
+    // fails the payment flow — delivery is best-effort via the provider).
+    void sendBookingInvoiceEmail(user.email, user.fullName || "there", {
+      bookingId: id,
+      serviceType: booking.serviceType,
+      scheduledAt: booking.scheduledAt,
+      startLocation: booking.startLocation,
+      endLocation: booking.endLocation,
+      amount,
+      paymentReference: razorpayPaymentId,
+      paymentMethod: booking.paymentMethod || "UPI / Online",
+    }).catch((err) => console.error("[EMAIL] Booking invoice email failed:", err))
 
     // Trigger partner matching in the background
     partnerMatching.assignPartnerToBooking(id, {

@@ -222,3 +222,71 @@ export async function sendSecurityAlertEmail(email: string, subject: string, bod
 export async function sendBookingEmail(email: string, subject: string, body: string): Promise<EmailResult> {
   return sendEmail(email, subject, wrapHtml(subject, `<p>${body}</p>`), `${subject}: ${body}`);
 }
+
+/** KYC decision email — sent to the applicant when an admin reviews their documents. */
+export async function sendKycEmail(email: string, name: string, approved: boolean, rejectionReason?: string): Promise<EmailResult> {
+  const subject = approved ? "KYC verification approved" : "KYC verification needs attention";
+  const bodyHtml = approved
+    ? `<p style="margin:0 0 14px">Hi ${escHtml(name)},</p><p style="margin:0 0 14px">Good news — your identity check was <strong>approved</strong>. You now have full access to bookings, events and partner services.</p><p style="margin:0">Keep your documents up to date in case we ever need to re-verify you.</p>`
+    : `<p style="margin:0 0 14px">Hi ${escHtml(name)},</p><p style="margin:0 0 14px">Unfortunately your identity check was <strong>not approved</strong>${rejectionReason ? `: ${escHtml(rejectionReason)}` : "."}</p><p style="margin:0">Please correct the details and resubmit your documents.</p>`;
+  return sendEmail(
+    email,
+    subject,
+    renderEmail({
+      title: approved ? "You're verified!" : "KYC update",
+      bodyHtml,
+      ctaText: "Check my profile",
+      ctaUrl: `${WEB_ORIGIN}/profile`,
+      note: "Need help? Reply to this email and we'll get back to you.",
+    }),
+    approved
+      ? `Hi ${name}, your KYC was approved. You now have full access to Nabri.`
+      : `Hi ${name}, your KYC was not approved${rejectionReason ? `: ${rejectionReason}` : "."} Please resubmit.`
+  );
+}
+
+export interface BookingInvoiceEmailData {
+  bookingId: string;
+  serviceType: string;
+  scheduledAt: Date;
+  startLocation: string;
+  endLocation: string;
+  amount: number;
+  paymentReference?: string;
+  paymentMethod?: string;
+}
+
+/** Booking confirmation with payment invoice summary. */
+export async function sendBookingInvoiceEmail(email: string, name: string, invoice: BookingInvoiceEmailData): Promise<EmailResult> {
+  const amountStr = `₹${invoice.amount.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+  const invoiceNo = invoice.bookingId.slice(0, 8).toUpperCase();
+  const scheduled = new Date(invoice.scheduledAt).toLocaleString("en-IN", { dateStyle: "long", timeStyle: "short" });
+  const rows: Array<[string, string]> = [
+    ["Service", invoice.serviceType.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())],
+    ["Scheduled for", scheduled],
+    ["Pickup", invoice.startLocation],
+    ["Drop-off", invoice.endLocation],
+    ["Payment method", invoice.paymentMethod || "UPI / Online"],
+    ["Amount paid", amountStr],
+  ];
+  if (invoice.paymentReference) rows.push(["Reference", invoice.paymentReference]);
+  const rowsHtml = rows
+    .map(
+      ([k, v]) =>
+        `<tr><td style="padding:10px 14px;border-top:1px solid #EFE8DC;font-size:13px;color:#6B6558">${escHtml(k)}</td><td style="padding:10px 14px;border-top:1px solid #EFE8DC;font-size:13px;color:#1C1917;font-weight:600;text-align:right">${escHtml(v)}</td></tr>`
+    )
+    .join("");
+  const bodyHtml = `<p style="margin:0 0 14px">Hi ${escHtml(name)},</p><p style="margin:0 0 14px">Your booking is confirmed and paid. Here&rsquo;s your invoice:</p><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #EFE8DC;border-radius:14px;overflow:hidden;margin:0 0 20px"><tr><td style="background:#FBF7EF;padding:12px 14px;font-size:12px;color:#D83D27;font-weight:800;letter-spacing:1px">NABRI · INVOICE ${invoiceNo}</td></tr>${rowsHtml}</table>`;
+  return sendEmail(
+    email,
+    `Booking confirmed · Invoice ${invoiceNo}`,
+    renderEmail({
+      title: `Booking confirmed · ${amountStr}`,
+      bodyHtml,
+      ctaText: "View booking",
+      ctaUrl: `${WEB_ORIGIN}/bookings`,
+      note: "Keep this email as your payment receipt. You can also view it anytime in the Nabri app.",
+    }),
+    `Hi ${name}, your booking is confirmed. Amount paid: ${amountStr}. Booking ref: ${invoiceNo}.`
+  );
+}
