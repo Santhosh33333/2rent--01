@@ -5,7 +5,6 @@ import { Capacitor } from '@capacitor/core'
 import { SplashScreen } from '@capacitor/splash-screen'
 import { AuthProvider } from './lib/auth'
 import { RoleProvider } from './lib/roleContext'
-import { AppClerkProvider } from './lib/clerkAuth'
 import { App } from './App'
 import './styles/globals.css'
 
@@ -84,11 +83,9 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <AuthProvider>
-        <AppClerkProvider>
-          <RoleProvider>
-            <App />
-          </RoleProvider>
-        </AppClerkProvider>
+        <RoleProvider>
+          <App />
+        </RoleProvider>
       </AuthProvider>
     </BrowserRouter>
   </StrictMode>,

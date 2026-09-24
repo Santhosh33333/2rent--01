@@ -8,7 +8,6 @@ import toast from 'react-hot-toast'
 import { User, Mail, Phone, Lock, Eye, EyeOff, ArrowRight, ArrowLeft, Check, Sparkles, Cake } from 'lucide-react'
 import { useAuth } from '../../lib/auth'
 import { api } from '../../lib/api'
-import { isClerkConfigured } from '../../lib/clerkAuth'
 import { AnimatedPage } from '../../components/AnimatedPage'
 
 function ageFrom(dob: string): number {
@@ -440,22 +439,6 @@ export function RegisterPage() {
                 </>
               )}
             </form>
-
-            {isClerkConfigured() && (
-              <div className="mt-5">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="h-px flex-1 bg-surface-200 dark:bg-surface-700" />
-                  <span className="text-xs text-surface-400">or</span>
-                  <div className="h-px flex-1 bg-surface-200 dark:bg-surface-700" />
-                </div>
-                <Link
-                  to="/sign-up"
-                  className="w-full py-3 rounded-xl border border-surface-300 dark:border-surface-600 text-sm font-semibold text-surface-700 dark:text-surface-200 hover:border-primary-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors flex items-center justify-center"
-                >
-                  Sign up with Clerk&nbsp;·&nbsp;Google, OTP & more
-                </Link>
-              </div>
-            )}
           </div>
 
           {/* Footer */}

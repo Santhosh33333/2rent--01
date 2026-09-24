@@ -87,12 +87,12 @@ export function createApp(): http.Server {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "https://checkout.razorpay.com", "https://accounts.google.com", "https://js.clerk.com"],
-        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://*.clerk.com"],
-        fontSrc: ["'self'", "https://fonts.gstatic.com", "https://*.clerk.com"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "https://checkout.razorpay.com", "https://accounts.google.com"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        fontSrc: ["'self'", "https://fonts.gstatic.com"],
         imgSrc: ["'self'", "data:", "https:"],
-        connectSrc: ["'self'", "https://api.clerk.com", "https://*.razorpay.com"],
-        frameSrc: ["'self'", "https://checkout.razorpay.com", "https://accounts.google.com", "https://*.clerk.com"],
+        connectSrc: ["'self'", "https://*.razorpay.com"],
+        frameSrc: ["'self'", "https://checkout.razorpay.com", "https://accounts.google.com"],
         objectSrc: ["'none'"],
         baseUri: ["'self'"],
         formAction: ["'self'"],
@@ -195,7 +195,7 @@ export function createApp(): http.Server {
       <li><strong>Location:</strong> your device location is used to match you with nearby partners and to allow partners to provide services. You can disable location at any time through your device settings.</li>
       <li><strong>Usage data:</strong> booking and chat history, wallet transactions, service requests, and app interaction data used to operate and improve the service.</li>
       <li><strong>Payment data:</strong> payments are processed by our payment provider (Razorpay). We do not store full card numbers.</li>
-      <li><strong>Authentication data:</strong> sign-in providers (Clerk / Google) may share a profile identifier so we can recognise you across logins.</li>
+      <li><strong>Authentication data:</strong> sign-in providers (e.g. Google) may share a profile identifier so we can recognise you across logins.</li>
     </ul>
   </section>
   <section>

@@ -2,7 +2,6 @@ import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect, useCallback } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../lib/auth'
-import { isClerkConfigured } from '../../lib/clerkAuth'
 import { initGoogleSignIn, signInWithGoogle } from '../../lib/googleAuth'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { ArrowRight, Mail, Lock, Loader2, Phone, Eye, EyeOff, Smartphone } from 'lucide-react'
@@ -86,7 +85,7 @@ export function LoginPage() {
     const safeFrom =
       typeof from === 'string' &&
       from.startsWith('/') &&
-      !['/', '/login', '/register', '/sign-in', '/sign-up', '/onboarding', '/account-type', '/forgot-password', '/verify-email', '/verify-mobile'].includes(from)
+      !['/', '/login', '/register', '/onboarding', '/account-type', '/forgot-password', '/verify-email', '/verify-mobile'].includes(from)
         ? from
         : null
     navigate(safeFrom || getDashboardForUser(user), { replace: true })
@@ -611,16 +610,6 @@ export function LoginPage() {
             </form>
             )}
 
-            {isClerkConfigured() && (
-              <div className="mt-5 text-center">
-                <Link
-                  to="/sign-in"
-                  className="text-sm font-medium text-surface-500 dark:text-surface-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
-                >
-                  More sign-in options
-                </Link>
-              </div>
-            )}
           </div>
 
           <p className="mt-8 text-center text-sm text-surface-500 dark:text-surface-400">

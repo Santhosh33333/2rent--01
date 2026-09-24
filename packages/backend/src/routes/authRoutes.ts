@@ -5,7 +5,6 @@ import { sanitizeInput, validateRequest } from "../middleware/validation";
 import { authenticateToken } from "../middleware/auth";
 import * as authController from "../controllers/authController";
 import * as otpController from "../controllers/otpController";
-import * as clerkAuthController from "../controllers/clerkAuthController";
 
 const router = Router();
 
@@ -159,15 +158,6 @@ router.post(
   [body("email").isEmail().normalizeEmail(), body("password").notEmpty()],
   validateRequest,
   authController.verifyPassword
-);
-
-// Clerk sync - exchange Clerk session token for our JWT
-router.post(
-  "/clerk",
-  authRateLimiter,
-  [body("token").notEmpty().withMessage("Clerk session token is required")],
-  validateRequest,
-  clerkAuthController.clerkSync
 );
 
 export default router;

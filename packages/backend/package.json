@@ -22,7 +22,6 @@
     "lint": "eslint src --ext .ts"
   },
   "dependencies": {
-    "@clerk/backend": "^3.11.7",
     "@prisma/client": "^5.22.0",
     "@types/nodemailer": "^8.0.1",
     "@types/twilio": "^3.19.2",

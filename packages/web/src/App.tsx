@@ -8,9 +8,6 @@ import { ThemeProvider } from './lib/themeContext'
 
 // Lazy-loaded auth pages
 const LoginPage = lazy(() => import('./pages/auth/LoginPage').then(m => ({ default: m.LoginPage })))
-const ClerkSignInPage = lazy(() => import('./pages/auth/ClerkSignInPage').then(m => ({ default: m.ClerkSignInPage })))
-const ClerkSignUpPage = lazy(() => import('./pages/auth/ClerkSignUpPage').then(m => ({ default: m.ClerkSignUpPage })))
-const ClerkCallbackPage = lazy(() => import('./pages/auth/ClerkCallbackPage').then(m => ({ default: m.ClerkCallbackPage })))
 const RegisterPage = lazy(() => import('./pages/auth/RegisterPage').then(m => ({ default: m.RegisterPage })))
 const AccountTypePage = lazy(() => import('./pages/auth/AccountTypePage').then(m => ({ default: m.AccountTypePage })))
 const AdminLoginPage = lazy(() => import('./pages/admin/AdminLoginPage').then(m => ({ default: m.AdminLoginPage })))
@@ -161,10 +158,6 @@ export function App() {
           <Route path="/account-type" element={<AccountTypePage />} />
           <Route path="/admin/login" element={<AdminLoginPage />} />
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/sign-in" element={<ClerkSignInPage />} />
-        <Route path="/sign-up" element={<ClerkSignUpPage />} />
-          <Route path="/sign-in/sso-callback" element={<ClerkCallbackPage />} />
-          <Route path="/sign-up/sso-callback" element={<ClerkCallbackPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/verify-email" element={<VerifyEmailPage />} />

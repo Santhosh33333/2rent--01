@@ -431,14 +431,6 @@ html[data-accent='sky'] {
   .auth-story::before { content: ''; position: absolute; width: 27rem; height: 27rem; right: -9rem; top: 12%; border: 1px solid rgba(251,247,239,.28); transform: rotate(45deg); box-shadow: 0 0 0 30px rgba(251,247,239,.035), 0 0 0 62px rgba(251,247,239,.025); animation: signalDrift 12s ease-in-out infinite alternate; }
   .auth-story::after { content: ''; position: absolute; width: 8rem; height: 8rem; right: 18%; bottom: 13%; background: #d2f53c; border-radius: 0; transform: rotate(45deg); animation: signalPulse 4s ease-in-out infinite; }
   .auth-mobile-mast { @apply flex lg:hidden items-center justify-between px-5 pt-5 pb-4; }
-  .auth-clerk-panel { @apply flex items-center justify-center px-4 py-7 sm:px-8 lg:px-12; }
-  .auth-clerk-panel .cl-rootBox { width: 100%; max-width: 25rem; }
-  .auth-clerk-panel .cl-card { box-shadow: 0 18px 50px rgba(28,25,23,.08); border: 1px solid theme('colors.surface.200'); border-top: 3px solid rgb(var(--c-600)); background: #fff; border-radius: 4px; }
-  .dark .auth-clerk-panel .cl-card { border-color: theme('colors.surface.700'); background: theme('colors.surface.900'); }
-  .auth-clerk-panel .cl-headerTitle, .auth-clerk-panel .cl-headerSubtitle { font-family: 'Plus Jakarta Sans', Inter, sans-serif; }
-  .auth-clerk-panel .cl-formButtonPrimary { background: rgb(var(--c-600)); box-shadow: none; }
-  .auth-clerk-panel .cl-formButtonPrimary:hover { background: #b52f20; }
-  .auth-clerk-panel .cl-footer, .auth-clerk-panel .cl-footerAction { background: transparent; }
 
   /* ===== NAVIGATION ===== */
   .nav-item {
@@ -474,7 +466,6 @@ html[data-accent='sky'] {
   }
   .glass-elevated { border-radius: .375rem; box-shadow: 0 16px 42px rgba(28,25,23,.08); }
   .auth-mobile-mast { border-bottom: 1px solid rgba(28,25,23,.12); }
-  .auth-clerk-panel { animation: pageEnter 420ms cubic-bezier(.2,.7,.2,1) both; }
   .auth-backdrop .glass-elevated { border-top: 3px solid rgb(var(--c-600)); }
   .auth-backdrop > div:not(.absolute) { width: min(100%, 28rem); margin: auto; }
   .auth-backdrop .text-center.mb-10, .auth-backdrop .text-center.mb-8 { text-align: left; border-left: 3px solid rgb(var(--c-600)); padding-left: 1rem; }

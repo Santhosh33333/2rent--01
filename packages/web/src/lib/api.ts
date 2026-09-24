@@ -111,8 +111,7 @@ api.interceptors.response.use(
       url.includes('/auth/register') ||
       url.includes('/auth/refresh-token') ||
       url.includes('/auth/google') ||
-      url.includes('/auth/phone') ||
-      url.includes('/auth/clerk')
+      url.includes('/auth/phone')
 
     if (status === 401 && !originalRequest._retry && !shouldSkipRefresh) {
       originalRequest._retry = true
@@ -133,7 +132,7 @@ api.interceptors.response.use(
           clearSessionStorage()
           // Entry/portal pages decide routing themselves (Splash, onboarding,
           // account-type, admin login): never yank them to /login.
-          if (typeof window !== 'undefined' && !['/', '/login', '/register', '/forgot-password', '/sign-in', '/sign-up', '/onboarding', '/account-type', '/admin/login'].includes(window.location.pathname)) {
+          if (typeof window !== 'undefined' && !['/', '/login', '/register', '/forgot-password', '/onboarding', '/account-type', '/admin/login'].includes(window.location.pathname)) {
             window.location.replace('/login')
           }
         }

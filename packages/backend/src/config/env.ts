@@ -153,11 +153,6 @@ const envSchema = z.object({
   // Demo sandbox accounts (fenced: invisible to real users and vice versa).
   DEMO_USER_EMAIL: z.string().optional(),
   DEMO_PARTNER_EMAIL: z.string().optional(),
-
-  // Clerk (legacy — optional)
-  CLERK_SECRET_KEY: z.string().optional(),
-  CLERK_PUBLISHABLE_KEY: z.string().optional(),
-  CLERK_JWKS_URL: z.string().default("https://willing-leech-39.clerk.accounts.dev/.well-known/jwks.json"),
 });
 
 export type Env = z.infer<typeof envSchema>;

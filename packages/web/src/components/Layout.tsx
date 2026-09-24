@@ -6,21 +6,8 @@ import {
   ClipboardList, Search, QrCode, MoreHorizontal, Send
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
-import { isClerkConfigured } from '../lib/clerkAuth';
-import { UserButton, useUser } from '@clerk/clerk-react';
 import { ImpersonationBanner } from './ImpersonationBanner';
 import { OfflineBanner } from './OfflineBanner';
-
-function ClerkUserButton() {
-  const { isSignedIn } = useUser();
-  if (!isSignedIn) return null;
-  return (
-    <div className="px-3 py-2">
-      <p className="text-[11px] uppercase tracking-wide text-gray-400 mb-2">Clerk account</p>
-      <UserButton afterSignOutUrl="/account-type" />
-    </div>
-  );
-}
 import { useRole } from '../lib/roleContext';
 import { useTheme } from '../lib/themeContext';
 import { RoleSwitcher } from './RoleSwitcher';
@@ -357,8 +344,6 @@ export function Layout() {
               <LogOut className="w-4 h-4" />
               Sign Out
             </button>
-
-            {isClerkConfigured() && <ClerkUserButton />}
           </aside>
         </>
       )}
