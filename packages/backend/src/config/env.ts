@@ -79,16 +79,24 @@ const envSchema = z.object({
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().default("Nabri <noreply@nabri.app>"),
 
-  // Email provider abstraction: none | smtp | brevo | resend. SMTP (Brevo relay)
+  // Email provider abstraction: none | smtp | gmail | brevo | resend. SMTP (Brevo relay)
   // can fail with 525 "Unauthorized IP" because Brevo binds relay to the sender
   // IP — never stable on a cloud host with rotating egress. `brevo` uses the
   // Transactional Email API (api-key auth, IP-independent) and is the reliable
-  // choice for production/Render. `none` (default) reports EMAIL_NOT_CONFIGURED.
+  // choice for production/Render. `gmail` sends via smtp.gmail.com using a
+  // Google App Password (GMAIL_APP_PASSWORD) — the sender address must be the
+  // Gmail address itself. `none` (default) reports EMAIL_NOT_CONFIGURED.
   EMAIL_PROVIDER: z.string().default("none"),
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().default("Nabri <noreply@nabri.app>"),
   SUPPORT_EMAIL: z.string().default("support@nabri.app"),
   BREVO_API_KEY: z.string().optional(),
+
+  // Gmail SMTP — used when EMAIL_PROVIDER=gmail. Requires a Google App Password
+  // (Google Account → Security → 2-Step Verification → App passwords). The
+  // sending address is locked to GMAIL_USER; EMAIL_FROM should match it.
+  GMAIL_USER: z.string().optional(),
+  GMAIL_APP_PASSWORD: z.string().optional(),
 
   // OTP policy (admin-tunable via AppSettings otp.* keys, env = fallback).
   OTP_EXPIRY_MINUTES: z.string().default("10").transform(Number),

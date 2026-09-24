@@ -1,21 +1,58 @@
 // Branded transactional email layout for Nabri.
 //
-// Inline styles + table-based structure only (no classes, no external CSS) so
-// Gmail, Outlook, Apple Mail and Yahoo render it consistently. Every element
-// is white-listed email style. No images — the wordmark is pure text, so it
+// Inline styles + table-based structure only (no external CSS) so Gmail,
+// Outlook, Apple Mail and Yahoo render it consistently. Every element is
+// white-listed email style. No images — the wordmark is pure text, so it
 // always renders even with images disabled.
+//
+// Animation: keyframes live in a <style> block in <head>. Support varies by
+// client (Apple Mail and most desktop/web clients run them; Gmail/Outlook
+// ignore <style> and render a clean static version). Every animated element
+// is also fully styled statically, so clients without animation never break —
+// they just skip the entrance/glow effects. prefers-reduced-motion is
+// respected for accessibility.
 
 const WEB_ORIGIN = "https://2rent-01.vercel.app";
+
+// Base animation CSS merged into every email (plus any per-mail extras).
+const BASE_EMAIL_CSS = `
+@keyframes nabriCardIn { from { opacity: 0; transform: translateY(16px) scale(.995); } to { opacity: 1; transform: none; } }
+@keyframes nabriFadeUp { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: none; } }
+@keyframes nabriDotPulse { 0% { box-shadow: 0 0 0 0 rgba(210,245,60,.55); } 70% { box-shadow: 0 0 0 11px rgba(210,245,60,0); } 100% { box-shadow: 0 0 0 0 rgba(210,245,60,0); } }
+@keyframes nabriGlow { 0% { box-shadow: 0 0 0 0 rgba(34,160,107,.45); } 70% { box-shadow: 0 0 0 9px rgba(34,160,107,0); } 100% { box-shadow: 0 0 0 0 rgba(34,160,107,0); } }
+@keyframes nabriCtaPulse { 0% { box-shadow: 0 0 0 0 rgba(216,61,39,.4); } 70% { box-shadow: 0 0 0 14px rgba(216,61,39,0); } 100% { box-shadow: 0 0 0 0 rgba(216,61,39,0); } }
+@keyframes nabriCodePop { 0% { opacity: 0; transform: scale(.96) translateY(6px); } 60% { transform: scale(1.02); } 100% { opacity: 1; transform: none; } }
+@keyframes nabriFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+@keyframes nabriSheet { 0% { background-position: -200% center; } 100% { background-position: 200% center; } }
+@media screen {
+  .nabri-card { animation: nabriCardIn .5s cubic-bezier(.2,.7,.2,1) both; }
+  .nabri-fade { animation: nabriFadeUp .55s ease-out both; }
+  .nabri-fade.d2 { animation-delay: .09s; }
+  .nabri-fade.d3 { animation-delay: .18s; }
+  .nabri-fade.d4 { animation-delay: .27s; }
+  .nabri-dot { animation: nabriDotPulse 2s ease-in-out infinite; }
+  .nabri-pulse { animation: nabriGlow 1.8s ease-out infinite; }
+  .nabri-cta { animation: nabriCtaPulse 2.2s ease-in-out infinite; }
+  .nabri-code { animation: nabriCodePop .45s cubic-bezier(.2,.8,.2,1) both; }
+  .nabri-float { animation: nabriFloat 5s ease-in-out infinite; }
+  .nabri-sheen { background-image: linear-gradient(120deg, rgba(255,255,255,0) 30%, rgba(255,255,255,.14) 50%, rgba(255,255,255,0) 70%); background-size: 200% 100%; animation: nabriSheet 4.5s linear infinite; }
+  @media (prefers-reduced-motion: reduce) {
+    .nabri-card, .nabri-fade, .nabri-dot, .nabri-pulse, .nabri-cta, .nabri-code, .nabri-float, .nabri-sheen { animation: none !important; }
+  }
+}
+`;
 
 export interface RenderEmailOptions {
   title: string;
   /** Raw, already-escaped HTML for the body. Use paragraphHtml() for plain text. */
   bodyHtml: string;
+  /** Small uppercase label above the title, e.g. "SECURITY NOTICE". */
+  kicker?: string;
   ctaText?: string;
   ctaUrl?: string;
   /** Optional muted footer line, e.g. "This code expires in 10 minutes." */
   note?: string;
-  /** Optional extra <head> content (keyframes/CSS) appended before printing. */
+  /** Optional extra <head> CSS (keyframes/classes) appended after the base set. */
   headHtml?: string;
 }
 
@@ -34,9 +71,13 @@ export function paragraphHtml(text: string): string {
 }
 
 export function renderEmail(opts: RenderEmailOptions): string {
+  const headCss = [BASE_EMAIL_CSS, opts.headHtml || ""].join("\n");
   const cta = opts.ctaText && opts.ctaUrl ? renderCta(opts.ctaText, opts.ctaUrl) : "";
-  const note = opts.note ? `<tr><td style="padding:0 34px 30px;background:#FFFFFF"><p style="margin:0;font-size:12px;line-height:1.6;color:#9A9184">${escHtml(opts.note)}</p></td></tr>` : "";
+  const note = opts.note ? `<tr><td class="nabri-fade d4" style="padding:0 34px 28px;background:#FFFFFF"><p style="margin:0;font-size:12px;line-height:1.6;color:#9A9184">${escHtml(opts.note)}</p></td></tr>` : "";
   const year = new Date().getFullYear();
+  const kicker = opts.kicker
+    ? `<p style="margin:0 0 8px;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:800;letter-spacing:2.5px;color:#D83D27;text-transform:uppercase">${escHtml(opts.kicker)}</p>`
+    : "";
 
   return `<!DOCTYPE html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
@@ -46,35 +87,37 @@ export function renderEmail(opts: RenderEmailOptions): string {
 <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
 <meta name="x-apple-disable-message-reformatting"/>
 <title>${escHtml(opts.title)}</title>
-${opts.headHtml ? `<style>${opts.headHtml}</style>` : ""}
+<style>${headCss}</style>
 </head>
-<body style="margin:0;padding:0;background:#F4F0E8;word-spacing:normal">
+<body style="margin:0;padding:0;background:#F1EBE0;word-spacing:normal">
   <div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all">${escHtml(opts.title)} · Nabri</div>
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F4F0E8">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F1EBE0">
     <tr>
-      <td align="center" style="padding:28px 16px">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;border-collapse:collapse;border-radius:20px;overflow:hidden;box-shadow:0 10px 30px rgba(28,25,23,0.08)">
+      <td align="center" style="padding:30px 16px">
+        <table class="nabri-card" role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;border-collapse:collapse;border-radius:22px;overflow:hidden;box-shadow:0 14px 40px rgba(28,25,23,0.10)">
           <!-- Header / brand bar -->
           <tr>
-            <td align="center" style="background:#D83D27;padding:26px 24px 22px">
-              <div style="font-family:Arial,Helvetica,sans-serif;font-size:24px;font-weight:900;letter-spacing:7px;color:#FBF7EF;margin:0;line-height:1.2">NABRI<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#D2F53C;margin-left:8px;vertical-align:3px"></span></div>
-              <div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:2.5px;color:#FCE4DF;margin-top:7px;text-transform:uppercase">Your Partner for Every Side of Life</div>
+            <td align="center" class="nabri-fade" style="background:#D83D27;background-image:linear-gradient(135deg,#C9331F 0%,#E2492F 58%,#F2694A 100%);padding:34px 24px 26px">
+              <div style="font-family:Arial,Helvetica,sans-serif;font-size:26px;font-weight:900;letter-spacing:7px;color:#FBF7EF;margin:0;line-height:1.2">NABRI<span class="nabri-dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#D2F53C;margin-left:9px;vertical-align:3px"></span></div>
+              <div style="width:52px;height:3px;border-radius:2px;background:rgba(210,245,60,.85);margin:12px auto 9px"></div>
+              <div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:2.6px;color:#FCE4DF;text-transform:uppercase">Your Partner for Every Side of Life</div>
             </td>
           </tr>
           <!-- Body -->
           <tr>
-            <td style="background:#FFFFFF;padding:34px 34px 6px">
-              <h1 style="margin:0 0 14px;font-family:Arial,Helvetica,sans-serif;font-size:21px;font-weight:800;line-height:1.35;color:#1C1917">${escHtml(opts.title)}</h1>
-              <div style="width:44px;height:4px;border-radius:2px;background:#D83D27;margin:0 0 20px"></div>
+            <td class="nabri-fade d2" style="background:#FFFFFF;padding:36px 36px 8px">
+              ${kicker}
+              <h1 style="margin:0 0 14px;font-family:Arial,Helvetica,sans-serif;font-size:22px;font-weight:800;line-height:1.35;color:#1C1917">${escHtml(opts.title)}</h1>
+              <div style="width:46px;height:4px;border-radius:2px;background:linear-gradient(90deg,#D83D27,#F2694A);margin:0 0 22px"></div>
               <div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.7;color:#4B453D">${opts.bodyHtml}</div>
             </td>
           </tr>
           ${cta}
           <tr>
-            <td style="background:#FFFFFF;padding:24px 34px 34px">
+            <td class="nabri-fade d3" style="background:#FFFFFF;padding:22px 36px 34px">
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="border-top:1px solid #EFE8DC;padding-top:22px">
                 <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.7;color:#9A9184">
-                  <strong style="color:#6B6558">Nabri</strong> · Your partner for every side of life.<br/>
+                  <strong style="color:#6B6558">Nabri</strong> · Your partner for every side of life. &mdash; Connect. Discover. Experience.<br/>
                   You're receiving this because you have a Nabri account.
                 </p>
               </td></tr></table>
@@ -83,7 +126,7 @@ ${opts.headHtml ? `<style>${opts.headHtml}</style>` : ""}
           ${note}
           <!-- Footer -->
           <tr>
-            <td align="center" style="background:#F4F0E8;padding:18px 24px 22px">
+            <td class="nabri-fade d4" align="center" style="background:#F1EBE0;padding:18px 24px 22px">
               <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.6;color:#8C8577">
                 &copy; ${year} Nabri · Chennai, India
               </p>
@@ -99,11 +142,11 @@ ${opts.headHtml ? `<style>${opts.headHtml}</style>` : ""}
 
 function renderCta(text: string, url: string): string {
   return `<tr>
-            <td align="center" style="background:#FFFFFF;padding:6px 34px 6px">
+            <td align="center" class="nabri-fade d3" style="background:#FFFFFF;padding:8px 36px 8px">
               <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                 <tr>
-                  <td align="center" style="border-radius:12px;background:#D83D27;padding:14px 34px">
-                    <a href="${escHtml(url)}" target="_blank" style="display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:800;letter-spacing:1px;color:#FFFFFF;text-decoration:none">${escHtml(text)}</a>
+                  <td class="nabri-cta" align="center" style="border-radius:13px;background:linear-gradient(135deg,#C9331F,#E2492F);padding:15px 36px">
+                    <a href="${escHtml(url)}" target="_blank" style="display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:800;letter-spacing:1px;color:#FFFFFF;text-decoration:none">${escHtml(text)} &rarr;</a>
                   </td>
                 </tr>
               </table>

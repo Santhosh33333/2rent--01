@@ -432,6 +432,7 @@ export async function login(req: Request, res: Response): Promise<void> {
       "Login successful."
     );
   } catch (err) {
+    console.error("[auth] login failed:", err);
     sendError(res, "Login failed.", 500, "INTERNAL_ERROR");
   }
 }
