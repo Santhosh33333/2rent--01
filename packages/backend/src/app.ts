@@ -7,6 +7,7 @@ import path from "path";
 import http from "http";
 
 import { env } from "./config/env";
+import { prisma } from "./config/database";
 import { generalRateLimiter } from "./middleware/rateLimiter";
 import { requireDocumentAccess } from "./middleware/fileAccess";
 import { blobFileHandler } from "./middleware/blobHandler";
@@ -125,6 +126,26 @@ export function createApp(): http.Server {
 
   app.get("/health", (_req: Request, res: Response) => {
     res.status(200).json({ success: true, data: { status: "ok", timestamp: new Date().toISOString() } });
+  });
+
+  // Public DB-liveness probe. Unlike /health (which never touches the DB),
+  // this actually pings Postgres so keepalive monitors + the dashboard can
+  // distinguish "API up, DB down" from a healthy service.
+  app.get("/health/db", async (_req: Request, res: Response) => {
+    const started = Date.now();
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      res.status(200).json({
+        success: true,
+        data: { status: "ok", latencyMs: Date.now() - started, timestamp: new Date().toISOString() },
+      });
+    } catch (err) {
+      res.status(503).json({
+        success: false,
+        error: "DB_UNREACHABLE",
+        message: `Database unreachable: ${(err as Error)?.message ?? err}`,
+      });
+    }
   });
 
   // Public privacy policy (Play Console / app store link requirement).

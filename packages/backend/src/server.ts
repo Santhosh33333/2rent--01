@@ -61,7 +61,7 @@ async function main(): Promise<void> {
 
 if (!dbAvailable) {
     console.error(
-      "\nâ\x9DŒ CRITICAL: Could not connect to the database after multiple attempts.\n" +
+      "\n[CRITICAL] Could not connect to the database after multiple attempts.\n" +
       "   The server will NOT start in 'no DB' mode. Verify PostgreSQL is running\n" +
       "   (e.g. Start-Service postgresql-x64-17) and DATABASE_URL is correct, then restart.\n"
     );

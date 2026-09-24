@@ -20,3 +20,18 @@ jobs:
             echo "::error::API unreachable during keepalive ping"
             exit 1
           fi
+      - name: Ping DB liveness probe
+        run: |
+          body=$(curl -s --max-time 60 \
+            https://rentbuddy-api-s7rz.onrender.com/api/health/db || true)
+          echo "health/db response: ${body}"
+          # A 503/5xx from /health/db means the API is up but the database is
+          # unreachable (login, wallets, KYC, payments all 500). Surface that as
+          # a failing run so the owner gets the GitHub Action failure email.
+          if echo "${body}" | grep -q '"status": "ok"'; then
+            echo "DB liveness: OK"
+          else
+            echo "::error::Database unreachable according to /api/health/db"
+            echo "body=${body}"
+            exit 1
+          fi
