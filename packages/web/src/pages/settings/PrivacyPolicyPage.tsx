@@ -73,7 +73,7 @@ export function PrivacyPolicyPage() {
 
             <section>
               <h2 className="text-lg font-bold font-display text-surface-900 dark:text-white mb-3">10. Contact Us</h2>
-              <p className="text-sm leading-relaxed">For privacy-related inquiries, contact us at privacy@nabri.app or through the in-app support channel.</p>
+              <p className="text-sm leading-relaxed">For privacy-related inquiries, contact us at nabri.support@gmail.com or through the in-app support channel.</p>
             </section>
           </div>
         </GlassCard>

@@ -73,7 +73,7 @@ export function TermsOfServicePage() {
 
             <section>
               <h2 className="text-lg font-bold font-display text-surface-900 dark:text-white mb-3">10. Contact</h2>
-              <p className="text-sm leading-relaxed">For questions about these Terms, contact us at legal@nabri.app or through the in-app support channel.</p>
+              <p className="text-sm leading-relaxed">For questions about these Terms, contact us at nabri.support@gmail.com or through the in-app support channel.</p>
             </section>
           </div>
         </GlassCard>

@@ -102,6 +102,17 @@ router.post("/walking-partners/:id/reactivate", requireSectionAction("PARTNERS",
 router.get("/bookings", bookingsView, adminController.getBookings);
 router.get("/bookings/:id", bookingsView, adminController.getBookingDetail);
 router.get("/withdrawals", withdrawalsManage, adminController.getWithdrawalRequests);
+router.post(
+  "/email/broadcast",
+  notificationsSend,
+  [
+    body("subject").isString().trim().isLength({ min: 1, max: 120 }).withMessage("Subject is required (max 120 chars)."),
+    body("body").isString().trim().isLength({ min: 1, max: 5000 }).withMessage("Message body is required (max 5000 chars)."),
+  ],
+  sanitizeInput,
+  validateRequest,
+  adminController.broadcastEmail
+);
 router.post("/withdrawals/:id/approve", requireSectionAction("WITHDRAWALS", "APPROVE"), adminController.approveWithdrawal);
 router.post("/withdrawals/:id/approve-with-proof", requireSectionAction("WITHDRAWALS", "APPROVE"), upload.single("proof"), adminController.approveWithdrawalWithProof);
 router.post("/withdrawals/:id/reject", requireSectionAction("WITHDRAWALS", "REJECT"), [body("reason").optional().isString()], sanitizeInput, validateRequest, adminController.rejectWithdrawal);

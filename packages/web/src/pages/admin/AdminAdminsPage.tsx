@@ -1,4 +1,4 @@
-﻿import { getErrorMessage } from '../../lib/error'
+import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect, FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, ShieldCheck, UserPlus, X, Loader2, KeyRound, Check, FileDown } from 'lucide-react'
@@ -306,7 +306,7 @@ export function AdminAdminsPage() {
               </select>
               <input required type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
                 className="px-4 py-2.5 rounded-xl bg-gray-800 border border-gray-700 text-white placeholder:text-gray-500 focus:border-emerald-500 focus:outline-none" />
-              <input required placeholder="Phone (+91â€¦)" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              <input required placeholder="Phone (+91…)" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
                 className="px-4 py-2.5 rounded-xl bg-gray-800 border border-gray-700 text-white placeholder:text-gray-500 focus:border-emerald-500 focus:outline-none" />
               <input required type="password" minLength={8} placeholder="Temporary password (min 8 chars)" value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
@@ -318,7 +318,7 @@ export function AdminAdminsPage() {
             <div>
               <p className="text-sm font-semibold text-white flex items-center gap-2 mb-2">
                 <KeyRound className="w-4 h-4 text-emerald-400" /> Access Rights
-                <span className="text-xs font-normal text-gray-500">â€” choose exactly what this admin can do ({selectedPerms.length} of {ALL_PERMISSIONS.length} selected)</span>
+                <span className="text-xs font-normal text-gray-500">— choose exactly what this admin can do ({selectedPerms.length} of {ALL_PERMISSIONS.length} selected)</span>
               </p>
               <PermissionPicker selected={selectedPerms} onChange={setSelectedPerms} />
             </div>
@@ -327,7 +327,7 @@ export function AdminAdminsPage() {
               <button type="submit" disabled={creating}
                 className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition ${creating ? 'opacity-60 pointer-events-none' : ''}`}>
                 {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
-                {creating ? 'Creatingâ€¦' : 'Create Account'}
+                {creating ? 'Creating…' : 'Create Account'}
               </button>
               <span className="text-xs text-gray-500">New admins sign in with these credentials immediately.</span>
             </div>
@@ -348,7 +348,7 @@ export function AdminAdminsPage() {
               <button onClick={savePerms} disabled={savingPerms}
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-sm font-semibold transition disabled:opacity-60">
                 {savingPerms ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
-                {savingPerms ? 'Savingâ€¦' : 'Save Access'}
+                {savingPerms ? 'Saving…' : 'Save Access'}
               </button>
               <button onClick={() => setEditing(null)} className="px-4 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm font-medium transition">Cancel</button>
             </div>
@@ -357,7 +357,7 @@ export function AdminAdminsPage() {
 
         <div className="space-y-3">
           {loading ? (
-            <div className="py-16 text-center text-gray-500">Loading admin accountsâ€¦</div>
+            <div className="py-16 text-center text-gray-500">Loading admin accounts…</div>
           ) : admins.length === 0 ? (
             <div className="py-16 text-center text-gray-500">No admin accounts yet.</div>
           ) : (
@@ -377,7 +377,7 @@ export function AdminAdminsPage() {
                     }`}>{acc.status}</span>
                     {accessBadges(acc)}
                   </div>
-                  <p className="text-sm text-gray-400 truncate mt-0.5">{acc.email}{acc.phone ? ` Â· ${acc.phone}` : ''}</p>
+                  <p className="text-sm text-gray-400 truncate mt-0.5">{acc.email}{acc.phone ? ` · ${acc.phone}` : ''}</p>
                   {acc.adminProfile?.department && <p className="text-xs text-gray-500">Dept: {acc.adminProfile.department}</p>}
                 </div>
                 {isSuperAdmin && acc.role !== 'SUPER_ADMIN' && (
@@ -404,7 +404,7 @@ export function AdminAdminsPage() {
                           : 'bg-emerald-900/40 text-emerald-300 hover:bg-emerald-900/60'
                       } ${busyId === acc.id ? 'opacity-50 pointer-events-none' : ''}`}
                     >
-                      {busyId === acc.id ? 'Workingâ€¦' : acc.status === 'ACTIVE' ? 'Suspend' : 'Reactivate'}
+                      {busyId === acc.id ? 'Working…' : acc.status === 'ACTIVE' ? 'Suspend' : 'Reactivate'}
                     </button>
                   </div>
                 )}

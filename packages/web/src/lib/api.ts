@@ -222,6 +222,9 @@ export const adminApi = {
   getReports: (params?: PaginationParams) => api.get('/admin/reports', { params }),
   resolveReport: (id: string, data?: ReportResolve) => api.post(`/admin/reports/${id}/resolve`, data),
   getAuditLogs: (params?: PaginationParams) => api.get('/admin/audit-logs', { params }),
+  // Broadcast email to all users (or one role scope)
+  broadcastEmail: (data: { subject: string; body: string; audience?: 'ALL' | 'USERS' | 'PARTNERS' }) =>
+    api.post('/admin/email/broadcast', { ...data, audience: data.audience || 'ALL' }),
   // Payment Center (real Razorpay order/payment ledger)
   getPayments: (params?: PaginationParams) => api.get('/admin/payments', { params }),
   getPaymentStats: () => api.get('/admin/payments/stats'),

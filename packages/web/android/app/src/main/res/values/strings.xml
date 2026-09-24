@@ -4,4 +4,6 @@
     <string name="title_activity_main">Nabri</string>
     <string name="package_name">app.rentbuddy.app</string>
     <string name="custom_url_scheme">app.rentbuddy.app</string>
+    <string name="notification_channel_name">Nabri</string>
+    <string name="notification_channel_description">Notifications from Nabri</string>
 </resources>

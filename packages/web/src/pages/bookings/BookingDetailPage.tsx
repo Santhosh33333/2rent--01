@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   Footprints, Package, MapPin, Navigation, Clock, Calendar, Star,
-  CreditCard, CheckCircle, XCircle, User, Loader2, AlertTriangle, KeyRound
+  CreditCard, CheckCircle, XCircle, User, Loader2, AlertTriangle, KeyRound, Download
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { api, assetUrl, bookingApi } from '../../lib/api'
 import { getErrorMessage } from '../../lib/error'
+import { downloadInvoicePdf } from '../../lib/invoicePdf'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
 import { SkeletonLoader } from '../../components/SkeletonLoader'
@@ -487,20 +488,28 @@ export function BookingDetailPage() {
                 {invoiceLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'View Invoice'}
               </button>
             ) : (
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between"><span className="text-surface-500">Receipt No</span><span className="font-mono font-medium">{invoice.receiptNo}</span></div>
-                {invoice.booking?.startedAt && (
-                  <div className="flex justify-between"><span className="text-surface-500">Worked</span><span className="font-medium">{new Date(invoice.booking.startedAt).toLocaleString('en-IN')} → {invoice.booking.completedAt ? new Date(invoice.booking.completedAt).toLocaleString('en-IN') : '—'}</span></div>
-                )}
-                {(invoice.transactions || []).map((t: any) => (
-                  <div key={t.id} className="flex justify-between">
-                    <span className="text-surface-500">{t.description || t.type}</span>
-                    <span className="font-medium">₹{Number(t.amount).toLocaleString('en-IN')} ({t.status})</span>
-                  </div>
-                ))}
-                {invoice.refund && (
-                  <div className="flex justify-between"><span className="text-surface-500">Refund</span><span className="font-medium text-emerald-600">₹{Number(invoice.refund.amount).toLocaleString('en-IN')} ({invoice.refund.status})</span></div>
-                )}
+              <div className="space-y-3">
+                <button
+                  onClick={() => downloadInvoicePdf(invoice)}
+                  className="w-full btn-gradient flex items-center justify-center gap-2"
+                >
+                  <Download className="w-4 h-4" /> Download Invoice (PDF)
+                </button>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between"><span className="text-surface-500">Receipt No</span><span className="font-mono font-medium">{invoice.receiptNo}</span></div>
+                  {invoice.booking?.startedAt && (
+                    <div className="flex justify-between"><span className="text-surface-500">Worked</span><span className="font-medium">{new Date(invoice.booking.startedAt).toLocaleString('en-IN')} → {invoice.booking.completedAt ? new Date(invoice.booking.completedAt).toLocaleString('en-IN') : '—'}</span></div>
+                  )}
+                  {(invoice.transactions || []).map((t: any) => (
+                    <div key={t.id} className="flex justify-between">
+                      <span className="text-surface-500">{t.description || t.type}</span>
+                      <span className="font-medium">₹{Number(t.amount).toLocaleString('en-IN')} ({t.status})</span>
+                    </div>
+                  ))}
+                  {invoice.refund && (
+                    <div className="flex justify-between"><span className="text-surface-500">Refund</span><span className="font-medium text-emerald-600">₹{Number(invoice.refund.amount).toLocaleString('en-IN')} ({invoice.refund.status})</span></div>
+                  )}
+                </div>
               </div>
             )}
           </GlassCard>

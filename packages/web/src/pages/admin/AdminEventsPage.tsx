@@ -1,4 +1,4 @@
-﻿import { getErrorMessage } from '../../lib/error'
+import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, ChevronLeft, ChevronRight, CalendarDays, FileDown } from 'lucide-react'
@@ -38,7 +38,7 @@ export function AdminEventsPage() {
           city: e.city,
           status: e.status,
           attendeeCount: Number(e.attendeeCount ?? e._count?.attendees ?? 0),
-          organizerName: e.organizer?.fullName || 'â€”',
+          organizerName: e.organizer?.fullName || '—',
           startTime: e.startTime,
         })),
       )

@@ -30,7 +30,7 @@ export function TermsPage() {
             <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">10. Termination</h2><p>We reserve the right to suspend or terminate your account at any time for violation of these Terms or for any other reason at our sole discretion.</p></section>
             <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">11. Governing Law</h2><p>These Terms are governed by the laws of India. Any disputes shall be subject to the exclusive jurisdiction of courts in India.</p></section>
             <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">12. Changes to Terms</h2><p>We may update these Terms from time to time. Continued use of the App after changes constitutes acceptance of the updated Terms.</p></section>
-            <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">13. Contact</h2><p>For questions about these Terms, contact us at support@nabri.app</p></section>
+            <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">13. Contact</h2><p>For questions about these Terms, contact us at nabri.support@gmail.com</p></section>
           </div>
         </GlassCard>
       </AnimatedPage>
@@ -61,7 +61,7 @@ export function PrivacyPolicyPage() {
             <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">6. Your Rights</h2><p>You have the right to: access your personal data, correct inaccurate data, request deletion of your data, export your data, opt out of notifications, and disable location sharing. You can exercise these rights through the App settings or by contacting us.</p></section>
             <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">7. Children's Privacy</h2><p>Nabri is not intended for users under 18 years of age. We do not knowingly collect information from children under 18.</p></section>
             <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">8. Location Data</h2><p>We collect and process location data only when you actively use location-dependent features (e.g., live walk tracking, nearby people). You can disable location sharing at any time through Settings.</p></section>
-            <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">9. Contact Us</h2><p>For privacy-related inquiries, contact our Data Protection Officer at privacy@nabri.app</p></section>
+            <section><h2 className="text-lg font-semibold text-surface-900 dark:text-white">9. Contact Us</h2><p>For privacy-related inquiries, contact our Data Protection Officer at nabri.support@gmail.com</p></section>
           </div>
         </GlassCard>
       </AnimatedPage>

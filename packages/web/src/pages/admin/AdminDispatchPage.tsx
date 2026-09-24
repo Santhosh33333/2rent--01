@@ -1,4 +1,4 @@
-﻿import { getErrorMessage } from '../../lib/error'
+import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, ChevronLeft, ChevronRight, Radio, FileDown } from 'lucide-react'
@@ -45,7 +45,7 @@ export function AdminDispatchPage() {
           id: b.id,
           userName: b.user?.fullName || 'Unknown',
           partnerName: b.partner?.user?.fullName || null,
-          serviceType: b.serviceType || 'â€”',
+          serviceType: b.serviceType || '—',
           status: b.status,
           offersSent: b._count?.dispatchRequests ?? 0,
           createdAt: b.createdAt,

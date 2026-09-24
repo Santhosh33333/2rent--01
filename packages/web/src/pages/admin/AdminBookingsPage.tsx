@@ -1,4 +1,4 @@
-﻿import { getErrorMessage } from '../../lib/error'
+import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, ChevronLeft, ChevronRight, FileDown } from 'lucide-react'
@@ -66,8 +66,8 @@ export function AdminBookingsPage() {
           id: b.id,
           userName: b.user?.fullName || b.userName || 'Unknown',
           userEmail: b.user?.email || '',
-          partnerName: b.partner?.user?.fullName || b.partnerName || 'â€”',
-          serviceType: b.serviceType || 'â€”',
+          partnerName: b.partner?.user?.fullName || b.partnerName || '—',
+          serviceType: b.serviceType || '—',
           status: b.status,
           paymentStatus: b.paymentStatus,
           refundStatus: b.refundStatus,

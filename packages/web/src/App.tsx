@@ -85,6 +85,7 @@ const AdminTopupsPage = lazy(() => import('./pages/admin/AdminTopupsPage').then(
 const AdminSettingsPage = lazy(() => import('./pages/admin/AdminSettingsPage').then(m => ({ default: m.AdminSettingsPage })))
 const AdminPricingPage = lazy(() => import('./pages/admin/AdminPricingPage').then(m => ({ default: m.AdminPricingPage })))
 const AdminLiveTrackingPage = lazy(() => import('./pages/admin/AdminLiveTrackingPage').then(m => ({ default: m.AdminLiveTrackingPage })))
+const AdminEmailBroadcastPage = lazy(() => import('./pages/admin/AdminEmailBroadcastPage').then(m => ({ default: m.AdminEmailBroadcastPage })))
 
 // Settings pages
 const SettingsPage = lazy(() => import('./pages/settings/SettingsPage').then(m => ({ default: m.SettingsPage })))
@@ -284,6 +285,7 @@ export function App() {
               <Route path="/admin/settings" element={<AdminSettingsPage />} />
               <Route path="/admin/pricing" element={<AdminPricingPage />} />
               <Route path="/admin/live-tracking" element={<AdminLiveTrackingPage />} />
+              <Route path="/admin/email" element={<AdminEmailBroadcastPage />} />
             </Route>
           </Route>
 

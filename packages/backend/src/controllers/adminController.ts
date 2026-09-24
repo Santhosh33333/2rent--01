@@ -15,6 +15,7 @@ import { invalidateConfigCache } from "../services/pricingEngine";
 import { ensureAdminUser } from "../services/adminProvision";
 import { SERVICE_KEYS } from "../services/serviceCatalog";
 import * as partnerMatching from "../services/partnerMatchingEngine";
+import { sendEmail } from "../services/emailService";
 
 // ============================================================================
 // SECTION 1: DASHBOARD & ANALYTICS
@@ -1054,6 +1055,58 @@ export async function markAdminNotificationRead(req: AuthedRequest, res: Respons
     sendSuccess(res, undefined, "Marked as read.");
   } catch (err) {
     sendError(res, "Failed to update notification.", 500, "INTERNAL_ERROR");
+  }
+}
+
+// Broadcast email to all (or a role scope of) users with a real email address.
+// Sends individually through the configured provider and reports a summary.
+export async function broadcastEmail(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const subject = typeof req.body?.subject === "string" ? req.body.subject.trim().slice(0, 120) : "";
+    const body = typeof req.body?.body === "string" ? req.body.body.trim().slice(0, 5000) : "";
+    if (!subject || !body) {
+      sendError(res, "subject and body are required.", 400, "VALIDATION_ERROR");
+      return;
+    }
+
+    const scopes: Record<string, string[]> = { ALL: ["USER", "PARTNER"], USERS: ["USER"], PARTNERS: ["PARTNER"] };
+    const roles = scopes[String(req.body?.audience || "ALL")] || scopes.ALL;
+
+    const users = await prisma.user.findMany({
+      where: { role: { in: roles } },
+      select: { email: true },
+    });
+
+    const recipients = users
+      .map((u) => (u.email || "").trim())
+      .filter(
+        (email) => email.length > 0 && !isDemoEmail(email) && !/sidebud|example\.com|\.test\b/i.test(email)
+      );
+
+    const esc = (s: string) =>
+      s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    const html = `<div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:20px"><h2 style="color:#D83D27;margin:0 0 8px">Nabri</h2><h3 style="margin:0 0 12px;color:#111">${esc(subject)}</h3><div style="font-size:14px;line-height:1.6;color:#111">${esc(body).replace(/\n/g, "<br/>")}</div><hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb"/><p style="color:#9ca3af;font-size:12px">Nabri · Your Partner for Every Side of Life. <br/> You are receiving this because you have a Nabri account.</p></div>`;
+
+    let sent = 0;
+    let failed = 0;
+    const CHUNK = 10;
+    for (let i = 0; i < recipients.length; i += CHUNK) {
+      const results = await Promise.all(recipients.slice(i, i + CHUNK).map((to) => sendEmail(to, subject, html)));
+      for (const r of results) {
+        if (r.ok) sent += 1;
+        else failed += 1;
+      }
+    }
+
+    if (sent === 0 && recipients.length > 0) {
+      sendError(res, "No emails could be delivered. Check the email provider configuration.", 502, "EMAIL_DELIVERY_FAILED");
+      return;
+    }
+
+    sendSuccess(res, { total: recipients.length, sent, failed }, `Broadcast sent to ${sent} of ${recipients.length} recipients.`);
+  } catch (err) {
+    console.error("Broadcast email error:", err);
+    sendError(res, "Failed to send broadcast email.", 500, "INTERNAL_ERROR");
   }
 }
 

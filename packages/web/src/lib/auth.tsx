@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 import { api, refreshSessionTokens } from './api'
 import { disconnectGlobalSocket } from '../hooks/useSocket'
+import { isNativeApp, requestNotificationPermission, registerForPushNotifications } from './pushNotifications'
 import type { RegisterInput } from '../types/api'
 
 interface User {
@@ -253,6 +254,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (!user || typeof window === 'undefined') return
+    if (isNativeApp()) {
+      window.setTimeout(() => {
+        void requestNotificationPermission().then((granted) => {
+          if (granted) void registerForPushNotifications()
+        })
+      }, 1200)
+    }
+  }, [user])
 
   const login = async (email: string, password: string) => {
     const response = await api.post('/auth/login', { email, password })

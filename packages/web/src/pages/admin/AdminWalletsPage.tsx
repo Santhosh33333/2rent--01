@@ -1,4 +1,4 @@
-﻿import { getErrorMessage } from '../../lib/error'
+import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, ChevronLeft, ChevronRight, FileDown, Wallet } from 'lucide-react'
@@ -110,7 +110,7 @@ export function AdminWalletsPage() {
               setSearch(e.target.value)
               setPage(1)
             }}
-            placeholder="Search by name or emailâ€¦"
+            placeholder="Search by name or email…"
             className="input w-full max-w-sm"
           />
         </div>

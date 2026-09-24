@@ -14,7 +14,7 @@ export function AboutPage() {
     { icon: Shield, label: 'Privacy Policy', desc: 'How we protect your data', action: () => navigate('/about/privacy') },
     { icon: Lock, label: 'Data Safety', desc: 'How your data is collected and used', action: () => navigate('/about/data-safety') },
     { icon: Scale, label: 'Community Guidelines', desc: 'Rules for using Nabri', action: () => navigate('/about/community-guidelines') },
-    { icon: Mail, label: 'Contact Us', desc: 'support@nabri.app', action: () => window.location.href = 'mailto:support@nabri.app' },
+    { icon: Mail, label: 'Contact Us', desc: 'nabri.support@gmail.com', action: () => window.location.href = 'mailto:nabri.support@gmail.com' },
     { icon: Globe, label: 'Website', desc: 'www.nabri.app', action: () => window.open('https://www.nabri.app', '_blank') },
   ]
 
