@@ -142,7 +142,7 @@ interface RuntimeEnv extends Env {
 const parsed = envSchema.safeParse(process.env);
 
 if (!parsed.success) {
-  console.error("âŒ Invalid environment variables:");
+  console.error("Invalid environment variables:");
   const errors = parsed.error.flatten().fieldErrors;
   for (const [field, messages] of Object.entries(errors)) {
     console.error(`   ${field}: ${(messages as string[]).join(", ")}`);

@@ -193,7 +193,7 @@ export function AdminBookingsPage() {
                         <td className="px-4 py-3 text-gray-400 text-xs">{b.refundStatus || '-'}</td>
                         <td className="px-4 py-3">
                           <span className="text-white font-semibold">
-                            â‚¹{Number(b.finalAmount || b.estimatedAmount || 0).toLocaleString('en-IN')}
+                            ₹{Number(b.finalAmount || b.estimatedAmount || 0).toLocaleString('en-IN')}
                           </span>
                         </td>
                         <td className="px-4 py-3">

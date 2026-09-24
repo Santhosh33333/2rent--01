@@ -137,7 +137,7 @@ export function DataSafetyPage() {
             </section>
             <section>
               <h2 className="text-lg font-semibold text-surface-900 dark:text-white">Data Deletion</h2>
-              <p className="mt-2">Users can delete their account and all associated data at any time through Settings â†’ Privacy â†’ Delete Account. Data is permanently deleted within 90 days.</p>
+              <p className="mt-2">Users can delete their account and all associated data at any time through Settings → Privacy → Delete Account. Data is permanently deleted within 90 days.</p>
             </section>
           </div>
         </GlassCard>

@@ -102,6 +102,15 @@ router.post("/walking-partners/:id/reactivate", requireSectionAction("PARTNERS",
 router.get("/bookings", bookingsView, adminController.getBookings);
 router.get("/bookings/:id", bookingsView, adminController.getBookingDetail);
 router.get("/withdrawals", withdrawalsManage, adminController.getWithdrawalRequests);
+router.get("/email/status", notificationsSend, adminController.getEmailStatus);
+router.post(
+  "/email/test",
+  notificationsSend,
+  [body("to").isEmail().withMessage("A valid recipient email is required.")],
+  sanitizeInput,
+  validateRequest,
+  adminController.sendTestEmail
+);
 router.post(
   "/email/broadcast",
   notificationsSend,

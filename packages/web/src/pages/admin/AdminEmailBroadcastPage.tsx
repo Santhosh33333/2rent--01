@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, Send, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, Send, AlertTriangle, CheckCircle2, XCircle, FlaskConical } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { adminApi } from '../../lib/api'
 import { getErrorMessage } from '../../lib/error'
@@ -11,6 +11,13 @@ interface BroadcastResult {
   failed: number
 }
 
+interface EmailStatus {
+  provider: string
+  configured: boolean
+  requiredEnv: string[]
+  from: string
+}
+
 export function AdminEmailBroadcastPage() {
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
@@ -18,6 +25,18 @@ export function AdminEmailBroadcastPage() {
   const [loading, setLoading] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [result, setResult] = useState<BroadcastResult | null>(null)
+  const [status, setStatus] = useState<EmailStatus | null>(null)
+  const [testTo, setTestTo] = useState('')
+  const [testLoading, setTestLoading] = useState(false)
+
+  useEffect(() => {
+    adminApi.getEmailStatus()
+      .then((res) => {
+        const d = res.data?.data?.email || res.data?.email
+        if (d) setStatus(d)
+      })
+      .catch(() => setStatus(null))
+  }, [])
 
   const send = async () => {
     setLoading(true)
@@ -32,6 +51,23 @@ export function AdminEmailBroadcastPage() {
     } finally {
       setLoading(false)
       setConfirming(false)
+    }
+  }
+
+  const sendTest = async () => {
+    if (!testTo.trim()) {
+      toast.error('Enter an email address to send the test to')
+      return
+    }
+    setTestLoading(true)
+    try {
+      const res = await adminApi.sendTestEmail(testTo.trim())
+      toast.success('Test email sent — check the inbox (and spam folder).')
+      setStatus(res.data?.data?.email || (res.data?.data?.provider ? { provider: res.data.data.provider, configured: true, requiredEnv: [], from: '' } : status))
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Test email failed'))
+    } finally {
+      setTestLoading(false)
     }
   }
 
@@ -50,7 +86,54 @@ export function AdminEmailBroadcastPage() {
           </div>
         </div>
 
+        {status?.configured ? (
+          <div className="flex items-start gap-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 p-4 mb-4">
+            <CheckCircle2 className="w-5 h-5 text-emerald-400 mt-px shrink-0" />
+            <div className="text-sm text-emerald-200">
+              <p className="font-semibold text-emerald-300">Email delivery is ready</p>
+              <p className="text-xs mt-1 opacity-80">Provider: {status.provider} · From: {status.from}</p>
+            </div>
+          </div>
+        ) : status && (
+          <div className="flex items-start gap-3 rounded-2xl bg-red-500/10 border border-red-500/30 p-4 mb-4">
+            <XCircle className="w-5 h-5 text-red-400 mt-px shrink-0" />
+            <div className="text-sm text-red-200">
+              <p className="font-semibold text-red-300">Email delivery is NOT configured — no email can be sent</p>
+              <p className="text-xs mt-1 opacity-90">
+                Add these environment variables on Render, then deploy:{' '}
+                <code className="bg-black/30 rounded px-1 py-0.5">EMAIL_PROVIDER=smtp</code>{' '}
+                {status.requiredEnv.map((k) => (<code key={k} className="bg-black/30 rounded px-1 py-0.5 mr-1">{k}</code>))}
+                <br />
+                Gmail example: SMTP_HOST=smtp.gmail.com, SMTP_PORT=587, SMTP_USER=nabri.support@gmail.com,
+                SMTP_PASS=&lt;Google App Password&gt;, EMAIL_FROM=Nabri &lt;nabri.support@gmail.com&gt;.
+              </p>
+            </div>
+          </div>
+        )}
+
         <div className="bg-gray-900 rounded-2xl p-5 space-y-4">
+          <div>
+            <label className="text-sm font-medium text-gray-300">Test delivery (optional, sends one email)</label>
+            <div className="flex gap-2 mt-1">
+              <input
+                value={testTo}
+                onChange={(e) => setTestTo(e.target.value)}
+                type="email"
+                placeholder="you@example.com"
+                className="flex-1 bg-gray-800 rounded-xl px-3 py-2.5 text-white border border-gray-700 focus:border-primary-500 outline-none"
+              />
+              <button
+                onClick={sendTest}
+                disabled={testLoading}
+                className="flex items-center gap-2 rounded-xl bg-gray-700 hover:bg-gray-600 disabled:opacity-40 px-4 py-2.5 text-sm text-white font-semibold transition shrink-0"
+              >
+                <FlaskConical className="w-4 h-4" />
+                {testLoading ? 'Sending…' : 'Send test'}
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">Verify the provider works before you broadcast to everyone.</p>
+          </div>
+
           <div>
             <label className="text-sm font-medium text-gray-300">Audience</label>
             <select
@@ -99,7 +182,7 @@ export function AdminEmailBroadcastPage() {
               </p>
               {result.failed > 0 && (
                 <p className="text-xs text-gray-500 mt-1">
-                  Some deliveries failed — check the email provider configuration (SMTP/Resend) on the server.
+                  Some deliveries failed — use the test box above to confirm the email provider settings.
                 </p>
               )}
             </div>
@@ -136,7 +219,7 @@ export function AdminEmailBroadcastPage() {
 
           <div className="flex items-start gap-2 text-xs text-amber-400/80 bg-amber-500/10 rounded-xl p-3">
             <AlertTriangle className="w-4 h-4 mt-px shrink-0" />
-            <p>This sends a real email to every recipient's inbox immediately. Use a clear subject and avoid sending twice.</p>
+            <p>This sends a real email to every recipient's inbox immediately. Use a clear subject and avoid sending twice. Admins are usually NOT in the recipient list (only Users + Partners) — use the test box to check your own inbox first.</p>
           </div>
         </div>
       </div>

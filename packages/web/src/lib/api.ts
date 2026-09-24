@@ -225,6 +225,8 @@ export const adminApi = {
   // Broadcast email to all users (or one role scope)
   broadcastEmail: (data: { subject: string; body: string; audience?: 'ALL' | 'USERS' | 'PARTNERS' }) =>
     api.post('/admin/email/broadcast', { ...data, audience: data.audience || 'ALL' }),
+  getEmailStatus: () => api.get('/admin/email/status'),
+  sendTestEmail: (to: string) => api.post('/admin/email/test', { to }),
   // Payment Center (real Razorpay order/payment ledger)
   getPayments: (params?: PaginationParams) => api.get('/admin/payments', { params }),
   getPaymentStats: () => api.get('/admin/payments/stats'),

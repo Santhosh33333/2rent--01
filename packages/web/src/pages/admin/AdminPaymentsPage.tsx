@@ -55,7 +55,7 @@ export function AdminPaymentsPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [downloading, setDownloading] = useState(false)
 
-  const inr = (n: number) => `â‚¹${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
+  const inr = (n: number) => `₹${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
 
   const load = async () => {
     setLoading(true)
@@ -215,8 +215,8 @@ export function AdminPaymentsPage() {
               exportTableToPdf({
                 title: 'Payments',
                 subtitle: [
-                  stats ? `Collected â‚¹${stats.totalCollected.toLocaleString('en-IN')}` : null,
-                  stats ? `Fees â‚¹${stats.platformFeesEarned.toLocaleString('en-IN')}` : null,
+                  stats ? `Collected ₹${stats.totalCollected.toLocaleString('en-IN')}` : null,
+                  stats ? `Fees ₹${stats.platformFeesEarned.toLocaleString('en-IN')}` : null,
                   `${rows.length} transaction(s) on this page`,
                 ]
                   .filter(Boolean)
@@ -226,7 +226,7 @@ export function AdminPaymentsPage() {
                   r.createdAt ? new Date(r.createdAt).toLocaleString('en-IN') : '-',
                   r.user?.fullName || '-',
                   r.user?.email || '-',
-                  `â‚¹${r.amount}`,
+                  `₹${r.amount}`,
                   r.type || '-',
                   r.status || '-',
                   r.booking?.serviceType || '-',
@@ -262,7 +262,7 @@ export function AdminPaymentsPage() {
                   onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}
                 >
                   <div className="w-11 h-11 shrink-0 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center font-bold text-white">
-                    â‚¹{Number(r.amount).toLocaleString('en-IN')}
+                    ₹{Number(r.amount).toLocaleString('en-IN')}
                   </div>
                   <div className="flex-1 min-w-0 grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-1 text-sm">
                     <div>

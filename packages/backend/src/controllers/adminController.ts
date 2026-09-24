@@ -15,7 +15,7 @@ import { invalidateConfigCache } from "../services/pricingEngine";
 import { ensureAdminUser } from "../services/adminProvision";
 import { SERVICE_KEYS } from "../services/serviceCatalog";
 import * as partnerMatching from "../services/partnerMatchingEngine";
-import { sendEmail } from "../services/emailService";
+import { sendEmail, emailStatus } from "../services/emailService";
 
 // ============================================================================
 // SECTION 1: DASHBOARD & ANALYTICS
@@ -1108,6 +1108,38 @@ export async function broadcastEmail(req: AuthedRequest, res: Response): Promise
     console.error("Broadcast email error:", err);
     sendError(res, "Failed to send broadcast email.", 500, "INTERNAL_ERROR");
   }
+}
+
+// Live email-provider status so the admin UI can block/surface a broadcast
+// that would otherwise silently no-op.
+export async function getEmailStatus(req: AuthedRequest, res: Response): Promise<void> {
+  sendSuccess(res, { email: emailStatus() }, "Email provider status.");
+}
+
+// Send a single test email to an arbitrary address (admin tooling: verify the
+// provider config BEFORE firing a broadcast to the whole platform).
+export async function sendTestEmail(req: AuthedRequest, res: Response): Promise<void> {
+  const to = String(req.body?.to || "").trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+    sendError(res, "A valid recipient email is required.", 400, "VALIDATION_ERROR");
+    return;
+  }
+  const result = await sendEmail(
+    to,
+    "Nabri test email",
+    `<div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:20px"><h2 style="color:#D83D27;margin:0 0 8px">Nabri</h2><p>This is a test email from the Nabri admin panel to confirm your email provider is configured correctly.</p></div>`,
+    "This is a test email from the Nabri admin panel to confirm your email provider is configured correctly."
+  );
+  if (!result.ok) {
+    sendError(
+      res,
+      `Email not delivered — provider: ${result.provider}. ${result.error === "EMAIL_NOT_CONFIGURED" ? "Add SMTP or Resend credentials (email provider) on the server environment, then retry." : result.error}`,
+      502,
+      "EMAIL_DELIVERY_FAILED"
+    );
+    return;
+  }
+  sendSuccess(res, { to, provider: result.provider, messageId: result.messageId }, "Test email sent.");
 }
 
 // ============================================================================

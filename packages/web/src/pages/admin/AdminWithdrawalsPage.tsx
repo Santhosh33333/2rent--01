@@ -138,7 +138,7 @@ const handleApprove = async (id: string) => {
                 rows: withdrawals.map((w) => [
                   w.userName || '-',
                   w.userEmail || '-',
-                  `â‚¹${w.amount}`,
+                  `₹${w.amount}`,
                   w.method || '-',
                   w.accountDetail || '-',
                   w.status || '-',
@@ -215,7 +215,7 @@ const handleApprove = async (id: string) => {
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          <span className="text-white font-semibold">â‚¹{Number(w.amount || 0).toLocaleString('en-IN')}</span>
+                          <span className="text-white font-semibold">₹{Number(w.amount || 0).toLocaleString('en-IN')}</span>
                         </td>
                         <td className="px-4 py-3">
                           <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${statusBadge(w.status)}`}>

@@ -93,7 +93,7 @@ export function AdminDashboardPage() {
       sub: `${data?.activeBookings ?? 0} active · ${data?.completedBookings ?? 0} completed`
     },
     {
-      label: 'Wallet Balance', value: `â‚¹${(data?.totalWalletBalance ?? 0).toLocaleString('en-IN')}`, icon: Wallet, color: 'text-cyan-400',
+      label: 'Wallet Balance', value: `₹${(data?.totalWalletBalance ?? 0).toLocaleString('en-IN')}`, icon: Wallet, color: 'text-cyan-400',
       sub: 'platform total'
     },
     {
