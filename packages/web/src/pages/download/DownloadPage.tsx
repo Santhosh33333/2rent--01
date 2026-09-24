@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { Check, Download, Monitor, ShieldCheck, Smartphone, Sparkles, Zap } from 'lucide-react'
 
 const APK_PATH = '/download/nabri.apk'
-const APK_SIZE = '39 MB'
+const APK_SIZE = '11 MB'
 const APK_VERSION = '1.0.5'
 
 const STEPS = [
@@ -29,9 +29,9 @@ export function DownloadPage() {
         </div>
 
         <div className="relative z-10 max-w-3xl mx-auto px-5 sm:px-8 py-12 sm:py-16 text-center">
-          <Link to="/" className="inline-flex items-center gap-2.5 text-lg font-extrabold font-display tracking-tight text-white">
-            <span className="flex items-center justify-center rounded-2xl bg-white p-2">
-              <img src="/logo-mark.png" alt="Nabri logo" className="w-8 h-8" />
+          <Link to="/" className="inline-flex items-center gap-3 text-lg font-extrabold font-display tracking-tight text-white">
+            <span className="logo-3d">
+              <img src="/images/logo-mark-3d@2x.png" alt="Nabri logo" className="w-9 h-9" />
             </span>
             NABRI
           </Link>

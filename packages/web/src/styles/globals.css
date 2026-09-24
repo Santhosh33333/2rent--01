@@ -465,6 +465,17 @@ html[data-accent='sky'] {
     @apply bg-gradient-to-r from-primary-700 to-primary-500 bg-clip-text text-transparent;
   }
   .glass-elevated { border-radius: .375rem; box-shadow: 0 16px 42px rgba(28,25,23,.08); }
+  .logo-3d {
+    display: inline-block;
+    transform-style: preserve-3d;
+    animation: mark3D 7s ease-in-out infinite;
+    will-change: transform;
+  }
+  .logo-3d:hover { animation-play-state: paused; transform: perspective(900px) rotateX(6deg) rotateY(-6deg) scale(1.05); }
+  @keyframes mark3D {
+    0%, 100% { transform: perspective(900px) rotateX(10deg) rotateY(-14deg) rotateZ(-2deg) translateY(0); }
+    50% { transform: perspective(900px) rotateX(4deg) rotateY(6deg) rotateZ(1deg) translateY(-8px); }
+  }
   .auth-mobile-mast { border-bottom: 1px solid rgba(28,25,23,.12); }
   .auth-backdrop .glass-elevated { border-top: 3px solid rgb(var(--c-600)); }
   .auth-backdrop > div:not(.absolute) { width: min(100%, 28rem); margin: auto; }

@@ -255,11 +255,11 @@ export function LoginPage() {
         ) : (
         <AnimatedPage>
 <div className="text-center mb-10">
-            <div className="inline-flex items-center justify-center rounded-3xl bg-white p-2.5 shadow-xl shadow-[#0D378B]/25 mb-5 animate-float">
+            <div className="logo-3d mb-5">
               <img
-                src="/logo-mark.png"
+                src="/images/logo-mark-3d.png"
                 alt="Nabri logo"
-                className="w-14 h-14"
+                className="w-16 h-16"
               />
             </div>
             <h1 className="text-3xl font-bold font-display text-surface-900 dark:text-white tracking-tight">

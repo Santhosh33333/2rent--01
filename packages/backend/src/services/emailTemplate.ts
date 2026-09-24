@@ -101,7 +101,7 @@ export function renderEmail(opts: RenderEmailOptions): string {
           <!-- Header / brand bar -->
           <tr>
             <td align="center" class="nabri-fade" style="background:#0D378B;background-image:linear-gradient(135deg,#081F4F 0%,#0D378B 58%,#3B6ED8 100%);padding:30px 24px 26px">
-              <img src="${WEB_ORIGIN}/images/logo-mark.png" width="104" height="104" alt="Nabri" style="display:block;border:0;width:104px;height:104px;max-width:104px;border-radius:26px;background:#FFFFFF;padding:8px;box-sizing:border-box" />
+              <img src="${WEB_ORIGIN}/images/logo-mark-3d@2x.png" width="104" height="104" alt="Nabri" style="display:block;border:0;width:104px;height:104px;max-width:104px;border-radius:26px;background:#FFFFFF;padding:8px;box-sizing:border-box" />
               <div style="font-family:Arial,Helvetica,sans-serif;font-size:20px;font-weight:900;letter-spacing:6px;color:#FBF7EF;margin:14px 0 0;line-height:1.2">NABRI<span class="nabri-dot" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#D2F53C;margin-left:8px;vertical-align:2px"></span></div>
               <div style="width:52px;height:3px;border-radius:2px;background:rgba(210,245,60,.85);margin:11px auto 8px"></div>
               <div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:2.6px;color:#CDE0FF;text-transform:uppercase">Your Partner for Every Side of Life</div>
