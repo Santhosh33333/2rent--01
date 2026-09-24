@@ -138,8 +138,9 @@ export async function register(req: Request, res: Response): Promise<void> {
     const { email, phone, password, fullName, dateOfBirth, gender, accountType, role } = req.body;
 
     // Input validation
-    if (!email && !phone) {
-      sendError(res, "Email or phone is required.", 400, "VALIDATION_ERROR");
+    // Both channels are mandatory so signup can always dual-verify.
+    if (!email || !phone) {
+      sendError(res, "Email and phone are both required in order to verify your account.", 400, "VALIDATION_ERROR");
       return;
     }
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -202,7 +203,7 @@ export async function register(req: Request, res: Response): Promise<void> {
           role: "USER",
           activeRole: "USER",
         },
-        select: { id: true, email: true, phone: true, fullName: true, dateOfBirth: true, gender: true, avatarUrl: true, bio: true, city: true, country: true, status: true, role: true, activeRole: true },
+        select: { id: true, email: true, phone: true, fullName: true, dateOfBirth: true, gender: true, avatarUrl: true, bio: true, city: true, country: true, status: true, role: true, activeRole: true, emailVerified: true, mobileVerified: true },
       });
 
       if (normalizedAccountType === "PARTNER") {
@@ -248,7 +249,7 @@ export async function register(req: Request, res: Response): Promise<void> {
 
     const { accessToken, refreshToken } = await createUserSession(user.id, req);
 
-    const responseUser = {
+const responseUser = {
       id: user.id,
       email: user.email,
       fullName: user.fullName,
@@ -262,9 +263,27 @@ export async function register(req: Request, res: Response): Promise<void> {
       role: user.role,
       activeRole: user.activeRole || user.role,
       accountType: normalizedAccountType,
+      emailVerified: user.emailVerified,
+      mobileVerified: user.mobileVerified,
     };
 
-    sendSuccess(res, { accessToken, refreshToken, user: responseUser }, "Registration successful. OTP sent for email verification.", 201);
+    sendSuccess(
+      res,
+      {
+        accessToken,
+        refreshToken,
+        user: responseUser,
+        verification: {
+          emailVerified: user.emailVerified,
+          mobileVerified: user.mobileVerified,
+          required: true,
+          emailOtpSent: true,
+          phoneOtpSent: !!user.phone,
+        },
+      },
+      "Registration successful. OTP sent for email and phone verification.",
+      201
+    );
   } catch (err) {
     console.error("register error:", err);
     sendError(res, "Registration failed.", 500, "INTERNAL_ERROR");
@@ -347,6 +366,29 @@ export async function login(req: Request, res: Response): Promise<void> {
       }
     }
 
+// ---- Dual-verification gate (signup compliance) ----
+    // When REQUIRE_DUAL_VERIFICATION=true, every non-admin account that has
+    // BOTH an email AND a phone must OTP-verify BOTH channels before signing
+    // in. Admin accounts are exempt (they log in through the admin panel).
+    // Enabled lazily so prod isn't locked out before an SMS provider exists.
+    if (
+      env.REQUIRE_DUAL_VERIFICATION &&
+      !isAdminRole(user.role) &&
+      user.email &&
+      user.phone &&
+      !(user.emailVerified && user.mobileVerified)
+    ) {
+      sendError(
+        res,
+        "Verify your email and phone before signing in.",
+        403,
+        "VERIFICATION_REQUIRED",
+        undefined,
+        { verification: { emailVerified: user.emailVerified, mobileVerified: user.mobileVerified } }
+      );
+      return;
+    }
+
     const { accessToken, refreshToken } = await createUserSession(user.id, req);
     await recordLogin(user.id, req);
 
@@ -364,9 +406,20 @@ export async function login(req: Request, res: Response): Promise<void> {
       role: user.role,
       activeRole: effectiveActiveRole,
       accountType: effectiveActiveRole || "USER",
+      emailVerified: user.emailVerified,
+      mobileVerified: user.mobileVerified,
     };
 
-    sendSuccess(res, { accessToken, refreshToken, user: responseUser }, "Login successful.");
+    sendSuccess(
+      res,
+      {
+        accessToken,
+        refreshToken,
+        user: responseUser,
+        verification: { emailVerified: user.emailVerified, mobileVerified: user.mobileVerified, required: true },
+      },
+      "Login successful."
+    );
   } catch (err) {
     sendError(res, "Login failed.", 500, "INTERNAL_ERROR");
   }

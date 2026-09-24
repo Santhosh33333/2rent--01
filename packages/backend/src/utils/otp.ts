@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { sendOTPEmail } from "../services/emailService";
+import { sendSmsMessage } from "../services/smsService";
 
 const OTP_LENGTH = 6;
 
@@ -27,43 +28,16 @@ export interface OtpChannel {
   phone?: string;
 }
 
-/**
- * Shared SMS sender (Twilio). Throws when unconfigured — callers decide
- * whether SMS is critical (OTP) or best-effort (SOS alerts).
- */
-export async function sendSmsMessage(phone: string, message: string): Promise<void> {
-  return sendSMS(phone, message);
-}
-
-async function sendSMS(phone: string, message: string): Promise<void> {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-  const fromNumber = process.env.TWILIO_FROM_NUMBER;
-
-  if (!accountSid || !authToken || !fromNumber) {
-    throw new Error("Twilio not configured — set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER");
-  }
-
-  const twilio = (await import("twilio")).default;
-  const client = twilio(accountSid, authToken);
-
-  await client.messages.create({
-    body: message,
-    from: fromNumber,
-    to: phone,
-  });
-}
-
 export async function sendOTP(otp: string, channel: OtpChannel): Promise<void> {
   if (channel.email) {
     await sendOTPEmail(channel.email, otp, "verification");
   }
   if (channel.phone) {
     try {
-      await sendSMS(channel.phone, `Your Nabri verification code is: ${otp}. It expires in 10 minutes. Do not share this code.`);
+      await sendSmsMessage(channel.phone, `Your Nabri verification code is: ${otp}. It expires in 10 minutes. Do not share this code.`);
     } catch (err) {
       console.error(`[OTP] SMS delivery failed for ${channel.phone}:`, err);
-      // In dev, log the OTP so developers can test without Twilio
+      // In dev, log the OTP so developers can test without SMS credentials
       if (process.env.NODE_ENV !== "production") {
         console.log(`[OTP] Dev fallback — SMS OTP for ${channel.phone}: ${otp}`);
       }

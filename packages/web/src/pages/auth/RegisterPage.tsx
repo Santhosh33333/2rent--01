@@ -97,7 +97,7 @@ export function RegisterPage() {
     try {
       setLoading(true)
       const isReferral = data.referralCode && data.referralCode.trim().length > 0
-      await registerUser({
+      const result = await registerUser({
         fullName: data.name,
         name: data.name,
         email: data.email,
@@ -117,8 +117,16 @@ export function RegisterPage() {
           /* best-effort — invalid codes are simply ignored */
         }
       }
-      toast.success('Registration successful!')
-      navigate(accountType === 'USER' ? '/profile/complete' : '/partner/dashboard', { replace: true })
+      toast.success('Registration successful! Verify your email and phone to activate your account.')
+      const userId = result?.userId || user?.id
+      if (userId) {
+        navigate(
+          `/verify-email?userId=${encodeURIComponent(userId)}&email=${encodeURIComponent(result?.email || data.email)}&next=verify-mobile`,
+          { replace: true }
+        )
+      } else {
+        navigate(accountType === 'USER' ? '/profile/complete' : '/partner/dashboard', { replace: true })
+      }
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Registration failed. Please check your details and try again.'))
     } finally {

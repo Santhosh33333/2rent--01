@@ -16,6 +16,7 @@ import { ensureAdminUser } from "../services/adminProvision";
 import { SERVICE_KEYS } from "../services/serviceCatalog";
 import * as partnerMatching from "../services/partnerMatchingEngine";
 import { sendEmail, emailStatus } from "../services/emailService";
+import { renderEmail, paragraphHtml } from "../services/emailTemplate";
 
 // ============================================================================
 // SECTION 1: DASHBOARD & ANALYTICS
@@ -1083,9 +1084,11 @@ export async function broadcastEmail(req: AuthedRequest, res: Response): Promise
         (email) => email.length > 0 && !isDemoEmail(email) && !/sidebud|example\.com|\.test\b/i.test(email)
       );
 
-    const esc = (s: string) =>
-      s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-    const html = `<div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:20px"><h2 style="color:#D83D27;margin:0 0 8px">Nabri</h2><h3 style="margin:0 0 12px;color:#111">${esc(subject)}</h3><div style="font-size:14px;line-height:1.6;color:#111">${esc(body).replace(/\n/g, "<br/>")}</div><hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb"/><p style="color:#9ca3af;font-size:12px">Nabri · Your Partner for Every Side of Life. <br/> You are receiving this because you have a Nabri account.</p></div>`;
+    const html = renderEmail({
+      title: subject,
+      bodyHtml: paragraphHtml(body),
+      note: "You're receiving this because you have a Nabri account.",
+    });
 
     let sent = 0;
     let failed = 0;
@@ -1127,7 +1130,11 @@ export async function sendTestEmail(req: AuthedRequest, res: Response): Promise<
   const result = await sendEmail(
     to,
     "Nabri test email",
-    `<div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:20px"><h2 style="color:#D83D27;margin:0 0 8px">Nabri</h2><p>This is a test email from the Nabri admin panel to confirm your email provider is configured correctly.</p></div>`,
+    renderEmail({
+      title: "Test email sent successfully",
+      bodyHtml: `<p style="margin:0 0 14px">This is a test email from the Nabri admin panel to confirm your email provider is configured correctly.</p><p style="margin:0">If you're reading this, your SMTP relay is working and all transactional emails will use this branded template.</p>`,
+      note: "Nabri · Your partner for every side of life.",
+    }),
     "This is a test email from the Nabri admin panel to confirm your email provider is configured correctly."
   );
   if (!result.ok) {

@@ -17,6 +17,7 @@ import {
   type OtpPurpose,
 } from "../services/otpService";
 import { emailStatus } from "../services/emailService";
+import { smsStatus } from "../services/smsService";
 import { createUserSession, recordLogin } from "./authController";
 
 const PUBLIC_PURPOSES: OtpPurpose[] = ["LOGIN", "PASSWORD_RESET"];
@@ -191,10 +192,9 @@ function cryptoRandom(): string {
 // account info). Lets clients hide code options the server cannot fulfill
 // instead of showing an error after the tap.
 export async function otpChannels(_req: Request, res: Response): Promise<void> {
-  const smsReady = Boolean(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_NUMBER);
   sendSuccess(
     res,
-    { email: emailStatus().configured, sms: smsReady },
+    { email: emailStatus().configured, sms: smsStatus().configured },
     "OTP channel availability."
   );
 }
@@ -212,7 +212,7 @@ export async function otpStatus(_req: AuthedRequest, res: Response): Promise<voi
         _count: { channel: true },
       }),
     ]);
-    const smsReady = Boolean(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_NUMBER);
+    const sms = smsStatus();
     const byChannel: Record<string, { sent: number; failed: number; verified: number; locked: number }> = {};
     for (const r of rows as Array<{ channel: string; status: string; _count: { channel: number } }>) {
       const c = (byChannel[r.channel] ||= { sent: 0, failed: 0, verified: 0, locked: 0 });
@@ -226,9 +226,7 @@ export async function otpStatus(_req: AuthedRequest, res: Response): Promise<voi
       res,
       {
         email: emailStatus(),
-        sms: smsReady
-          ? { provider: "twilio", configured: true, requiredEnv: [] as string[] }
-          : { provider: "twilio", configured: false, requiredEnv: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM_NUMBER"] },
+        sms,
         policy: {
           expiryMinutes: policy.expiryMinutes,
           maxAttempts: policy.maxAttempts,

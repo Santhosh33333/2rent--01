@@ -1,5 +1,6 @@
 import { createTransport } from "nodemailer";
 import { env } from "../config/env";
+import { renderEmail, escHtml, WEB_ORIGIN } from "./emailTemplate";
 
 export type EmailProviderName = "none" | "smtp" | "resend";
 
@@ -81,7 +82,7 @@ export interface EmailResult {
 }
 
 function wrapHtml(title: string, body: string): string {
-  return `<div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:20px"><h2 style="color:#4f46e5">Nabri</h2><h3>${title}</h3>${body}<hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb"/><p style="color:#9ca3af;font-size:12px">Nabri · Your Partner for Every Side of Life.</p></div>`;
+  return renderEmail({ title, bodyHtml: body });
 }
 
 /**
@@ -115,18 +116,30 @@ export async function sendEmail(to: string, subject: string, html: string, text?
 
 export async function sendOTPEmail(email: string, otp: string, purpose = "verification"): Promise<EmailResult> {
   const subject = `Your Nabri ${purpose} code`;
-  const html = wrapHtml(
-    `Your ${purpose} code is:`,
-    `<div style="font-size:32px;font-weight:bold;letter-spacing:4px;color:#111;background:#f3f4f6;padding:16px;border-radius:8px;text-align:center">${otp}</div><p style="color:#6b7280;font-size:14px">This code expires in ${env.OTP_EXPIRY_MINUTES} minutes. Do not share it with anyone.</p><p style="color:#9ca3af;font-size:12px">If you didn't request this, please ignore this email.</p>`
+  const bodyHtml = `<div style="background:#FBF7EF;border:1px solid #EFE4D4;border-radius:16px;padding:22px 16px;text-align:center;margin:8px 0 18px"><div style="font-family:Arial,Helvetica,sans-serif;font-size:34px;font-weight:900;letter-spacing:10px;color:#1C1917;padding-left:10px;margin:0">${escHtml(otp)}</div></div><p style="margin:0 0 12px;font-size:14px;color:#6B6558">Use this code to complete the <strong style="color:#1C1917">${escHtml(purpose)}</strong> step for your Nabri account. It expires in ${env.OTP_EXPIRY_MINUTES} minutes.</p><p style="margin:0;font-size:12px;color:#9A9184">If you didn't request this code, you can safely ignore this email.</p>`;
+  return sendEmail(
+    email,
+    subject,
+    renderEmail({
+      title: `Your Nabri ${purpose} code`,
+      bodyHtml,
+      note: `This code expires in ${env.OTP_EXPIRY_MINUTES} minutes. Never share it with anyone, including Nabri support.`,
+    }),
+    `Your ${purpose} code is ${otp}. Expires in ${env.OTP_EXPIRY_MINUTES} minutes.`
   );
-  return sendEmail(email, subject, html, `Your ${purpose} code is ${otp}. Expires in ${env.OTP_EXPIRY_MINUTES} minutes.`);
 }
 
 export async function sendWelcomeEmail(email: string, name: string): Promise<EmailResult> {
   return sendEmail(
     email,
     "Welcome to Nabri",
-    wrapHtml(`Welcome, ${name}!`, `<p>Your account is ready. Find partners, join events, and explore your city.</p>`),
+    renderEmail({
+      title: `Welcome, ${escHtml(name)}!`,
+      bodyHtml: `<p style="margin:0 0 14px">Your account is ready. Find trusted partners nearby, join local events, book homes and get quick help — all in one place.</p><p style="margin:0">Finish your profile and start exploring your city.</p>`,
+      ctaText: "Explore Nabri",
+      ctaUrl: WEB_ORIGIN,
+      note: "You created this account on Nabri. If it wasn't you, please contact support immediately.",
+    }),
     `Welcome to Nabri, ${name}! Your account is ready.`
   );
 }

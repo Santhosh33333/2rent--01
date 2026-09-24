@@ -2,7 +2,7 @@ import crypto from "crypto";
 import { prisma } from "../config/database";
 import { env } from "../config/env";
 import { sendOTPEmail, emailStatus } from "./emailService";
-import { sendSmsMessage } from "../utils/otp";
+import { sendSmsMessage, smsStatus, smsProviderName } from "./smsService";
 
 export const OTP_PURPOSES = [
   "SIGNUP",
@@ -207,14 +207,15 @@ export async function issueOtp(opts: {
   }
 
   // SMS channel.
-  const smsReady = Boolean(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_NUMBER);
-  if (!smsReady) {
+  const sms = smsStatus();
+  if (!sms.configured) {
     await prisma.otpCode.update({ where: { id: row.id }, data: { status: "FAILED", provider: "none", failureReason: "SMS_NOT_CONFIGURED" } });
     return fail(opts, "SMS is not configured yet. Use email code instead.", "SMS_NOT_CONFIGURED", { provider: "none" });
   }
+  const smsProvider = smsProviderName();
   try {
     await sendSmsMessage(identifier, `Your Nabri ${opts.purpose.toLowerCase().replace(/_/g, " ")} code is: ${code}. Expires in ${policy.expiryMinutes} min. Do not share it.`);
-    await prisma.otpCode.update({ where: { id: row.id }, data: { status: "SENT", provider: "twilio", deliveryStatus: "SENT" } });
+    await prisma.otpCode.update({ where: { id: row.id }, data: { status: "SENT", provider: smsProvider, deliveryStatus: "SENT" } });
     return {
       sent: true,
       maskedTo: maskIdentifier(opts.channel, identifier),
@@ -222,11 +223,11 @@ export async function issueOtp(opts: {
       purpose: opts.purpose,
       expiresInSec: policy.expiryMinutes * 60,
       resendInSec: policy.resendSeconds,
-      provider: "twilio",
+      provider: smsProvider,
     };
   } catch (err: any) {
-    await prisma.otpCode.update({ where: { id: row.id }, data: { status: "FAILED", provider: "twilio", failureReason: err?.message?.slice(0, 300) } });
-    return fail(opts, "SMS could not be sent. Try again or use email.", "SMS_DELIVERY_FAILED", { provider: "twilio" });
+    await prisma.otpCode.update({ where: { id: row.id }, data: { status: "FAILED", provider: smsProvider, failureReason: err?.message?.slice(0, 300) } });
+    return fail(opts, "SMS could not be sent. Try again or use email.", "SMS_DELIVERY_FAILED", { provider: smsProvider });
   }
 }
 

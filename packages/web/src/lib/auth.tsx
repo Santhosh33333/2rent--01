@@ -36,7 +36,12 @@ interface AuthContextType {
   loading: boolean
   login: (email: string, password: string) => Promise<void>
   completeLogin: (data: { accessToken: string; refreshToken: string; user?: Record<string, unknown> }) => void
-  register: (data: RegisterInput) => Promise<void>
+  register: (data: RegisterInput) => Promise<{
+    userId?: string;
+    email?: string;
+    phone?: string;
+    verification?: { emailVerified?: boolean; mobileVerified?: boolean };
+  }>,
   logout: () => void
   updateUser: (data: Partial<User>) => void
   refreshProfile: () => Promise<void>
@@ -377,6 +382,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('user', JSON.stringify(u))
     localStorage.setItem('activeRole', u.activeRole || u.role || 'USER')
     setUser(u)
+    reconcileCompletionFlags(u)
+    return {
+      userId: apiUser?.id,
+      email: apiUser?.email || payload.email,
+      phone: apiUser?.phone,
+      verification: serverPayload.verification,
+    }
   }
 
   const logout = () => {

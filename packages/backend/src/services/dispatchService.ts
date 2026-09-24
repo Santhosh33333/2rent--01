@@ -13,7 +13,10 @@ import { sendPushNotification } from "./notificationService";
  * controllers); everyone else is told the job was taken.
  */
 
-export const DISPATCH_WINDOW_MS = 2 * 60 * 1000;
+// Partners get 30 minutes to claim a job. If nobody accepts within this
+// window the booking is auto-expired (escrow released, user notified).
+// The timer stops the moment a partner wins the claim (onBookingClaimed).
+export const DISPATCH_WINDOW_MS = 30 * 60 * 1000;
 
 const expiryTimers = new Map<string, NodeJS.Timeout>();
 

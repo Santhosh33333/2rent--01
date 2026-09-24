@@ -93,9 +93,9 @@ const envSchema = z.object({
   OTP_MAX_PER_HOUR: z.string().default("5").transform(Number),
   OTP_MAX_PER_IP_HOUR: z.string().default("20").transform(Number),
 
-  // SMS provider abstraction: twilio | none. Without Twilio env, SMS OTP
-  // honestly reports SMS_NOT_CONFIGURED (email fallback offered instead).
-  SMS_PROVIDER: z.string().default("twilio"),
+  // SMS provider abstraction: twilio | msg91 | none. Without provider env, SMS
+  // OTP honestly reports SMS_NOT_CONFIGURED (email fallback offered instead).
+  SMS_PROVIDER: z.enum(["twilio", "msg91", "none"]).default("none"),
   SMS_SENDER_ID: z.string().optional(),
   SMS_REGION: z.string().default("IN"),
 
@@ -103,6 +103,25 @@ const envSchema = z.object({
   TWILIO_ACCOUNT_SID: z.string().optional(),
   TWILIO_AUTH_TOKEN: z.string().optional(),
   TWILIO_FROM_NUMBER: z.string().optional(),
+
+  // SMS (MSG91) — optional. Free account needs just the auth key from
+  // MSG91 → Settings → API Keys. MSG91_SENDER_ID is the 6-char transactional
+  // sender (defaults to "NABRI"); DLT-approved sender/template may be required
+  // for delivery in India.
+  MSG91_AUTH_KEY: z.string().optional(),
+  MSG91_SENDER_ID: z.string().optional(),
+
+  // Signup gate: when enabled, accounts that have BOTH an email and a phone
+  // cannot log in until BOTH channels are OTP-verified. Admin accounts are
+  // always exempt. Keep off until a real SMS provider is configured.
+  REQUIRE_DUAL_VERIFICATION: z
+    .string()
+    .default("false")
+    .transform((v) => v === "true" || v === "1"),
+
+  // SOS: when set, every active SOS alert is also SMSed to this ops phone
+  // (E.164), in addition to the user's emergency contact.
+  SOS_SMS_TO: z.string().optional(),
 
   // LocationIQ — optional in dev
   LOCATIONIQ_API_KEY: z.string().default("pk_dev_placeholder"),

@@ -1,9 +1,10 @@
 import { Response } from "express";
 import { prisma } from "../config/database";
+import { env } from "../config/env";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
 import { getIO } from "../services/socketService";
-import { sendSmsMessage } from "../utils/otp";
+import { sendSmsMessage, smsConfigured } from "../services/smsService";
 import { ensureAdminUsers, activeAdminUserIds } from "../services/adminProvision";
 
 export async function getProfile(req: AuthedRequest, res: Response): Promise<void> {
@@ -357,28 +358,38 @@ export async function triggerSos(req: AuthedRequest, res: Response): Promise<voi
       console.error("[SOS] admin inbox fan-out failed:", (e as Error)?.message);
     }
 
-    // 2) SMS to the user's emergency contact (best-effort; needs Twilio env).
+    // 2) SMS fan-out (best-effort; requires an SMS provider env).
     let smsSent = false;
     let smsReason: string | null = null;
+    const mapsLink = latitude && longitude ? `https://maps.google.com/?q=${latitude},${longitude}` : null;
     try {
-      const verification = await prisma.verification.findUnique({
-        where: { userId: req.user!.userId },
-        select: { emergencyContactPhone: true, emergencyContactName: true },
-      });
-      // Emergency contact fields live on Verification; fall back gracefully.
-      const contactPhone = (verification as any)?.emergencyContactPhone as string | undefined;
-      if (contactPhone) {
-        const mapsLink = `https://maps.google.com/?q=${latitude},${longitude}`;
-        await sendSmsMessage(
-          contactPhone,
-          `SOS! Your contact needs emergency help. Location: ${mapsLink} Msg: ${alert.message || "Emergency SOS"} - Nabri Safety`
-        );
-        smsSent = true;
+      if (!smsConfigured()) {
+        smsReason = "SMS_NOT_CONFIGURED";
       } else {
-        smsReason = "NO_EMERGENCY_CONTACT";
+        const verification = await prisma.verification.findUnique({
+          where: { userId: req.user!.userId },
+          select: { emergencyContactPhone: true, emergencyContactName: true },
+        });
+        // Emergency contact fields live on Verification; fall back gracefully.
+        const contactPhone = (verification as any)?.emergencyContactPhone as string | undefined;
+        const userForSms = await prisma.user.findUnique({
+          where: { id: req.user!.userId },
+          select: { fullName: true, phone: true },
+        });
+        const loc = mapsLink ? ` Location: ${mapsLink}` : "";
+        const base = `SOS! ${userForSms?.fullName || "A Nabri user"} needs emergency help${userForSms?.phone ? ` (${userForSms.phone})` : ""}.${loc} Msg: ${alert.message || "Emergency SOS"} - Nabri Safety`;
+        const targets: string[] = [];
+        if (contactPhone) targets.push(contactPhone);
+        if (env.SOS_SMS_TO) targets.push(env.SOS_SMS_TO);
+        if (targets.length > 0) {
+          await Promise.all(targets.map((t) => sendSmsMessage(t, base)));
+          smsSent = true;
+        } else {
+          smsReason = "NO_EMERGENCY_CONTACT";
+        }
       }
     } catch (e) {
-      smsReason = (e as Error)?.message?.includes("Twilio") ? "SMS_NOT_CONFIGURED" : "SMS_FAILED";
+      smsReason = smsConfigured() ? "SMS_FAILED" : "SMS_NOT_CONFIGURED";
     }
 
     const payload = {
