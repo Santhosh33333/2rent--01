@@ -89,7 +89,7 @@ const envSchema = z.object({
   EMAIL_PROVIDER: z.string().default("none"),
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().default("Nabri <noreply@nabri.app>"),
-  SUPPORT_EMAIL: z.string().default("support@nabri.app"),
+  SUPPORT_EMAIL: z.string().default("nabri.support@gmail.com"),
   BREVO_API_KEY: z.string().optional(),
 
   // Gmail SMTP — used when EMAIL_PROVIDER=gmail. Requires a Google App Password

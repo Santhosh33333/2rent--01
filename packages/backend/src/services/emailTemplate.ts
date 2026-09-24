@@ -52,6 +52,8 @@ export interface RenderEmailOptions {
   ctaUrl?: string;
   /** Optional muted footer line, e.g. "This code expires in 10 minutes." */
   note?: string;
+  /** Support contact shown in the footer. Defaults to the Nabri support mailbox. */
+  supportEmail?: string;
   /** Optional extra <head> CSS (keyframes/classes) appended after the base set. */
   headHtml?: string;
 }
@@ -75,6 +77,7 @@ export function renderEmail(opts: RenderEmailOptions): string {
   const cta = opts.ctaText && opts.ctaUrl ? renderCta(opts.ctaText, opts.ctaUrl) : "";
   const note = opts.note ? `<tr><td class="nabri-fade d4" style="padding:0 34px 28px;background:#FFFFFF"><p style="margin:0;font-size:12px;line-height:1.6;color:#9A9184">${escHtml(opts.note)}</p></td></tr>` : "";
   const year = new Date().getFullYear();
+  const supportEmail = opts.supportEmail || "nabri.support@gmail.com";
   const kicker = opts.kicker
     ? `<p style="margin:0 0 8px;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:800;letter-spacing:2.5px;color:#D83D27;text-transform:uppercase">${escHtml(opts.kicker)}</p>`
     : "";
@@ -119,6 +122,9 @@ export function renderEmail(opts: RenderEmailOptions): string {
                 <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.7;color:#9A9184">
                   <strong style="color:#6B6558">Nabri</strong> · Your partner for every side of life. &mdash; Connect. Discover. Experience.<br/>
                   You're receiving this because you have a Nabri account.
+                </p>
+                <p style="margin:12px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.6;color:#9A9184">
+                  Need help? <a href="mailto:${escHtml(supportEmail)}" style="color:#D83D27;text-decoration:none;font-weight:700">${escHtml(supportEmail)}</a>
                 </p>
               </td></tr></table>
             </td>

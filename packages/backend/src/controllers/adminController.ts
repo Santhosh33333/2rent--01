@@ -1098,6 +1098,8 @@ export async function broadcastEmail(req: AuthedRequest, res: Response): Promise
 
     const html = renderEmail({
       title: subject,
+      kicker: "Update from Nabri",
+      supportEmail: env.SUPPORT_EMAIL,
       bodyHtml: paragraphHtml(body),
       note: "You're receiving this because you have a Nabri account.",
     });
@@ -1144,6 +1146,8 @@ export async function sendTestEmail(req: AuthedRequest, res: Response): Promise<
     "Nabri test email",
     renderEmail({
       title: "Test email sent successfully",
+      kicker: "Provider test",
+      supportEmail: env.SUPPORT_EMAIL,
       bodyHtml: `<p style="margin:0 0 14px">This is a test email from the Nabri admin panel to confirm your email provider is configured correctly.</p><p style="margin:0">If you're reading this, your SMTP relay is working and all transactional emails will use this branded template.</p>`,
       note: "Nabri · Your partner for every side of life.",
     }),

@@ -228,7 +228,7 @@ export async function sendOTPEmail(
   return sendEmail(
     email,
     subject,
-    renderEmail({
+    renderEmail({ supportEmail: env.SUPPORT_EMAIL,
       title: subject,
       kicker: "Security code",
       bodyHtml,
@@ -272,7 +272,7 @@ export async function sendWelcomeEmail(email: string, name: string): Promise<Ema
   return sendEmail(
     email,
     `Welcome to Nabri, ${firstName}! 🎉`,
-    renderEmail({
+    renderEmail({ supportEmail: env.SUPPORT_EMAIL,
       title: `Welcome to Nabri! 🎉`,
       kicker: "You're in!",
       bodyHtml,
@@ -302,7 +302,7 @@ export async function sendIntroductionEmail(email: string, name: string): Promis
   return sendEmail(
     email,
     "Getting started with Nabri",
-    renderEmail({
+    renderEmail({ supportEmail: env.SUPPORT_EMAIL,
       title: "Welcome — let's get you started",
       kicker: "Getting started",
       bodyHtml,
@@ -322,7 +322,7 @@ export async function sendSecurityAlertEmail(email: string, subject: string, bod
   return sendEmail(
     email,
     `[Security] ${subject}`,
-    renderEmail({
+    renderEmail({ supportEmail: env.SUPPORT_EMAIL,
       title: subject,
       kicker: "Security alert",
       bodyHtml: `<p style="margin:0 0 14px">We detected unusual activity on your Nabri account.</p><table class="nabri-fade d2" role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#FFF7F5;border:1px solid #F5D9D3;border-radius:14px;margin:0 0 16px"><tr><td style="padding:16px 18px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.7;color:#4B453D">${paragraphHtml(body)}</td></tr></table><p style="margin:0 0 14px"><strong>If this was you</strong> — you're all set. <strong>If it wasn't</strong>, change your password immediately and contact <a href="mailto:${escHtml(env.SUPPORT_EMAIL)}" style="color:#D83D27;text-decoration:none">${escHtml(env.SUPPORT_EMAIL)}</a>.</p>`,
@@ -336,7 +336,7 @@ export async function sendBookingEmail(email: string, subject: string, body: str
   return sendEmail(
     email,
     subject,
-    renderEmail({
+    renderEmail({ supportEmail: env.SUPPORT_EMAIL,
       title: subject,
       kicker: "Nabri booking",
       bodyHtml: `<p style="margin:0 0 14px">Here's an update on your Nabri booking:</p><div class="nabri-fade d2" style="background:#FBF7EF;border:1px solid #EFE4D4;border-radius:14px;padding:16px 18px;margin:0 0 16px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.7;color:#4B453D">${paragraphHtml(body)}</div><p style="margin:0">Need help? Reply to this email or reach us at <a href="mailto:${escHtml(env.SUPPORT_EMAIL)}" style="color:#D83D27;text-decoration:none">${escHtml(env.SUPPORT_EMAIL)}</a>.</p>`,
@@ -354,7 +354,7 @@ export async function sendKycEmail(email: string, name: string, approved: boolea
   return sendEmail(
     email,
     subject,
-    renderEmail({
+    renderEmail({ supportEmail: env.SUPPORT_EMAIL,
       title: approved ? "You're verified!" : "KYC update",
       kicker: approved ? "Verified" : "Action needed",
       bodyHtml,
@@ -403,7 +403,7 @@ export async function sendBookingInvoiceEmail(email: string, name: string, invoi
   return sendEmail(
     email,
     `Booking confirmed · Invoice ${invoiceNo}`,
-    renderEmail({
+    renderEmail({ supportEmail: env.SUPPORT_EMAIL,
       title: `Booking confirmed · ${amountStr}`,
       kicker: "Payment receipt",
       bodyHtml,
