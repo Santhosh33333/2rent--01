@@ -2,8 +2,8 @@ import { Link } from 'react-router-dom'
 import { Check, Download, Monitor, ShieldCheck, Smartphone, Sparkles, Zap } from 'lucide-react'
 
 const APK_PATH = '/download/nabri.apk'
-const APK_SIZE = '11 MB'
-const APK_VERSION = '1.0.7'
+const APK_SIZE = '12 MB'
+const APK_VERSION = '1.0.8'
 
 const STEPS = [
   { icon: Smartphone, title: 'Open on your phone', text: 'Visit this page from your Android phone so the APK downloads straight to it.' },
