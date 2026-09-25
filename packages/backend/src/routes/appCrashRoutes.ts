@@ -3,6 +3,6 @@ import { reportAppCrash } from "../controllers/appCrashController";
 
 const router = Router();
 
-router.post("/crash-report", reportAppCrash);
+router.post("/", reportAppCrash);
 
 export default router;
