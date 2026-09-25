@@ -1,11 +1,12 @@
 ﻿import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Sun, Moon, Monitor, Bell, Shield, Smartphone, Type, WifiOff, Save, Loader2, Eye, Clock } from 'lucide-react'
+import { ArrowLeft, Sun, Moon, Monitor, Bell, Shield, Smartphone, Type, WifiOff, Save, Loader2, Eye, Clock, Lock, KeyRound } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
 import { api } from '../../lib/api'
 import { useTheme, ACCENTS, Accent } from '../../lib/themeContext'
+import { useAppLock } from '../../lib/appLock'
 
 interface Settings {
   theme: string
@@ -84,12 +85,117 @@ function SettingRow({ icon: Icon, label, description, children }: { icon: any; l
   )
 }
 
+const AUTO_LOCK_OPTIONS = [
+  { value: 0, label: 'Instantly' },
+  { value: 60, label: '1 min' },
+  { value: 300, label: '5 min' },
+]
+
+function PinEntryModal({
+  mode,
+  onChangePin,
+  onClose,
+}: {
+  mode: 'setup' | 'disable' | 'change'
+  onChangePin: (pin: string, oldPin?: string) => Promise<void>
+  onClose: () => void
+}) {
+  const { verify } = useAppLock()
+  const [step, setStep] = useState<'old' | 'new' | 'confirm'>(mode === 'setup' ? 'new' : 'old')
+  const [oldPin, setOldPin] = useState('')
+  const [pin1, setPin1] = useState('')
+  const [pin2, setPin2] = useState('')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const heading =
+    step === 'old' ? `Enter your current PIN` : step === 'new' ? 'Choose a PIN (4–6 digits)' : 'Repeat the new PIN'
+
+  const next = async () => {
+    if (step === 'old') {
+      setBusy(true)
+      const ok = await verify(oldPin)
+      setBusy(false)
+      if (ok) {
+        setError('')
+        if (mode === 'disable') {
+          await onChangePin(oldPin)
+          onClose()
+        } else {
+          setOldPin('')
+          setStep('new')
+        }
+      } else {
+        setError('Wrong PIN')
+        setOldPin('')
+      }
+      return
+    }
+    if (step === 'new') {
+      if (pin1.length < 4) { setError('PIN must be 4–6 digits'); return }
+      setError('')
+      setStep('confirm')
+      return
+    }
+    if (pin1 !== pin2) { setError('PINs do not match'); setPin2(''); return }
+    setBusy(true)
+    await onChangePin(pin1, oldPin || undefined)
+    setBusy(false)
+    onClose()
+  }
+
+  const type = (k: string) => {
+    const set = step === 'old' ? setOldPin : step === 'new' ? setPin1 : setPin2
+    set(prev => (k === '⌫' ? prev.slice(0, -1) : prev.length < 6 ? prev + k : prev))
+  }
+
+  const pinLen = step === 'old' ? oldPin.length : step === 'new' ? pin1.length : pin2.length
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-5" role="dialog" aria-modal="true">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-xs rounded-3xl bg-white dark:bg-surface-900 p-6 shadow-2xl ring-1 ring-surface-200 dark:ring-surface-700">
+        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-500/10">
+          <KeyRound className="w-6 h-6 text-primary-500" />
+        </div>
+        <h3 className="text-center text-lg font-bold text-surface-900 dark:text-white">
+          {mode === 'setup' ? 'Set app lock PIN' : mode === 'change' ? 'Change PIN' : 'Turn off PIN lock'}
+        </h3>
+        <p className="mt-1 text-center text-xs text-surface-500">{heading}</p>
+        <div className="mt-5 flex justify-center gap-2">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <span key={i} className={`h-3 w-3 rounded-full transition-all ${i < pinLen ? 'bg-primary-500 scale-110' : 'bg-surface-200 dark:bg-surface-700'}`} />
+          ))}
+        </div>
+        {error && <p className="mt-3 text-center text-sm font-medium text-red-500">{error}</p>}
+        <div className="mt-5 grid grid-cols-3 gap-2">
+          {['1','2','3','4','5','6','7','8','9','','0','⌫'].map((k, i) =>
+            k ? (
+              <button key={i} type="button" onClick={() => type(k)} className="h-12 rounded-2xl bg-surface-100 dark:bg-surface-800 text-lg font-semibold text-surface-900 dark:text-white active:scale-95 active:bg-primary-500/20 transition">{k}</button>
+            ) : <span key={i} />
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={next}
+          disabled={busy}
+          className="mt-5 w-full rounded-2xl bg-primary-600 py-3 text-sm font-semibold text-white active:scale-[0.98] transition disabled:opacity-50"
+        >
+          {busy ? 'Checking…' : step === 'confirm' ? 'Finish' : 'Continue'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function SettingsPage() {
   const navigate = useNavigate()
   const [settings, setSettings] = useState<Settings>(defaultSettings)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const { setTheme, setAccent } = useTheme()
+  const { enabled: appLockEnabled, autoLockSec, enable, disable, changePin, lockNow, setAutoLockSec } = useAppLock()
+  const [lockModal, setLockModal] = useState<null | 'setup' | 'disable' | 'change'>(null)
 
   useEffect(() => {
     api.get('/settings').then(r => {
@@ -248,6 +354,53 @@ export function SettingsPage() {
           <SettingRow icon={Shield} label="Location Sharing" description="Share location during walks">
             <ToggleSwitch enabled={settings.allowLocationSharing} onChange={v => update('allowLocationSharing', v)} />
           </SettingRow>
+
+          {/* App Lock */}
+          <h2 className="text-xs font-semibold text-surface-400 uppercase tracking-wider mb-3 mt-8">App Lock</h2>
+          <SettingRow icon={Lock} label="PIN Lock" description="Lock the app with a 4–6 digit PIN when it's not in use">
+            <ToggleSwitch enabled={appLockEnabled} onChange={v => setLockModal(v ? 'setup' : 'disable')} />
+          </SettingRow>
+          {appLockEnabled && (
+            <>
+              <SettingRow icon={Clock} label="Lock after" description="How soon to lock after leaving the app">
+                <div className="flex gap-1">
+                  {AUTO_LOCK_OPTIONS.map(o => (
+                    <button
+                      key={o.value}
+                      onClick={() => {
+                        setAutoLockSec(o.value)
+                        toast.success(`Locks ${o.label.toLowerCase()}`)
+                      }}
+                      className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${autoLockSec === o.value ? 'bg-primary-500 text-white' : 'bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400'}`}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+              </SettingRow>
+              <SettingRow icon={KeyRound} label="Change PIN" description="Set a new PIN">
+                <button onClick={() => setLockModal('change')} className="px-3 py-1 rounded-lg text-xs font-medium bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 hover:bg-surface-200 dark:hover:bg-surface-700 transition-colors">
+                  Change
+                </button>
+              </SettingRow>
+              <SettingRow icon={Lock} label="Lock now" description="Lock the app immediately">
+                <button onClick={() => { lockNow(); toast.success('App locked') }} className="px-3 py-1 rounded-lg text-xs font-medium bg-primary-500/10 text-primary-600 hover:bg-primary-500/20 transition-colors">
+                  Lock
+                </button>
+              </SettingRow>
+            </>
+          )}
+          {lockModal && (
+            <PinEntryModal
+              mode={lockModal}
+              onClose={() => setLockModal(null)}
+              onChangePin={async (pin, oldPin) => {
+                if (lockModal === 'setup') { await enable(pin); toast.success('PIN lock enabled') }
+                else if (lockModal === 'disable') { const ok = await disable(pin); if (ok) toast.success('PIN lock turned off'); else toast.error('Wrong PIN') }
+                else { const r = await changePin(oldPin || pin, pin); toast.success(r === 'ok' ? 'PIN changed' : 'Failed to change PIN') }
+              }}
+            />
+          )}
 
           {/* Data & Storage */}
           <h2 className="text-xs font-semibold text-surface-400 uppercase tracking-wider mb-3 mt-8">Data & Storage</h2>

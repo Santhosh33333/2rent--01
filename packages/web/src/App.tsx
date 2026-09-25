@@ -5,6 +5,8 @@ import { ProtectedRoute } from './components/ProtectedRoute'
 import { Layout } from './components/Layout'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { ThemeProvider } from './lib/themeContext'
+import { AppLockProvider, useAppLock } from './lib/appLock'
+import { LockScreen } from './components/LockScreen'
 
 // Lazy-loaded auth pages
 const LoginPage = lazy(() => import('./pages/auth/LoginPage').then(m => ({ default: m.LoginPage })))
@@ -152,7 +154,8 @@ export function App() {
       )}>
         <Toaster position="top-center" toastOptions={{ duration: 3000, style: { background: '#18181b', color: '#fafafa', borderRadius: '16px' } }} />
         <Suspense fallback={<LoadingSpinner />}>
-          <Routes>
+          <AppLockProvider>
+            <Routes>
           <Route path="/" element={<SplashPage />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
           <Route path="/account-type" element={<AccountTypePage />} />
@@ -284,8 +287,15 @@ export function App() {
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+            <LockOverlay />
+          </AppLockProvider>
         </Suspense>
       </ErrorBoundary>
     </ThemeProvider>
   )
+}
+
+function LockOverlay() {
+  const { locked } = useAppLock()
+  return locked ? <LockScreen /> : null
 }
