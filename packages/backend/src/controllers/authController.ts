@@ -470,67 +470,23 @@ export async function login(req: Request, res: Response): Promise<void> {
 export async function sendPhoneOTP(req: Request, res: Response): Promise<void> {
   try {
     const { phone } = req.body;
-    
-    const firebaseAuth = getFirebaseAuth();
-    if (!firebaseAuth) {
-      // No Firebase: issue through the DB-backed OTP service. In production
-      // this errors loudly (SMS_NOT_CONFIGURED) rather than reporting a
-      // delivery that never happens; in dev the email fallback keeps the
-      // flow testable without any SMS provider.
-      if (env.isProduction) {
-        const r = await issueOtp({
-          channel: "SMS",
-          identifier: phone,
-          purpose: "LOGIN",
-          ip: getClientIp(req),
-          userAgent: req.headers["user-agent"],
-        });
-        if (!r.sent) {
-          sendError(res, r.error || "Phone OTP delivery is not configured (no SMS provider).", 503, "SMS_NOT_CONFIGURED");
-          return;
-        }
-        sendSuccess(res, { sent: true, maskedTo: r.maskedTo, resendInSec: r.resendInSec }, "OTP sent to your phone.");
-        return;
-      }
-      const r = await issueOtp({
-        channel: "SMS",
-        identifier: phone,
-        purpose: "LOGIN",
-        ip: getClientIp(req),
-        userAgent: req.headers["user-agent"],
-      });
-      // OTP and phone numbers must never be written to logs (PII / account-takeover risk).
-      sendSuccess(res, { sent: r.sent, dev: true, maskedTo: r.maskedTo }, r.sent ? "OTP sent via dev fallback (check your SMS provider to go live)." : (r.error || "OTP could not be sent."));
+    // Always deliver through the DB-backed OTP service. Nothing is reported
+    // as sent unless the SMS provider accepts the message — previously this
+    // returned "OTP sent" without any delivery whenever Firebase was
+    // initialized, which made phone login never complete.
+    const r = await issueOtp({
+      channel: "SMS",
+      identifier: phone,
+      purpose: "LOGIN",
+      ip: getClientIp(req),
+      userAgent: req.headers["user-agent"],
+    });
+    if (!r.sent) {
+      const status = r.code === "OTP_RATE_LIMITED" ? 429 : r.code === "SMS_NOT_CONFIGURED" ? 503 : 400;
+      sendError(res, r.error || "Could not send the code.", status, r.code || "OTP_REQUEST_FAILED");
       return;
     }
-
-    // Firebase path: confirm the phone number is valid via Firebase.
-    try {
-      const firebaseUser = await getUserByPhone(phone);
-      if (!firebaseUser) {
-        // Create user in Firebase
-        await createUserWithPhone(phone);
-      }
-      // In production, Firebase handles OTP sending via client SDK.
-      // Here we just confirm the phone number is valid.
-      sendSuccess(res, { sent: true }, "OTP sent. Please check your phone.");
-    } catch (fbErr) {
-      if (env.isProduction) {
-        console.error("sendPhoneOTP Firebase error:", fbErr);
-        sendError(res, "Failed to send OTP.", 500, "INTERNAL_ERROR");
-        return;
-      }
-      // Dev fallback: Firebase unavailable/misconfigured — deliver OTP locally so
-      // the flow remains testable. In production this would be a real misconfig.
-      const r = await issueOtp({
-        channel: "SMS",
-        identifier: phone,
-        purpose: "LOGIN",
-        ip: getClientIp(req),
-        userAgent: req.headers["user-agent"],
-      });
-      sendSuccess(res, { sent: r.sent, dev: true, maskedTo: r.maskedTo }, r.sent ? "OTP sent via dev fallback (configure an SMS provider to go live)." : (r.error || "OTP could not be sent."));
-    }
+    sendSuccess(res, { sent: true, maskedTo: r.maskedTo, resendInSec: r.resendInSec, provider: r.provider }, `OTP sent to ${r.maskedTo}.`);
   } catch (err) {
     console.error("sendPhoneOTP error:", err);
     sendError(res, "Failed to send OTP.", 500, "INTERNAL_ERROR");
@@ -541,61 +497,54 @@ export async function sendPhoneOTP(req: Request, res: Response): Promise<void> {
 export async function verifyPhoneOTP(req: Request, res: Response): Promise<void> {
   try {
     const { phone, otp } = req.body;
-    
-    const firebaseAuth = getFirebaseAuth();
-    if (!firebaseAuth) {
-      // Fallback to DB-backed OTP verification (purpose-bound LOGIN code).
-      const v = await verifyOtp({ channel: "SMS", identifier: phone, purpose: "LOGIN", code: otp });
-      if (!v.ok) {
-        sendError(res, v.error || "Invalid or expired OTP.", 400, "INVALID_OTP");
-        return;
-      }
-      
-      // Atomic: find-or-create user with upsert to prevent race condition
-      const placeholderEmail = `${phone.replace(/\D/g, '')}@phone.placeholder`;
-      const passwordHash = await bcrypt.hash(generateOTP(32), env.BCRYPT_SALT_ROUNDS);
-      let user = await prisma.user.findUnique({ where: { phone } });
-      if (!user) {
-        try {
-          user = await prisma.user.create({
-            data: {
-              phone,
-              email: placeholderEmail,
-              passwordHash,
-              fullName: "Phone User",
-              dateOfBirth: new Date("2000-01-01"),
-              gender: "OTHER",
-              mobileVerified: true,
-            },
-          });
-          await prisma.wallet.create({ data: { userId: user.id } });
-        } catch (createErr: any) {
-          // Unique constraint violation = concurrent create won. Retry find.
-          if (createErr.code === 'P2002') {
-            user = await prisma.user.findUnique({ where: { phone } });
-          } else {
-            throw createErr;
-          }
-        }
-      } else {
-        await prisma.user.update({ where: { id: user.id }, data: { mobileVerified: true } });
-      }
-
-      if (!user) {
-        sendError(res, "Failed to create or find user.", 500, "INTERNAL_ERROR");
-        return;
-      }
-
-      const { accessToken, refreshToken } = await createUserSession(user.id, req);
-      await recordLogin(user.id, req);
-
-      sendSuccess(res, { accessToken, refreshToken, user: { id: user.id, email: user.email, fullName: user.fullName, phone: user.phone, dateOfBirth: user.dateOfBirth, gender: user.gender, avatarUrl: user.avatarUrl, bio: user.bio, city: user.city, country: user.country, role: user.role, activeRole: user.activeRole } }, "Phone verified and logged in.");
+    // Always verify through the DB-backed OTP service (purpose-bound LOGIN
+    // code). The previous Firebase client-SDK branch made phone OTP login
+    // fail with USE_CLIENT_SDK even though the web/mobile clients have no
+    // Firebase SDK — phone login could never complete.
+    const v = await verifyOtp({ channel: "SMS", identifier: phone, purpose: "LOGIN", code: otp });
+    if (!v.ok) {
+      sendError(res, v.error || "Invalid or expired OTP.", 400, "INVALID_OTP");
       return;
     }
 
-    // Firebase verification would be done client-side with Firebase SDK
-    // Server verifies the ID token from Firebase
-    sendError(res, "Use Firebase client SDK for phone auth verification.", 400, "USE_CLIENT_SDK");
+    const placeholderEmail = `${phone.replace(/\D/g, '')}@phone.placeholder`;
+    const passwordHash = await bcrypt.hash(generateOTP(32), env.BCRYPT_SALT_ROUNDS);
+    let user = await prisma.user.findUnique({ where: { phone } });
+    if (!user) {
+      try {
+        user = await prisma.user.create({
+          data: {
+            phone,
+            email: placeholderEmail,
+            passwordHash,
+            fullName: "Phone User",
+            dateOfBirth: new Date("2000-01-01"),
+            gender: "OTHER",
+            mobileVerified: true,
+          },
+        });
+        await prisma.wallet.create({ data: { userId: user.id } });
+      } catch (createErr: any) {
+        // Unique constraint violation = concurrent create won. Retry find.
+        if (createErr.code === 'P2002') {
+          user = await prisma.user.findUnique({ where: { phone } });
+        } else {
+          throw createErr;
+        }
+      }
+    } else {
+      await prisma.user.update({ where: { id: user.id }, data: { mobileVerified: true } });
+    }
+
+    if (!user) {
+      sendError(res, "Failed to create or find user.", 500, "INTERNAL_ERROR");
+      return;
+    }
+
+    const { accessToken, refreshToken } = await createUserSession(user.id, req);
+    await recordLogin(user.id, req);
+
+    sendSuccess(res, { accessToken, refreshToken, user: { id: user.id, email: user.email, fullName: user.fullName, phone: user.phone, dateOfBirth: user.dateOfBirth, gender: user.gender, avatarUrl: user.avatarUrl, bio: user.bio, city: user.city, country: user.country, role: user.role, activeRole: user.activeRole } }, "Phone verified and logged in.");
   } catch (err) {
     console.error("verifyPhoneOTP error:", err);
     sendError(res, "Phone verification failed.", 500, "INTERNAL_ERROR");
