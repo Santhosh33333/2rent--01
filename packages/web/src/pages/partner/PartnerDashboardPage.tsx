@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import {
   ClipboardList, MapPin, Wallet, Star, TrendingUp, CheckCircle,
   ToggleLeft, ToggleRight, Navigation, Calendar, Zap, ChevronRight,
-  DollarSign, Award, Flame
+  DollarSign, Award, Flame, MessageCircle
 } from 'lucide-react'
 import { useAuth } from '../../lib/auth'
 import { api } from '../../lib/api'
@@ -171,9 +171,10 @@ export function PartnerDashboardPage() {
 
       {/* Hero banner */}
       <AnimatedPage>
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-500 p-6 sm:p-8 text-white shadow-xl shadow-emerald-500/20">
-          <div className="absolute -top-20 -right-20 w-60 h-60 bg-white/10 rounded-full blur-3xl" />
-          <div className="absolute -bottom-20 -left-20 w-60 h-60 bg-teal-500/20 rounded-full blur-3xl" />
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary-800 via-primary-700 to-accent-600 p-6 sm:p-8 text-white shadow-xl shadow-primary-800/25">
+          <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2230%22%20height%3D%2230%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cdefs%3E%3Cpattern%20id%3D%22g%22%20width%3D%2230%22%20height%3D%2230%22%20patternUnits%3D%22userSpaceOnUse%22%3E%3Ccircle%20cx%3D%2215%22%20cy%3D%2215%22%20r%3D%221%22%20fill%3D%22rgba(255,255,255,0.06)%22/%3E%3C/pattern%3E%3C/defs%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22url(%23g)%22/%3E%3C/svg%3E')] opacity-30" />
+          <div className="absolute -top-20 -right-20 w-60 h-60 bg-accent-300/20 rounded-full blur-3xl" />
+          <div className="absolute -bottom-20 -left-20 w-60 h-60 bg-primary-500/40 rounded-full blur-3xl" />
           <div className="relative z-10">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
               <div>
@@ -232,17 +233,17 @@ export function PartnerDashboardPage() {
       {/* Active job banner */}
       {activeJob && (
         <AnimatedPage delay={50}>
-          <GlassCard variant="elevated" padding="lg" className="border-l-4 border-l-emerald-500">
+          <GlassCard variant="elevated" padding="lg" className="border-l-4 border-l-primary-500">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
+              <h2 className="font-bold text-primary-600 dark:text-primary-400 flex items-center gap-2">
                 <Zap className="w-4 h-4" /> Active Job
               </h2>
-              <Link to={`/bookings/${activeJob.id}`} className="text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+              <Link to={`/bookings/${activeJob.id}`} className="text-sm text-primary-600 dark:text-primary-400 flex items-center gap-1">
                 View <ChevronRight className="w-4 h-4" />
               </Link>
             </div>
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-500/20 flex-shrink-0">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center shadow-lg shadow-primary-500/20 flex-shrink-0">
                 <MapPin className="w-5 h-5 text-white" />
               </div>
               <div className="flex-1 min-w-0">
@@ -255,7 +256,7 @@ export function PartnerDashboardPage() {
                 </p>
               </div>
               <Link to={`/bookings/${activeJob.id}/tracking`}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white text-sm font-semibold shadow-lg shadow-emerald-500/25">
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gradient-to-r from-primary-500 to-primary-700 text-white text-sm font-semibold shadow-lg shadow-primary-500/25">
                 <Navigation className="w-4 h-4" /> Track
               </Link>
             </div>
@@ -268,10 +269,10 @@ export function PartnerDashboardPage() {
         <h2 className="section-title mb-4">Quick Actions</h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { to: '/partner/jobs', icon: ClipboardList, label: 'Jobs', gradient: 'from-emerald-500 to-emerald-600' },
+            { to: '/partner/jobs', icon: ClipboardList, label: 'Jobs', gradient: 'from-primary-500 to-primary-700' },
             { to: '/partner/map', icon: Navigation, label: 'Nearby', gradient: 'from-sky-500 to-blue-600' },
-            { to: '/partner/wallet', icon: Wallet, label: 'Wallet', gradient: 'from-amber-500 to-orange-600' },
-            { to: '/partner/performance', icon: TrendingUp, label: 'Analytics', gradient: 'from-violet-500 to-violet-600' },
+            { to: '/partner/wallet', icon: Wallet, label: 'Wallet', gradient: 'from-accent-400 to-accent-500' },
+            { to: '/messages', icon: MessageCircle, label: 'Messages', gradient: 'from-violet-500 to-violet-600' },
           ].map(a => (
             <Link key={a.to} to={a.to}
               className="group glass-card-static p-4 text-center hover:-translate-y-1 transition-all duration-300">
@@ -291,16 +292,16 @@ export function PartnerDashboardPage() {
           <GlassCard variant="elevated" padding="lg">
             <div className="flex items-center justify-between mb-5">
               <h2 className="section-title flex items-center gap-2">
-                <DollarSign className="w-5 h-5 text-emerald-500" /> Earnings
+                <DollarSign className="w-5 h-5 text-primary-500" /> Earnings
               </h2>
-              <Link to="/partner/performance" className="text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+              <Link to="/partner/performance" className="text-sm text-primary-600 dark:text-primary-400 flex items-center gap-1">
                 Full report <ChevronRight className="w-4 h-4" />
               </Link>
             </div>
 
             <div className="grid grid-cols-2 gap-3 mb-5">
               {[
-                { label: 'Today', value: fmt(perf.todayEarnings), sub: `${perf.todayJobs} jobs`, color: 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300' },
+                { label: 'Today', value: fmt(perf.todayEarnings), sub: `${perf.todayJobs} jobs`, color: 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300' },
                 { label: 'This Week', value: fmt(perf.weeklyEarnings), sub: `${perf.weeklyJobs} jobs`, color: 'bg-sky-50 dark:bg-sky-900/20 text-sky-700 dark:text-sky-300' },
                 { label: 'This Month', value: fmt(perf.monthlyEarnings), sub: 'month total', color: 'bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300' },
                 { label: 'Lifetime', value: fmt(perf.lifetimeEarnings), sub: 'all time', color: 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300' },
@@ -315,7 +316,7 @@ export function PartnerDashboardPage() {
 
             {/* Withdrawable callout */}
             {perf.withdrawableBalance > 0 && (
-              <div className="flex items-center justify-between p-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white">
+              <div className="flex items-center justify-between p-4 rounded-2xl bg-gradient-to-r from-primary-600 to-primary-800 text-white">
                 <div>
                   <p className="text-xs text-white/70">Available to withdraw</p>
                   <p className="text-2xl font-bold">{fmt(perf.withdrawableBalance)}</p>
@@ -380,11 +381,11 @@ export function PartnerDashboardPage() {
             {/* Today summary */}
             <GlassCard variant="elevated" padding="md">
               <h3 className="font-bold text-surface-900 dark:text-white mb-3 flex items-center gap-2 text-sm">
-                <Calendar className="w-4 h-4 text-emerald-500" /> Today
+                <Calendar className="w-4 h-4 text-primary-500" /> Today
               </h3>
               <div className="space-y-2">
                 {[
-                  { label: 'Jobs', value: perf.todayJobs, icon: ClipboardList, color: 'text-emerald-500' },
+                  { label: 'Jobs', value: perf.todayJobs, icon: ClipboardList, color: 'text-primary-500' },
                   { label: 'Earned', value: fmt(perf.todayEarnings), icon: Wallet, color: 'text-amber-500' },
                   { label: 'Pending', value: fmt(perf.pendingEarnings), icon: DollarSign, color: 'text-sky-500' },
                 ].map(it => (
@@ -407,9 +408,9 @@ export function PartnerDashboardPage() {
         <GlassCard variant="elevated" padding="lg">
           <div className="flex items-center justify-between mb-5">
             <h2 className="section-title flex items-center gap-2">
-              <ClipboardList className="w-5 h-5 text-emerald-500" /> Recent Jobs
+              <ClipboardList className="w-5 h-5 text-primary-500" /> Recent Jobs
             </h2>
-            <Link to="/partner/jobs" className="text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+            <Link to="/partner/jobs" className="text-sm text-primary-600 dark:text-primary-400 flex items-center gap-1">
               All jobs <ChevronRight className="w-4 h-4" />
             </Link>
           </div>
@@ -423,7 +424,7 @@ export function PartnerDashboardPage() {
               {recentJobs.map(job => (
                 <Link key={job.id} to={`/bookings/${job.id}`}
                   className="flex items-center gap-3 py-3 hover:bg-surface-50 dark:hover:bg-surface-800/40 rounded-xl px-2 -mx-2 transition-all group">
-                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center flex-shrink-0 shadow-sm">
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center flex-shrink-0 shadow-sm">
                     <MapPin className="w-4 h-4 text-white" />
                   </div>
                   <div className="flex-1 min-w-0">

@@ -91,7 +91,30 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     if (user) {
       refreshRoles()
     }
-  }, [user?.id])
+  }, [user?.id, user?.role, user?.activeRole, refreshRoles])
+
+  // A super admin can grant access while this account is already signed in.
+  // Revalidate when the app regains focus and periodically while it stays open
+  // so the new role and account details appear without forcing a logout.
+  useEffect(() => {
+    if (!user) return
+    let inFlight = false
+    const syncAccess = () => {
+      if (inFlight || document.visibilityState === 'hidden') return
+      inFlight = true
+      void Promise.allSettled([refreshRoles(), refreshProfile()]).finally(() => {
+        inFlight = false
+      })
+    }
+    window.addEventListener('focus', syncAccess)
+    document.addEventListener('visibilitychange', syncAccess)
+    const interval = window.setInterval(syncAccess, 60_000)
+    return () => {
+      window.removeEventListener('focus', syncAccess)
+      document.removeEventListener('visibilitychange', syncAccess)
+      window.clearInterval(interval)
+    }
+  }, [user?.id, refreshProfile, refreshRoles])
 
   // Boot parallel: fetch roles as soon as a token exists instead of waiting
   // for the profile fetch to finish (profile + roles used to waterfall,

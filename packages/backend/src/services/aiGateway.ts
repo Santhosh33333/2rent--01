@@ -14,18 +14,57 @@
  */
 import { env } from "../config/env";
 
-export type AiProvider = "none" | "openai-compatible";
+export type AiProvider = "none" | "openai-compatible" | "nim" | "gemini";
 
-export function aiProvider(): AiProvider {
+const PROVIDER_BASE: Record<string, string> = {
+  nim: "https://integrate.api.nvidia.com/v1",
+  gemini: "https://generativelanguage.googleapis.com/v1beta/openai",
+  "openai-compatible": "",
+};
+
+const PROVIDER_MODEL: Record<string, string> = {
+  nim: "meta/muse-glimmer-30b",
+  gemini: "gemini-3.8-flash",
+  "openai-compatible": "gpt-4o-mini",
+};
+
+function configuredProvider(): AiProvider {
+  if (env.AI_PROVIDER === "nim" || env.AI_PROVIDER === "gemini") return env.AI_PROVIDER;
   if (env.AI_API_KEY && env.AI_API_BASE) return "openai-compatible";
   return "none";
 }
 
-export function aiConfigInfo(): { provider: AiProvider; requiredEnv: string[] } {
+export function aiProvider(): AiProvider {
+  const p = configuredProvider();
+  // nim/gemini still require a key; without one we report "none" so the app
+  // stays honest (AI_NOT_CONFIGURED) instead of pretending to be live.
+  if (p !== "none" && !env.AI_API_KEY) return "none";
+  return p;
+}
+
+export function aiBaseUrl(): string {
+  const p = aiProvider();
+  if (p === "none") return "";
+  return env.AI_API_BASE || PROVIDER_BASE[p] || "";
+}
+
+export function aiModelName(): string {
+  const p = aiProvider();
+  if (p === "none") return "";
+  return env.AI_MODEL || PROVIDER_MODEL[p] || "gpt-4o-mini";
+}
+
+export function aiConfigInfo(): { provider: AiProvider; requiredEnv: string[]; baseUrl?: string; model?: string } {
   const provider = aiProvider();
-  return provider === "none"
-    ? { provider, requiredEnv: ["AI_API_BASE", "AI_API_KEY", "AI_MODEL"] }
-    : { provider, requiredEnv: [] };
+  if (provider === "none") {
+    return { provider, requiredEnv: ["AI_API_KEY", "AI_PROVIDER"] };
+  }
+  return {
+    provider,
+    requiredEnv: [],
+    baseUrl: aiBaseUrl(),
+    model: aiModelName(),
+  };
 }
 
 // --- cost control: per-user token bucket (per process) ----------------------
@@ -85,7 +124,9 @@ export async function aiComplete(
   const provider = aiProvider();
   if (provider === "none") {
     const info = aiConfigInfo();
-    const err: any = new Error(`AI features are not configured. Required env: ${info.requiredEnv.join(", ")}.`);
+    const err: any = new Error(
+      `AI features are not configured. Required env: ${info.requiredEnv.join(", ")}. Set AI_PROVIDER=gemini|nim|openai-compatible plus AI_API_KEY (free tiers).`
+    );
     err.code = "AI_NOT_CONFIGURED";
     throw err;
   }
@@ -106,8 +147,10 @@ export async function aiComplete(
   const maxTokens = Math.min(1024, Math.max(64, opts.maxTokens ?? 512));
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 30000);
+  const baseUrl = aiBaseUrl();
+  const model = aiModelName();
   try {
-    const res = await fetch(`${env.AI_API_BASE}/chat/completions`, {
+    const res = await fetch(`${baseUrl}/chat/completions`, {
       method: "POST",
       signal: ctrl.signal,
       headers: {
@@ -115,7 +158,7 @@ export async function aiComplete(
         Authorization: `Bearer ${env.AI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: env.AI_MODEL || "gpt-4o-mini",
+        model,
         temperature: opts.temperature ?? 0.3,
         max_tokens: maxTokens,
         messages: [
@@ -128,7 +171,7 @@ export async function aiComplete(
     const data: any = await res.json();
     const text = data?.choices?.[0]?.message?.content?.trim() || "";
     if (!text) throw new Error("AI provider returned an empty response.");
-    const out: AiCompletion = { text, model: env.AI_MODEL || "gpt-4o-mini", cached: false };
+    const out: AiCompletion = { text, model, cached: false };
     if (cacheKey) aiCacheSet(cacheKey, out);
     return out;
   } finally {

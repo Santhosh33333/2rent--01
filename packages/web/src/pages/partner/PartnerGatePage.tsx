@@ -66,8 +66,8 @@ export function PartnerGatePage() {
       <div className="flex-1 flex items-start justify-center px-6 pb-12">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <div className="w-16 h-16 mx-auto mb-5 rounded-[20px] bg-gradient-to-br from-accent-400 to-accent-600 flex items-center justify-center shadow-xl shadow-accent-500/25">
-              <ShieldCheck className="w-8 h-8 text-white" />
+            <div className="w-16 h-16 mx-auto mb-5 rounded-[20px] bg-gradient-to-br from-primary-700 to-primary-900 flex items-center justify-center shadow-xl shadow-primary-800/30 ring-1 ring-white/10">
+              <img src="/images/logo-mark-3d.png" alt="Nabri logo" className="w-9 h-9" />
             </div>
             <h1 className="text-2xl font-bold font-display tracking-tight text-surface-900 dark:text-white">Partner Access</h1>
             <p className="mt-2 text-sm text-surface-500 dark:text-surface-400">

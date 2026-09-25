@@ -468,6 +468,7 @@ export async function getAiStatus(_req: AuthedRequest, res: Response): Promise<v
     {
       provider: info.provider,
       requiredEnv: info.requiredEnv,
+      ...(info.baseUrl ? { baseUrl: info.baseUrl, model: info.model } : {}),
       rulesFeatures: ["ask", "matches", "safety-flags", "admin-summary"],
       llmFeatures: ["translate", "draft"],
     },

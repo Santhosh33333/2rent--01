@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   Footprints, Package, MapPin, Navigation, Clock, Calendar, Star,
-  CreditCard, CheckCircle, XCircle, User, Loader2, AlertTriangle, KeyRound, Download
+  CreditCard, CheckCircle, XCircle, User, Loader2, AlertTriangle, KeyRound, Download, MessageCircle
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { api, assetUrl, bookingApi } from '../../lib/api'
@@ -26,6 +26,7 @@ interface Booking {
   platformFee: number
   partnerEarning: number
   partnerName?: string
+  partnerId?: string
   partnerRating?: number
   partnerPhone?: string
   paymentStatus?: string
@@ -82,6 +83,7 @@ export function BookingDetailPage() {
         setBooking({
           ...data,
           partnerName: data?.partner?.user?.fullName,
+          partnerId: data?.partner?.user?.id,
           partnerRating: data?.partner?.averageRating ?? data?.partner?.user?.rating,
           partnerPhone: data?.partner?.user?.phone,
         })
@@ -373,6 +375,15 @@ export function BookingDetailPage() {
                   </div>
                 )}
               </div>
+              {booking.partnerId && (
+                <Link
+                  to={`/messages/${booking.partnerId}`}
+                  state={{ name: booking.partnerName }}
+                  className="btn-outline btn-sm flex items-center gap-1.5"
+                >
+                  <MessageCircle className="w-3.5 h-3.5" /> Message
+                </Link>
+              )}
               {booking.partnerPhone && (
                 <a href={`tel:${booking.partnerPhone}`} className="btn-outline btn-sm">
                   Call

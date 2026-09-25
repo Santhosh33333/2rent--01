@@ -134,15 +134,17 @@ export function PartnerJobDetailPage() {
               <p className="flex items-center gap-2"><Clock className="w-4 h-4 text-sky-500" /> {new Date(job.scheduledAt).toLocaleString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
               {job.durationMinutes ? <p className="text-surface-500">Estimated duration: {job.durationMinutes} min</p> : null}
               {job.user?.fullName ? (
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
                   <p className="text-surface-500">Customer: {job.user.fullName}</p>
-                  <button
-                    onClick={() => job.user?.id && navigate(`/messages/${job.user.id}`, { state: { name: job.user.fullName } })}
-                    disabled={!job.user?.id}
-                    className="btn-outline btn-sm flex items-center gap-1.5 disabled:opacity-50"
-                  >
-                    <MessageCircle className="w-3.5 h-3.5" /> Message
-                  </button>
+                  {job.user?.id && (
+                    <Link
+                      to={`/messages/${job.user.id}`}
+                      state={{ name: job.user.fullName }}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-primary-500/10 text-primary-600 dark:text-primary-400 px-2.5 py-1 text-xs font-semibold transition-colors hover:bg-primary-500/20"
+                    >
+                      <MessageCircle className="w-3.5 h-3.5" /> Message
+                    </Link>
+                  )}
                 </div>
               ) : null}
               {tracking?.etaMinutesEstimate != null && phase === 'TRAVELLING' && (

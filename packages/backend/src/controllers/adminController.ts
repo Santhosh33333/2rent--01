@@ -2600,16 +2600,23 @@ export async function promoteUserRole(req: AuthedRequest, res: Response): Promis
     await prisma.$transaction(async (tx) => {
       await tx.user.update({ where: { id: userId }, data: { role, activeRole: role } });
 
-      // Ensure the admin role template exists
+      const { permissionsForRole } = await import("../rbac/sections.js");
+      const rolePermissions = permissionsForRole(role);
+
+      // Ensure the admin role template exists with usable defaults.
       const adminRole = await tx.adminRole.findUnique({ where: { name: role } });
       if (!adminRole) {
-        await tx.adminRole.create({ data: { name: role, displayName: role.charAt(0) + role.slice(1).toLowerCase().replace(/_/g, " "), permissions: JSON.stringify([]), isSystem: true } });
+        await tx.adminRole.create({ data: { name: role, displayName: role.charAt(0) + role.slice(1).toLowerCase().replace(/_/g, " "), permissions: JSON.stringify(rolePermissions), isSystem: true } });
       }
 
       // Upsert AdminUser record
       const ar = await tx.adminRole.findUnique({ where: { name: role } });
       if (ar) {
-        await tx.adminUser.upsert({ where: { userId }, update: { roleId: ar.id }, create: { userId, roleId: ar.id } });
+        await tx.adminUser.upsert({
+          where: { userId },
+          update: { roleId: ar.id, ...(oldRole !== role ? { permissions: JSON.stringify(rolePermissions) } : {}) },
+          create: { userId, roleId: ar.id, permissions: JSON.stringify(rolePermissions) },
+        });
       }
 
       await tx.auditLog.create({

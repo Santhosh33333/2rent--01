@@ -3,6 +3,7 @@ import { verifyAccessToken } from "../utils/jwt";
 import { prisma } from "../config/database";
 import { sendError } from "../utils/response";
 import { AuthedRequest, AuthenticatedUser, UserRole } from "./authTypes";
+import { resolveActiveRole } from "../rbac/activeRole";
 
 const ADMIN_TIER_ROLES = ["SUPER_ADMIN", "ADMIN", "MODERATOR", "SUPPORT", "FINANCE", "SUPPORT_ADMIN", "FINANCE_ADMIN", "KYC_ADMIN", "MARKETING_ADMIN", "PARTNER_ADMIN"];
 
@@ -58,13 +59,10 @@ export async function authenticateToken(req: AuthedRequest, res: Response, next:
       return;
     }
 
-    // Self-heal: admin-tier accounts must resolve their session role from the
-    // stored account type, never a stale activeRole left from a prior
-    // regular-user session (that silently hid FINANCE/SUPPORT/etc. admins
-    // from every admin guard). Mirrors the normalization login() already does.
-    let activeRole = (user.activeRole as string) || user.role;
-    if (ADMIN_TIER_ROLES.includes(user.role as string) && activeRole !== user.role) {
-      activeRole = user.role as string;
+    // Preserve an admin's intentional USER/PARTNER preview, but heal stale or
+    // invalid admin-role values after role changes so admin guards stay aligned.
+    const activeRole = resolveActiveRole(user.role, user.activeRole);
+    if (activeRole !== user.activeRole) {
       void prisma.user.update({ where: { id: user.id }, data: { activeRole } }).catch(() => {});
     }
 

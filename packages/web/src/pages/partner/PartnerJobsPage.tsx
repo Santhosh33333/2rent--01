@@ -158,8 +158,8 @@ export function PartnerJobsPage() {
                     <div className="flex items-start gap-4">
                       <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-md flex-shrink-0 ${
                         job.serviceType === 'WALKING'
-                          ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-emerald-500/20'
-                          : 'bg-gradient-to-br from-amber-500 to-orange-600 shadow-amber-500/20'
+                          ? 'bg-gradient-to-br from-primary-500 to-primary-700 shadow-primary-500/20'
+                          : 'bg-gradient-to-br from-accent-400 to-accent-500 shadow-accent-500/20'
                       }`}>
                         {job.serviceType === 'WALKING' ? <Footprints className="w-5 h-5 text-white" /> : <Package className="w-5 h-5 text-white" />}
                       </div>

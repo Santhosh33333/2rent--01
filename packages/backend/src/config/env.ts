@@ -153,6 +153,19 @@ const envSchema = z.object({
   // AI gateway — all optional. Without AI_API_BASE + AI_API_KEY the LLM
   // features honestly report AI_NOT_CONFIGURED; rules-based AI (matching,
   // safety flags, assistant router, admin summary) works without any key.
+  //
+  // AI_PROVIDER: "openai-compatible" (default) | "nim" | "gemini".
+  //   "nim"    -> NVIDIA NIM free tier (https://integrate.api.nvidia.com/v1).
+  //              Hosts open-weight models for $0 (e.g. meta/muse-glimmer-30b).
+  //              Sign up at build.nvidia.com — free dev API key, no card.
+  //   "gemini" -> Google AI Studio free tier
+  //              (https://generativelanguage.googleapis.com/v1beta/openai/).
+  //              Free key at aistudio.google.com/apikey (US-only data policy).
+  //   "openai-compatible" -> any other /chat/completions endpoint.
+  // When AI_PROVIDER is "nim" or "gemini", AI_API_BASE is optional (the
+  // provider's well-known base URL is assumed) and AI_MODEL falls back to the
+  // provider's flagship model (meta/muse-glimmer-30b / gemini-3.8-flash).
+  AI_PROVIDER: z.enum(["openai-compatible", "nim", "gemini"]).optional(),
   AI_API_BASE: z.string().optional(),
   AI_API_KEY: z.string().optional(),
   AI_MODEL: z.string().optional(),

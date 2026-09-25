@@ -96,6 +96,26 @@ export const SUPER_ADMIN_ROLE = "SUPER_ADMIN";
  *  - KYC Admin      : NO Payment secrets
  */
 export const ROLE_TEMPLATES: Record<string, Partial<Record<Section, Action[]>>> = {
+  MODERATOR: {
+    USERS: ["VIEW"],
+    REPORTS: ["VIEW", "APPROVE", "REJECT"],
+    CONTENT_MODERATION: ["VIEW", "APPROVE", "REJECT"],
+  },
+  SUPPORT: {
+    USERS: ["VIEW", "EDIT"],
+    BOOKINGS: ["VIEW"],
+    REPORTS: ["VIEW", "CREATE", "APPROVE", "REJECT"],
+    SUPPORT: ["VIEW", "CREATE", "EDIT", "APPROVE", "REJECT"],
+  },
+  FINANCE: {
+    WALLETS: ["VIEW", "CREATE", "EDIT", "EXPORT"],
+    REFUNDS: ["VIEW", "CREATE", "APPROVE", "REJECT", "EXPORT"],
+    WITHDRAWALS: ["VIEW", "APPROVE", "REJECT", "EXPORT"],
+    PAYMENTS: ["VIEW", "EXPORT"],
+    ANALYTICS: ["VIEW"],
+    REPORTS: ["VIEW"],
+    BOOKINGS: ["VIEW"],
+  },
   SUPPORT_ADMIN: {
     USERS: ["VIEW", "EDIT"],
     REPORTS: ["VIEW", "CREATE", "APPROVE", "REJECT", "EXPORT"],

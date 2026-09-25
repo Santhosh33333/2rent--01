@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import {
   User, Star, Settings, Shield, Camera, ChevronRight, Award, Footprints,
-  Wallet, MessageSquare, LogOut, Phone, Mail, CheckCircle, Package, FileText, Check, X
+  Wallet, LogOut, Phone, Mail, CheckCircle, Package, FileText, Check, X, MessageCircle
 } from 'lucide-react'
 import { useAuth } from '../../lib/auth'
 import { api, assetUrl } from '../../lib/api'
@@ -78,9 +78,9 @@ export function PartnerProfilePage() {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <AnimatedPage>
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-500 p-6 sm:p-8 text-white shadow-xl shadow-emerald-500/20">
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary-800 via-primary-700 to-accent-600 p-6 sm:p-8 text-white shadow-xl shadow-primary-800/25">
           <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2230%22%20height%3D%2230%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cdefs%3E%3Cpattern%20id%3D%22g%22%20width%3D%2230%22%20height%3D%2230%22%20patternUnits%3D%22userSpaceOnUse%22%3E%3Ccircle%20cx%3D%2215%22%20cy%3D%2215%22%20r%3D%221%22%20fill%3D%22rgba(255,255,255,0.08)%22/%3E%3C/pattern%3E%3C/defs%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22url(%23g)%22/%3E%3C/svg%3E')] opacity-30" />
-          <div className="absolute -top-20 -right-20 w-60 h-60 bg-white/10 rounded-full blur-3xl" />
+          <div className="absolute -top-20 -right-20 w-60 h-60 bg-accent-300/20 rounded-full blur-3xl" />
 
           <div className="relative z-10 flex flex-col sm:flex-row items-center sm:items-start gap-6">
             <div className="relative group">
@@ -168,8 +168,8 @@ export function PartnerProfilePage() {
       <AnimatedPage delay={100}>
         <div className="grid grid-cols-3 gap-3">
           {[
-            { label: 'Total Jobs', value: stats.totalJobs, icon: Footprints, gradient: 'from-emerald-500 to-emerald-600' },
-            { label: 'Rating', value: `★ ${stats.averageRating.toFixed(1)}`, icon: Star, gradient: 'from-amber-500 to-amber-600' },
+            { label: 'Total Jobs', value: stats.totalJobs, icon: Footprints, gradient: 'from-primary-500 to-primary-700' },
+            { label: 'Rating', value: `★ ${stats.averageRating.toFixed(1)}`, icon: Star, gradient: 'from-accent-400 to-accent-500' },
             { label: 'Earnings', value: `₹${stats.totalEarnings.toLocaleString('en-IN')}`, icon: Wallet, gradient: 'from-violet-500 to-violet-600' },
           ].map((stat) => (
             <div key={stat.label} className="glass-card-static p-4 text-center group hover:-translate-y-0.5 transition-all duration-300">
@@ -221,8 +221,8 @@ export function PartnerProfilePage() {
                 {[
                   { to: '/profile', icon: User, label: 'Edit Profile' },
                   { to: '/verification', icon: Shield, label: 'Verification' },
-                  { to: '/messages', icon: MessageSquare, label: 'Messages' },
                   { to: '/partner/performance', icon: Award, label: 'Performance' },
+                  { to: '/messages', icon: MessageCircle, label: 'Messages' },
                 ].map((link) => (
                   <Link key={link.to} to={link.to} className="flex items-center justify-between p-3 rounded-2xl hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors group">
                     <span className="text-sm text-surface-700 dark:text-surface-300 flex items-center gap-2">

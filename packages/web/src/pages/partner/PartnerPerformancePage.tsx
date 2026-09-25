@@ -144,9 +144,9 @@ export function PartnerPerformancePage() {
       <AnimatedPage delay={100}>
         <div className="grid grid-cols-2 gap-4">
           {[
-            { label: 'Total Jobs', value: data.totalJobs, icon: CheckCircle, gradient: 'from-emerald-500 to-emerald-600' },
+            { label: 'Total Jobs', value: data.totalJobs, icon: CheckCircle, gradient: 'from-primary-500 to-primary-700' },
             { label: 'Completion', value: `${data.completionRate}%`, icon: TrendingUp, gradient: 'from-sky-500 to-blue-600' },
-            { label: 'Lifetime Earn', value: fmt(data.lifetimeEarnings), icon: DollarSign, gradient: 'from-amber-500 to-orange-600' },
+            { label: 'Lifetime Earn', value: fmt(data.lifetimeEarnings), icon: DollarSign, gradient: 'from-accent-400 to-accent-500' },
             { label: 'Avg Rating', value: `★ ${data.averageRating.toFixed(1)}`, icon: Star, gradient: 'from-violet-500 to-violet-600' },
           ].map(s => (
             <div key={s.label} className="glass-card p-5 group hover:-translate-y-0.5 transition-all duration-300">
@@ -169,16 +169,16 @@ export function PartnerPerformancePage() {
         <GlassCard variant="elevated" padding="lg">
           <div className="flex items-center justify-between mb-5">
             <h3 className="section-title flex items-center gap-2">
-              <Wallet className="w-5 h-5 text-emerald-500" /> Earnings Breakdown
+              <Wallet className="w-5 h-5 text-accent-500" /> Earnings Breakdown
             </h3>
             <Link to="/partner/wallet"
-              className="text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+              className="text-sm text-accent-600 dark:text-accent-400 flex items-center gap-1">
               Wallet <ChevronRight className="w-4 h-4" />
             </Link>
           </div>
           <div className="grid grid-cols-2 gap-3">
             {[
-              { label: 'Today', value: fmt(data.todayEarnings), jobs: data.todayJobs, color: 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300' },
+              { label: 'Today', value: fmt(data.todayEarnings), jobs: data.todayJobs, color: 'bg-accent-50 dark:bg-accent-900/20 text-accent-700 dark:text-accent-300' },
               { label: 'This Week', value: fmt(data.weeklyEarnings), jobs: data.weeklyJobs, color: 'bg-sky-50 dark:bg-sky-900/20 text-sky-700 dark:text-sky-300' },
               { label: 'This Month', value: fmt(data.monthlyEarnings), jobs: null, color: 'bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300' },
               { label: 'Pending', value: fmt(data.pendingEarnings), jobs: null, color: 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300' },
@@ -194,7 +194,7 @@ export function PartnerPerformancePage() {
           </div>
 
           {data.withdrawableBalance > 0 && (
-            <div className="mt-4 flex items-center justify-between p-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white">
+            <div className="mt-4 flex items-center justify-between p-4 rounded-2xl bg-gradient-to-r from-primary-600 to-primary-800 text-white">
               <div>
                 <p className="text-xs text-white/70">Available to withdraw</p>
                 <p className="text-2xl font-bold">{fmt(data.withdrawableBalance)}</p>
@@ -258,7 +258,7 @@ export function PartnerPerformancePage() {
       <AnimatedPage delay={250}>
         <GlassCard variant="elevated" padding="lg">
           <h3 className="section-title mb-5 flex items-center gap-2">
-            <CheckCircle className="w-5 h-5 text-emerald-500" /> Job Breakdown
+            <CheckCircle className="w-5 h-5 text-accent-500" /> Job Breakdown
           </h3>
           <div className="space-y-3">
             {[
@@ -281,11 +281,11 @@ export function PartnerPerformancePage() {
             <div className="pt-2">
               <div className="flex justify-between text-xs text-surface-500 mb-1">
                 <span>Completion rate</span>
-                <span className="font-semibold text-emerald-600">{data.completionRate}%</span>
+                <span className="font-semibold text-accent-600">{data.completionRate}%</span>
               </div>
               <div className="h-2 bg-surface-100 dark:bg-surface-800 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-full transition-all duration-700"
+                  className="h-full bg-gradient-to-r from-accent-400 to-accent-500 rounded-full transition-all duration-700"
                   style={{ width: `${data.completionRate}%` }}
                 />
               </div>
