@@ -114,14 +114,17 @@ export function SplashPage() {
         }
       `}</style>
 
-      <div className={`min-h-screen flex flex-col items-center justify-center bg-surface-950 transition-opacity duration-500 ${fadeOut ? 'opacity-0' : 'opacity-100'}`}>
+      <div
+        className={`min-h-screen flex flex-col items-center justify-center bg-[#081F4F] transition-opacity duration-500 ${fadeOut ? 'opacity-0' : 'opacity-100'}`}
+        style={{ background: 'radial-gradient(ellipse at 50% 20%, #0D378B 0%, #081F4F 55%, #051536 100%)' }}
+      >
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div
             className="absolute top-1/4 left-1/2 w-[600px] h-[600px] bg-primary-500/10 rounded-full blur-[128px]"
             style={{ transform: 'translate(-50%, -50%)', animation: 'blob-pulse 4s ease-in-out infinite' }}
           />
           <div
-            className="absolute bottom-1/4 left-1/3 w-[400px] h-[400px] bg-accent-500/10 rounded-full blur-[128px]"
+            className="absolute bottom-1/4 left-1/3 w-[400px] h-[400px] bg-accent-300/15 rounded-full blur-[128px]"
             style={{ animation: 'blob-pulse-2 5s ease-in-out infinite 1s' }}
           />
         </div>
@@ -130,7 +133,7 @@ export function SplashPage() {
           <div className="relative mb-6 stagger-logo">
             <div className="w-24 h-24 flex items-center justify-center">
               <img
-                src="/logo-mark.svg"
+                src="/images/logo-mark-3d.png"
                 alt="Nabri logo"
                 className="w-full h-full relative z-10 drop-shadow-2xl"
                 style={{ animation: 'float-gentle 4s ease-in-out infinite' }}
@@ -142,7 +145,7 @@ export function SplashPage() {
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent" style={{ width: '40%', height: '200%', top: '-50%' }} />
               </div>
             </div>
-            <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-gradient-to-br from-accent-500 to-accent-400 flex items-center justify-center shadow-lg">
+            <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-gradient-to-br from-accent-400 to-accent-300 flex items-center justify-center shadow-lg">
               <svg viewBox="0 0 12 12" className="w-3 h-3" fill="none">
                 <path d="M2 6L5 9L10 3" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
@@ -157,15 +160,15 @@ export function SplashPage() {
           </div>
 
           <h1 className="text-4xl font-bold font-display tracking-tight stagger-brand">
-            <span className="text-gradient">Nabri</span>
+            <span className="text-gradient wordmark-on-navy">Nabri</span>
           </h1>
-          <p className="text-surface-500 mt-3 text-sm tracking-wide stagger-tagline">
+          <p className="text-white/60 mt-3 text-sm tracking-wide stagger-tagline">
             Your Partner for Every Side of Life.
           </p>
         </div>
 
         <div className="relative z-10 mt-16 stagger-spinner">
-          <div className="w-8 h-8 rounded-full border-2 border-surface-700 border-t-primary-500 animate-spin" />
+          <div className="w-8 h-8 rounded-full border-2 border-surface-700 border-t-accent-300 animate-spin" />
         </div>
       </div>
     </>

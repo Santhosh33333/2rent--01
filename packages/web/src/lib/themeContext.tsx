@@ -1,9 +1,10 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 
 type Theme = 'light' | 'dark'
-export type Accent = 'coral' | 'indigo' | 'emerald' | 'rose' | 'amber' | 'sky'
+export type Accent = 'navy' | 'coral' | 'indigo' | 'emerald' | 'rose' | 'amber' | 'sky'
 
 export const ACCENTS: { value: Accent; label: string }[] = [
+  { value: 'navy', label: 'Navy' },
   { value: 'coral', label: 'Coral' },
   { value: 'indigo', label: 'Indigo' },
   { value: 'emerald', label: 'Emerald' },
@@ -41,7 +42,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       const stored = localStorage.getItem('accent')
       if (isAccent(stored)) return stored
     }
-    return 'coral'
+    return 'navy'
   })
 
   useEffect(() => {

@@ -214,7 +214,7 @@ export function Layout() {
                 <Menu className="w-5 h-5" />
               </button>
               <Link to="/dashboard" className="flex items-center gap-2.5">
-                <img src="/logo-mark.svg" alt="Nabri logo" className="w-9 h-9 transition-transform duration-300 hover:-rotate-6 hover:scale-105" />
+                <img src="/images/logo-mark-3d.png" alt="Nabri logo" className="w-9 h-9 transition-transform duration-300 hover:-rotate-6 hover:scale-105" />
                 <span className="text-lg font-extrabold font-display tracking-[-0.06em] text-surface-900 dark:text-surface-50 hidden sm:block">
                   NABRI
                 </span>

@@ -75,7 +75,7 @@ export function DashboardPage() {
   const features = [
     { to: '/bookings/create', icon: Footprints, label: 'Book Service', desc: 'Walking or CarryBuddy', gradient: 'from-emerald-500 to-emerald-600' },
     { to: '/communities', icon: Users, label: 'Communities', desc: 'Join local groups', gradient: 'from-sky-500 to-blue-600' },
-    { to: '/events', icon: Calendar, label: 'Events', desc: 'Upcoming activities', gradient: 'from-violet-500 to-purple-600' },
+    { to: '/events', icon: Calendar, label: 'Events', desc: 'Upcoming activities', gradient: 'from-amber-500 to-orange-600' },
     { to: '/messages', icon: MessageCircle, label: 'Chat', desc: 'Send a message', gradient: 'from-primary-500 to-accent-600' },
     { to: '/notifications', icon: Heart, label: 'Alerts', desc: 'Notifications & updates', gradient: 'from-pink-500 to-rose-600' },
   ]

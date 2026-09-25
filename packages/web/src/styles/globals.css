@@ -5,6 +5,11 @@
 /* ===== ACCENT THEMES =====
    `primary-*`, `indigo-*`, `violet-*`, `purple-*` utilities resolve to these
    CSS variables, so the accent is switched purely by `data-accent` on <html>. */
+/* `:root` keeps the legacy coral ramp so `data-accent="coral"` (and the
+   pre-attribute boot frame) still resolves to a real accent. Nabri's default is
+   navy, so `html[data-accent="navy"]` below overrides `:root` the moment
+   themeContext sets the attribute. Attribute selectors win at equal specificity,
+   so the legacy indigo/emerald/rose/amber/sky blocks keep working too. */
 :root {
   --c-50: 255 240 235;
   --c-100: 255 217 204;
@@ -17,6 +22,20 @@
   --c-800: 143 41 31;
   --c-900: 116 39 31;
   --c-950: 64 16 13;
+}
+
+html[data-accent='navy'] {
+  --c-50: 238 243 255;
+  --c-100: 220 231 255;
+  --c-200: 185 208 255;
+  --c-300: 138 177 245;
+  --c-400: 91 143 232;
+  --c-500: 59 110 216;
+  --c-600: 42 86 184;
+  --c-700: 28 66 148;
+  --c-800: 18 49 111;
+  --c-900: 12 46 116;
+  --c-950: 8 31 79;
 }
 
 html[data-accent='indigo'] {
@@ -162,6 +181,16 @@ html[data-accent='sky'] {
     outline-color: #d2f53c;
   }
 }
+
+/* The navy ramp's 600/700 are action colours, not foreground colours: on dark
+   surfaces they measure 2.3-2.8:1. Lift the foreground steps to c-400 (#5B8FE8,
+   4.7:1+) in dark, including the hover state — a hover that made a link LESS
+   readable was the worst of the call sites. Unlayered on purpose: these beat
+   Tailwind's `@layer utilities` `.text-primary-600` / `.hover:text-primary-600`,
+   which a rule inside `@layer base` below could not. */
+html.dark .text-primary-600,
+html.dark .text-primary-700 { color: rgb(var(--c-400)); }
+html.dark .hover\:text-primary-600:hover { color: rgb(var(--c-400)); }
 
 @layer components {
   /* ===== SURFACES ===== */
@@ -416,7 +445,7 @@ html[data-accent='sky'] {
   }
 
   /* ===== AUTH BACKDROP (signature look, distinct from app interior) ===== */
-  .auth-backdrop { @apply min-h-screen relative overflow-hidden bg-surface-50 dark:bg-surface-950; display: flex; align-items: center; padding: max(1rem, env(safe-area-inset-top)) 1rem max(1rem, env(safe-area-inset-bottom)); background-image: linear-gradient(rgba(28,25,23,.025) 1px, transparent 1px), linear-gradient(90deg, rgba(28,25,23,.025) 1px, transparent 1px); background-size: 34px 34px; }
+  .auth-backdrop { @apply min-h-screen relative overflow-hidden bg-surface-50 dark:bg-surface-950; display: flex; align-items: center; padding: max(1rem, env(safe-area-inset-top)) 1rem max(1rem, env(safe-area-inset-bottom)); background-image: linear-gradient(rgba(13,55,139,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(13,55,139,.04) 1px, transparent 1px); background-size: 34px 34px; }
   .auth-editorial {
     @apply min-h-screen grid lg:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)];
     padding-top: env(safe-area-inset-top);
@@ -490,6 +519,11 @@ html[data-accent='sky'] {
   .bottom-nav-active::before { content: ''; position: absolute; inset: 2px 7px auto; height: 2px; background: rgb(var(--c-600)); animation: navSignal 220ms cubic-bezier(.2,.8,.2,1) both; }
   .btn-primary, .btn-gradient { box-shadow: 0 4px 0 rgb(var(--c-800)); }
   .btn-primary:active, .btn-gradient:active { box-shadow: 0 1px 0 rgb(var(--c-800)); }
+  /* The 3D lip is `--c-800` (near-black navy) and disappears against the dark
+     surfaces at 1.6:1, so dark mode gets a pure-black edge that is measurably
+     darker than any card. Shadow stays in the same "0 4px 0" geometry. */
+  html.dark .btn-primary, html.dark .btn-gradient { box-shadow: 0 4px 0 rgb(0 0 0 / .5); }
+  html.dark .btn-primary:active, html.dark .btn-gradient:active { box-shadow: 0 1px 0 rgb(0 0 0 / .5); }
 }
 
 /* ===== MOBILE / SMALL-SCREEN TUNING ===== */
@@ -541,6 +575,17 @@ html[data-accent='sky'] {
   }
 }
 
+/* ===== GRADIENT TEXT ON A NAVY FIELD =====
+   The components-layer `.text-gradient` runs primary-700 -> accent-600, which
+   on a deep navy field drops to ~1.7:1 at the navy end. Same navy -> lime story,
+   lifted into the range the wordmark is actually legible at (4.9:1 on #081F4F).
+   Unlayered on purpose, so it wins over the components layer it is stacked on;
+   `.text-gradient` still supplies `bg-clip-text`/`text-transparent`. Shared by
+   the splash screen and the Download hero so the two cannot drift apart. */
+.wordmark-on-navy {
+  background-image: linear-gradient(100deg, #5B8FE8 0%, #8AB1F5 42%, #D2F53C 100%);
+}
+
 /* Respect OS reduced-motion: kill decorative animation, keep opacity fades
    instant so content never gets stuck invisible. */
 @media (prefers-reduced-motion: reduce) {
@@ -562,7 +607,7 @@ html[data-accent='sky'] {
     background-size: 40px 40px;
   }
   .bg-dots {
-    background-image: radial-gradient(circle, rgba(240, 79, 50, 0.14) 1px, transparent 1px);
+    background-image: radial-gradient(circle, rgb(var(--c-500) / 0.14) 1px, transparent 1px);
     background-size: 24px 24px;
   }
   .bg-noise {

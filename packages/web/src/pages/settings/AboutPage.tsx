@@ -28,7 +28,7 @@ export function AboutPage() {
       <AnimatedPage>
         <GlassCard variant="elevated" padding="lg" className="text-center">
           <img
-            src="/logo-mark.svg"
+            src="/images/logo-mark-3d.png"
             alt="Nabri logo"
             className="w-20 h-20 mx-auto rounded-3xl shadow-xl shadow-primary-500/30 mb-4"
           />

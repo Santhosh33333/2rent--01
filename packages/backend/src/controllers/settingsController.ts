@@ -28,7 +28,7 @@ interface UserSettings {
 
 const DEFAULT_SETTINGS: UserSettings = {
   theme: "system",
-  accent: "coral",
+  accent: "navy",
   fontSize: "medium",
   language: "en",
   notificationsEnabled: true,

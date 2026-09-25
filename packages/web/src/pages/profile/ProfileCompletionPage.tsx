@@ -152,7 +152,7 @@ export function ProfileCompletionPage() {
         <AnimatedPage>
           <div className="text-center mb-8">
             <img
-              src="/logo-mark.svg"
+              src="/images/logo-mark-3d.png"
               alt="Nabri logo"
               className="inline-block w-14 h-14 rounded-2xl shadow-xl shadow-primary-500/25 mb-5 animate-float"
             />

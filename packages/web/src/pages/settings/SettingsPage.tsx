@@ -31,7 +31,7 @@ interface Settings {
 }
 
 const defaultSettings: Settings = {
-  theme: 'system', accent: 'coral', fontSize: 'medium',
+  theme: 'system', accent: 'navy', fontSize: 'medium',
   notificationsEnabled: true, notificationSound: true, chatNotifications: true, eventReminders: true,
   walkingAlerts: true, communityUpdates: true, pushEnabled: true,
   emailNotifications: true, smsNotifications: false, dataSaver: false,
@@ -52,6 +52,7 @@ const fontSizes = [
 ]
 
 const accentSwatches: Record<string, string> = {
+  navy: '#2A56B8',
   coral: '#f04f32',
   indigo: '#6366f1',
   emerald: '#10b981',

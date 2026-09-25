@@ -36,7 +36,7 @@ export function DownloadPage() {
             NABRI
           </Link>
 
-          <h1 className="mt-8 text-3xl sm:text-5xl font-bold font-display tracking-tight text-gradient">
+          <h1 className="mt-8 text-3xl sm:text-5xl font-bold font-display tracking-tight text-gradient wordmark-on-navy">
             Get Nabri on your phone
           </h1>
           <p className="mt-4 text-sm sm:text-base text-surface-400 max-w-md mx-auto">
