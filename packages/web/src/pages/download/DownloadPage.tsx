@@ -3,7 +3,7 @@ import { Check, Download, Monitor, ShieldCheck, Smartphone, Sparkles, Zap } from
 
 const APK_PATH = '/download/nabri.apk'
 const APK_SIZE = '12 MB'
-const APK_VERSION = '1.0.8'
+const APK_VERSION = '1.0.9'
 
 const STEPS = [
   { icon: Smartphone, title: 'Open on your phone', text: 'Visit this page from your Android phone so the APK downloads straight to it.' },
