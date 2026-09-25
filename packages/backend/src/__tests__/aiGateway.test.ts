@@ -19,7 +19,7 @@ async function loadGateway(withEnv: Record<string, string | undefined>) {
   });
   try {
     vi.resetModules();
-    return await import("../services/aiGateway");
+    return await import("../services/aiGateway.js");
   } finally {
     Object.assign(process.env, original);
   }
