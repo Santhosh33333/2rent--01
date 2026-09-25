@@ -7,6 +7,7 @@ import * as partnerMatching from "../services/partnerMatchingEngine";
 import * as bookingEngine from "../services/bookingEngine";
 import { expireStaleSearches, onBookingClaimed, markDispatchesViewed } from "../services/dispatchService";
 import { notifyBookingStatusChange } from "../controllers/notificationController";
+import { sendBookingCompletionEmails } from "../services/emailService";
 import { buildReferralRewardService } from "./referralController";
 import { isDemoEmail, isDemoUserEmail } from "../utils/demo";
 import { ensureConversation } from "./messageController";
@@ -594,6 +595,12 @@ export async function completeBooking(req: AuthedRequest, res: Response): Promis
     }
 
     void notifyBookingStatusChange(booking.id, booking.userId, "COMPLETED");
+
+    // Completion emails: customer's final invoice + partner's earnings receipt,
+    // both built from the post-settlement Booking row. Fire-and-forget.
+    void sendBookingCompletionEmails(booking.id).catch((err) =>
+      console.error("[EMAIL] Booking completion emails failed:", err)
+    );
 
     // Referral rewards unlock on the referee's first completed booking — this is the
     // real completion path partners use, so settle here (claim-guarded, idempotent).

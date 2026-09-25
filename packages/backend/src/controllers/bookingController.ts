@@ -10,7 +10,8 @@ import { dispatchBooking, onBookingClaimed } from "../services/dispatchService"
 import { ensureConversation } from "./messageController"
 import { SERVICE_KEYS, getServiceDef } from "../services/serviceCatalog"
 import { logBookingTransition } from "../services/bookingLogService"
-import { sendBookingInvoiceEmail } from "../services/emailService"
+import { sendBookingInvoiceEmail, sendBookingCompletionEmails } from "../services/emailService"
+import { notifyBookingStatusChange } from "./notificationController"
 import { moneyTransaction, shortTransaction } from "../utils/db"
 import {
   getEarlyStartMinutes,
@@ -1254,6 +1255,14 @@ export async function completeBooking(req: AuthedRequest, res: Response): Promis
     // Anomaly watch: implausibly fast jobs get flagged for admin review
     // (never auto-punished).
     void checkInstantCompletion(id);
+
+    // In-app + push notification and the completion emails (final invoice to
+    // the customer, earnings receipt to the partner) — all from real settled
+    // DB data, all fire-and-forget so completion is never blocked by mail.
+    void notifyBookingStatusChange(id, updated.userId, "COMPLETED");
+    void sendBookingCompletionEmails(id).catch((err) =>
+      console.error("[EMAIL] Booking completion emails failed:", err)
+    );
 
     sendSuccess(res, updated, "Booking completed.");
   } catch (err: any) {

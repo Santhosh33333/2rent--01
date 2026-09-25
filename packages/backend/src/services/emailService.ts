@@ -1,5 +1,6 @@
 import { createTransport } from "nodemailer";
 import { env } from "../config/env";
+import { prisma } from "../config/database";
 import { renderEmail, escHtml, paragraphHtml, WEB_ORIGIN } from "./emailTemplate";
 
 export type EmailProviderName = "none" | "smtp" | "gmail" | "brevo" | "resend";
@@ -413,4 +414,163 @@ export async function sendBookingInvoiceEmail(email: string, name: string, invoi
     }),
     `Hi ${name}, your booking is confirmed. Amount paid: ${amountStr}. Booking ref: ${invoiceNo}.`
   );
+}
+
+export interface CompletedBookingEmailData {
+  bookingId: string;
+  serviceType: string;
+  scheduledAt: Date;
+  completedAt: Date;
+  startLocation: string;
+  endLocation: string;
+  finalAmount: number;
+  platformFee: number;
+  partnerEarning: number;
+  paymentMethod: string;
+  paymentReference?: string;
+  durationMinutes: number;
+}
+
+function rupee(n: number): string {
+  return `₹${(Number.isFinite(n) ? n : 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+}
+
+function serviceLabel(s: string): string {
+  return (s || "").replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** Booking-completion email to the CUSTOMER: final invoice + rating prompt. */
+export async function sendBookingCompletedEmail(email: string, name: string, d: CompletedBookingEmailData): Promise<EmailResult> {
+  const invoiceNo = d.bookingId.slice(0, 8).toUpperCase();
+  const days = Math.max(1, Math.round((d.completedAt.getTime() - d.scheduledAt.getTime()) / 86400000) + 1);
+  const scheduled = new Date(d.scheduledAt).toLocaleString("en-IN", { dateStyle: "long", timeStyle: "short" });
+  const doneAt = new Date(d.completedAt).toLocaleString("en-IN", { dateStyle: "long", timeStyle: "short" });
+  const rows: Array<[string, string]> = [
+    ["Service", serviceLabel(d.serviceType)],
+    ["Booked for", scheduled],
+    ["Completed", doneAt],
+    ["Pickup", d.startLocation],
+    ["Drop-off", d.endLocation],
+    ["Duration", d.durationMinutes ? `${d.durationMinutes} min` : "—"],
+    ["Payment", (d.paymentMethod || "ONLINE").toLowerCase().replace(/_/g, " ")],
+    ["Final amount", rupee(d.finalAmount)],
+  ];
+  if (d.paymentReference) rows.push(["Reference", d.paymentReference]);
+  const rowsHtml = rows
+    .map(
+      ([k, v]) =>
+        `<tr><td style="padding:10px 14px;border-top:1px solid #EFE8DC;font-size:13px;color:#6B6558">${escHtml(k)}</td><td style="padding:10px 14px;border-top:1px solid #EFE8DC;font-size:13px;color:#1C1917;font-weight:600;text-align:right">${escHtml(String(v))}</td></tr>`
+    )
+    .join("");
+  const bodyHtml = `<p style="margin:0 0 14px">Hi ${escHtml(name)},</p><p style="margin:0 0 14px">Your Nabri booking is <strong>complete</strong>. Here's your final invoice:</p><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #EFE8DC;border-radius:14px;overflow:hidden;margin:0 0 20px"><tr><td style="background:#FBF7EF;padding:12px 14px;font-size:12px;color:#0D378B;font-weight:800;letter-spacing:1px">NABRI · COMPLETED · ${invoiceNo}</td></tr>${rowsHtml}</table><p style="margin:0 0 14px">How was your experience? A short rating helps the partner and keeps the community honest.</p>`;
+  return sendEmail(
+    email,
+    `Booking completed · Final invoice ${invoiceNo}`,
+    renderEmail({ supportEmail: env.SUPPORT_EMAIL,
+      title: `Booking completed · ${rupee(d.finalAmount)}`,
+      kicker: "Invoice · completed",
+      bodyHtml,
+      ctaText: "Rate your partner",
+      ctaUrl: `${WEB_ORIGIN}/bookings/${d.bookingId}/rate`,
+      note: "Need help? Reply to this email and we'll get back to you — usually within a few hours.",
+    }),
+    `Hi ${name}, your booking is complete. Final amount ${rupee(d.finalAmount)}. Ref ${invoiceNo}.`
+  );
+}
+
+/** Earnings receipt email to the PARTNER after a completed booking. */
+export async function sendPartnerEarningsEmail(email: string, name: string, d: CompletedBookingEmailData & { walletBalance: number }): Promise<EmailResult> {
+  const invoiceNo = d.bookingId.slice(0, 8).toUpperCase();
+  const rows: Array<[string, string]> = [
+    ["Service", serviceLabel(d.serviceType)],
+    ["Completed", new Date(d.completedAt).toLocaleString("en-IN", { dateStyle: "long", timeStyle: "short" })],
+    ["Customer fare", rupee(d.finalAmount)],
+    ["Platform fee", `−${rupee(d.platformFee)}`],
+    ["You earned", rupee(d.partnerEarning)],
+    ["Wallet balance", rupee(d.walletBalance)],
+  ];
+  const rowsHtml = rows
+    .map(
+      ([k, v]) =>
+        `<tr><td style="padding:10px 14px;border-top:1px solid #EFE8DC;font-size:13px;color:#6B6558">${escHtml(k)}</td><td style="padding:10px 14px;border-top:1px solid #EFE8DC;font-size:13px;color:#1C1917;font-weight:600;text-align:right">${escHtml(v)}</td></tr>`
+    )
+    .join("");
+  const bodyHtml = `<p style="margin:0 0 14px">Hi ${escHtml(name)},</p><p style="margin:0 0 14px">Nice work — you've completed booking ${invoiceNo} and earned <strong>${rupee(d.partnerEarning)}</strong>, now in your Nabri wallet.</p><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #EFE8DC;border-radius:14px;overflow:hidden;margin:0 0 20px"><tr><td style="background:#FBF7EF;padding:12px 14px;font-size:12px;color:#0D378B;font-weight:800;letter-spacing:1px">NABRI · EARNINGS · ${invoiceNo}</td></tr>${rowsHtml}</table><p style="margin:0">Withdraw anytime from your partner wallet.</p>`;
+  return sendEmail(
+    email,
+    `You earned ${rupee(d.partnerEarning)} · Booking ${invoiceNo} completed`,
+    renderEmail({ supportEmail: env.SUPPORT_EMAIL,
+      title: `You earned ${rupee(d.partnerEarning)}`,
+      kicker: "Earnings · completed",
+      bodyHtml,
+      ctaText: "View partner wallet",
+      ctaUrl: `${WEB_ORIGIN}/partner/wallet`,
+      note: "Need help? Reply to this email and we'll get back to you.",
+    }),
+    `Hi ${name}, you earned ${rupee(d.partnerEarning)} for booking ${invoiceNo}. Wallet balance: ${rupee(d.walletBalance)}.`
+  );
+}
+
+/**
+ * One call for both completion emails, built from REAL post-settlement DB data
+ * (the Booking row is updated by finalizeBookingPrice with the verified final
+ * amount, platform fee and partner earning before this runs). Fire-and-forget:
+ * never blocks or fails the completion path.
+ */
+export async function sendBookingCompletionEmails(bookingId: string): Promise<{ userEmail: boolean; partnerEmail: boolean }> {
+  try {
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      select: {
+        id: true, userId: true, partnerId: true, serviceType: true, scheduledAt: true, completedAt: true,
+        startLocation: true, endLocation: true, finalAmount: true, estimatedAmount: true,
+        platformFee: true, partnerEarning: true, paymentMethod: true, razorpayPaymentId: true, durationMinutes: true,
+      },
+    });
+    if (!booking) return { userEmail: false, partnerEmail: false };
+    const d: CompletedBookingEmailData = {
+      bookingId: booking.id,
+      serviceType: booking.serviceType,
+      scheduledAt: booking.scheduledAt,
+      completedAt: booking.completedAt || new Date(),
+      startLocation: booking.startLocation,
+      endLocation: booking.endLocation,
+      finalAmount: booking.finalAmount ?? booking.estimatedAmount ?? 0,
+      platformFee: booking.platformFee ?? 0,
+      partnerEarning: booking.partnerEarning ?? 0,
+      paymentMethod: booking.paymentMethod || "ONLINE",
+      paymentReference: booking.razorpayPaymentId || undefined,
+      durationMinutes: booking.durationMinutes || 0,
+    };
+    const customer = await prisma.user.findUnique({
+      where: { id: booking.userId },
+      select: { email: true, fullName: true },
+    });
+    const userEmail = customer
+      ? (await sendBookingCompletedEmail(customer.email, customer.fullName || "there", d)).ok
+      : false;
+    let partnerEmail = false;
+    if (booking.partnerId) {
+      const partner = await prisma.partner.findUnique({
+        where: { id: booking.partnerId },
+        select: { userId: true },
+      });
+      if (partner) {
+        const [partnerUser, wallet] = await Promise.all([
+          prisma.user.findUnique({ where: { id: partner.userId }, select: { email: true, fullName: true } }),
+          prisma.wallet.findUnique({ where: { userId: partner.userId }, select: { balance: true } }),
+        ]);
+        if (partnerUser) {
+          partnerEmail = (await sendPartnerEarningsEmail(partnerUser.email, partnerUser.fullName || "there", {
+            ...d,
+            walletBalance: wallet ? Number(wallet.balance) : 0,
+          })).ok;
+        }
+      }
+    }
+    return { userEmail, partnerEmail };
+  } catch (err) {
+    console.error("[EMAIL] Booking completion emails failed:", err);
+    return { userEmail: false, partnerEmail: false };
+  }
 }
