@@ -25,20 +25,22 @@ public class MainActivity extends BridgeActivity {
     private void installCrashReporter() {
         final Thread.UncaughtExceptionHandler prev = Thread.getDefaultUncaughtExceptionHandler();
         Thread.setDefaultUncaughtExceptionHandler((thread, throwable) -> {
-            String trace = String.valueOf(throwable);
-            StackTraceElement[] stack = throwable.getStackTrace();
-            if (stack != null) {
-                StringBuilder sb = new StringBuilder();
-                for (StackTraceElement el : stack) {
-                    sb.append(el.toString()).append('\n');
+            StringBuilder full = new StringBuilder();
+            full.append("THREAD: ").append(thread.getName()).append('\n');
+            Throwable t = throwable;
+            int depth = 0;
+            while (t != null && depth < 8) {
+                full.append(t.getClass().getName()).append(": ").append(String.valueOf(t.getMessage())).append('\n');
+                StackTraceElement[] stack = t.getStackTrace();
+                if (stack != null) {
+                    for (int i = 0; i < Math.min(stack.length, 12); i++) {
+                        full.append("    at ").append(stack[i].toString()).append('\n');
+                    }
                 }
-                if (sb.length() > 0) {
-                    // Cap the payload (~4 KB server limit).
-                    trace = (trace + "\n" + sb).length() > 4000
-                        ? (trace + "\n" + sb).substring(0, 4000)
-                        : trace + "\n" + sb;
-                }
+                t = t.getCause();
+                depth++;
             }
+            String trace = full.length() > 4000 ? full.substring(0, 4000) : full.toString();
             try {
                 sendCrash(trace);
             } catch (Exception ignored) {

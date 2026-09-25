@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 import { api, refreshSessionTokens } from './api'
 import { disconnectGlobalSocket } from '../hooks/useSocket'
-import { isNativeApp, requestNotificationPermission, registerForPushNotifications } from './pushNotifications'
+import { isNativeApp, isPushOptedIn, requestNotificationPermission, registerForPushNotifications } from './pushNotifications'
 import type { RegisterInput } from '../types/api'
 
 interface User {
@@ -262,7 +262,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!user || typeof window === 'undefined') return
-    if (isNativeApp()) {
+    if (isNativeApp() && isPushOptedIn()) {
       window.setTimeout(() => {
         void requestNotificationPermission().then((granted) => {
           if (granted) void registerForPushNotifications()

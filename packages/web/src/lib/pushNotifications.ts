@@ -7,6 +7,8 @@ import { api } from './api';
 let attempted = false;
 let registeredThisSession = false;
 
+const PUSH_OPTIN_KEY = 'nabri-push-optin'
+
 export function isNativeApp(): boolean {
   try {
     return Capacitor.isNativePlatform();
@@ -15,8 +17,25 @@ export function isNativeApp(): boolean {
   }
 }
 
+export function isPushOptedIn(): boolean {
+  try {
+    return localStorage.getItem(PUSH_OPTIN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function setPushOptedIn(enabled: boolean): void {
+  try {
+    if (enabled) localStorage.setItem(PUSH_OPTIN_KEY, '1');
+    else localStorage.removeItem(PUSH_OPTIN_KEY);
+  } catch {
+    // storage unavailable — persist on next launch
+  }
+}
+
 export async function requestNotificationPermission(): Promise<boolean> {
-  if (!isNativeApp()) return false;
+  if (!isNativeApp() || !isPushOptedIn()) return false;
   try {
     const result = await PushNotifications.requestPermissions();
     return result.receive === 'granted';
