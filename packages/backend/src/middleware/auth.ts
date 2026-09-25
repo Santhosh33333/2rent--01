@@ -58,11 +58,21 @@ export async function authenticateToken(req: AuthedRequest, res: Response, next:
       return;
     }
 
+    // Self-heal: admin-tier accounts must resolve their session role from the
+    // stored account type, never a stale activeRole left from a prior
+    // regular-user session (that silently hid FINANCE/SUPPORT/etc. admins
+    // from every admin guard). Mirrors the normalization login() already does.
+    let activeRole = (user.activeRole as string) || user.role;
+    if (ADMIN_TIER_ROLES.includes(user.role as string) && activeRole !== user.role) {
+      activeRole = user.role as string;
+      void prisma.user.update({ where: { id: user.id }, data: { activeRole } }).catch(() => {});
+    }
+
     req.user = {
       userId: user.id,
       email: user.email,
       role: user.role as UserRole,
-      activeRole: (user.activeRole as UserRole) || (user.role as UserRole),
+      activeRole: (activeRole as UserRole) || (user.role as UserRole),
       impersonatorId: payload.impersonatorId,
     };
     next();
