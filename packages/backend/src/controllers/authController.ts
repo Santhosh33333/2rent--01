@@ -20,6 +20,12 @@ function maskPhone(phone: string): string {
   return maskIdentifier("SMS", phone);
 }
 
+// Session life cycle: an idle session is dropped after 7 days of no activity
+// (sliding), and NO session outlives 30 days from the moment it was created
+// (absolute auto-expiry) — the user must log in again after 30 days max.
+const SESSION_IDLE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const SESSION_HARD_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
 export async function createUserSession(userId: string, req: Request): Promise<{ accessToken: string; refreshToken: string }> {
   const accessToken = generateAccessToken({ userId, email: (await prisma.user.findUnique({ where: { id: userId }, select: { email: true } }))?.email ?? "" });
   const refreshToken = generateRefreshToken(userId);
@@ -36,13 +42,13 @@ export async function createUserSession(userId: string, req: Request): Promise<{
       ],
     },
   });
-  await prisma.session.create({
+await prisma.session.create({
     data: {
       userId,
       refreshToken,
       ipAddress: req.ip ?? req.socket.remoteAddress ?? null,
       userAgent: req.headers["user-agent"] ?? null,
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      expiresAt: new Date(Date.now() + SESSION_HARD_TTL_MS),
     },
   });
 
@@ -64,7 +70,7 @@ export async function createImpersonationSession(
       refreshToken,
       ipAddress: req.ip ?? req.socket.remoteAddress ?? null,
       userAgent: req.headers["user-agent"] ?? null,
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      expiresAt: new Date(Date.now() + SESSION_HARD_TTL_MS),
     },
   });
 
@@ -813,7 +819,11 @@ const accessToken = payload.impersonatorId
       ? generateImpersonationAccessToken({ userId: user.id, email: user.email }, payload.impersonatorId)
       : generateAccessToken({ userId: user.id, email: user.email });
     const newRefreshToken = generateRefreshToken(user.id, payload.impersonatorId);
-    await prisma.session.update({ where: { id: session.id }, data: { refreshToken: newRefreshToken, expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) } });
+    // Sliding idle window (≤7 fresh days) capped by the absolute session age:
+    // the session can never extend past 30 days from when it was created.
+    const hardExpiry = session.createdAt.getTime() + SESSION_HARD_TTL_MS;
+    const nextExpiry = Math.min(Date.now() + SESSION_IDLE_TTL_MS, hardExpiry);
+    await prisma.session.update({ where: { id: session.id }, data: { refreshToken: newRefreshToken, expiresAt: new Date(nextExpiry) } });
 
     sendSuccess(res, { accessToken, refreshToken: newRefreshToken }, "Token refreshed.");
   } catch (err) {
