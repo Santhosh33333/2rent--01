@@ -8,6 +8,8 @@ import {
 import toast from 'react-hot-toast'
 import { api } from '../../lib/api'
 import { AnimatedPage } from '../../components/AnimatedPage'
+import { UpiQrPanel } from '../../components/UpiQrPanel'
+import { UpiLookupInput } from '../../components/UpiLookupInput'
 import { GlassCard } from '../../components/GlassCard'
 import { SkeletonLoader } from '../../components/SkeletonLoader'
 
@@ -36,6 +38,10 @@ interface UpiDetails {
   upiId: string
   accountName?: string | null
   qrUrl?: string | null
+  upiUri?: string | null
+  qrReference?: string | null
+  qrExpiresAt?: string | null
+  qrExpiresInSeconds?: number | null
   amount: number
   referenceNote?: string
 }
@@ -303,6 +309,10 @@ export function BookingPaymentPage() {
             </div>
           )}
 
+          <div className="mt-4 p-4 rounded-2xl bg-surface-50 dark:bg-surface-800/50 border border-surface-200 dark:border-surface-700">
+            <UpiLookupInput />
+          </div>
+
           {upiInfo && (
             <button
               onClick={() => setSelected('UPI_MANUAL')}
@@ -330,8 +340,18 @@ export function BookingPaymentPage() {
                 <span className="text-surface-500">Amount</span>
                 <span className="font-bold">₹{(upiInfo.amount ?? amount).toLocaleString('en-IN')}</span>
               </div>
-              {upiInfo.qrUrl && (
-                <img src={upiInfo.qrUrl} alt="UPI QR code" className="w-48 h-48 mx-auto rounded-xl bg-white p-2" />
+              {id && (
+                <UpiQrPanel
+                  bookingId={id}
+                  amount={amount}
+                  data={upiInfo}
+                  onData={(next) => setUpiInfo(next as UpiDetails)}
+                />
+              )}
+              {upiInfo.qrReference && (
+                <p className="text-xs text-surface-500 text-center">
+                  Reference in this QR: <span className="font-mono font-bold">{upiInfo.qrReference}</span>
+                </p>
               )}
               {upiInfo.referenceNote && (
                 <p className="text-xs text-surface-500 text-center">Add note while paying: <span className="font-bold">{upiInfo.referenceNote}</span></p>

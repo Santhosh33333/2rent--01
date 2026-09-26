@@ -1,5 +1,7 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import toast from 'react-hot-toast'
+import { saveBlob } from './download'
 
 export interface PdfExportOptions {
   title: string
@@ -10,7 +12,7 @@ export interface PdfExportOptions {
   landscape?: boolean
 }
 
-export function exportTableToPdf({ title, subtitle, columns, rows, fileName, landscape }: PdfExportOptions): void {
+export async function exportTableToPdf({ title, subtitle, columns, rows, fileName, landscape }: PdfExportOptions): Promise<'downloaded' | 'shared' | 'saved'> {
   const doc = new jsPDF({ orientation: landscape ? 'landscape' : 'portrait', unit: 'pt', format: 'a4' })
   const pageWidth = doc.internal.pageSize.getWidth()
 
@@ -53,5 +55,18 @@ export function exportTableToPdf({ title, subtitle, columns, rows, fileName, lan
     },
   })
 
-  doc.save(fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`)
+  // doc.save() silently fails in the Android WebView; hand the bytes to the
+  // cross-platform saver (native Share sheet on Android) instead. Feedback is
+  // handled here so every admin report gets it without touching call sites.
+  const name = fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`
+  try {
+    const outcome = await saveBlob(doc.output('blob'), name);
+    toast.success(
+      outcome === 'shared' ? 'Choose where to save the PDF' : 'PDF downloaded'
+    );
+    return outcome;
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : 'Could not create the PDF.');
+    throw err;
+  }
 }

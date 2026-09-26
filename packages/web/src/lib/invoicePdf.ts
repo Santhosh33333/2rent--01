@@ -1,5 +1,7 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import toast from 'react-hot-toast'
+import { saveBlob } from './download'
 
 function inr(value: number | string | null | undefined): string {
   const n = Number(value ?? 0)
@@ -28,7 +30,7 @@ function labelRow(doc: jsPDF, y: number, label: string, value: string, x: number
   return y + 14
 }
 
-export function downloadInvoicePdf(receipt: any): void {
+export async function downloadInvoicePdf(receipt: any): Promise<void> {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' })
   const W = doc.internal.pageSize.getWidth()
   const L = 40
@@ -169,7 +171,15 @@ export function downloadInvoicePdf(receipt: any): void {
   doc.setTextColor(150)
   doc.text('Thank you for using Nabri. This is a system-generated invoice.', L, doc.internal.pageSize.getHeight() - 24)
 
-  doc.save(`Nabri-Invoice-${(receipt?.receiptNo || b.id || 'receipt').replace(/[^A-Za-z0-9-]/g, '')}.pdf`)
+  // doc.save() is a no-op inside the Android WebView, so the PDF bytes are
+  // produced here and handed to the cross-platform saver instead.
+  const fileName = `Nabri-Invoice-${(receipt?.receiptNo || b.id || 'receipt').replace(/[^A-Za-z0-9-]/g, '')}.pdf`
+  try {
+    const outcome = await saveBlob(doc.output('blob'), fileName)
+    toast.success(outcome === 'shared' ? 'Choose where to save the invoice' : 'Invoice downloaded')
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : 'Could not create the invoice PDF.')
+  }
 }
 
 function serviceLabel(key: string | null | undefined): string {

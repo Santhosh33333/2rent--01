@@ -4,6 +4,8 @@ import { Link } from 'react-router-dom'
 import { ArrowLeft, Search, ChevronLeft, ChevronRight, CreditCard, IndianRupee, Clock, XCircle, Percent, Banknote, Wallet, Download, Phone, Mail, User as UserIcon, FileDown } from 'lucide-react'
 import { adminApi } from '../../lib/api'
 import { exportTableToPdf } from '../../lib/pdfExport'
+import { saveBlob } from '../../lib/download'
+import toast from 'react-hot-toast'
 
 interface PaymentStats {
   totalCollected: number
@@ -120,19 +122,19 @@ export function AdminPaymentsPage() {
         ].map(csvEscape).join(','))
       }
       const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
       const stamp = new Date().toISOString().slice(0, 10)
       const parts = ['nabri-payments', stamp]
       if (statusFilter) parts.push(statusFilter.toLowerCase())
       if (typeFilter) parts.push(typeFilter.toLowerCase())
       if (search.trim()) parts.push('search')
-      a.download = `${parts.join('-')}.csv`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      // Blob + <a download> is ignored by the Android WebView, so route the
+      // export through the shared saver (native Share sheet on Android).
+      const outcome = await saveBlob(blob, `${parts.join('-')}.csv`)
+      if (outcome === 'shared') {
+        toast.success('Choose where to save the CSV')
+      } else {
+        toast.success('Payments CSV downloaded')
+      }
     } catch {
       setError('Failed to export payments')
     } finally {
