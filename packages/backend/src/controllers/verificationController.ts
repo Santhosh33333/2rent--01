@@ -255,22 +255,24 @@ export async function submitAddressProof(req: AuthedRequest, res: Response): Pro
 export async function submitEmergencyContact(req: AuthedRequest, res: Response): Promise<void> {
   try {
     const { name, phone, relation, email } = req.body;
-
     if (!name || !phone || !relation) {
       sendError(res, "Name, phone, and relation are required.", 400, "VALIDATION_ERROR");
       return;
     }
 
-    // Optional: lets us email the contact if an SOS is ever triggered.
-    let contactEmail: string | null = null;
-    if (email !== undefined && email !== null && String(email).trim() !== "") {
-      const candidate = String(email).trim().toLowerCase();
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidate)) {
-        sendError(res, "Enter a valid emergency contact email address.", 400, "VALIDATION_ERROR");
-        return;
-      }
-      contactEmail = candidate;
+    // The contact email is mandatory: SOS alerts must be able to reach the
+    // emergency contact by email, so an unverifiable contact blocks the flow.
+    if (!name || !phone || !relation || !email) {
+      sendError(res, "Name, phone, email, and relation are required.", 400, "VALIDATION_ERROR");
+      return;
     }
+
+    const candidate = String(email).trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidate)) {
+      sendError(res, "Enter a valid emergency contact email address.", 400, "VALIDATION_ERROR");
+      return;
+    }
+    const contactEmail: string | null = candidate;
 
     const verification = await upsertVerification(req.user!.userId);
 
@@ -331,10 +333,10 @@ export async function submitForVerification(req: AuthedRequest, res: Response): 
       return;
     }
 
-    if (!verification.emergencyContactName || !verification.emergencyContactPhone) {
+    if (!verification.emergencyContactName || !verification.emergencyContactPhone || !verification.emergencyContactEmail) {
       sendError(
         res,
-        "Emergency contact information is required.",
+        "Emergency contact information (name, phone and email) is required.",
         400,
         "INCOMPLETE_SUBMISSION"
       );
@@ -432,7 +434,11 @@ export async function getVerificationStatus(req: AuthedRequest, res: Response): 
     const hasGovId = !!verification.govIdUrl;
     const hasSelfie = !!verification.selfieUrl;
     const hasAddressProof = !!verification.addressProofUrl;
-    const hasEmergencyContact = !!verification.emergencyContactName;
+    // Step 5 only counts as done once the contact email is on file (SOS must be
+    // able to reach them). Members who were verified before the email existed
+    // are not re-nagged — their KYC is already closed.
+    const alreadyVerified = ["APPROVED", "PENDING_REVIEW", "UNDER_VERIFICATION", "SUBMITTED"].includes(verification.status);
+    const hasEmergencyContact = !!verification.emergencyContactName && (!!verification.emergencyContactEmail || alreadyVerified);
 
     const completedSteps = [
       hasPersonalDetails,
@@ -472,10 +478,11 @@ export async function getVerificationStatus(req: AuthedRequest, res: Response): 
           selfieUrl: verification.selfieUrl || null,
           addressProof: hasAddressProof,
           addressProofUrl: verification.addressProofUrl || null,
-          emergencyContact: hasEmergencyContact,
-          emergencyContactName: verification.emergencyContactName,
-          emergencyContactPhone: verification.emergencyContactPhone,
-          emergencyContactRelation: verification.emergencyContactRelation,
+        emergencyContact: hasEmergencyContact,
+        emergencyContactName: verification.emergencyContactName,
+        emergencyContactPhone: verification.emergencyContactPhone,
+        emergencyContactEmail: verification.emergencyContactEmail,
+        emergencyContactRelation: verification.emergencyContactRelation,
         },
         rejectionReason: verification.rejectionReason,
         reviewedAt: verification.reviewedAt,

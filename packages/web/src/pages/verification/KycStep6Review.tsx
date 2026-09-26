@@ -21,6 +21,7 @@ interface KycStatus {
     emergencyContact: boolean
     emergencyContactName?: string
     emergencyContactPhone?: string
+    emergencyContactEmail?: string
     emergencyContactRelation?: string
   }
 }
@@ -162,7 +163,14 @@ export function KycStep6Review() {
               <div className={`p-3 rounded-xl flex items-center gap-3 ${kycData.documents.emergencyContact ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-surface-100 dark:bg-surface-800'}`}>
                 <CheckCircle className={`w-5 h-5 flex-shrink-0 ${kycData.documents.emergencyContact ? 'text-emerald-500' : 'text-surface-400'}`} />
                 <span className={kycData.documents.emergencyContact ? 'text-emerald-700 dark:text-emerald-300' : 'text-surface-600 dark:text-surface-400'}>
-                  Emergency Contact {kycData.documents.emergencyContactName && `(${kycData.documents.emergencyContactName})`}
+                  Emergency Contact{' '}
+                  {kycData.documents.emergencyContactName && (
+                    <span className="text-xs opacity-80">
+                      ({kycData.documents.emergencyContactName}
+                      {kycData.documents.emergencyContactPhone ? ` · ${kycData.documents.emergencyContactPhone}` : ''}
+                      {kycData.documents.emergencyContactEmail ? ` · ${kycData.documents.emergencyContactEmail}` : ''})
+                    </span>
+                  )}
                 </span>
               </div>
             </div>

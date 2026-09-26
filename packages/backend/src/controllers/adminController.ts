@@ -505,7 +505,7 @@ export async function getKycQueue(req: AuthedRequest, res: Response): Promise<vo
           id: true, userId: true, status: true,
           selfieUrl: true, govIdUrl: true, govIdType: true, addressProofUrl: true,
           rejectionReason: true, reviewedBy: true, reviewedAt: true,
-          emergencyContactName: true, emergencyContactPhone: true, emergencyContactRelation: true,
+          emergencyContactName: true, emergencyContactPhone: true, emergencyContactEmail: true, emergencyContactRelation: true,
           createdAt: true, updatedAt: true,
           user: { select: { id: true, fullName: true, email: true, phone: true, avatarUrl: true } },
         },

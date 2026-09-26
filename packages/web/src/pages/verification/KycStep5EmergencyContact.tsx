@@ -25,7 +25,7 @@ export function KycStep5EmergencyContact() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!formData.name || !formData.phone || !formData.relation) {
+    if (!formData.name || !formData.phone || !formData.email || !formData.relation) {
       toast.error('Please fill all required fields')
       return
     }
@@ -65,7 +65,8 @@ export function KycStep5EmergencyContact() {
             <div>
               <h2 className="font-bold text-surface-900 dark:text-white">Emergency contact information</h2>
               <p className="text-sm text-surface-600 dark:text-surface-400 mt-1">
-                We keep this information safe to contact your emergency contact in urgent situations.
+                We keep this information safe to contact your emergency contact in urgent situations. Their phone and email are both required so
+                we can reach them fast if you trigger SOS.
               </p>
             </div>
           </div>
@@ -108,10 +109,10 @@ export function KycStep5EmergencyContact() {
               <p className="text-xs text-surface-500 mt-1">Include country code</p>
             </div>
 
-            {/* Email (optional) */}
+            {/* Email */}
             <div>
               <label className="block text-sm font-medium text-surface-900 dark:text-white mb-2">
-                Email Address
+                Email Address <span className="text-red-500">*</span>
               </label>
               <input
                 type="email"
@@ -120,8 +121,9 @@ export function KycStep5EmergencyContact() {
                 onChange={handleChange}
                 placeholder="contact@example.com"
                 className="input w-full"
+                required
               />
-              <p className="text-xs text-surface-500 mt-1">Optional — we email this address if an SOS alert is triggered for you</p>
+              <p className="text-xs text-surface-500 mt-1">We email this address the moment an SOS alert is triggered for you</p>
             </div>
 
             {/* Relationship */}
@@ -174,7 +176,7 @@ export function KycStep5EmergencyContact() {
           <h3 className="font-bold text-green-900 dark:text-green-300 mb-3">Why we need this:</h3>
           <ul className="space-y-2 text-sm text-green-800 dark:text-green-200">
             <li>• To contact in case of emergency or safety concerns</li>
-            <li>• Your emergency contact will only be contacted with your permission</li>
+            <li>• They are emailed and notified when you trigger an SOS alert</li>
             <li>• This information is encrypted and securely stored</li>
             <li>• You can update this anytime from your profile</li>
           </ul>

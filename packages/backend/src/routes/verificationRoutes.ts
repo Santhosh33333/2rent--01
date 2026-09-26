@@ -61,7 +61,7 @@ router.post(
     body("name").notEmpty().withMessage("Name is required"),
     body("phone").isMobilePhone("any").withMessage("Valid phone is required"),
     body("relation").notEmpty().withMessage("Relationship is required"),
-    body("email").optional({ values: "falsy" }).isEmail().withMessage("Valid email is required"),
+    body("email").isEmail().withMessage("Valid emergency contact email is required"),
   ],
   sanitizeInput,
   validateRequest,
