@@ -337,7 +337,9 @@ if (!dbAvailable) {
   const server = createApp();
 
   // Connect Redis before sockets so the adapter and the shared caches are ready.
-  // A failure here is not fatal: the process falls back to in-process state.
+  // initRedis() is bounded and never throws, so a dead or unreachable Redis can
+  // delay start-up by a few seconds at most - it must never be able to stop the
+  // process from listening.
   await initRedis();
 
   const io = initializeSocket(server);

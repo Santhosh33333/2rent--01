@@ -24,9 +24,9 @@ export function redisEnabled(): boolean {
 }
 
 /**
- * Connect once at boot. Never throws: a failed connection logs and leaves the
- * caller on the in-memory path, because losing the cache is far better than
- * refusing to serve traffic.
+ * Connect once at boot. Never throws and never blocks for long: a failed
+ * connection logs and leaves the caller on the in-memory path, because losing
+ * the cache is far better than refusing to serve traffic.
  */
 export async function initRedis(url = process.env.REDIS_URL): Promise<boolean> {
   if (!url) return false;
@@ -34,16 +34,28 @@ export async function initRedis(url = process.env.REDIS_URL): Promise<boolean> {
   if (connecting) return connecting;
 
   connecting = (async () => {
+    let c: RedisClientType | null = null;
     try {
-      const c: RedisClientType = createClient({
+      c = createClient({
         url,
-        // Fail fast instead of queueing commands forever behind a dead socket.
-        socket: { connectTimeout: 5_000, reconnectStrategy: (r) => Math.min(r * 200, 5_000) },
+        socket: {
+          connectTimeout: 3_000,
+          // Give up rather than retry forever. An unbounded strategy makes
+          // connect() hang instead of rejecting when the host is unreachable -
+          // and a hang here would stall start-up, taking the whole API with it.
+          reconnectStrategy: (retries) => (retries >= 3 ? new Error("redis: giving up") : Math.min(retries * 200, 1_000)),
+        },
       });
       // Without a listener node-redis throws on background reconnects, which
       // would crash the process during a Redis blip.
       c.on("error", (err) => console.error("[REDIS]", err?.message));
-      await c.connect();
+
+      // Hard deadline. Whatever the client decides to do, start-up continues.
+      await Promise.race([
+        c.connect(),
+        new Promise((_resolve, reject) => setTimeout(() => reject(new Error("redis: connect timed out")), 5_000)),
+      ]);
+
       client = c;
 
       // Duplicates for the adapter; a failure here only costs us cross-instance
@@ -64,6 +76,13 @@ export async function initRedis(url = process.env.REDIS_URL): Promise<boolean> {
       return true;
     } catch (err) {
       console.error("[REDIS] unavailable, using in-process state:", (err as Error)?.message);
+      // Drop the half-open client, otherwise a later command would queue behind
+      // a socket that is never going to arrive.
+      try {
+        if (c?.isOpen) await c.disconnect();
+      } catch {
+        /* already gone */
+      }
       client = null;
       return false;
     } finally {
