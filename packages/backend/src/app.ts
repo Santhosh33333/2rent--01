@@ -1,7 +1,8 @@
 import "dotenv/config";
-import express, { Application, Request, Response, NextFunction } from "express";
+import express, { Application, Request, Response, NextFunction, RequestHandler } from "express";
 import cors from "cors";
 import helmet from "helmet";
+import compression from "compression";
 import morgan from "morgan";
 import path from "path";
 import http from "http";
@@ -88,12 +89,12 @@ export function createApp(): http.Server {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "https://checkout.razorpay.com", "https://accounts.google.com"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "https://accounts.google.com"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
         imgSrc: ["'self'", "data:", "https:"],
-        connectSrc: ["'self'", "https://*.razorpay.com"],
-        frameSrc: ["'self'", "https://checkout.razorpay.com", "https://accounts.google.com"],
+        connectSrc: ["'self'", "https://accounts.google.com"],
+        frameSrc: ["'self'", "https://accounts.google.com"],
         objectSrc: ["'none'"],
         baseUri: ["'self'"],
         formAction: ["'self'"],
@@ -111,6 +112,24 @@ export function createApp(): http.Server {
     },
     credentials: true,
   }));
+  // Compress API responses (JSON is highly compressible - typically a 60-75%
+  // reduction on mobile networks). Registered before the body parsers so it
+  // wraps their output. Streaming/large payloads are skipped so compression
+  // never buffers a file in memory.
+  //
+  // The cast is needed because this package resolves @types/compression from the
+  // hoisted root node_modules, where @types/express is v5 while this service
+  // runs Express v4 - the middleware itself is version-agnostic.
+  const gzip = compression({
+    filter: (req, res) => {
+      if (req.headers["x-no-compression"]) return false;
+      const type = res.getHeader("Content-Type");
+      if (typeof type === "string" && !/json|text|javascript|css|svg/.test(type)) return false;
+      return compression.filter(req, res);
+    },
+    threshold: 1024,
+  }) as unknown as RequestHandler;
+  app.use(gzip);
   app.use(express.json({ limit: "10mb" }));
   app.use(express.urlencoded({ extended: true, limit: "10mb" }));
   app.use(morgan(env.isProduction ? "combined" : "dev"));

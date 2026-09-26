@@ -166,9 +166,8 @@ export async function topupWallet(req: AuthedRequest, res: Response): Promise<vo
       return;
     }
 
-    // TODO: Integrate with Razorpay payment gateway
-    // For now, create pending transaction pending payment
-
+    // Funds are credited only after an admin verifies the UPI reference.
+    // This endpoint just records the request; no balance is changed here.
     let wallet = await prisma.wallet.findUnique({
       where: { userId: req.user!.userId },
     });
@@ -188,9 +187,9 @@ export async function topupWallet(req: AuthedRequest, res: Response): Promise<vo
       },
     });
 
-    // Real top-up funds are credited only after a genuine Razorpay capture via
-    // POST /payments/verify — never automatically. This endpoint just records the
-    // request; no balance is changed here.
+    // Real top-up funds are credited only after an admin verifies the UPI
+    // reference + proof (see the manual-UPI top-up flow below). This endpoint
+    // just records the request; no balance is changed here.
     const finalTx = transaction;
     const balance = wallet.balance;
 
@@ -208,7 +207,7 @@ export async function topupWallet(req: AuthedRequest, res: Response): Promise<vo
     sendSuccess(
       res,
       { ...finalTx, walletBalance: balance },
-      "Topup request created. Complete the Razorpay payment to add funds.",
+      "Topup request created. Pay to the Nabri UPI ID and submit your reference number with proof.",
       201
     );
   } catch (err: any) {

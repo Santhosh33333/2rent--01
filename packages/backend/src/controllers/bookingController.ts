@@ -33,6 +33,7 @@ import { getConfig } from "../services/pricingEngine"
 import { buildReferralRewardService } from "./referralController"
 import { env } from "../config/env"
 import { CancellationCutoffError, getBookingCancellationState } from "../services/bookingCancellationPolicy"
+import { bookingStatusFor, paymentStatusFor, resolvePaymentMethod } from "../services/paymentMethodPolicy"
 
 const settleReferralReward = buildReferralRewardService()
 
@@ -1818,10 +1819,9 @@ export async function getPriceEstimate(req: AuthedRequest, res: Response): Promi
 export async function selectPaymentMethod(req: AuthedRequest, res: Response): Promise<void> {
   try {
     const { id } = req.params;
-    const { paymentMethod } = req.body; // 'ONLINE' | 'CASH' | 'UPI_MANUAL'
-
-    if (!['ONLINE', 'CASH', 'UPI_MANUAL'].includes(paymentMethod)) {
-      sendError(res, 'Payment method must be ONLINE, CASH or UPI_MANUAL.', 400, 'VALIDATION_ERROR');
+    const method = resolvePaymentMethod(req.body.paymentMethod);
+    if (!method) {
+      sendError(res, 'Payment method must be UPI_MANUAL or CASH.', 400, 'VALIDATION_ERROR');
       return;
     }
 
@@ -1841,7 +1841,7 @@ export async function selectPaymentMethod(req: AuthedRequest, res: Response): Pr
     }
 
     // Atomic latch: only the first selectPaymentMethod call wins
-    const newNotes = JSON.stringify({ ...existingNotes, paymentMethod });
+    const newNotes = JSON.stringify({ ...existingNotes, paymentMethod: method });
     const alreadyPaid = (booking as any).paymentStatus === 'PAID';
     const claimed = await prisma.booking.updateMany({
       where: {
@@ -1851,8 +1851,8 @@ export async function selectPaymentMethod(req: AuthedRequest, res: Response): Pr
       },
       data: {
         notes: newNotes,
-        paymentStatus: alreadyPaid ? booking.paymentStatus as any : paymentMethod === 'CASH' ? 'PENDING_CASH' : paymentMethod === 'UPI_MANUAL' ? 'VERIFICATION_PENDING' : 'PAYMENT_PENDING',
-        status: alreadyPaid ? undefined : paymentMethod === 'CASH' ? 'OTP_GENERATED' : paymentMethod === 'ONLINE' ? 'PAYMENT_PENDING' : undefined,
+        paymentStatus: alreadyPaid ? booking.paymentStatus as any : paymentStatusFor(method),
+        status: alreadyPaid ? undefined : bookingStatusFor(method),
       },
     });
 
@@ -1862,14 +1862,14 @@ export async function selectPaymentMethod(req: AuthedRequest, res: Response): Pr
     }
 
     await prisma.auditLog.create({
-      data: { actorId: req.user!.userId, actorType: 'USER', action: 'PAYMENT_METHOD_SELECTED', entityType: 'Booking', entityId: id, metadata: JSON.stringify({ paymentMethod }) },
+      data: { actorId: req.user!.userId, actorType: 'USER', action: 'PAYMENT_METHOD_SELECTED', entityType: 'Booking', entityId: id, metadata: JSON.stringify({ paymentMethod: method }) },
     });
 
     await prisma.notification.create({
-      data: { userId: req.user!.userId, title: paymentMethod === 'CASH' ? 'Cash Payment Selected' : 'Proceed to Online Payment', body: paymentMethod === 'CASH' ? `Pay ₹${booking?.estimatedAmount} directly to your partner after the service.` : `Complete your online payment to confirm booking.`, data: JSON.stringify({ bookingId: id }) },
+      data: { userId: req.user!.userId, title: method === 'CASH' ? 'Cash Payment Selected' : 'Pay via UPI', body: method === 'CASH' ? `Pay ₹${booking?.estimatedAmount} directly to your partner after the service.` : `Pay to the Nabri UPI ID and submit your reference number.`, data: JSON.stringify({ bookingId: id }) },
     });
 
-    sendSuccess(res, { paymentMethod }, paymentMethod === 'CASH' ? 'Cash payment selected. Booking confirmed.' : 'Online payment method selected. Please complete payment.');
+    sendSuccess(res, { paymentMethod: method }, method === 'CASH' ? 'Cash payment selected. Booking confirmed.' : 'UPI payment selected. Please pay and submit your reference number.');
   } catch (err: any) {
     console.error('selectPaymentMethod error:', err);
     sendError(res, 'Failed to select payment method.', 500, 'INTERNAL_ERROR');
