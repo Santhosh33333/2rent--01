@@ -5,11 +5,12 @@ import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Send, Loader2, AlertTriangle,
   CheckCheck, MessageCircle, ImagePlus, Mic, Square,
-  Trash2, Flag, Ban, X, MessageCircleReply
+  Trash2, Flag, Ban, X, MessageCircleReply, Phone
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { useChat } from '../../hooks/useSocket'
+import { useCallLauncher } from '../../hooks/useCallLauncher'
 
 interface Message {
   id: string
@@ -68,6 +69,7 @@ export function ConversationPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const myId = user?.id
+  const startCall = useCallLauncher()
 
   const [messages, setMessages] = useState<Message[]>([])
   const [conversationId, setConversationId] = useState<string | null>(null)
@@ -468,6 +470,17 @@ export function ConversationPage() {
             {otherTyping ? 'typing…' : 'Online'}
           </p>
         </div>
+        {/* In-app call: the chat never reveals or dials a phone number. */}
+        <button
+          type="button"
+          onClick={() => startCall({ id: userId ?? '', fullName: partnerName, avatarUrl: null })}
+          disabled={!userId}
+          title={`Call ${partnerName} inside the app`}
+          aria-label={`Call ${partnerName} inside the app`}
+          className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center hover:bg-emerald-200 transition-colors disabled:opacity-50"
+        >
+          <Phone className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+        </button>
       </div>
 
       {/* Messages Area */}

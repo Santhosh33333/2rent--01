@@ -2,6 +2,7 @@ import { Response } from "express";
 import { prisma } from "../config/database";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
+import { canCall } from "../services/callService";
 
 export async function createCall(req: AuthedRequest, res: Response): Promise<void> {
   try {
@@ -15,13 +16,24 @@ export async function createCall(req: AuthedRequest, res: Response): Promise<voi
       sendError(res, "Receiver not found.", 404, "RECEIVER_NOT_FOUND");
       return;
     }
+    // Only people who share a booking, conversation or friendship may call.
+    // Phone numbers play no part in authorising or placing the call.
+    const permission = await canCall(req.user!.userId, receiverId);
+    if (!permission.allowed) {
+      sendError(
+        res,
+        "You can only call people you have interacted with on Nabri.",
+        403,
+        permission.reason === "SELF_CALL" ? "INVALID_RECEIVER" : "CALL_NOT_ALLOWED"
+      );
+      return;
+    }
     const call = await prisma.callLog.create({
       data: {
         callerId: req.user!.userId,
         receiverId,
         type: type || "VOICE",
-        status: "MISSED",
-        startedAt: new Date(),
+        status: "RINGING",
       },
     });
     sendSuccess(res, call, "Call created.", 201);

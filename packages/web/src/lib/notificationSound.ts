@@ -52,3 +52,47 @@ export function playNotificationSound(notificationId?: string) {
     oscillator.stop(onset + 0.17)
   }
 }
+
+// ---------------------------------------------------------------------------
+// In-app call ringtone
+// ---------------------------------------------------------------------------
+
+let ringInterval: number | null = null
+
+/** One burst of the double-ring pattern. */
+function ringBurst() {
+  if (!context || context.state !== 'running') return
+  const start = context.currentTime
+  for (const [index, frequency] of [880, 1108.7].entries()) {
+    const oscillator = context.createOscillator()
+    const gain = context.createGain()
+    const onset = start + index * 0.14
+    oscillator.type = 'sine'
+    oscillator.frequency.value = frequency
+    gain.gain.setValueAtTime(0.0001, onset)
+    gain.gain.exponentialRampToValueAtTime(0.16, onset + 0.02)
+    gain.gain.setValueAtTime(0.16, onset + 0.42)
+    gain.gain.exponentialRampToValueAtTime(0.0001, onset + 0.5)
+    oscillator.connect(gain)
+    gain.connect(context.destination)
+    oscillator.start(onset)
+    oscillator.stop(onset + 0.52)
+  }
+}
+
+/** Start the looping ringtone (idempotent). Used for incoming/outgoing ringing. */
+export function startCallRingtone() {
+  if (typeof window === 'undefined' || ringInterval !== null) return
+  if (localStorage.getItem(SOUND_KEY) === 'false' || localStorage.getItem(GLOBAL_NOTIFICATIONS_KEY) === 'false') return
+  if (!context || context.state !== 'running') return
+  ringBurst()
+  ringInterval = window.setInterval(ringBurst, 1600)
+}
+
+export function stopCallRingtone() {
+  if (ringInterval !== null) {
+    window.clearInterval(ringInterval)
+    ringInterval = null
+  }
+}
+

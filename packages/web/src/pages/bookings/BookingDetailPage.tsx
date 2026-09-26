@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   Footprints, Package, MapPin, Navigation, Clock, Calendar, Star,
-  CreditCard, CheckCircle, XCircle, User, Loader2, AlertTriangle, KeyRound, Download, MessageCircle
+  CreditCard, CheckCircle, XCircle, User, Loader2, AlertTriangle, KeyRound, Download, MessageCircle, Phone
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { api, assetUrl, bookingApi } from '../../lib/api'
@@ -11,6 +11,7 @@ import { downloadInvoicePdf } from '../../lib/invoicePdf'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
 import { SkeletonLoader } from '../../components/SkeletonLoader'
+import { useCallLauncher } from '../../hooks/useCallLauncher'
 
 interface Booking {
   id: string
@@ -28,7 +29,6 @@ interface Booking {
   partnerName?: string
   partnerId?: string
   partnerRating?: number
-  partnerPhone?: string
   paymentStatus?: string
   paymentId?: string
   paymentMethod?: 'ONLINE' | 'CASH' | 'UPI_MANUAL'
@@ -62,6 +62,7 @@ const statusConfig: Record<string, { label: string; badge: string }> = {
 export function BookingDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const startCall = useCallLauncher()
   const [booking, setBooking] = useState<Booking | null>(null)
   const [loading, setLoading] = useState(true)
   const [cancelling, setCancelling] = useState(false)
@@ -85,7 +86,6 @@ export function BookingDetailPage() {
           partnerName: data?.partner?.user?.fullName,
           partnerId: data?.partner?.user?.id,
           partnerRating: data?.partner?.averageRating ?? data?.partner?.user?.rating,
-          partnerPhone: data?.partner?.user?.phone,
         })
         if (data?.notes) {
           try { const n = JSON.parse(data.notes); if (n.paymentMethod) setBooking(prev => prev ? { ...prev, paymentMethod: n.paymentMethod } : null) } catch {}
@@ -384,10 +384,22 @@ export function BookingDetailPage() {
                   <MessageCircle className="w-3.5 h-3.5" /> Message
                 </Link>
               )}
-              {booking.partnerPhone && (
-                <a href={`tel:${booking.partnerPhone}`} className="btn-outline btn-sm">
-                  Call
-                </a>
+              {/* In-app call instead of a tel: link - the partner's number is
+                  never shown to the customer or dialled. */}
+              {booking.partnerId && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    startCall({
+                      id: booking.partnerId as string,
+                      fullName: booking.partnerName ?? 'Partner',
+                      avatarUrl: null,
+                    })
+                  }
+                  className="btn-outline btn-sm flex items-center gap-1.5"
+                >
+                  <Phone className="w-3.5 h-3.5" /> Call in app
+                </button>
               )}
             </div>
           </GlassCard>

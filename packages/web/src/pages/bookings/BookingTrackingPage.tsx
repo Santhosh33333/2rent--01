@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
-  Navigation, XCircle, AlertTriangle, Loader2, MapPin, Clock, Star, MessageCircle, Siren
+  Navigation, XCircle, AlertTriangle, Loader2, MapPin, Clock, Star, MessageCircle, Siren, Phone
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { api, assetUrl } from '../../lib/api'
 import { getErrorMessage } from '../../lib/error'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { useBookingTracking } from '../../hooks/useSocket'
+import { useCallLauncher } from '../../hooks/useCallLauncher'
 import { GlassCard } from '../../components/GlassCard'
 import { LiveMap, MapPoint } from '../../components/LiveMap'
 
@@ -19,14 +20,14 @@ interface Booking {
   status: string
   partnerId?: string
   user?: {
+    id?: string
     fullName: string
-    phone: string
     avatarUrl?: string
   }
   partner?: {
     user: {
+      id?: string
       fullName: string
-      phone: string
       avatarUrl?: string
     }
     averageRating?: number
@@ -201,6 +202,9 @@ export function BookingTrackingPage() {
     if (partnerUserId) navigate(`/messages/${partnerUserId}`)
   }
 
+  const partnerUserId = (booking?.partner as any)?.user?.id as string | undefined
+  const startPartnerCall = useCallLauncher()
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'IN_PROGRESS':
@@ -331,6 +335,21 @@ export function BookingTrackingPage() {
                       className="w-10 h-10 rounded-xl bg-sky-100 dark:bg-sky-900/30 flex items-center justify-center hover:bg-sky-200 transition-colors"
                     >
                       <MessageCircle className="w-5 h-5 text-sky-600 dark:text-sky-400" />
+                    </button>
+                    {/* In-app call: partner's number is never shown or dialled. */}
+                    <button
+                      onClick={() =>
+                        startPartnerCall(
+                          partnerUserId
+                            ? { id: partnerUserId, fullName: partnerName, avatarUrl: partnerAvatar ?? null }
+                            : null
+                        )
+                      }
+                      disabled={!partnerUserId}
+                      title={partnerUserId ? 'Call partner inside the app' : 'Partner is not available for calls'}
+                      className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center hover:bg-emerald-200 transition-colors disabled:opacity-50"
+                    >
+                      <Phone className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                     </button>
                   </div>
                 </div>

@@ -7,6 +7,7 @@ import { ErrorBoundary } from './components/ErrorBoundary'
 import { ThemeProvider } from './lib/themeContext'
 import { AppLockProvider, useAppLock } from './lib/appLock'
 import { LockScreen } from './components/LockScreen'
+import CallOverlay from './components/CallOverlay'
 
 // Lazy-loaded auth pages
 const LoginPage = lazy(() => import('./pages/auth/LoginPage').then(m => ({ default: m.LoginPage })))
@@ -292,6 +293,7 @@ export function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
             <LockOverlay />
+            <CallOverlay />
           </AppLockProvider>
         </Suspense>
       </ErrorBoundary>

@@ -2,6 +2,7 @@ import { Server as SocketIOServer, Socket } from "socket.io";
 import { Server as HTTPServer } from "http";
 import { prisma } from "../config/database";
 import { verifyToken } from "../middleware/auth";
+import { registerCallHandlers } from "./callService";
 
 type AuthSocket = Socket & { userId?: string; userRole?: string };
 
@@ -117,6 +118,21 @@ export function emitToUser(userId: string, event: string, payload: unknown): voi
   }
 }
 
+/**
+ * Emit to a user's live sockets only, exactly once.
+ *
+ * Call signaling uses this instead of emitToUser(): a client subscribed to the
+ * notifications room would otherwise receive each event twice, and a repeated
+ * SDP offer/answer breaks the WebRTC handshake.
+ */
+export function emitToUserSockets(userId: string, event: string, payload: unknown): void {
+  if (!ioInstance) return;
+  const sockets = userSockets.get(userId) || [];
+  for (const socketId of sockets) {
+    ioInstance.to(socketId).emit(event, payload);
+  }
+}
+
 export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
   const io = new SocketIOServer(httpServer, {
     cors: {
@@ -187,6 +203,18 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
     if (["ADMIN", "SUPER_ADMIN", "MODERATOR", "SUPPORT", "FINANCE"].includes(socket.userRole || "")) {
       socket.join("admins");
     }
+
+    // =====================================================================
+    // IN-APP VOICE CALLS (WebRTC signaling; phone numbers never involved)
+    // =====================================================================
+    registerCallHandlers(
+      io,
+      socket,
+      userId,
+      // Exactly-once delivery: a duplicate offer/answer would break the call.
+      (targetUserId, event, payload) => emitToUserSockets(targetUserId, event, payload),
+      (targetUserId) => (userSockets.get(targetUserId) ?? []).some((id) => id !== socket.id)
+    );
 
     // =====================================================================
     // BOOKING TRACKING EVENTS
@@ -727,69 +755,6 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
     socket.on("unsubscribe_notifications", () => {
       const room = `notifications_${userId}`;
       socket.leave(room);
-    });
-
-    // =====================================================================
-    // CALL EVENTS (Voice/Video calling)
-    // =====================================================================
-
-    /**
-     * Initiate a call
-     */
-    socket.on("initiate_call", (data: { recipientId: string; callType: "VOICE" | "VIDEO" }) => {
-      const recipientSockets = userSockets.get(data.recipientId) || [];
-
-      recipientSockets.forEach((recipientSocketId) => {
-        io.to(recipientSocketId).emit("incoming_call", {
-          callerId: userId,
-          callType: data.callType,
-          timestamp: Date.now(),
-        });
-      });
-    });
-
-    /**
-     * Accept call
-     */
-    socket.on("accept_call", (data: { callerId: string }) => {
-      const callerSockets = userSockets.get(data.callerId) || [];
-
-      callerSockets.forEach((callerSocketId) => {
-        io.to(callerSocketId).emit("call_accepted", {
-          recipientId: userId,
-          timestamp: Date.now(),
-        });
-      });
-    });
-
-    /**
-     * Reject call
-     */
-    socket.on("reject_call", (data: { callerId: string; reason?: string }) => {
-      const callerSockets = userSockets.get(data.callerId) || [];
-
-      callerSockets.forEach((callerSocketId) => {
-        io.to(callerSocketId).emit("call_rejected", {
-          rejectedBy: userId,
-          reason: data.reason,
-          timestamp: Date.now(),
-        });
-      });
-    });
-
-    /**
-     * End call
-     */
-    socket.on("end_call", (data: { otherUserId: string; duration: number }) => {
-      const otherUserSockets = userSockets.get(data.otherUserId) || [];
-
-      otherUserSockets.forEach((otherSocketId) => {
-        io.to(otherSocketId).emit("call_ended", {
-          endedBy: userId,
-          duration: data.duration,
-          timestamp: Date.now(),
-        });
-      });
     });
 
     // =====================================================================

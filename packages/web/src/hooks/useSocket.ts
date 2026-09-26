@@ -15,7 +15,6 @@ import type {
   MessageReactedData,
   UserActiveData,
   NotificationData,
-  CallData,
 } from '../types/socket-events';
 
 interface UseSocketOptions {
@@ -469,75 +468,13 @@ export function useNotifications() {
 }
 
 /**
- * Hook for voice/video calls
+ * In-app calling lives in useInAppCall().
+ *
+ * The previous useCalls() hook (initiate_call / accept_call / reject_call /
+ * end_call) was removed on purpose: it relayed straight to socket ids with no
+ * permission check, so any member could ring any other id. It also carried no
+ * media, so it never produced a real conversation.
  */
-export function useCalls() {
-  const { emit, on } = useSocket({ autoConnect: true });
-
-  const initiateCall = useCallback(
-    (recipientId: string, callType: 'VOICE' | 'VIDEO') => {
-      emit('initiate_call', { recipientId, callType });
-    },
-    [emit]
-  );
-
-  const acceptCall = useCallback(
-    (callerId: string) => {
-      emit('accept_call', { callerId });
-    },
-    [emit]
-  );
-
-  const rejectCall = useCallback(
-    (callerId: string, reason?: string) => {
-      emit('reject_call', { callerId, reason });
-    },
-    [emit]
-  );
-
-  const endCall = useCallback(
-    (otherUserId: string, duration: number) => {
-      emit('end_call', { otherUserId, duration });
-    },
-    [emit]
-  );
-
-  const listenToIncomingCall = useCallback(
-    (callback: (data: CallData) => void) => {
-      return on('incoming_call', callback as (...args: unknown[]) => void);
-    },
-    [on]
-  );
-
-  const listenToCallAccepted = useCallback(
-    (callback: (data: CallData) => void) => {
-      return on('call_accepted', callback as (...args: unknown[]) => void);
-    },
-    [on]
-  );
-
-  const listenToCallRejected = useCallback(
-    (callback: (data: CallData) => void) => {
-      return on('call_rejected', callback as (...args: unknown[]) => void);
-    },
-    [on]
-  );
-
-  const listenToCallEnded = useCallback(
-    (callback: (data: CallData) => void) => {
-      return on('call_ended', callback as (...args: unknown[]) => void);
-    },
-    [on]
-  );
-
-  return {
-    initiateCall,
-    acceptCall,
-    rejectCall,
-    endCall,
-    listenToIncomingCall,
-    listenToCallAccepted,
-    listenToCallRejected,
-    listenToCallEnded,
-  };
+export function useCalls(): never {
+  throw new Error('useCalls was removed. Use useInAppCall() for in-app calling.');
 }

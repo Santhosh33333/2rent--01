@@ -78,8 +78,41 @@ export interface NotificationData {
   data?: Record<string, string>
 }
 
-export interface CallData {
+// In-app calling. Identities travel as ids + display names only - a phone
+// number is never part of a call payload.
+export interface CallPeerData {
+  id: string
+  fullName: string | null
+  avatarUrl: string | null
+}
+
+export interface CallRingingData {
   callId: string
-  callerId: string
-  callType: 'VOICE' | 'VIDEO'
+  type: 'VOICE' | 'VIDEO'
+  peer: CallPeerData
+}
+
+export interface CallIncomingData extends CallRingingData {
+  ringTimeoutMs?: number
+}
+
+export interface CallAcceptedData {
+  callId: string
+  peer: CallPeerData
+  initiator?: boolean
+}
+
+export interface CallSignalData {
+  callId: string
+  payload: unknown
+}
+
+export interface CallEndedData {
+  callId: string
+  reason?: string
+  duration?: number | null
+}
+
+export interface CallUnavailableData {
+  reason?: string
 }

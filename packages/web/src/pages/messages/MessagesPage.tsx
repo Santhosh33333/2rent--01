@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { MessageCircle, Search, ChevronRight, Clock } from 'lucide-react'
+import { MessageCircle, Search, ChevronRight, Clock, Phone } from 'lucide-react'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { useSocket } from '../../hooks/useSocket'
@@ -8,6 +8,7 @@ import { AnimatedPage } from '../../components/AnimatedPage'
 import { EmptyState } from '../../components/EmptyState'
 import { SkeletonLoader } from '../../components/SkeletonLoader'
 import { useAsync } from '../../hooks/useAsync'
+import CallUserButton from '../../components/CallUserButton'
 
 interface Conversation {
   conversationId: string
@@ -17,6 +18,40 @@ interface Conversation {
   lastMessage: string | null
   lastMessageAt: string | null
   unreadCount: number
+}
+
+interface CallRecord {
+  id: string
+  callerId: string
+  receiverId: string
+  type: string
+  status: string
+  duration: number | null
+  createdAt: string
+  caller?: { id: string; fullName: string | null; avatarUrl: string | null } | null
+  receiver?: { id: string; fullName: string | null; avatarUrl: string | null } | null
+}
+
+/** Human label for a call-log status. */
+function callStatusLabel(record: CallRecord, myId: string): { text: string; missed: boolean } {
+  const outgoing = record.callerId === myId
+  switch (record.status) {
+    case 'ENDED':
+      return {
+        text: `${outgoing ? 'Outgoing' : 'Incoming'} · ${record.duration ? `${record.duration}s` : 'connected'}`,
+        missed: false,
+      }
+    case 'MISSED':
+      return { text: outgoing ? 'Unanswered call' : 'Missed call', missed: true }
+    case 'REJECTED':
+      return { text: 'Declined', missed: false }
+    case 'CANCELLED':
+      return { text: 'Cancelled', missed: false }
+    case 'FAILED':
+      return { text: 'Could not connect', missed: true }
+    default:
+      return { text: outgoing ? 'Outgoing call' : 'Incoming call', missed: false }
+  }
 }
 
 function timeAgo(iso: string | null): string {
@@ -33,9 +68,33 @@ function timeAgo(iso: string | null): string {
 export function MessagesPage() {
   const [search, setSearch] = useState('')
   const [conversations, setConversations] = useState<Conversation[]>([])
+  const [recentCalls, setRecentCalls] = useState<CallRecord[]>([])
   const { user } = useAuth()
   const myId = user?.id
   const { on } = useSocket({ autoConnect: true })
+
+  // Recent calls, so a missed call can be returned without leaving the app.
+  // The API returns identities only - never phone numbers.
+  const fetchRecentCalls = useCallback(async (signal?: AbortSignal) => {
+    const res = await api.get('/calls', { params: { limit: 5 }, signal, timeout: 15000 })
+    const d = res.data?.data || {}
+    const items: CallRecord[] = Array.isArray(d) ? d : d.items || []
+    setRecentCalls(items)
+  }, [])
+
+  useEffect(() => {
+    fetchRecentCalls().catch(() => {})
+  }, [fetchRecentCalls])
+
+  // A finished call refreshes the history entry.
+  useEffect(() => {
+    const off = on('call:ended', () => {
+      fetchRecentCalls().catch(() => {})
+    })
+    return () => {
+      off?.()
+    }
+  }, [fetchRecentCalls, on])
 
   const fetchConversations = useCallback(async (signal?: AbortSignal) => {
     const res = await api.get('/messages/conversations', { signal, timeout: 15000 })
@@ -198,6 +257,50 @@ export function MessagesPage() {
           )}
         </div>
       </AnimatedPage>
+
+      {/* Recent in-app calls */}
+      {recentCalls.length > 0 && (
+        <AnimatedPage delay={150}>
+          <div className="glass-elevated overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-surface-100 dark:border-surface-800">
+              <Phone className="w-4 h-4 text-emerald-500" />
+              <h2 className="text-sm font-bold text-surface-900 dark:text-white">Recent calls</h2>
+              <span className="text-xs text-surface-400 ml-auto">In-app · numbers stay private</span>
+            </div>
+            <div className="divide-y divide-surface-100 dark:divide-surface-800">
+              {recentCalls.map((record) => {
+                const other = record.callerId === myId ? record.receiver : record.caller
+                if (!other) return null
+                const { text, missed } = callStatusLabel(record, myId as string)
+                return (
+                  <div key={record.id} className="flex items-center gap-3 px-4 py-3">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-primary-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
+                      {(other.fullName || 'U')
+                        .split(' ')
+                        .map((n: string) => n[0])
+                        .join('')
+                        .slice(0, 2)
+                        .toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-surface-900 dark:text-white truncate">
+                        {other.fullName || 'Nabri member'}
+                      </p>
+                      <p className={`text-xs ${missed ? 'text-red-500 font-medium' : 'text-surface-500 dark:text-surface-400'}`}>
+                        {text} · {timeAgo(record.createdAt)}
+                      </p>
+                    </div>
+                    <CallUserButton
+                      peer={{ id: other.id, fullName: other.fullName, avatarUrl: other.avatarUrl }}
+                      callType={record.type === 'VIDEO' ? 'VIDEO' : 'VOICE'}
+                    />
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </AnimatedPage>
+      )}
     </div>
   )
 }
