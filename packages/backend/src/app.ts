@@ -152,13 +152,29 @@ export function createApp(): http.Server {
   // Public DB-liveness probe. Unlike /health (which never touches the DB),
   // this actually pings Postgres so keepalive monitors + the dashboard can
   // distinguish "API up, DB down" from a healthy service.
+  //
+  // Two queries are timed on purpose. The first includes any connection work
+  // (TCP + TLS + auth) while the second reuses the pooled connection, so the
+  // two numbers separate "we pay a handshake on every query" from "the database
+  // itself is slow to commit". That distinction decides whether the fix belongs
+  // in the connection string or with the database provider.
   app.get("/health/db", async (_req: Request, res: Response) => {
-    const started = Date.now();
+    const firstStarted = Date.now();
     try {
       await prisma.$queryRaw`SELECT 1`;
+      const firstQueryMs = Date.now() - firstStarted;
+      const steadyStarted = Date.now();
+      await prisma.$queryRaw`SELECT 1`;
+      const steadyQueryMs = Date.now() - steadyStarted;
       res.status(200).json({
         success: true,
-        data: { status: "ok", latencyMs: Date.now() - started, timestamp: new Date().toISOString() },
+        data: {
+          status: "ok",
+          latencyMs: firstQueryMs,
+          firstQueryMs,
+          steadyQueryMs,
+          timestamp: new Date().toISOString(),
+        },
       });
     } catch (err) {
       res.status(503).json({

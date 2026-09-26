@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { createApp } from "./app";
 import { env } from "./config/env";
-import { prisma, testConnection, disconnect } from "./config/database";
+import { prisma, testConnection, disconnect, databaseHost } from "./config/database";
 import { initializeFirebase } from "./services/notificationService";
 import { sendPushNotification } from "./services/notificationService";
 import { initializeFirebaseAuth } from "./services/firebaseAuthService";
@@ -64,7 +64,7 @@ async function main(): Promise<void> {
     try {
       await testConnection();
       dbAvailable = true;
-      console.log("Database connection established.");
+      console.log(`Database connection established (host: ${databaseHost() ?? "unknown"}).`);
       break;
     } catch (err) {
       console.warn(`Database connection attempt ${attempt}/${MAX_ATTEMPTS} failed: ${(err as Error)?.message ?? err}`);
