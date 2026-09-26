@@ -675,41 +675,57 @@ export async function submitUpiReference(req: AuthedRequest, res: Response): Pro
       return;
     }
 
-    // Prevent the same reference being reused for another booking (fraud guard).
-    const duplicate = await prisma.upiPayment.findFirst({
-      where: { referenceNumber, status: { in: ["VERIFICATION_PENDING", "VERIFIED", "REQUEST_INFO"] } },
-    });
+    // The duplicate-reference check and the wallet lookup do not depend on each
+    // other, so they are fetched together. Every query here costs a full network
+    // round trip to the database, which is the dominant cost of this endpoint.
+    const [duplicate, wallet] = await Promise.all([
+      // Prevent the same reference being reused for another booking (fraud guard).
+      prisma.upiPayment.findFirst({
+        where: { referenceNumber, status: { in: ["VERIFICATION_PENDING", "VERIFIED", "REQUEST_INFO"] } },
+      }),
+      prisma.wallet.findUnique({ where: { userId: req.user!.userId } }),
+    ]);
     if (duplicate) {
       sendError(res, "This reference number is already used for another booking.", 409, "DUPLICATE_REFERENCE");
       return;
     }
 
-    const wallet = await prisma.wallet.findUnique({ where: { userId: req.user!.userId } });
-    await prisma.upiPayment.create({
-      data: {
-        bookingId: id,
-        userId: req.user!.userId,
-        amount: booking.estimatedAmount ?? 0,
-        currency: "INR",
-        referenceNumber,
-        status: "VERIFICATION_PENDING",
-        metadata: JSON.stringify({ serviceType: booking.serviceType }),
-      },
-    });
-    await prisma.booking.update({
-      where: { id },
-      data: { paymentStatus: "VERIFICATION_PENDING", paymentMethod: "UPI_MANUAL" },
-    });
-    await prisma.auditLog.create({
-      data: {
-        actorId: req.user!.userId,
-        actorType: "USER",
-        action: "UPI_REFERENCE_SUBMITTED",
-        entityType: "Booking",
-        entityId: id,
-        metadata: JSON.stringify({ referenceNumber, walletId: wallet?.id ?? null }),
-      },
-    });
+    // Creating the attempt and marking the booking are one logical step. Batching
+    // them into a single transaction halves the round trips and, more importantly,
+    // stops a failure between the two writes from leaving an orphaned payment
+    // record attached to a booking that still says it is unpaid.
+    await prisma.$transaction([
+      prisma.upiPayment.create({
+        data: {
+          bookingId: id,
+          userId: req.user!.userId,
+          amount: booking.estimatedAmount ?? 0,
+          currency: "INR",
+          referenceNumber,
+          status: "VERIFICATION_PENDING",
+          metadata: JSON.stringify({ serviceType: booking.serviceType }),
+        },
+      }),
+      prisma.booking.update({
+        where: { id },
+        data: { paymentStatus: "VERIFICATION_PENDING", paymentMethod: "UPI_MANUAL" },
+      }),
+    ]);
+
+    // Auditing is not part of the user's transaction, so it must not hold up the
+    // response on a slow link. It is still written, just without blocking on it.
+    void prisma.auditLog
+      .create({
+        data: {
+          actorId: req.user!.userId,
+          actorType: "USER",
+          action: "UPI_REFERENCE_SUBMITTED",
+          entityType: "Booking",
+          entityId: id,
+          metadata: JSON.stringify({ referenceNumber, walletId: wallet?.id ?? null }),
+        },
+      })
+      .catch((err) => console.error("auditLog write failed:", err));
 
     sendSuccess(res, { status: "VERIFICATION_PENDING" }, "Reference submitted. Admin will verify the payment.");
   } catch (err: any) {
