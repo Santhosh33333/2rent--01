@@ -73,6 +73,7 @@ model User {
   locationShares                 LocationShare[]
   auditLogs                      AuditLog[]
   withdrawalRequests             WithdrawalRequest[]
+  agreements                     Agreement[]
   adminProfile                   AdminUser?
   partnerLevel                   PartnerLevel?
   partnerEarnings                PartnerEarnings?
@@ -324,6 +325,30 @@ model WithdrawalRequest {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
 
+  @@index([status])
+}
+
+// ============================================================
+// AGREEMENTS (post-KYC safety/terms contracts)
+// Status: PENDING -> SENT -> ACCEPTED. contentHtml is a snapshot of the
+// template at the moment it was issued so later template edits never rewrite
+// history. Acceptance is a legal record (acceptedAt timestamp).
+// ============================================================
+model Agreement {
+  id          String    @id @default(uuid())
+  userId      String
+  kind        String    @default("USER") // USER | PARTNER
+  title       String
+  contentHtml String
+  status      String    @default("PENDING") // PENDING | SENT | ACCEPTED
+  sentAt      DateTime?
+  acceptedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
   @@index([status])
 }
 
@@ -1089,6 +1114,18 @@ model OtpCode {
   @@index([identifier, purpose, status])
   @@index([createdAt])
   @@index([expiresAt])
+}
+
+model MarketingEmailLog {
+  id       String   @id @default(uuid())
+  campaign String // e.g. REENGAGEMENT_7D
+  userId   String
+  email    String
+  sentAt   DateTime @default(now())
+
+  @@unique([campaign, userId])
+  @@index([userId])
+  @@index([campaign])
 }
 
 // ============================================================

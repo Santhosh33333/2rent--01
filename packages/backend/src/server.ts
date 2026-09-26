@@ -8,11 +8,14 @@ import { initializeFirebaseAuth } from "./services/firebaseAuthService";
 import { initializeSocket } from "./services/socketService";
 import { emitToUser } from "./services/socketService";
 import { processTimeoutBookings, sendUpcomingReminders } from "./services/bookingEngine";
+import { runReengagementSweep } from "./services/emailService";
 
 const TIMEOUT_SWEEP_INTERVAL_MS = 30_000;
 const REMINDER_SWEEP_INTERVAL_MS = 60_000;
+const REENGAGEMENT_SWEEP_INTERVAL_MS = 60 * 60 * 1000; // hourly, idempotent per-user
 let timeoutSweeper: ReturnType<typeof setInterval> | null = null;
 let reminderSweeper: ReturnType<typeof setInterval> | null = null;
+let reengagementSweeper: ReturnType<typeof setInterval> | null = null;
 
 function startTimeoutSweeper(): void {
   // Recovers bookings stuck in PARTNER_SEARCHING/PARTNER_ASSIGNED past their
@@ -33,6 +36,18 @@ function startReminderSweeper(): void {
     );
   }, REMINDER_SWEEP_INTERVAL_MS);
   reminderSweeper.unref?.();
+}
+
+function startReengagementSweeper(): void {
+  // "We miss you" email for users inactive 7+ days (deduplicated via
+  // MarketingEmailLog). Runs hourly in a short batch; skips when email is
+  // not configured (sendEmail returns ok:false, sweep logs nothing).
+  reengagementSweeper = setInterval(() => {
+    runReengagementSweep(200).catch((err) =>
+      console.error("[REENGAGE] Sweeper run failed:", err)
+    );
+  }, REENGAGEMENT_SWEEP_INTERVAL_MS);
+  reengagementSweeper.unref?.();
 }
 
 async function main(): Promise<void> {
@@ -263,6 +278,50 @@ if (!dbAvailable) {
     console.warn("Schema reconciliation warning (Verification):", (err as Error)?.message);
   }
 
+  // Marketing email dedup log (re-engagement sweeps). Same idempotent pattern.
+  try {
+    await prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "MarketingEmailLog" (
+        "id" TEXT NOT NULL,
+        "campaign" TEXT NOT NULL,
+        "userId" TEXT NOT NULL,
+        "email" TEXT NOT NULL,
+        "sentAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "MarketingEmailLog_pkey" PRIMARY KEY ("id")
+      )`
+    );
+    await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "MarketingEmailLog_campaign_userId_key" ON "MarketingEmailLog"("campaign", "userId")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MarketingEmailLog_userId_idx" ON "MarketingEmailLog"("userId")`);
+    console.log("Schema reconciliation: MarketingEmailLog ensured.");
+  } catch (err) {
+    console.warn("Schema reconciliation warning (MarketingEmailLog):", (err as Error)?.message);
+  }
+
+  // Post-KYC Agreement records. Same idempotent reconciliation pattern: new
+  // tables are created at boot so migrations never need shadow-DB privileges.
+  try {
+    await prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "Agreement" (
+        "id" TEXT NOT NULL,
+        "userId" TEXT NOT NULL,
+        "kind" TEXT NOT NULL DEFAULT 'USER',
+        "title" TEXT NOT NULL,
+        "contentHtml" TEXT NOT NULL,
+        "status" TEXT NOT NULL DEFAULT 'PENDING',
+        "sentAt" TIMESTAMP(3),
+        "acceptedAt" TIMESTAMP(3),
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "Agreement_pkey" PRIMARY KEY ("id")
+      )`
+    );
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Agreement_userId_idx" ON "Agreement"("userId")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Agreement_status_idx" ON "Agreement"("status")`);
+    console.log("Schema reconciliation: Agreement ensured.");
+  } catch (err) {
+    console.warn("Schema reconciliation warning (Agreement):", (err as Error)?.message);
+  }
+
   initializeFirebase();
   initializeFirebaseAuth();
 
@@ -303,6 +362,7 @@ if (!dbAvailable) {
 
   startTimeoutSweeper();
   startReminderSweeper();
+  startReengagementSweeper();
 
   server.listen(env.PORT, () => {
     console.log(`Nabri API server listening on port ${env.PORT} [${env.NODE_ENV}]`);
@@ -315,6 +375,9 @@ if (!dbAvailable) {
     }
     if (reminderSweeper) {
       clearInterval(reminderSweeper);
+    }
+    if (reengagementSweeper) {
+      clearInterval(reengagementSweeper);
     }
     server.close(() => {
       console.log("HTTP server closed.");

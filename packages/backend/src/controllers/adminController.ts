@@ -15,8 +15,39 @@ import { invalidateConfigCache } from "../services/pricingEngine";
 import { ensureAdminUser } from "../services/adminProvision";
 import { SERVICE_KEYS } from "../services/serviceCatalog";
 import * as partnerMatching from "../services/partnerMatchingEngine";
-import { sendEmail, emailStatus, sendKycEmail, sendWelcomeEmail } from "../services/emailService";
+import { sendEmail, emailStatus, sendKycEmail, sendWelcomeEmail, sendWithdrawalPaidEmail, sendWithdrawalRejectedEmail } from "../services/emailService";
+import { createAndSendAgreements } from "../services/agreementService";
 import { renderEmail, paragraphHtml } from "../services/emailTemplate";
+import { ADMIN_ROLES, SUPER_ADMIN_ROLE } from "../rbac/sections";
+import { resolveAdminPermissions, hasPermission } from "../rbac/permissions";
+
+// An account is "privileged" when it carries an admin role. Only a SUPER_ADMIN
+// may mutate (ban / unban / change status / impersonate) another privileged
+// account — a delegated admin (even with USERS.EDIT) must never be able to turn
+// off a fellow admin, let alone escalate past it.
+function isPrivilegedTarget(role?: string | null): boolean {
+  return Boolean(role && ADMIN_ROLES.includes(role as any));
+}
+function isPrimarySuperAdmin(email?: string | null): boolean {
+  return (env.ADMIN_EMAIL ?? "santhoshkrishna958@gmail.com") === email;
+}
+
+async function assertCanMutateTarget(
+  actor: { userId: string; activeRole?: string | null; role?: string | null },
+  targetRole?: string | null,
+  targetActiveRole?: string | null
+): Promise<{ ok: true } | { ok: false; error: { message: string; code: string } }> {
+  const actorIsSuper = actor.activeRole === SUPER_ADMIN_ROLE || actor.role === SUPER_ADMIN_ROLE;
+  if (isPrivilegedTarget(targetRole) || isPrivilegedTarget(targetActiveRole)) {
+    if (!actorIsSuper) {
+      return {
+        ok: false,
+        error: { message: "Only a super admin can modify another admin account.", code: "FORBIDDEN" },
+      };
+    }
+  }
+  return { ok: true };
+}
 
 // ============================================================================
 // SECTION 1: DASHBOARD & ANALYTICS
@@ -136,6 +167,18 @@ export async function getUserById(req: AuthedRequest, res: Response): Promise<vo
       sendError(res, "User not found.", 404, "USER_NOT_FOUND");
       return;
     }
+    // Gov-ID documents, selfies and bank details are PII. Only a super admin may
+    // read full KYC / bank data; delegated admins get the operational profile
+    // without identity documents and money routing details.
+    const actorIsSuper = req.user!.activeRole === SUPER_ADMIN_ROLE || req.user!.role === SUPER_ADMIN_ROLE;
+    if (!actorIsSuper) {
+      const redacted = { ...user, verification: user.verification ? { ...user.verification, personalDetails: undefined, selfieUrl: null, govIdUrl: null, govIdType: null, addressProofUrl: null } : null };
+      if (redacted.partner) {
+        redacted.partner = { ...redacted.partner, bankAccountName: null, bankAccountNumber: null, bankIfsc: null, upiId: null };
+      }
+      sendSuccess(res, redacted, "User retrieved.");
+      return;
+    }
     sendSuccess(res, user, "User retrieved.");
 } catch (err) {
     sendError(res, "Failed to retrieve user.", 500, "INTERNAL_ERROR");
@@ -212,6 +255,16 @@ export async function updateUserStatus(req: AuthedRequest, res: Response): Promi
   try {
     const { id } = req.params;
     const { status } = req.body;
+    const target = await prisma.user.findUnique({ where: { id }, select: { id: true, role: true, activeRole: true } });
+    if (!target) {
+      sendError(res, "User not found.", 404, "USER_NOT_FOUND");
+      return;
+    }
+    const guard = await assertCanMutateTarget(req.user!, target.role, target.activeRole);
+    if (!guard.ok) {
+      sendError(res, guard.error.message, 403, guard.error.code);
+      return;
+    }
     const user = await prisma.user.update({ where: { id }, data: { status } });
     await prisma.auditLog.create({
       data: { actorId: req.user!.userId, actorType: "ADMIN", action: "UPDATE_USER_STATUS", entityType: "User", entityId: id, metadata: JSON.stringify({ status }) },
@@ -219,6 +272,42 @@ export async function updateUserStatus(req: AuthedRequest, res: Response): Promi
     sendSuccess(res, { id: user.id, status: user.status }, "User status updated.");
   } catch (err) {
     sendError(res, "Failed to update user status.", 500, "INTERNAL_ERROR");
+  }
+}
+
+// Admin edits a user's mobile number (support escalation for number changes the
+// user can't do self-serve). Guarded by USERS.EDIT so support can't touch admins.
+export async function updateUserPhone(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const { phone } = req.body;
+    if (!phone || !/^\+?[0-9]{10,15}$/.test(String(phone))) {
+      sendError(res, "A valid phone number is required (10–15 digits, optional +country).", 400, "VALIDATION_ERROR");
+      return;
+    }
+    const target = await prisma.user.findUnique({ where: { id }, select: { id: true, role: true, activeRole: true } });
+    if (!target) {
+      sendError(res, "User not found.", 404, "USER_NOT_FOUND");
+      return;
+    }
+    const guard = await assertCanMutateTarget(req.user!, target.role, target.activeRole);
+    if (!guard.ok) {
+      sendError(res, guard.error.message, 403, guard.error.code);
+      return;
+    }
+    const dup = await prisma.user.findFirst({ where: { phone: String(phone), id: { not: id } } });
+    if (dup) {
+      sendError(res, "Another account already uses this number.", 409, "DUPLICATE_PHONE");
+      return;
+    }
+    const user = await prisma.user.update({ where: { id }, data: { phone: String(phone) } });
+    await prisma.auditLog.create({
+      data: { actorId: req.user!.userId, actorType: "ADMIN", action: "UPDATE_USER_PHONE", entityType: "User", entityId: id, metadata: JSON.stringify({ phone }) },
+    });
+    sendSuccess(res, { id: user.id, phone: user.phone }, "Mobile number updated.");
+  } catch (err) {
+    console.error("updateUserPhone error:", err);
+    sendError(res, "Failed to update mobile number.", 500, "INTERNAL_ERROR");
   }
 }
 
@@ -234,12 +323,17 @@ export async function blockUser(req: AuthedRequest, res: Response): Promise<void
       durationDays?: number; durationYears?: number; permanent?: boolean; reason?: string;
     };
 
-    const target = await prisma.user.findUnique({ where: { id }, select: { id: true, status: true, role: true } });
+    const target = await prisma.user.findUnique({ where: { id }, select: { id: true, email: true, status: true, role: true, activeRole: true } });
     if (!target) {
       sendError(res, "User not found.", 404, "NOT_FOUND");
       return;
     }
-    if (target.role === "SUPER_ADMIN") {
+    const guard = await assertCanMutateTarget(req.user!, target.role, target.activeRole);
+    if (!guard.ok) {
+      sendError(res, guard.error.message, 403, guard.error.code);
+      return;
+    }
+    if (target.role === "SUPER_ADMIN" && isPrimarySuperAdmin(target.email)) {
       sendError(res, "Super admins cannot be blocked.", 403, "FORBIDDEN");
       return;
     }
@@ -292,6 +386,16 @@ export async function blockUser(req: AuthedRequest, res: Response): Promise<void
 export async function unblockUser(req: AuthedRequest, res: Response): Promise<void> {
   try {
     const { id } = req.params;
+    const target = await prisma.user.findUnique({ where: { id }, select: { id: true, role: true, activeRole: true } });
+    if (!target) {
+      sendError(res, "User not found.", 404, "NOT_FOUND");
+      return;
+    }
+    const guard = await assertCanMutateTarget(req.user!, target.role, target.activeRole);
+    if (!guard.ok) {
+      sendError(res, guard.error.message, 403, guard.error.code);
+      return;
+    }
     const user = await prisma.user.update({
       where: { id },
       data: { status: "ACTIVE", suspendedUntil: null, suspensionReason: null },
@@ -443,6 +547,14 @@ prisma.auditLog.create({ data: { actorId: req.user!.userId, actorType: "ADMIN", 
       console.error("[EMAIL] KYC decision email failed:", err)
     );
   }
+
+  // KYC approved → issue the post-verification agreements (member + partner)
+  // immediately. Fire-and-forget: email never blocks the approval response.
+  if (approve) {
+    void createAndSendAgreements(verification.userId).catch((err) =>
+      console.error("[AGREEMENT] issuance after KYC approval failed:", err)
+    );
+  }
 }
 
 export async function approveKyc(req: AuthedRequest, res: Response): Promise<void> {
@@ -498,10 +610,12 @@ export async function approveWalkingPartner(req: AuthedRequest, res: Response): 
     const partner = await prisma.partner.update({ where: { id }, data: { status: "APPROVED" } });
 
     // Keep the separate WalkingPartner record in sync so the walking-request
-    // feature reflects the approval.
-    await prisma.walkingPartner.updateMany({
+    // feature reflects the approval. Upsert so legacy partners approved only via
+    // the Partner table still get the row the walking feature requires.
+    await prisma.walkingPartner.upsert({
       where: { userId: partner.userId },
-      data: { status: "APPROVED", reviewedBy: req.user!.userId, reviewedAt: new Date() },
+      update: { status: "APPROVED", reviewedBy: req.user!.userId, reviewedAt: new Date() },
+      create: { userId: partner.userId, status: "APPROVED", reviewedBy: req.user!.userId, reviewedAt: new Date() },
     });
     await prisma.user.updateMany({ where: { id: partner.userId }, data: { activeRole: "PARTNER" } });
 
@@ -605,9 +719,9 @@ export async function getBookings(req: AuthedRequest, res: Response): Promise<vo
         if (!Number.isNaN(to.getTime())) where.scheduledAt.lte = to;
       }
     }
-    const [items, total] = await Promise.all([
+const [items, total] = await Promise.all([
       prisma.booking.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page - 1) * limit, take: limit,
-        include: { user: { select: { id: true, fullName: true, email: true } }, partner: { select: { id: true, userId: true, user: { select: { fullName: true, email: true } } } } },
+        include: { user: { select: { id: true, fullName: true, email: true, phone: true } }, partner: { select: { id: true, userId: true, user: { select: { fullName: true, email: true, phone: true } } } } },
       }),
       prisma.booking.count({ where }),
     ]);
@@ -659,10 +773,43 @@ export async function getWithdrawalRequests(req: AuthedRequest, res: Response): 
     const limit = Number(req.query.limit) || 20;
     const where: any = {};
     if (req.query.status) where.status = req.query.status;
-    const [items, total] = await Promise.all([
+    const [raw, total] = await Promise.all([
       prisma.withdrawalRequest.findMany({ where, orderBy: { createdAt: "asc" }, skip: (page - 1) * limit, take: limit, include: { user: { select: { id: true, fullName: true, email: true } } } }),
       prisma.withdrawalRequest.count({ where }),
     ]);
+    // Bank details are sensitive. Roles that VIEW (but cannot execute payments)
+    // only see masked account info; APPROVE holders (who actually transfer the
+    // money) keep the full number needed to complete the payout.
+    const perms = await resolveAdminPermissions(req.user!.userId);
+    const revealAccount = perms.isSuper || hasPermission(perms.permissions, "WITHDRAWALS", "APPROVE");
+    const items = raw.map((w) => {
+      let ad: Record<string, any> | null = null;
+      try {
+        ad = w.accountDetail ? JSON.parse(w.accountDetail) : null;
+      } catch {
+        ad = null;
+      }
+      let accountSummary = "—";
+      if (w.method === "UPI") {
+        const upi = ad?.upiId || (!ad && w.accountDetail ? (w.accountDetail as string) : "");
+        if (upi) accountSummary = upi;
+      } else {
+        const num = typeof ad?.accountNumber === "string" ? ad.accountNumber : "";
+        const ifsc = typeof ad?.ifsc === "string" ? ad.ifsc : "";
+        const masked = num ? `Bank ${num.length >= 4 ? `•••• ${num.slice(-4)}` : "••••"}` : "";
+        accountSummary = [masked, ifsc && `IFSC ${ifsc}`].filter(Boolean).join(" · ") || "—";
+      }
+      return {
+        ...w,
+        accountSummary,
+        accountRevealed: revealAccount,
+        accountDetail: revealAccount
+          ? w.accountDetail
+          : (ad
+              ? JSON.stringify({ ...ad, accountNumber: ad.accountNumber ? "••••" : ad.accountNumber })
+              : (w.accountDetail ? "••••" : w.accountDetail)),
+      };
+    });
     sendSuccess(res, { items, page, limit, total });
   } catch (err) {
     sendError(res, "Failed to retrieve withdrawal requests.", 500, "INTERNAL_ERROR");
@@ -830,11 +977,23 @@ export async function approveWithdrawal(req: AuthedRequest, res: Response): Prom
         data: { status: "COMPLETED", description: "Withdrawal approved and settled" },
       });
 
-      await tx.auditLog.create({
+await tx.auditLog.create({
         data: { actorId: req.user!.userId, actorType: "ADMIN", action: "WITHDRAWAL_APPROVE", entityType: "WithdrawalRequest", entityId: id },
       });
     });
-sendSuccess(res, undefined, "Withdrawal approved.");
+    // Withdrawal payment completed — notify the user by email (fire-and-forget;
+    // never blocks or fails the approval path when delivery is unconfigured).
+    const paidUser = await prisma.user.findUnique({ where: { id: request.userId }, select: { email: true, fullName: true } });
+    if (paidUser) {
+      void sendWithdrawalPaidEmail(paidUser.email, paidUser.fullName || "there", {
+        withdrawalId: request.id,
+        amount: Number(request.amount),
+        method: request.method,
+        status: "APPROVED",
+        processedAt: new Date(),
+      }).catch((err) => console.error("[EMAIL] Withdrawal paid email failed:", err));
+    }
+    sendSuccess(res, undefined, "Withdrawal approved.");
   } catch (err: any) {
     if (err?.message === "WITHDRAWAL_NOT_PENDING") {
       sendError(res, "Withdrawal already processed.", 400, "INVALID_STATUS");
@@ -863,7 +1022,7 @@ export async function approveWithdrawalWithProof(req: AuthedRequest, res: Respon
       sendError(res, "Withdrawal already processed.", 400, "INVALID_STATUS");
       return;
     }
-    const payoutProofImageUrl = `/uploads/${(req.file as Express.Multer.File).filename}`;
+    const payoutProofImageUrl = `/uploads/private/${(req.file as Express.Multer.File).filename}`;
     await prisma.$transaction(async (tx) => {
       const claimed = await tx.withdrawalRequest.updateMany({
         where: { id, status: "PENDING" },
@@ -905,6 +1064,17 @@ export async function approveWithdrawalWithProof(req: AuthedRequest, res: Respon
         data: JSON.stringify({ kind: "WITHDRAWAL_PAID", withdrawalId: id }),
       },
     });
+
+    const paidUser = await prisma.user.findUnique({ where: { id: request.userId }, select: { email: true, fullName: true } });
+    if (paidUser) {
+      void sendWithdrawalPaidEmail(paidUser.email, paidUser.fullName || "there", {
+        withdrawalId: request.id,
+        amount: Number(request.amount),
+        method: request.method,
+        status: "APPROVED",
+        processedAt: new Date(),
+      }).catch((err) => console.error("[EMAIL] Withdrawal paid email failed:", err));
+    }
 
     sendSuccess(res, { payoutProofImageUrl }, "Withdrawal approved and payout proof attached.");
   } catch (err: any) {
@@ -952,10 +1122,22 @@ export async function rejectWithdrawal(req: AuthedRequest, res: Response): Promi
         data: { status: "FAILED", description: `Withdrawal rejected${reason ? `: ${reason}` : ""}; hold released` },
       });
 
-      await tx.auditLog.create({
+await tx.auditLog.create({
         data: { actorId: req.user!.userId, actorType: "ADMIN", action: "WITHDRAWAL_REJECT", entityType: "WithdrawalRequest", entityId: id, metadata: reason ? JSON.stringify({ reason }) : null },
       });
     });
+    // Funds released back to the wallet — tell the user what happened.
+    const rejectedUser = await prisma.user.findUnique({ where: { id: request.userId }, select: { email: true, fullName: true } });
+    if (rejectedUser) {
+      void sendWithdrawalRejectedEmail(rejectedUser.email, rejectedUser.fullName || "there", {
+        withdrawalId: request.id,
+        amount: Number(request.amount),
+        method: request.method,
+        status: "REJECTED",
+        processedAt: new Date(),
+        rejectionReason: reason || undefined,
+      }).catch((err) => console.error("[EMAIL] Withdrawal rejected email failed:", err));
+    }
     sendSuccess(res, undefined, "Withdrawal rejected.");
   } catch (err: any) {
     if (err?.message === "WITHDRAWAL_NOT_PENDING") {
@@ -979,6 +1161,39 @@ export async function getReports(req: AuthedRequest, res: Response): Promise<voi
     sendSuccess(res, { items, page, limit, total });
   } catch (err) {
     sendError(res, "Failed to retrieve reports.", 500, "INTERNAL_ERROR");
+  }
+}
+
+// Agreement archive (legal records). Finance/Support/KYC admins + the super
+// admin can audit every issued agreement and its acceptance state.
+export async function getAgreements(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 20;
+    const where: any = {};
+    if (req.query.status) where.status = req.query.status;
+    if (req.query.kind) where.kind = req.query.kind;
+    if (req.query.search) {
+      where.user = {
+        OR: [
+          { fullName: { contains: req.query.search, mode: "insensitive" } },
+          { email: { contains: req.query.search, mode: "insensitive" } },
+        ],
+      };
+    }
+    const [items, total] = await Promise.all([
+      prisma.agreement.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * limit,
+        take: limit,
+        include: { user: { select: { id: true, fullName: true, email: true, phone: true } } },
+      }),
+      prisma.agreement.count({ where }),
+    ]);
+    sendSuccess(res, { items, page, limit, total });
+  } catch (err) {
+    sendError(res, "Failed to retrieve agreements.", 500, "INTERNAL_ERROR");
   }
 }
 
@@ -2032,7 +2247,10 @@ export async function getUpiConfig(_req: AuthedRequest, res: Response): Promise<
 // ============================================================================
 
 const ADMIN_TIER = ["SUPER_ADMIN", "ADMIN", "MODERATOR", "SUPPORT", "FINANCE", "SUPPORT_ADMIN", "FINANCE_ADMIN", "KYC_ADMIN", "MARKETING_ADMIN", "PARTNER_ADMIN"];
-const ASSIGNABLE_ADMIN_ROLES = ["SUPPORT_ADMIN", "FINANCE_ADMIN", "KYC_ADMIN", "MARKETING_ADMIN", "PARTNER_ADMIN"];
+// Roles a Super Admin can provision via createAdminAccount. Each has a
+// ROLE_TEMPLATES matrix in rbac/sections.ts so the new admin gets usable
+// defaults. Must stay in sync with the frontend AdminAdminsPage.
+const ASSIGNABLE_ADMIN_ROLES = ["MODERATOR", "SUPPORT", "FINANCE", "SUPPORT_ADMIN", "FINANCE_ADMIN", "KYC_ADMIN", "MARKETING_ADMIN", "PARTNER_ADMIN"];
 
 async function ensureAdminRole(name: string, permissions?: string[]) {
   const existing = await prisma.adminRole.findUnique({ where: { name } });
@@ -2163,7 +2381,7 @@ export async function updateAdminAccount(req: AuthedRequest, res: Response): Pro
       sendError(res, "Admin account not found.", 404, "NOT_FOUND");
       return;
     }
-    if (target.role === "SUPER_ADMIN") {
+    if (target.role === "SUPER_ADMIN" && isPrimarySuperAdmin(target.email)) {
       sendError(res, "The primary super admin cannot be modified.", 403, "PROTECTED_ACCOUNT");
       return;
     }
@@ -2216,7 +2434,7 @@ export async function resetAdminPassword(req: AuthedRequest, res: Response): Pro
       sendError(res, "Admin account not found.", 404, "NOT_FOUND");
       return;
     }
-    if (target.role === "SUPER_ADMIN") {
+    if (target.role === "SUPER_ADMIN" && isPrimarySuperAdmin(target.email)) {
       sendError(res, "The primary super admin password cannot be reset here.", 403, "PROTECTED_ACCOUNT");
       return;
     }
@@ -2654,7 +2872,7 @@ export async function demoteUserRole(req: AuthedRequest, res: Response): Promise
       sendError(res, "User not found.", 404, "NOT_FOUND");
       return;
     }
-    if (target.role === "SUPER_ADMIN") {
+    if (target.role === "SUPER_ADMIN" && isPrimarySuperAdmin(target.email)) {
       sendError(res, "Cannot demote a SUPER_ADMIN.", 403, "FORBIDDEN");
       return;
     }

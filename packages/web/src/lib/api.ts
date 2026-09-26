@@ -188,6 +188,7 @@ export const adminApi = {
   getUsers: (params?: PaginationParams) => api.get('/admin/users', { params }),
   getUserDetail: (id: string) => api.get(`/admin/users/${id}`),
   updateUserStatus: (id: string, status: string) => api.put(`/admin/users/${id}/status`, { status }),
+  updateUserPhone: (id: string, phone: string) => api.put(`/admin/users/${id}/phone`, { phone }),
   getKycQueue: (params?: PaginationParams) => api.get('/admin/kyc-queue', { params }),
   approveKyc: (id: string) => api.post(`/admin/kyc/${id}/approve`),
   rejectKyc: (id: string, data: KycRejectReason) => api.post(`/admin/kyc/${id}/reject`, data),
@@ -255,6 +256,15 @@ export const adminApi = {
   createAdminAccount: (data: AdminAccountInput) => api.post('/admin/admins', data),
   updateAdminAccount: (userId: string, data: AdminAccountInput) => api.patch(`/admin/admins/${userId}`, data),
   resetAdminPassword: (userId: string) => api.post(`/admin/admins/${userId}/reset-password`),
+  // Agreement archive (legal records)
+  getAgreements: (params?: PaginationParams) => api.get('/admin/agreements', { params }),
+}
+
+// Post-KYC agreements (member self-serve)
+export const agreementApi = {
+  getMyAgreements: () => api.get('/users/agreements'),
+  getAgreement: (id: string) => api.get(`/users/agreements/${id}`),
+  accept: (id: string) => api.post(`/users/agreements/${id}/accept`),
 }
 
 // Account role switching (USER <-> PARTNER), backend-enforced

@@ -92,6 +92,11 @@ const envSchema = z.object({
   SUPPORT_EMAIL: z.string().default("nabri.support@gmail.com"),
   BREVO_API_KEY: z.string().optional(),
 
+  // Agreement archive: every issued agreement is blind-copied to these
+  // recipients (comma-separated). Defaults to the primary super admin so legal
+  // records always reach the owner; add more addresses here as needed.
+  AGREEMENT_ARCHIVE_EMAILS: z.string().optional(),
+
   // Gmail SMTP — used when EMAIL_PROVIDER=gmail. Requires a Google App Password
   // (Google Account → Security → 2-Step Verification → App passwords). The
   // sending address is locked to GMAIL_USER; EMAIL_FROM should match it.

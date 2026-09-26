@@ -4,10 +4,16 @@ import { authenticateToken } from "../middleware/auth";
 import { sanitizeInput, validateRequest } from "../middleware/validation";
 import { upload } from "../middleware/upload";
 import * as userController from "../controllers/userController";
+import * as agreementController from "../controllers/agreementController";
 
 const router = Router();
 
 router.use(authenticateToken);
+
+// Post-KYC agreements (member self-serve: list / view / accept)
+router.get("/agreements", agreementController.getMyAgreements);
+router.get("/agreements/:id", agreementController.getAgreementDetail);
+router.post("/agreements/:id/accept", agreementController.acceptMyAgreement);
 
 // Profile endpoints
 router.get("/profile", userController.getProfile);

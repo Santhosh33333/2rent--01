@@ -77,12 +77,29 @@ function getGmailTransporter() {
   return gmailTransporter;
 }
 
-async function sendViaBrevo(to: string, subject: string, html: string, text: string): Promise<{ ok: boolean; messageId?: string; error?: string; detail?: string }> {
+async function sendViaBrevo(
+  to: string,
+  subject: string,
+  html: string,
+  text: string,
+  opts?: SendEmailOptions
+): Promise<{ ok: boolean; messageId?: string; error?: string; detail?: string }> {
   try {
     const { name, email } = parseFrom();
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 20000);
     try {
+      const payload: Record<string, any> = {
+        sender: { name, email },
+        to: [{ email: to }],
+        subject,
+        htmlContent: html,
+        textContent: text,
+      };
+      if (opts?.bcc?.length) payload.bcc = opts.bcc.map((e) => ({ email: e }));
+      if (opts?.attachments?.length) {
+        payload.attachment = opts.attachments.map((a) => ({ content: a.content.toString("base64"), name: a.filename }));
+      }
       const res = await fetch("https://api.brevo.com/v3/smtp/email", {
         method: "POST",
         signal: ctrl.signal,
@@ -91,13 +108,7 @@ async function sendViaBrevo(to: string, subject: string, html: string, text: str
           "api-key": env.BREVO_API_KEY || "",
           Accept: "application/json",
         },
-        body: JSON.stringify({
-          sender: { name, email },
-          to: [{ email: to }],
-          subject,
-          htmlContent: html,
-          textContent: text,
-        }),
+        body: JSON.stringify(payload),
       });
       const data: any = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -114,11 +125,22 @@ async function sendViaBrevo(to: string, subject: string, html: string, text: str
   }
 }
 
-async function sendViaResend(to: string, subject: string, html: string, text: string): Promise<{ ok: boolean; messageId?: string; error?: string; detail?: string }> {
+async function sendViaResend(
+  to: string,
+  subject: string,
+  html: string,
+  text: string,
+  opts?: SendEmailOptions
+): Promise<{ ok: boolean; messageId?: string; error?: string; detail?: string }> {
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 15000);
     try {
+      const body: Record<string, any> = { from: env.EMAIL_FROM, to: [to], subject, html, text };
+      if (opts?.bcc?.length) body.bcc = opts.bcc;
+      if (opts?.attachments?.length) {
+        body.attachments = opts.attachments.map((a) => ({ filename: a.filename, content: a.content.toString("base64") }));
+      }
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST",
         signal: ctrl.signal,
@@ -126,7 +148,7 @@ async function sendViaResend(to: string, subject: string, html: string, text: st
           "Content-Type": "application/json",
           Authorization: `Bearer ${env.RESEND_API_KEY}`,
         },
-        body: JSON.stringify({ from: env.EMAIL_FROM, to: [to], subject, html, text }),
+        body: JSON.stringify(body),
       });
       const data: any = await res.json().catch(() => ({}));
       if (!res.ok) return { ok: false, error: `Resend ${res.status}: ${data?.message || "rejected"}` };
@@ -148,12 +170,17 @@ export interface EmailResult {
   detail?: string;
 }
 
+export interface SendEmailOptions {
+  attachments?: Array<{ filename: string; content: Buffer }>;
+  bcc?: string[];
+}
+
 /**
  * Send one transactional email. Returns ok:false (never throws) when no
  * provider is configured or delivery fails — callers MUST check `ok`
  * before telling the user anything was sent.
  */
-export async function sendEmail(to: string, subject: string, html: string, text?: string): Promise<EmailResult> {
+export async function sendEmail(to: string, subject: string, html: string, text?: string, opts?: SendEmailOptions): Promise<EmailResult> {
   const provider = emailProvider();
   const plain = text || html.replace(/<[^>]*>/g, "");
   if (provider === "none") {
@@ -162,12 +189,12 @@ export async function sendEmail(to: string, subject: string, html: string, text?
     return { ok: false, provider, error: "EMAIL_NOT_CONFIGURED" };
   }
   if (provider === "brevo") {
-    const r = await sendViaBrevo(to, subject, html, plain);
+    const r = await sendViaBrevo(to, subject, html, plain, opts);
     if (!r.ok) console.error("[EMAIL] Brevo API failed:", r.error);
     return { ok: r.ok, provider, messageId: r.messageId, error: r.error, detail: r.detail };
   }
   if (provider === "resend") {
-    const r = await sendViaResend(to, subject, html, plain);
+    const r = await sendViaResend(to, subject, html, plain, opts);
     if (!r.ok) console.error("[EMAIL] Resend failed:", r.error);
     return { ok: r.ok, provider, messageId: r.messageId, error: r.error, detail: r.detail };
   }
@@ -175,7 +202,7 @@ export async function sendEmail(to: string, subject: string, html: string, text?
     const tx = getGmailTransporter();
     if (!tx) return { ok: false, provider: "none", error: "EMAIL_NOT_CONFIGURED" };
     try {
-      const info: any = await tx.sendMail({ from: env.EMAIL_FROM, to, subject, html, text: plain });
+      const info: any = await tx.sendMail({ from: env.EMAIL_FROM, to, subject, html, text: plain, attachments: opts?.attachments, bcc: opts?.bcc });
       return { ok: true, provider, messageId: info?.messageId };
     } catch (err: any) {
       const detail =
@@ -193,7 +220,7 @@ export async function sendEmail(to: string, subject: string, html: string, text?
   const tx = getTransporter();
   if (!tx) return { ok: false, provider: "none", error: "EMAIL_NOT_CONFIGURED" };
   try {
-    const info: any = await tx.sendMail({ from: env.EMAIL_FROM, to, subject, html, text: plain });
+    const info: any = await tx.sendMail({ from: env.EMAIL_FROM, to, subject, html, text: plain, attachments: opts?.attachments, bcc: opts?.bcc });
     return { ok: true, provider, messageId: info?.messageId };
   } catch (err: any) {
     // Nodemailer surfaces rejection codes/responses that a bare message hides.
@@ -511,8 +538,203 @@ export async function sendPartnerEarningsEmail(email: string, name: string, d: C
   );
 }
 
+export interface WithdrawalEmailData {
+  withdrawalId: string;
+  amount: number;
+  method: string;
+  status: string;
+  createdAt?: Date;
+  processedAt?: Date;
+  rejectionReason?: string;
+  walletBalance?: number;
+}
+
+function withdrawalMethodLabel(method: string): string {
+  return method === "UPI" ? "UPI" : "bank account";
+}
+
+/** Withdrawal request submitted — confirms the hold and shows the processing timeline. */
+export async function sendWithdrawalRequestedEmail(email: string, name: string, d: WithdrawalEmailData): Promise<EmailResult> {
+  const requested = d.createdAt ? new Date(d.createdAt).toLocaleString("en-IN", { dateStyle: "long", timeStyle: "short" }) : "";
+  const rows: Array<[string, string]> = [
+    ["Withdrawal ID", d.withdrawalId.slice(0, 8).toUpperCase()],
+    ["Amount", rupee(d.amount)],
+    ["Method", withdrawalMethodLabel(d.method)],
+    ["Requested", requested],
+    ["Status", "Under review"],
+  ];
+  const rowsHtml = rows
+    .map(
+      ([k, v]) =>
+        `<tr><td style="padding:10px 14px;border-top:1px solid #EFE8DC;font-size:13px;color:#6B6558">${escHtml(k)}</td><td style="padding:10px 14px;border-top:1px solid #EFE8DC;font-size:13px;color:#1C1917;font-weight:600;text-align:right">${escHtml(String(v))}</td></tr>`
+    )
+    .join("");
+  const bodyHtml = `<p style="margin:0 0 14px">Hi ${escHtml(name)},</p><p style="margin:0 0 14px">We received your withdrawal request of <strong>${rupee(d.amount)}</strong> and the amount has been set aside in your wallet. An admin will review it shortly.</p><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #EFE8DC;border-radius:14px;overflow:hidden;margin:0 0 20px"><tr><td style="background:#FBF7EF;padding:12px 14px;font-size:12px;color:#0D378B;font-weight:800;letter-spacing:1px">NABRI · WITHDRAWAL REQUESTED</td></tr>${rowsHtml}</table><p style="margin:0 0 14px">We'll email you the moment your payment is completed. You can also check the status anytime in your wallet.</p>`;
+  return sendEmail(
+    email,
+    `Withdrawal requested · ${rupee(d.amount)}`,
+    renderEmail({ supportEmail: env.SUPPORT_EMAIL,
+      title: `Withdrawal of ${rupee(d.amount)} requested`,
+      kicker: "Wallet withdrawal",
+      bodyHtml,
+      ctaText: "View wallet",
+      ctaUrl: `${WEB_ORIGIN}/wallet`,
+      note: "Keep this email as confirmation that your withdrawal request was received.",
+    }),
+    `Hi ${name}, your withdrawal request of ${rupee(d.amount)} was received and is under review.`
+  );
+}
+
+/** Withdrawal payment completed — the money is on its way to the partner. */
+export async function sendWithdrawalPaidEmail(email: string, name: string, d: WithdrawalEmailData): Promise<EmailResult> {
+  const processed = d.processedAt ? new Date(d.processedAt).toLocaleString("en-IN", { dateStyle: "long", timeStyle: "short" }) : "just now";
+  const rows: Array<[string, string]> = [
+    ["Withdrawal ID", d.withdrawalId.slice(0, 8).toUpperCase()],
+    ["Amount paid", rupee(d.amount)],
+    ["Method", withdrawalMethodLabel(d.method)],
+    ["Paid on", processed],
+    ["Wallet balance", d.walletBalance !== undefined ? rupee(d.walletBalance) : "—"],
+  ];
+  const rowsHtml = rows
+    .map(
+      ([k, v]) =>
+        `<tr><td style="padding:10px 14px;border-top:1px solid #EFE8DC;font-size:13px;color:#6B6558">${escHtml(k)}</td><td style="padding:10px 14px;border-top:1px solid #EFE8DC;font-size:13px;color:#1C1917;font-weight:600;text-align:right">${escHtml(String(v))}</td></tr>`
+    )
+    .join("");
+  const bodyHtml = `<p style="margin:0 0 14px">Hi ${escHtml(name)},</p><p style="margin:0 0 14px">Great news — your withdrawal of <strong>${rupee(d.amount)}</strong> has been <strong>paid out</strong> to your ${escHtml(withdrawalMethodLabel(d.method))}.</p><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #EFE8DC;border-radius:14px;overflow:hidden;margin:0 0 20px"><tr><td style="background:#FBF7EF;padding:12px 14px;font-size:12px;color:#0D378B;font-weight:800;letter-spacing:1px">NABRI · WITHDRAWAL PAID</td></tr>${rowsHtml}</table><p style="margin:0 0 14px">Depending on your bank or UPI provider, the funds may take a few hours to appear in your account.</p>`;
+  return sendEmail(
+    email,
+    `Withdrawal paid · ${rupee(d.amount)}`,
+    renderEmail({ supportEmail: env.SUPPORT_EMAIL,
+      title: `Your ${rupee(d.amount)} withdrawal is paid`,
+      kicker: "Withdrawal completed",
+      bodyHtml,
+      ctaText: "View wallet",
+      ctaUrl: `${WEB_ORIGIN}/wallet`,
+      note: "Need help? Reply to this email and we'll get back to you.",
+    }),
+    `Hi ${name}, your withdrawal of ${rupee(d.amount)} has been paid to your ${withdrawalMethodLabel(d.method)}.`
+  );
+}
+
+/** Withdrawal rejected — the held amount is returned to the wallet. */
+export async function sendWithdrawalRejectedEmail(email: string, name: string, d: WithdrawalEmailData): Promise<EmailResult> {
+  const processed = d.processedAt ? new Date(d.processedAt).toLocaleString("en-IN", { dateStyle: "long", timeStyle: "short" }) : "";
+  const rows: Array<[string, string]> = [
+    ["Withdrawal ID", d.withdrawalId.slice(0, 8).toUpperCase()],
+    ["Amount returned", rupee(d.amount)],
+    ["Wallet balance", d.walletBalance !== undefined ? rupee(d.walletBalance) : "—"],
+    ["Processed", processed || "—"],
+  ];
+  const rowsHtml = rows
+    .map(
+      ([k, v]) =>
+        `<tr><td style="padding:10px 14px;border-top:1px solid #EFE8DC;font-size:13px;color:#6B6558">${escHtml(k)}</td><td style="padding:10px 14px;border-top:1px solid #EFE8DC;font-size:13px;color:#1C1917;font-weight:600;text-align:right">${escHtml(String(v))}</td></tr>`
+    )
+    .join("");
+  const bodyHtml = `<p style="margin:0 0 14px">Hi ${escHtml(name)},</p><p style="margin:0 0 14px">Your withdrawal request of <strong>${rupee(d.amount)}</strong> could not be completed${d.rejectionReason ? `: <em>${escHtml(d.rejectionReason)}</em>` : "."}</p><p style="margin:0 0 14px">The amount has been <strong>returned to your Nabri wallet</strong> and is available to use.</p><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #EFE8DC;border-radius:14px;overflow:hidden;margin:0 0 20px"><tr><td style="background:#FBF7EF;padding:12px 14px;font-size:12px;color:#0D378B;font-weight:800;letter-spacing:1px">NABRI · WITHDRAWAL RETURNED</td></tr>${rowsHtml}</table><p style="margin:0">Please update your payment details and try again, or contact support if you think this was a mistake.</p>`;
+  return sendEmail(
+    email,
+    `Withdrawal returned · ${rupee(d.amount)}`,
+    renderEmail({ supportEmail: env.SUPPORT_EMAIL,
+      title: `Withdrawal request returned`,
+      kicker: "Wallet withdrawal",
+      bodyHtml,
+      ctaText: "View wallet",
+      ctaUrl: `${WEB_ORIGIN}/wallet`,
+      note: "Your funds are safe — the amount was credited back to your wallet.",
+    }),
+    `Hi ${name}, your withdrawal of ${rupee(d.amount)} was not completed and the amount has been returned to your wallet.`
+  );
+}
+
+/** Re-engagement ("we miss you") email for users inactive for 7+ days. */
+export async function sendReengagementEmail(email: string, name: string, daysInactive = 7): Promise<EmailResult> {
+  const displayName = name && name !== email ? name : "there";
+  const firstName = displayName.split(/\s+/)[0] || displayName;
+  const perks: Array<[string, string, string]> = [
+    ["🚀", "Back to it in seconds", "Log back in — your profile, bookings and communities are exactly where you left them."],
+    ["🤝", "Fresh things around you", "New people, new walks, new help requests and events are happening near you right now."],
+    ["💰", "Balances still safe", "Any wallet balance you have is secure and ready whenever you are."],
+    ["💬", "Messages waiting", "Missed chats and requests? Catch up on everything in one tap."],
+  ];
+  const perkRows = perks
+    .map(
+      ([emoji, head, desc]) =>
+        `<tr><td style="vertical-align:top;padding:0 0 12px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="width:34px;vertical-align:top"><div style="width:28px;height:28px;border-radius:9px;background:#FBF7EF;border:1px solid #EFE4D4;text-align:center;line-height:26px;font-size:14px">${emoji}</div></td><td style="padding:2px 0 0 10px;font-size:13.5px;line-height:1.5;color:#4B453D"><strong style="color:#1C1917">${escHtml(head)}</strong> ${escHtml(desc)}</td></tr></table></td></tr>`
+    )
+    .join("");
+  const bodyHtml = `<p style="margin:0 0 12px">Hi <strong style="color:#1C1917">${escHtml(firstName)}</strong>,</p>
+<p style="margin:0 0 14px">It&rsquo;s been a little while since you&rsquo;ve been on Nabri — <strong>${escHtml(String(daysInactive))} days</strong> to be exact. We wanted to check in, because there might be good stuff waiting for you.</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px">${perkRows}</table>
+<p style="margin:0 0 14px">Whenever you're ready, jump back in. It takes seconds and it&rsquo;s all still here.</p>
+<p style="margin:0 0 18px;font-style:italic;color:#4B453D">See you soon — Team Nabri 💙</p>`;
+  return sendEmail(
+    email,
+    `We miss you, ${firstName}! 👋`,
+    renderEmail({ supportEmail: env.SUPPORT_EMAIL,
+      title: "We miss you on Nabri",
+      kicker: "Quick hello",
+      bodyHtml,
+      ctaText: "Back to Nabri",
+      ctaUrl: WEB_ORIGIN,
+      note: `You're receiving this because you have a Nabri account and haven't been active in ${daysInactive}+ days. Unsubscribe anytime by contacting ${env.SUPPORT_EMAIL}.`,
+    }),
+    `Hi ${firstName}, it's been ${daysInactive} days since you used Nabri. Come back and see what's new! Support: ${env.SUPPORT_EMAIL}`
+  );
+}
+
 /**
- * One call for both completion emails, built from REAL post-settlement DB data
+ * Re-engagement sweep — finds verified, ACTIVE users who haven't been active
+ * in 7+ days and sends one "we miss you" email, tracked in MarketingEmailLog so
+ * nobody gets it twice. Batch-limited; never throws; purely fire-and-forget.
+ */
+export async function runReengagementSweep(batchSize = 200): Promise<{ scanned: number; sent: number; skipped: number }> {
+  try {
+    const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const users = await prisma.user.findMany({
+      where: {
+        emailVerified: true,
+        status: "ACTIVE",
+        role: { notIn: ["SUPER_ADMIN", "ADMIN", "MODERATOR", "SUPPORT", "FINANCE", "SUPPORT_ADMIN", "FINANCE_ADMIN", "KYC_ADMIN", "MARKETING_ADMIN", "PARTNER_ADMIN"] },
+        OR: [{ lastLoginAt: { lt: cutoff } }, { lastLoginAt: null }],
+      },
+      select: { id: true, email: true, fullName: true, lastLoginAt: true },
+      take: batchSize,
+      orderBy: { updatedAt: "desc" },
+    });
+
+    let sent = 0;
+    let skipped = 0;
+    for (const u of users) {
+      const already = await prisma.marketingEmailLog
+        .findUnique({ where: { campaign_userId: { campaign: "REENGAGEMENT_7D", userId: u.id } } })
+        .catch(() => null);
+      if (already) {
+        skipped += 1;
+        continue;
+      }
+      const last = u.lastLoginAt?.getTime() ?? Date.now() - 7 * 86400000;
+      const days = Math.max(7, Math.round((Date.now() - last) / 86400000));
+      const result = await sendReengagementEmail(u.email, u.fullName || u.email, days);
+      if (result.ok) {
+        await prisma.marketingEmailLog
+          .create({ data: { campaign: "REENGAGEMENT_7D", userId: u.id, email: u.email, sentAt: new Date() } })
+          .catch(() => undefined);
+        sent += 1;
+      } else {
+        skipped += 1;
+      }
+    }
+    console.log(`[EMAIL] Re-engagement sweep: ${users.length} scanned, ${sent} sent, ${skipped} skipped.`);
+    return { scanned: users.length, sent, skipped };
+  } catch (err) {
+    console.error("[EMAIL] Re-engagement sweep failed:", err);
+    return { scanned: 0, sent: 0, skipped: 0 };
+  }
+}
+
+/** One call for both completion emails, built from REAL post-settlement DB data
  * (the Booking row is updated by finalizeBookingPrice with the verified final
  * amount, platform fee and partner earning before this runs). Fire-and-forget:
  * never blocks or fails the completion path.

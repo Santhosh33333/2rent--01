@@ -34,6 +34,7 @@ export const SECTIONS = [
   "NOTIFICATIONS",
   "ANALYTICS",
   "CONTENT_MODERATION",
+  "AGREEMENTS",
   "SECURITY",
   "ADMIN_MANAGEMENT",
   "SYSTEM_SETTINGS",
@@ -115,6 +116,7 @@ export const ROLE_TEMPLATES: Record<string, Partial<Record<Section, Action[]>>> 
     ANALYTICS: ["VIEW"],
     REPORTS: ["VIEW"],
     BOOKINGS: ["VIEW"],
+    AGREEMENTS: ["VIEW", "EXPORT"],
   },
   SUPPORT_ADMIN: {
     USERS: ["VIEW", "EDIT"],
@@ -125,12 +127,14 @@ export const ROLE_TEMPLATES: Record<string, Partial<Record<Section, Action[]>>> 
     EVENTS: ["VIEW"],
     NOTIFICATIONS: ["VIEW", "CREATE"],
     AUDIT_LOGS: ["VIEW"],
+    AGREEMENTS: ["VIEW", "EXPORT"],
   },
   KYC_ADMIN: {
     KYC: ["VIEW", "CREATE", "EDIT", "APPROVE", "REJECT", "EXPORT"],
     USERS: ["VIEW"],
     REPORTS: ["VIEW"],
     CONTENT_MODERATION: ["VIEW", "APPROVE", "REJECT"],
+    AGREEMENTS: ["VIEW"],
   },
   FINANCE_ADMIN: {
     WALLETS: ["VIEW", "CREATE", "EDIT", "EXPORT"],

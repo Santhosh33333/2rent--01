@@ -4,7 +4,7 @@ import { authRateLimiter } from "../middleware/rateLimiter";
 import { authenticateToken, requireAdmin, requireSuperAdmin } from "../middleware/auth";
 import { sanitizeInput, validateRequest } from "../middleware/validation";
 import { requireSectionAction } from "../rbac/permissions";
-import { upload } from "../middleware/upload";
+import { upload, privateUpload } from "../middleware/upload";
 import * as adminController from "../controllers/adminController";
 import * as communityController from "../controllers/communityController";
 import * as eventController from "../controllers/eventController";
@@ -17,6 +17,10 @@ router.use(requireAdmin);
 
 // Section/action permission guards — backend-enforced (never trust the UI).
 const users = requireSectionAction("USERS", "VIEW");
+// Account-mutating actions (status change, block, impersonate) are above the
+// VIEW tier: a MODERATOR holding only USERS.VIEW must never be able to ban or
+// impersonate accounts. Only roles granted USERS.EDIT (or super admin) may.
+const usersEdit = requireSectionAction("USERS", "EDIT");
 const kycReview = requireSectionAction("KYC", "APPROVE");
 const partnersManage = requireSectionAction("PARTNERS", "VIEW");
 const bookingsView = requireSectionAction("BOOKINGS", "VIEW");
@@ -66,11 +70,12 @@ router.put(
 );
 router.get("/users", users, adminController.getUsers);
 router.get("/users/:id", users, adminController.getUserById);
-router.put("/users/:id/status", users, [body("status").isIn(["ACTIVE", "SUSPENDED", "BANNED", "DEACTIVATED"])], validateRequest, adminController.updateUserStatus);
-router.post("/users/:id/impersonate", users, adminController.impersonateUser);
+router.put("/users/:id/status", usersEdit, [body("status").isIn(["ACTIVE", "SUSPENDED", "BANNED", "DEACTIVATED"])], validateRequest, adminController.updateUserStatus);
+router.put("/users/:id/phone", usersEdit, [body("phone").isString().trim().isLength({ min: 10, max: 15 })], sanitizeInput, validateRequest, adminController.updateUserPhone);
+router.post("/users/:id/impersonate", usersEdit, adminController.impersonateUser);
 router.post(
   "/users/:id/block",
-  users,
+  usersEdit,
   [
     body("durationDays").optional().isFloat({ gt: 0 }),
     body("durationYears").optional().isFloat({ gt: 0 }),
@@ -81,7 +86,7 @@ router.post(
   validateRequest,
   adminController.blockUser
 );
-router.post("/users/:id/unblock", users, adminController.unblockUser);
+router.post("/users/:id/unblock", usersEdit, adminController.unblockUser);
 router.post("/sos/:id/resolve", users, adminController.resolveSosAlert);
 router.get("/sos/alerts", users, adminController.listSosAlerts);
 router.post("/demo/refill", requireSuperAdmin, adminController.refillDemoWallet);
@@ -102,6 +107,7 @@ router.post("/walking-partners/:id/reactivate", requireSectionAction("PARTNERS",
 router.get("/bookings", bookingsView, adminController.getBookings);
 router.get("/bookings/:id", bookingsView, adminController.getBookingDetail);
 router.get("/withdrawals", withdrawalsManage, adminController.getWithdrawalRequests);
+router.get("/agreements", requireSectionAction("AGREEMENTS", "VIEW"), adminController.getAgreements);
 router.get("/email/status", notificationsSend, adminController.getEmailStatus);
 router.post(
   "/email/test",
@@ -139,7 +145,7 @@ router.post(
   adminController.broadcastEmail
 );
 router.post("/withdrawals/:id/approve", requireSectionAction("WITHDRAWALS", "APPROVE"), adminController.approveWithdrawal);
-router.post("/withdrawals/:id/approve-with-proof", requireSectionAction("WITHDRAWALS", "APPROVE"), upload.single("proof"), adminController.approveWithdrawalWithProof);
+router.post("/withdrawals/:id/approve-with-proof", requireSectionAction("WITHDRAWALS", "APPROVE"), privateUpload.single("proof"), adminController.approveWithdrawalWithProof);
 router.post("/withdrawals/:id/reject", requireSectionAction("WITHDRAWALS", "REJECT"), [body("reason").optional().isString()], sanitizeInput, validateRequest, adminController.rejectWithdrawal);
 router.get("/reports", reportsManage, adminController.getReports);
 router.post("/reports/:id/resolve", requireSectionAction("REPORTS", "APPROVE"), [body("note").optional().isString()], sanitizeInput, validateRequest, adminController.resolveReport);
