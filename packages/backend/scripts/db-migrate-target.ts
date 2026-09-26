@@ -36,7 +36,7 @@ function targetUrl(): string {
 }
 
 type Relation = { fromField: string; toModel: string; toField: string; required: boolean };
-type ModelInfo = { name: string; orderBy: string[]; dependsOn: string[]; relations: Relation[]; selfReferencing: boolean };
+type ModelInfo = { name: string; orderBy: string[]; idFields: string[]; dependsOn: string[]; relations: Relation[]; selfReferencing: boolean };
 
 /**
  * This Prisma DMMF exposes object relations as entries in `fields` with
@@ -64,7 +64,8 @@ function modelInfos(): ModelInfo[] {
     const scalars = m.fields.filter((f) => f.kind === "scalar");
     const unique = (m.uniqueFields ?? []).flatMap((u: string[]) => u);
     const orderBy = [...new Set([...unique, ...scalars.map((s) => s.name)])];
-    return { name: m.name, orderBy, dependsOn: [...dependsOn], relations, selfReferencing };
+    const idFields = scalars.filter((s) => s.isId).map((s) => s.name);
+    return { name: m.name, orderBy, idFields, dependsOn: [...dependsOn], relations, selfReferencing };
   });
 }
 
@@ -286,6 +287,141 @@ async function migrate(): Promise<void> {
   }
 }
 
+/**
+ * `migrate` deliberately leaves any table that already has rows alone, so it is a
+ * one-shot bootstrap and cannot bring a target up to date afterwards. `sync` is
+ * that missing half: it reconciles an existing target against a live source so
+ * the switchover can happen after the copy without a long maintenance window.
+ */
+type Row = Record<string, unknown>;
+
+/** Stable text form of a row, so the same row read twice compares equal. */
+function stable(value: unknown): string {
+  const norm = (v: unknown): unknown => {
+    if (v === null || v === undefined) return null;
+    if (v instanceof Date) return v.toISOString();
+    if (typeof v === "bigint") return v.toString();
+    if (Array.isArray(v)) return v.map(norm);
+    if (typeof v === "object") {
+      const o = v as Record<string, unknown> & { toFixed?: unknown };
+      if (typeof o.toFixed === "function") return (o.toFixed as () => string)();
+      const out: Record<string, unknown> = {};
+      for (const k of Object.keys(v).sort()) out[k] = norm((v as Record<string, unknown>)[k]);
+      return out;
+    }
+    return v;
+  };
+  return JSON.stringify(norm(value));
+}
+
+function rowKey(idFields: string[], row: Row): string {
+  return stable(idFields.map((f) => row[f]));
+}
+
+function whereOf(idFields: string[], row: Row): Row {
+  return Object.fromEntries(idFields.map((f) => [f, row[f]]));
+}
+
+async function sync(): Promise<void> {
+  const prune = process.argv.includes("--prune");
+  const dryRun = process.argv.includes("--dry-run");
+  const url = targetUrl();
+  if (url === sourceUrl()) throw new Error("refusing to sync onto the source database");
+
+  const src = new PrismaClient({ datasources: { db: { url: sourceUrl() } } });
+  const dst = new PrismaClient({ datasources: { db: { url } } });
+  try {
+    const infos = modelInfos();
+    const { order } = condense(infos);
+
+    let fks: ForeignKey[] = [];
+    if (dryRun) {
+      console.log("dry run: nothing will be written\n");
+    } else {
+      fks = await captureForeignKeys(dst);
+      console.log(`removing ${fks.length} foreign keys from the target for the duration of the sync`);
+      await dropForeignKeys(dst, fks);
+    }
+
+    let inserted = 0;
+    let updated = 0;
+    let removed = 0;
+    let kept = 0;
+    try {
+      for (const group of order) {
+        for (const name of group) {
+          const info = infos.find((i) => i.name === name)!;
+          if (info.idFields.length === 0) {
+            console.log(`  skip  ${name} (no primary key, so rows cannot be matched safely)`);
+            continue;
+          }
+          const s = (src as unknown as Record<string, Record<string, Function>>)[name];
+          const d = (dst as unknown as Record<string, Record<string, Function>>)[name];
+          const orderBy = info.orderBy.map((f) => ({ [f]: "asc" }));
+
+          const sRows = (await withRetry(`read source ${name}`, () => s.findMany({ orderBy }))) as Row[];
+          const tRows = (await withRetry(`read target ${name}`, () => d.findMany({ orderBy }))) as Row[];
+
+          const tByKey = new Map(tRows.map((r) => [rowKey(info.idFields, r), r]));
+          const sKeys = new Set(sRows.map((r) => rowKey(info.idFields, r)));
+
+          const toInsert = sRows.filter((r) => !tByKey.has(rowKey(info.idFields, r)));
+          const toUpdate = sRows.filter((r) => {
+            const t = tByKey.get(rowKey(info.idFields, r));
+            return t !== undefined && stable(t) !== stable(r);
+          });
+          const toDelete = tRows.filter((r) => !sKeys.has(rowKey(info.idFields, r)));
+
+          if (!toInsert.length && !toUpdate.length && !toDelete.length) continue;
+
+          const parts: string[] = [];
+          if (toInsert.length) parts.push(`+${toInsert.length}`);
+          if (toUpdate.length) parts.push(`~${toUpdate.length}`);
+          if (toDelete.length) parts.push(prune ? `-${toDelete.length}` : `-${toDelete.length} kept (pass --prune to delete)`);
+          console.log(`  sync  ${name}  ${parts.join("  ")}`);
+
+          inserted += toInsert.length;
+          updated += toUpdate.length;
+          kept += prune ? 0 : toDelete.length;
+
+          if (dryRun) continue;
+
+          if (toInsert.length) {
+            await withRetry(`insert ${name}`, () => d.createMany({ data: toInsert as never, skipDuplicates: true }));
+          }
+          for (const r of toUpdate) {
+            const where = whereOf(info.idFields, r);
+            await withRetry(`update ${name}`, () => d.update({ where: where as never, data: r as never }));
+          }
+          if (prune) {
+            for (const r of toDelete) {
+              const where = whereOf(info.idFields, r);
+              await withRetry(`delete ${name}`, () => d.delete({ where: where as never }));
+              removed++;
+            }
+          }
+        }
+      }
+    } finally {
+      if (!dryRun) {
+        console.log(`restoring ${fks.length} foreign keys (this re-validates every synced row)`);
+        await addForeignKeys(dst, fks);
+      }
+    }
+
+    console.log(`\ninserted ${inserted}, updated ${updated}, deleted ${removed}, left alone ${kept}`);
+    if (kept > 0) {
+      console.log(`\n${kept} target row(s) no longer exist in the source and were kept.`);
+      console.log("That is expected when the source is ahead of the copy. Re-run with --prune to");
+      console.log("delete them and make the target match the source exactly.");
+    }
+    if (dryRun) console.log("\ndry run: no changes were written");
+  } finally {
+    await src.$disconnect();
+    await dst.$disconnect();
+  }
+}
+
 async function verify(): Promise<void> {
   const src = new PrismaClient({ datasources: { db: { url: sourceUrl() } } });
   const dst = new PrismaClient({ datasources: { db: { url: targetUrl() } } });
@@ -334,7 +470,7 @@ async function verify(): Promise<void> {
 }
 
 const mode = process.argv[2] ?? "inspect";
-const run: Record<string, () => void | Promise<void>> = { inspect, plan, migrate, verify };
+const run: Record<string, () => void | Promise<void>> = { inspect, plan, migrate, sync, verify };
 const fn = run[mode];
 if (!fn) {
   console.error(`unknown mode "${mode}". use: ${Object.keys(run).join(", ")}`);

@@ -17,6 +17,7 @@
     "db:inspect": "tsx scripts/db-migrate-target.ts inspect",
     "db:plan": "tsx scripts/db-migrate-target.ts plan",
     "db:migrate": "tsx scripts/db-migrate-target.ts migrate",
+    "db:sync": "tsx scripts/db-migrate-target.ts sync",
     "db:verify": "tsx scripts/db-migrate-target.ts verify",
     "prisma:seed": "tsx prisma/seed.ts",
     "seed:admins": "tsx prisma/seed-admins.ts",
