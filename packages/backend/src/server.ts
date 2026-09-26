@@ -6,6 +6,7 @@ import { initializeFirebase } from "./services/notificationService";
 import { sendPushNotification } from "./services/notificationService";
 import { initializeFirebaseAuth } from "./services/firebaseAuthService";
 import { initializeSocket } from "./services/socketService";
+import { initRedis } from "./services/redisClient";
 import { emitToUser } from "./services/socketService";
 import { processTimeoutBookings, sendUpcomingReminders } from "./services/bookingEngine";
 import { runReengagementSweep } from "./services/emailService";
@@ -334,6 +335,10 @@ if (!dbAvailable) {
   initializeFirebaseAuth();
 
   const server = createApp();
+
+  // Connect Redis before sockets so the adapter and the shared caches are ready.
+  // A failure here is not fatal: the process falls back to in-process state.
+  await initRedis();
 
   const io = initializeSocket(server);
 

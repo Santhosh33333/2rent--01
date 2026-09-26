@@ -8,15 +8,27 @@
 import { Server as SocketIOServer, Socket } from "socket.io";
 import { prisma } from "../config/database";
 import { sendPushNotification } from "./notificationService";
+import {
+  putLiveCall,
+  getLiveCall,
+  updateLiveCall,
+  dropLiveCall,
+  listLiveCallIds,
+  isUserOnlineShared,
+  type SharedCall,
+} from "./redisClient";
 
 const RING_TIMEOUT_MS = 30_000;
 const VALID_CALL_TYPES = ["VOICE", "VIDEO"] as const;
 
-/** callId -> live call metadata (in-memory; authoritative state is CallLog). */
-const liveCalls = new Map<
-  string,
-  { id: string; callerId: string; receiverId: string; type: string; startedAt: number; timer: ReturnType<typeof setTimeout> }
->();
+/**
+ * Ring timers stay local because a setTimeout handle cannot be shared, but the
+ * call itself lives in Redis so any instance can resolve it. That matters as soon
+ * as there is more than one instance: the callee's socket may be on a different
+ * process from the one that created the call, and a purely in-memory map would
+ * answer CALL_GONE to a perfectly valid call.
+ */
+const ringTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 interface PeerIdentity {
   id: string;
@@ -77,12 +89,14 @@ async function peerIdentity(userId: string): Promise<PeerIdentity> {
   return { id: userId, fullName: user?.fullName || "Nabri member", avatarUrl: user?.avatarUrl || null };
 }
 
-function clearRingTimer(callId: string): void {
-  const call = liveCalls.get(callId);
-  if (call?.timer) {
-    clearTimeout(call.timer);
-    liveCalls.delete(callId);
+/** Stop the unanswered-ring timer and forget the live call everywhere. */
+async function clearLiveCall(call: SharedCall): Promise<void> {
+  const timer = ringTimers.get(call.id);
+  if (timer) {
+    clearTimeout(timer);
+    ringTimers.delete(call.id);
   }
+  await dropLiveCall(call);
 }
 
 /**
@@ -127,15 +141,16 @@ export function registerCallHandlers(
       const receiver = await peerIdentity(receiverId);
       const caller = await peerIdentity(userId);
 
-      // One live call per caller: drop any previous attempt first.
-      for (const [existingId, call] of liveCalls.entries()) {
-        if (call.callerId === userId) {
-          clearRingTimer(existingId);
-          emitToPeer(call.receiverId, "call:ended", { callId: existingId, reason: "REPLACED" });
-          await prisma.callLog
-            .update({ where: { id: existingId }, data: { status: "CANCELLED", endedAt: new Date() } })
-            .catch(() => {});
-        }
+      // One live call per caller: drop any previous attempt first. Queried from
+      // shared state so a call started on another instance is replaced too.
+      for (const existingId of await listLiveCallIds(userId)) {
+        const existing = await getLiveCall(existingId);
+        if (!existing || existing.callerId !== userId) continue;
+        await clearLiveCall(existing);
+        emitToPeer(existing.receiverId, "call:ended", { callId: existingId, reason: "REPLACED" });
+        await prisma.callLog
+          .update({ where: { id: existingId }, data: { status: "CANCELLED", endedAt: new Date() } })
+          .catch(() => {});
       }
 
       const call = await prisma.callLog.create({
@@ -144,15 +159,19 @@ export function registerCallHandlers(
 
       // Unanswered after 30s -> MISSED on both sides.
       const timer = setTimeout(async () => {
-        liveCalls.delete(call.id);
+        ringTimers.delete(call.id);
+        const ringing = await getLiveCall(call.id);
+        if (!ringing) return; // already accepted or ended
+        await dropLiveCall(ringing);
         await prisma.callLog
           .update({ where: { id: call.id }, data: { status: "MISSED", endedAt: new Date() } })
           .catch(() => {});
         emitToPeer(userId, "call:ended", { callId: call.id, reason: "NO_ANSWER" });
         emitToPeer(receiverId, "call:ended", { callId: call.id, reason: "NO_ANSWER" });
       }, RING_TIMEOUT_MS);
+      ringTimers.set(call.id, timer);
 
-      liveCalls.set(call.id, { id: call.id, callerId: userId, receiverId, type, startedAt: Date.now(), timer });
+      await putLiveCall({ id: call.id, callerId: userId, receiverId, type, startedAt: Date.now() });
 
       emitToSelf("call:ringing", { callId: call.id, type, peer: receiver });
       emitToPeer(receiverId, "call:incoming", {
@@ -179,7 +198,7 @@ export function registerCallHandlers(
   // ---------------------------------------------------------------------
   socket.on("call:accept", async (data: { callId?: string }) => {
     const callId = String(data?.callId || "");
-    const call = liveCalls.get(callId);
+    const call = await getLiveCall(callId);
     if (!call) {
       emitToSelf("call:unavailable", { reason: "CALL_GONE" });
       return;
@@ -189,8 +208,12 @@ export function registerCallHandlers(
       return;
     }
 
-    clearRingTimer(callId);
-    liveCalls.set(callId, { ...call, startedAt: Date.now() });
+    const timer = ringTimers.get(callId);
+    if (timer) {
+      clearTimeout(timer);
+      ringTimers.delete(callId);
+    }
+    await updateLiveCall(callId, { startedAt: Date.now() });
     await prisma.callLog.update({ where: { id: callId }, data: { status: "ACCEPTED", startedAt: new Date() } }).catch(() => {});
 
     const caller = await peerIdentity(call.callerId);
@@ -200,11 +223,11 @@ export function registerCallHandlers(
 
   socket.on("call:reject", async (data: { callId?: string }) => {
     const callId = String(data?.callId || "");
-    const call = liveCalls.get(callId);
+    const call = await getLiveCall(callId);
     if (!call) return;
     if (call.receiverId !== userId && call.callerId !== userId) return;
 
-    clearRingTimer(callId);
+    await clearLiveCall(call);
     await prisma.callLog.update({ where: { id: callId }, data: { status: "REJECTED", endedAt: new Date() } }).catch(() => {});
     emitToPeer(call.callerId, "call:rejected", { callId });
     emitToPeer(call.receiverId, "call:rejected", { callId });
@@ -215,14 +238,14 @@ export function registerCallHandlers(
   // ---------------------------------------------------------------------
   socket.on("call:end", async (data: { callId?: string }) => {
     const callId = String(data?.callId || "");
-    const call = liveCalls.get(callId);
+    const call = await getLiveCall(callId);
     if (!call) {
       emitToSelf("call:ended", { callId, reason: "ALREADY_ENDED" });
       return;
     }
     if (call.callerId !== userId && call.receiverId !== userId) return;
 
-    clearRingTimer(callId);
+    await clearLiveCall(call);
     const endedAt = new Date();
     const wasAccepted = call.startedAt > 0;
     const duration = wasAccepted ? Math.max(0, Math.floor((endedAt.getTime() - call.startedAt) / 1000)) : null;
@@ -238,9 +261,9 @@ export function registerCallHandlers(
   // 4) WebRTC signaling relay. Strictly point-to-point: only the other
   //    participant of this specific call may receive the payload.
   // ---------------------------------------------------------------------
-  const relayToPeer = (event: string) => (data: { callId?: string; payload?: unknown }) => {
+  const relayToPeer = (event: string) => async (data: { callId?: string; payload?: unknown }) => {
     const callId = String(data?.callId || "");
-    const call = liveCalls.get(callId);
+    const call = await getLiveCall(callId);
     if (!call) return;
     if (call.callerId !== userId && call.receiverId !== userId) return;
     const peerId = call.callerId === userId ? call.receiverId : call.callerId;
@@ -255,11 +278,11 @@ export function registerCallHandlers(
   // caller hears a clean "unavailable" instead of ringing forever.
   socket.on("call:media_failed", async (data: { callId?: string; reason?: string }) => {
     const callId = String(data?.callId || "");
-    const call = liveCalls.get(callId);
+    const call = await getLiveCall(callId);
     if (!call) return;
     if (call.receiverId !== userId) return;
 
-    clearRingTimer(callId);
+    await clearLiveCall(call);
     await prisma.callLog.update({ where: { id: callId }, data: { status: "FAILED", endedAt: new Date() } }).catch(() => {});
     emitToPeer(call.callerId, "call:unavailable", { callId, reason: data?.reason || "MEDIA_FAILED" });
   });
@@ -268,22 +291,31 @@ export function registerCallHandlers(
     // A dropped connection ends any call this socket was part of, so the peer
     // is not left talking to somebody who is gone. A user who still has
     // another device/tab online keeps the call.
-    if (hasOtherSocket(userId)) return;
-    for (const [callId, call] of liveCalls.entries()) {
-      if (call.callerId !== userId && call.receiverId !== userId) continue;
-      clearRingTimer(callId);
-      const endedAt = new Date();
-      const duration = call.startedAt > 0 ? Math.max(0, Math.floor((endedAt.getTime() - call.startedAt) / 1000)) : null;
-      void prisma.callLog
-        .update({ where: { id: callId }, data: { status: "ENDED", endedAt, ...(duration !== null ? { duration } : {}) } })
-        .catch(() => {});
-      const peerId = call.callerId === userId ? call.receiverId : call.callerId;
-      emitToPeer(peerId, "call:ended", { callId, reason: "DISCONNECTED", duration });
-    }
+    void (async () => {
+      // Shared presence first: with several instances the user may still be
+      // connected elsewhere, in which case the call must survive.
+      const onlineElsewhere = (await isUserOnlineShared(userId)) === true || hasOtherSocket(userId);
+      if (onlineElsewhere) return;
+
+      for (const callId of await listLiveCallIds(userId)) {
+        const call = await getLiveCall(callId);
+        if (!call) continue;
+        if (call.callerId !== userId && call.receiverId !== userId) continue;
+        await clearLiveCall(call);
+        const endedAt = new Date();
+        const duration = call.startedAt > 0 ? Math.max(0, Math.floor((endedAt.getTime() - call.startedAt) / 1000)) : null;
+        void prisma.callLog
+          .update({ where: { id: callId }, data: { status: "ENDED", endedAt, ...(duration !== null ? { duration } : {}) } })
+          .catch(() => {});
+        const peerId = call.callerId === userId ? call.receiverId : call.callerId;
+        emitToPeer(peerId, "call:ended", { callId, reason: "DISCONNECTED", duration });
+      }
+    })();
   });
 }
 
 /** Test/maintenance helper: drop a ringing call (e.g. admin resolve). */
-export function cancelLiveCall(callId: string): void {
-  clearRingTimer(callId);
+export async function cancelLiveCall(callId: string): Promise<void> {
+  const call = await getLiveCall(callId);
+  if (call) await clearLiveCall(call);
 }

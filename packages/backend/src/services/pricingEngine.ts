@@ -1,4 +1,5 @@
 import { prisma } from "../config/database";
+import { cacheGet, cacheSet, cacheDel } from "./redisClient";
 
 // Default pricing constants
 const DEFAULT_BASE_FEE = 50; // ₹50 for first 30 minutes
@@ -59,31 +60,76 @@ export interface PartnerEarningSummary {
   levelPoints: number;
 }
 
-// Pricing/admin knobs are read on nearly every booking/price call. A short
-// TTL cache removes a DB round-trip per read; admin writes call
-// invalidateConfigCache() for immediacy (60s staleness otherwise).
+// Pricing/admin knobs are read on nearly every booking/price call. Previously
+// each key was its own query, so a price calculation paid several database round
+// trips - and on a cross-region link a single round trip is most of a second.
+//
+// The whole active set is now fetched in one query and cached, so a calculation
+// costs one round trip per TTL instead of one per key, and none at all on a hit.
+// Redis holds the copy so every instance agrees on the price; the local Map is a
+// fast path in front of it. Admin writes call invalidateConfigCache() so a change
+// takes effect immediately rather than after the TTL.
 const CONFIG_CACHE_TTL_MS = 60000;
-const configCache = new Map<string, { at: number; value: number }>();
+const CONFIG_REDIS_KEY = "nb:config:pricing";
+const localConfigCache = new Map<string, number>();
+let localConfigFetchedAt = 0;
+let inflight: Promise<Map<string, number>> | null = null;
+
+async function loadAllConfig(): Promise<Map<string, number>> {
+  const rows = await prisma.pricingConfig.findMany({ where: { isActive: true } });
+  const map = new Map<string, number>();
+  for (const row of rows) {
+    const parsed = parseFloat(row.value);
+    if (!Number.isNaN(parsed)) map.set(row.key, parsed);
+  }
+  return map;
+}
 
 /** Invalidate cached pricing/admin knobs (call after admin updates). */
-export function invalidateConfigCache(key?: string): void {
-  if (key) configCache.delete(key);
-  else configCache.clear();
+export function invalidateConfigCache(_key?: string): void {
+  localConfigCache.clear();
+  localConfigFetchedAt = 0;
+  void cacheDel(CONFIG_REDIS_KEY);
+}
+
+async function getActiveConfig(): Promise<Map<string, number>> {
+  const now = Date.now();
+  if (localConfigFetchedAt && now - localConfigFetchedAt < CONFIG_CACHE_TTL_MS) return localConfigCache;
+
+  // Collapse concurrent misses into a single query. Booking confirmation and
+  // price preview frequently arrive together, and without this each one pays its
+  // own round trip.
+  inflight ??= (async () => {
+    try {
+      const shared = await cacheGet<Record<string, number>>(CONFIG_REDIS_KEY);
+      const map = new Map(Object.entries(shared ?? {}));
+      if (map.size === 0) {
+        map.clear();
+        for (const [k, v] of await loadAllConfig()) map.set(k, v);
+        await cacheSet(CONFIG_REDIS_KEY, Object.fromEntries(map), CONFIG_CACHE_TTL_MS);
+      }
+      localConfigCache.clear();
+      for (const [k, v] of map) localConfigCache.set(k, v);
+      localConfigFetchedAt = Date.now();
+      return localConfigCache;
+    } catch {
+      // A cache failure must not break pricing: fall back to a direct read.
+      const map = new Map<string, number>();
+      for (const [k, v] of await loadAllConfig()) map.set(k, v);
+      return map;
+    } finally {
+      inflight = null;
+    }
+  })();
+
+  return inflight;
 }
 
 export async function getConfig(key: string, defaultValue: number): Promise<number> {
   try {
-    const now = Date.now();
-    const hit = configCache.get(key);
-    if (hit && now - hit.at < CONFIG_CACHE_TTL_MS) return hit.value;
-    const config = await prisma.pricingConfig.findUnique({ where: { key } });
-    const value = config && config.isActive ? parseFloat(config.value) : defaultValue;
-    configCache.set(key, { at: now, value });
-    if (configCache.size > 500) {
-      const oldest = configCache.keys().next();
-      if (!oldest.done) configCache.delete(oldest.value);
-    }
-    return value;
+    const config = await getActiveConfig();
+    const value = config.get(key);
+    return value === undefined ? defaultValue : value;
   } catch {
     return defaultValue;
   }

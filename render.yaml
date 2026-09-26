@@ -15,6 +15,14 @@ services:
     rootDir: packages/backend
     buildCommand: npm install && npx prisma generate && npx prisma migrate deploy && npm run build
     startCommand: node dist/src/server.js
+    # Render's free compute plan cannot run more than one instance, so the API
+    # stays a single instance here. That is not a performance problem on its own
+    # - the cross-region database round trip was - and the free plan keeps cost
+    # at zero. Scaling out needs a paid plan, and the Redis-backed shared state
+    # in the backend is already in place for when that happens.
+    #
+    # Do not add a "plan:" key unless the service is being moved to a paid
+    # compute plan; leaving it out is what keeps this service free.
     envVars:
       - key: NODE_ENV
         value: production
@@ -24,6 +32,17 @@ services:
         generateValue: true
       - key: PORT
         value: 5000
+      # Shared cache + cross-instance state. Set this in the dashboard.
+      # sync: false keeps Render from overwriting a value you set by hand.
+      #
+      # CAUTION: a Render Key Value *internal* URL (redis://red-...:6379) only
+      # resolves from services in the SAME region. When the API is moved to
+      # Singapore the Key Value must be created in Singapore too, or REDIS_URL
+      # must point at an externally reachable Redis (e.g. Upstash) instead.
+      # The backend degrades to in-process state if this is missing, so a wrong
+      # value costs performance, not uptime.
+      - key: REDIS_URL
+        sync: false
     # The liveness route is mounted at the root ("/health"), not under /api -
     # everything under /api sits behind auth middleware and answers 401 here,
     # which would fail every deploy's health check.

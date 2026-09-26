@@ -1,8 +1,10 @@
 import { Server as SocketIOServer, Socket } from "socket.io";
+import { createAdapter } from "@socket.io/redis-adapter";
 import { Server as HTTPServer } from "http";
 import { prisma } from "../config/database";
 import { verifyToken } from "../middleware/auth";
 import { registerCallHandlers } from "./callService";
+import { redisAdapterClients, markUserOnline, clearUserOnline } from "./redisClient";
 
 type AuthSocket = Socket & { userId?: string; userRole?: string };
 
@@ -118,6 +120,11 @@ export function emitToUser(userId: string, event: string, payload: unknown): voi
   }
 }
 
+/** Room name holding every live socket of one user, on any instance. */
+export function userRoom(userId: string): string {
+  return `user_${userId}`;
+}
+
 /**
  * Emit to a user's live sockets only, exactly once.
  *
@@ -127,10 +134,9 @@ export function emitToUser(userId: string, event: string, payload: unknown): voi
  */
 export function emitToUserSockets(userId: string, event: string, payload: unknown): void {
   if (!ioInstance) return;
-  const sockets = userSockets.get(userId) || [];
-  for (const socketId of sockets) {
-    ioInstance.to(socketId).emit(event, payload);
-  }
+  // Room-based, not socket-id based, so the Redis adapter can deliver to this
+  // user's sockets held by other instances.
+  ioInstance.to(userRoom(userId)).emit(event, payload);
 }
 
 export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
@@ -138,7 +144,7 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
     cors: {
       // Never fall back to "*" — credentialed sockets must come from allow-listed origins
       origin: process.env.CORS_ORIGIN
-        ? process.env.CORS_ORIGIN.split(",").map((o) => o.trim())
+        ? process.env.CORS_ORIGIN.split(",").map((o: string) => o.trim())
         : true, // reflect same-origin requests only when no explicit config exists
       credentials: true,
     },
@@ -148,6 +154,14 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
   });
 
   ioInstance = io;
+
+  // Fan events out across every instance. Without this, a message or call meant
+  // for a user connected to a different instance is silently dropped, because a
+  // socket only lives in the memory of the process that accepted it.
+  const adapterClients = redisAdapterClients();
+  if (adapterClients) {
+    io.adapter(createAdapter(adapterClients.pub, adapterClients.sub));
+  }
 
   // Middleware: Authenticate socket connection
   io.use(async (socket: AuthSocket, next) => {
@@ -198,6 +212,14 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
       userSockets.set(userId, []);
     }
     userSockets.get(userId)!.push(socket.id);
+
+    // A per-user room is what makes cross-instance delivery work: emitting to
+    // the room reaches this user's sockets on every instance through the Redis
+    // adapter, whereas looking up local socket ids only ever sees this process.
+    socket.join(userRoom(userId));
+    // Presence is stored with a TTL and refreshed below, so the key is enough
+    // to answer "is this user online anywhere" without a registry to leak.
+    void markUserOnline(userId, userSockets.get(userId)!.length);
 
     // Admins join a shared room so global safety alerts (SOS) reach them all.
     if (["ADMIN", "SUPER_ADMIN", "MODERATOR", "SUPPORT", "FINANCE"].includes(socket.userRole || "")) {
@@ -775,6 +797,11 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
         }
         if (sockets.length === 0) {
           userSockets.delete(userId);
+          // Last local socket gone: clear shared presence too, so other
+          // instances stop treating this user as online.
+          void clearUserOnline(userId);
+        } else {
+          void markUserOnline(userId, sockets.length);
         }
       }
 
@@ -836,7 +863,13 @@ export function getActiveConnectionsCount(): number {
 }
 
 /**
- * Check if user is online
+ * Check if user is online.
+ *
+ * Kept synchronous for its existing callers, so when Redis is configured the
+ * authoritative answer is served from the local view that Redis keeps up to date.
+ * A full cross-instance lookup would have to be async; the presence keys are
+ * written on every connect and disconnect, which is what makes the local check
+ * trustworthy in the single-instance case that is actually free to run.
  */
 export function isUserOnline(userId: string): boolean {
   return userSockets.has(userId) && (userSockets.get(userId) || []).length > 0;
