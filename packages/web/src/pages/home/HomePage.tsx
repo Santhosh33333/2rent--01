@@ -111,10 +111,10 @@ export function HomePage() {
   return (
     <div className="space-y-6 sm:space-y-8">
       <AnimatedPage>
-        <div className="hero-indigo">
-          <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2230%22%20height%3D%2230%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cdefs%3E%3Cpattern%20id%3D%22g%22%20width%3D%2230%22%20height%3D%2230%22%20patternUnits%3D%22userSpaceOnUse%22%3E%3Ccircle%20cx%3D%2215%22%20cy%3D%2215%22%20r%3D%221%22%20fill%3D%22rgba(255,255,255,0.08)%22/%3E%3C/pattern%3E%3C/defs%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22url(%23g)%22/%3E%3C/svg%3E')] opacity-50" />
-          <div className="absolute -top-20 -right-20 w-60 h-60 bg-white/10 rounded-full blur-3xl" />
-          <div className="absolute -bottom-20 -left-20 w-60 h-60 bg-accent-500/20 rounded-full blur-3xl" />
+        <div className="hero-indigo overflow-hidden">
+          <div className="hero-sheen pointer-events-none absolute inset-0" />
+          <div className="absolute -right-16 -top-24 h-72 w-72 rounded-full bg-[#D2F53C]/10 blur-3xl" />
+          <div className="absolute -bottom-24 -left-16 h-64 w-64 rounded-full bg-white/5 blur-3xl" />
 
           <div className="relative z-10 flex items-center justify-between gap-4">
             <div>
@@ -122,8 +122,13 @@ export function HomePage() {
               <h1 className="text-2xl sm:text-3xl font-bold font-display tracking-tight">{userName}!</h1>
               <p className="text-white/60 text-sm mt-1">Your social ecosystem is ready.</p>
             </div>
-            <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-xl font-bold ring-2 ring-white/30">
-              {userName.charAt(0).toUpperCase()}
+            <div className="relative flex h-14 w-14 shrink-0 items-center justify-center">
+              <span className="brand-badge h-14 w-14">
+                <span className="flex h-full w-full items-center justify-center text-xl font-bold text-white">
+                  {userName.charAt(0).toUpperCase()}
+                </span>
+              </span>
+              <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white/40 bg-[#D2F53C] dark:border-surface-900" />
             </div>
           </div>
 

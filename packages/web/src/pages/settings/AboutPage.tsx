@@ -27,11 +27,13 @@ export function AboutPage() {
 
       <AnimatedPage>
         <GlassCard variant="elevated" padding="lg" className="text-center">
-          <img
-            src="/images/logo-mark-3d.png"
-            alt="Nabri logo"
-            className="w-20 h-20 mx-auto rounded-3xl shadow-xl shadow-primary-500/30 mb-4"
-          />
+          <span className="brand-badge mx-auto mb-4 inline-flex">
+            <img
+              src="/logo-mark.svg"
+              alt="Nabri logo"
+              className="h-20 w-20 drop-shadow-[0_14px_32px_rgba(13,55,139,0.35)]"
+            />
+          </span>
           <h1 className="text-2xl font-bold font-display text-surface-900 dark:text-white">Nabri</h1>
           <p className="text-sm text-surface-500 mt-1">Trust-based social platform</p>
           <div className="flex items-center justify-center gap-4 mt-3 text-xs text-surface-400">

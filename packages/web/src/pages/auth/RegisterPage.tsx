@@ -218,8 +218,8 @@ export function RegisterPage() {
   return (
     <div className="auth-backdrop transition-colors duration-400">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-32 -right-32 w-[500px] h-[500px] bg-primary-400/10 rounded-full blur-[128px]" />
-        <div className="absolute -bottom-32 -left-32 w-[500px] h-[500px] bg-accent-400/10 rounded-full blur-[128px]" />
+        <div className="absolute -top-32 -right-32 h-[500px] w-[500px] rounded-full bg-primary-400/10 blur-[128px]" />
+        <div className="absolute -bottom-32 -left-32 h-[500px] w-[500px] rounded-full bg-primary-300/8 blur-[128px]" />
       </div>
 
       <div className="relative w-full max-w-md m-auto">
@@ -228,9 +228,9 @@ export function RegisterPage() {
 <div className="text-center mb-8">
             <div className="logo-3d mb-5">
               <img
-                src="/images/logo-mark-3d.png"
+                src="/logo-mark.svg"
                 alt="Nabri logo"
-                className="w-16 h-16"
+                className="h-16 w-16 drop-shadow-[0_12px_28px_rgba(13,55,139,0.35)]"
               />
             </div>
             <h1 className="text-3xl font-bold font-display text-surface-900 dark:text-white tracking-tight">Create account</h1>
