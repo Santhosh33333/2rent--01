@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { prisma } from "../config/database";
 import { env } from "../config/env";
+import { cacheGet, cacheSet, cacheDel } from "./redisClient";
 import { sendOTPEmail, emailStatus } from "./emailService";
 import { sendSmsMessage, smsStatus, smsProviderName } from "./smsService";
 
@@ -53,15 +54,88 @@ function hashCode(code: string): string {
   return crypto.createHash("sha256").update(code).digest("hex");
 }
 
+// The six OTP limits all live in the same settings table and are read on every
+// issue and every verify. Reading them one at a time cost six round trips per
+// call, so they load together and sit behind a short cache: one round trip per
+// TTL instead of six per call, and none at all on a hit. The local copy is a fast
+// path in front of Redis; admin edits call invalidateOtpSettingsCache().
+const OTP_SETTINGS_TTL_MS = 60000;
+const OTP_SETTINGS_REDIS_KEY = "nb:config:otp";
+const OTP_SETTING_KEYS = [
+  "expiry_minutes",
+  "max_attempts",
+  "resend_seconds",
+  "max_per_15min",
+  "max_per_hour",
+  "max_per_ip_hour",
+] as const;
+
+let otpSettingsCache: Record<string, number> | null = null;
+let otpSettingsFetchedAt = 0;
+let otpSettingsInflight: Promise<Record<string, number>> | null = null;
+
+/** Invalidate cached OTP limits (call after admin updates). */
+export function invalidateOtpSettingsCache(): void {
+  otpSettingsCache = null;
+  otpSettingsFetchedAt = 0;
+  void cacheDel(OTP_SETTINGS_REDIS_KEY);
+}
+
+async function getOtpSettings(): Promise<Record<string, number>> {
+  const now = Date.now();
+  if (otpSettingsCache && now - otpSettingsFetchedAt < OTP_SETTINGS_TTL_MS) return otpSettingsCache;
+
+  // Collapse concurrent misses into one query.
+  otpSettingsInflight ??= (async () => {
+    try {
+      const shared = await cacheGet<Record<string, number>>(OTP_SETTINGS_REDIS_KEY);
+      const map = { ...(shared ?? {}) };
+      if (Object.keys(map).length === 0) {
+        for (const k of Object.keys(map)) delete map[k];
+        const rows = await prisma.appSettings.findMany({
+          where: { key: { in: OTP_SETTING_KEYS.map((k) => `otp.${k}`) } },
+          select: { key: true, value: true },
+        });
+        for (const row of rows) {
+          const n = Number(row.value);
+          if (Number.isFinite(n) && n > 0) map[row.key.replace(/^otp\./, "")] = n;
+        }
+        await cacheSet(OTP_SETTINGS_REDIS_KEY, map, OTP_SETTINGS_TTL_MS);
+      }
+      otpSettingsCache = map;
+      otpSettingsFetchedAt = Date.now();
+      return map;
+    } catch {
+      // A cache failure must not lock anyone out: fall back to a direct read.
+      const map: Record<string, number> = {};
+      try {
+        const rows = await prisma.appSettings.findMany({
+          where: { key: { in: OTP_SETTING_KEYS.map((k) => `otp.${k}`) } },
+          select: { key: true, value: true },
+        });
+        for (const row of rows) {
+          const n = Number(row.value);
+          if (Number.isFinite(n) && n > 0) map[row.key.replace(/^otp\./, "")] = n;
+        }
+      } catch {
+        // settings table unreadable - fall back to env
+      }
+      return map;
+    } finally {
+      otpSettingsInflight = null;
+    }
+  })();
+
+  return otpSettingsInflight;
+}
+
 async function getLimit(key: string, fallback: number): Promise<number> {
   try {
-    const row = await prisma.appSettings.findUnique({ where: { key: `otp.${key}` } });
-    if (row) {
-      const n = Number(row.value);
-      if (Number.isFinite(n) && n > 0) return n;
-    }
+    const settings = await getOtpSettings();
+    const n = settings[key];
+    if (typeof n === "number" && Number.isFinite(n) && n > 0) return n;
   } catch {
-    // settings table unreadable — fall back to env
+    // settings table unreadable - fall back to env
   }
   return fallback;
 }

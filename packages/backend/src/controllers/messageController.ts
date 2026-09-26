@@ -220,26 +220,30 @@ export async function getConversations(req: AuthedRequest, res: Response): Promi
       )
     );
 
-    const conversations = await prisma.conversation.findMany({
-      where: { OR: [{ participant1Id: userId }, { participant2Id: userId }] },
-      include: {
-        participant1: { select: USER_SELECT },
-        participant2: { select: USER_SELECT },
-        messages: { orderBy: { createdAt: "desc" }, take: 1 },
-      },
-      orderBy: { updatedAt: "desc" },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
-
-    const convIds = conversations.map((c) => c.id);
-
-    const unreadRows = await prisma.message.groupBy({
-      by: ["conversationId"],
-      where: { receiverId: userId, status: { not: "READ" }, conversationId: { in: convIds } },
-      _count: { _all: true },
-    });
-    const unreadMap = new Map(unreadRows.map((u) => [u.conversationId, u._count._all]));
+    // The total is the real number of conversations, counted after the
+    // merge above has created any missing rows - so it cannot move earlier.
+    // It does not depend on the page of conversations though, so the two go
+    // out together, and the unread tally rides along on the same query as a
+    // filtered relation count instead of costing a separate groupBy scan.
+    const [conversations, convTotal] = await Promise.all([
+      prisma.conversation.findMany({
+        where: { OR: [{ participant1Id: userId }, { participant2Id: userId }] },
+        include: {
+          participant1: { select: USER_SELECT },
+          participant2: { select: USER_SELECT },
+          messages: { orderBy: { createdAt: "desc" }, take: 1 },
+          _count: {
+            select: { messages: { where: { receiverId: userId, status: { not: "READ" } } } },
+          },
+        },
+        orderBy: { updatedAt: "desc" },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.conversation.count({
+        where: { OR: [{ participant1Id: userId }, { participant2Id: userId }] },
+      }),
+    ]);
 
     const items = conversations.map((c) => {
       const partner = c.participant1Id === userId ? c.participant2 : c.participant1;
@@ -252,7 +256,7 @@ export async function getConversations(req: AuthedRequest, res: Response): Promi
         partnerAvatar: partner.avatarUrl,
         lastMessage: last?.content ?? null,
         lastMessageAt: last?.createdAt ?? null,
-        unreadCount: unreadMap.get(c.id) ?? 0,
+        unreadCount: c._count.messages,
       };
     });
 
@@ -260,12 +264,6 @@ export async function getConversations(req: AuthedRequest, res: Response): Promi
       const ta = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
       const tb = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
       return tb - ta;
-    });
-
-    // Real total for pagination: number of conversations this user participates in
-    // (after the accepted-request merge above has created any missing rows).
-    const convTotal = await prisma.conversation.count({
-      where: { OR: [{ participant1Id: userId }, { participant2Id: userId }] },
     });
 
     sendSuccess(res, { items, page, limit, total: convTotal });
