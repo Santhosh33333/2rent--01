@@ -257,11 +257,16 @@ export async function updateCreditRules(req: AuthedRequest, res: Response): Prom
 async function notifySuperAdmins(n: { type: string; title: string; body: string }): Promise<void> {
   try {
     const supers = await prisma.user.findMany({ where: { activeRole: "SUPER_ADMIN", status: "ACTIVE" }, select: { id: true } });
-    for (const s of supers) {
-      await prisma.notification.create({
-        data: { userId: s.id, title: n.title, body: n.body, data: JSON.stringify({ kind: n.type }) },
-      });
-    }
+    // One insert per admin, issued together: writing them in sequence meant each
+    // admin cost a separate network round trip before the response could go out.
+    await prisma.notification.createMany({
+      data: supers.map((s) => ({
+        userId: s.id,
+        title: n.title,
+        body: n.body,
+        data: JSON.stringify({ kind: n.type }),
+      })),
+    });
   } catch {
     /* non-blocking */
   }

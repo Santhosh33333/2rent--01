@@ -110,13 +110,6 @@ export async function getNearbyBookings(req: AuthedRequest, res: Response): Prom
     }
     void markDispatchesViewed(partner.id);
 
-    // Don't re-show jobs this partner has already declined.
-    const rejected = await prisma.dispatchRequest.findMany({
-      where: { partnerId: partner.id, status: "REJECTED" },
-      select: { bookingId: true },
-    });
-    const rejectedIds = new Set(rejected.map((r) => r.bookingId));
-
     const where: any = {
       status: { in: ["PARTNER_SEARCHING", "PAYMENT_SUCCESSFUL"] },
     };
@@ -127,26 +120,37 @@ export async function getNearbyBookings(req: AuthedRequest, res: Response): Prom
       where.serviceType = "CARRY_BUDDY";
     }
 
-    const bookings = await prisma.booking.findMany({
-      where,
-      select: {
-        id: true,
-        serviceType: true,
-        status: true,
-        scheduledAt: true,
-        durationMinutes: true,
-        estimatedAmount: true,
-        createdAt: true,
-        itemType: true,
-        itemDescription: true,
-        notes: true,
-        // Privacy: exact coordinates/addresses are withheld until a partner is
-        // assigned. Only coarse, non-identifying info is broadcast to the pool.
-        user: { select: { id: true, avatarUrl: true, city: true, fullName: true, email: true } },
-      },
-      orderBy: { createdAt: "desc" },
-      take: 20,
-    });
+    // Both only depend on the partner row we already have, so they travel
+    // together instead of one waiting on the other.
+    const [rejected, bookings] = await Promise.all([
+      // Don't re-show jobs this partner has already declined.
+      prisma.dispatchRequest.findMany({
+        where: { partnerId: partner.id, status: "REJECTED" },
+        select: { bookingId: true },
+      }),
+      prisma.booking.findMany({
+        where,
+        select: {
+          id: true,
+          serviceType: true,
+          status: true,
+          scheduledAt: true,
+          durationMinutes: true,
+          estimatedAmount: true,
+          createdAt: true,
+          itemType: true,
+          itemDescription: true,
+          notes: true,
+          // Privacy: exact coordinates/addresses are withheld until a partner is
+          // assigned. Only coarse, non-identifying info is broadcast to the pool.
+          user: { select: { id: true, avatarUrl: true, city: true, fullName: true, email: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      }),
+    ]);
+
+    const rejectedIds = new Set(rejected.map((r) => r.bookingId));
 
     // Demo sandbox fence: the demo partner only ever sees demo-user jobs,
     // and real partners never see demo jobs.
@@ -654,14 +658,18 @@ export async function getPartnerBookings(req: AuthedRequest, res: Response): Pro
 
 export async function getPerformance(req: AuthedRequest, res: Response): Promise<void> {
   try {
-    const partner = await prisma.partner.findUnique({ where: { userId: req.user!.userId } });
+    // The partner row is needed for the 404 and for partner.id, but the earnings
+    // and level rows are keyed by userId, which we already know. Fetching them
+    // together turns three sequential round trips into one.
+    const [partner, earnings, partnerLevel] = await Promise.all([
+      prisma.partner.findUnique({ where: { userId: req.user!.userId } }),
+      prisma.partnerEarnings.findUnique({ where: { userId: req.user!.userId } }),
+      prisma.partnerLevel.findUnique({ where: { userId: req.user!.userId } }),
+    ]);
     if (!partner) {
       sendError(res, "Partner not found.", 404, "PARTNER_NOT_FOUND");
       return;
     }
-
-    const earnings = await prisma.partnerEarnings.findUnique({ where: { userId: partner.userId } });
-    const partnerLevel = await prisma.partnerLevel.findUnique({ where: { userId: partner.userId } });
 
     // Date boundaries
     const now = new Date();
@@ -669,10 +677,20 @@ export async function getPerformance(req: AuthedRequest, res: Response): Promise
     const startOfWeek = new Date(now); startOfWeek.setDate(now.getDate() - now.getDay()); startOfWeek.setHours(0, 0, 0, 0);
     const startOfMonth = new Date(now); startOfMonth.setDate(1); startOfMonth.setHours(0, 0, 0, 0);
 
-    const allCancelled = await prisma.booking.count({ where: { partnerId: partner.id, status: "CANCELLED" } });
+    // Everything below only needs partner.id, so it all goes out together. This
+    // used to be five separate waits, and each one is a full network round trip
+    // to the database - which dominated the time this screen took to appear.
+    const monthRanges = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(now);
+      d.setMonth(d.getMonth() - (6 - i));
+      const start = new Date(d.getFullYear(), d.getMonth(), 1);
+      const end = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
+      return { start, end, label: d.toLocaleString("default", { month: "short" }) };
+    });
 
-    // Use DB aggregates instead of fetching all rows
-    const [todayAgg, weekAgg, monthAgg] = await Promise.all([
+    const [allCancelled, todayAgg, weekAgg, monthAgg, monthAggregates, recentRatings] = await Promise.all([
+      prisma.booking.count({ where: { partnerId: partner.id, status: "CANCELLED" } }),
+      // Use DB aggregates instead of fetching all rows
       prisma.booking.aggregate({
         where: { partnerId: partner.id, status: "COMPLETED", completedAt: { gte: startOfToday } },
         _sum: { partnerEarning: true },
@@ -688,6 +706,25 @@ export async function getPerformance(req: AuthedRequest, res: Response): Promise
         _sum: { partnerEarning: true },
         _count: true,
       }),
+      // Last-7-months bar chart
+      Promise.all(
+        monthRanges.map(({ start, end, label }) =>
+          prisma.booking
+            .aggregate({
+              where: { partnerId: partner.id, status: "COMPLETED", completedAt: { gte: start, lte: end } },
+              _sum: { partnerEarning: true },
+              _count: true,
+            })
+            .then((agg) => ({ count: agg._count, earnings: Number(agg._sum.partnerEarning ?? 0), label })),
+        ),
+      ),
+      // Recent ratings for this partner
+      prisma.rating.findMany({
+        where: { ratedId: partner.userId, targetType: "PARTNER" },
+        include: { rater: { select: { fullName: true, avatarUrl: true } } },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+      }),
     ]);
 
     const todayEarnings = Number(todayAgg._sum.partnerEarning ?? 0);
@@ -696,24 +733,9 @@ export async function getPerformance(req: AuthedRequest, res: Response): Promise
     const todayJobs = todayAgg._count;
     const weeklyJobs = weekAgg._count;
 
-    // Build last-7-months bar chart data using DB aggregates
     const monthlyJobCounts: number[] = [];
     const monthlyEarningsList: number[] = [];
     const monthLabels: string[] = [];
-    const monthAggregates = await Promise.all(
-      Array.from({ length: 7 }, (_, i) => {
-        const d = new Date(now);
-        d.setMonth(d.getMonth() - (6 - i));
-        const y = d.getFullYear(); const m = d.getMonth();
-        const start = new Date(y, m, 1);
-        const end = new Date(y, m + 1, 0, 23, 59, 59);
-        return prisma.booking.aggregate({
-          where: { partnerId: partner.id, status: "COMPLETED", completedAt: { gte: start, lte: end } },
-          _sum: { partnerEarning: true },
-          _count: true,
-        }).then((agg) => ({ count: agg._count, earnings: Number(agg._sum.partnerEarning ?? 0), label: d.toLocaleString("default", { month: "short" }) }));
-      })
-    );
     for (const m of monthAggregates) {
       monthlyJobCounts.push(m.count);
       monthlyEarningsList.push(m.earnings);
@@ -723,14 +745,6 @@ export async function getPerformance(req: AuthedRequest, res: Response): Promise
     // Completion rate
     const totalAttempted = partner.completedJobs + allCancelled;
     const completionRate = totalAttempted > 0 ? Math.round((partner.completedJobs / totalAttempted) * 100) : 100;
-
-    // Recent ratings for this partner
-    const recentRatings = await prisma.rating.findMany({
-      where: { ratedId: partner.userId, targetType: "PARTNER" },
-      include: { rater: { select: { fullName: true, avatarUrl: true } } },
-      orderBy: { createdAt: "desc" },
-      take: 10,
-    });
 
     // Determine level label
     const levelMap: Record<string, string> = {

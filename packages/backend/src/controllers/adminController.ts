@@ -2215,13 +2215,17 @@ export async function setUpiConfig(req: AuthedRequest, res: Response): Promise<v
       { key: "UPI_ACCOUNT_NAME", value: accountName ? String(accountName) : "" },
       { key: "UPI_QR_URL", value: qrUrl ? String(qrUrl) : "" },
     ];
-    for (const e of entries) {
-      await prisma.pricingConfig.upsert({
-        where: { key: e.key },
-        create: { key: e.key, value: e.value, description: "Platform UPI config", category: "PAYMENT" },
-        update: { value: e.value },
-      });
-    }
+    // Three independent upserts: sent together rather than one after another,
+    // which turns three round trips into one.
+    await Promise.all(
+      entries.map((e) =>
+        prisma.pricingConfig.upsert({
+          where: { key: e.key },
+          create: { key: e.key, value: e.value, description: "Platform UPI config", category: "PAYMENT" },
+          update: { value: e.value },
+        }),
+      ),
+    );
     invalidateConfigCache();
     await prisma.auditLog.create({
       data: {
