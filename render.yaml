@@ -13,7 +13,13 @@ services:
     # the dashboard, then repoint the web app at the new hostname.
     region: singapore
     rootDir: packages/backend
-    buildCommand: npm install && npx prisma generate && npx prisma migrate deploy && npm run build
+    # No "prisma migrate deploy" here on purpose. The Docker image this service
+    # actually runs starts with "node dist/src/server.js" and never migrates,
+    # and production carries no _prisma_migrations table at all, so a build-time
+    # migrate deploy would try to replay all fifteen migrations onto a database
+    # that already has that schema and fail. Schema changes are applied on purpose
+    # with db push or the migration tool, not as a side effect of a build.
+    buildCommand: npm install && npx prisma generate && npm run build
     startCommand: node dist/src/server.js
     # Render's free compute plan cannot run more than one instance, so the API
     # stays a single instance here. That is not a performance problem on its own
