@@ -441,13 +441,18 @@ async function verify(): Promise<void> {
     console.log(`row drift:        ${drift.length === 0 ? "none" : `${drift.length} table(s)`}`);
     if (drift.length) console.log(drift.join("\n"));
 
-    // Triggers were switched off during the copy, so nothing has re-checked the
-    // references. Prove they hold by looking for rows pointing at nothing.
+    // Foreign keys were removed for the duration of the copy and sync, so
+    // nothing has re-checked the references. Prove they hold by looking for rows
+    // pointing at nothing.
+    //
+    // Nullable columns are checked as well as required ones. A row can only be
+    // an orphan if the value is present, so the join already excludes nulls, and
+    // skipping optional relations is what let a dangling reference through once
+    // before: a user was deleted while a top-up still pointed at them.
     let checked = 0;
     const orphans: string[] = [];
     for (const info of infos) {
       for (const rel of info.relations) {
-        if (!rel.required) continue;
         const r = await dst.$queryRawUnsafe<{ c: number }[]>(
           `SELECT count(*)::int AS c FROM "${info.name}" t
              LEFT JOIN "${rel.toModel}" p ON p."${rel.toField}" = t."${rel.fromField}"
@@ -457,12 +462,24 @@ async function verify(): Promise<void> {
         if (r[0].c > 0) orphans.push(`  ${info.name}.${rel.fromField} -> ${rel.toModel}.${rel.toField}: ${r[0].c} orphaned`);
       }
     }
-    console.log(`\nrequired foreign keys checked: ${checked}`);
+    console.log(`\nforeign keys checked:  ${checked}`);
+
+    // A constraint that failed to be restored is silently missing, and the row
+    // counts above would still match, so the count itself has to be asserted.
+    const declaredFks = infos.reduce((n, i) => n + i.relations.length, 0);
+    const present = await dst.$queryRawUnsafe<{ n: number }[]>(
+      `SELECT count(*)::int AS n FROM pg_constraint
+        WHERE contype = 'f' AND connamespace = current_schema()::regnamespace`,
+    );
+    const fkShort = declaredFks - present[0].n;
+    console.log(`foreign keys present:  ${present[0].n} of ${declaredFks} declared`);
+    if (fkShort > 0) console.log(`  ${fkShort} foreign key(s) are missing from the target, so it is weaker than the schema`);
+
     console.log(`orphaned references: ${orphans.length === 0 ? "none" : `${orphans.length}`}`);
     if (orphans.length) console.log(orphans.join("\n"));
 
-    if (drift.length || orphans.length) process.exitCode = 1;
-    else console.log("\nCOPY VERIFIED: every table matches and every required foreign key resolves");
+    if (drift.length || orphans.length || fkShort > 0) process.exitCode = 1;
+    else console.log("\nCOPY VERIFIED: every table matches, every declared foreign key is present, and every reference resolves");
   } finally {
     await src.$disconnect();
     await dst.$disconnect();
