@@ -2,7 +2,16 @@ services:
   - type: web
     name: rentbuddy-api
     runtime: node
-    region: oregon
+    # The database is Supabase in AWS ap-southeast-1 (Singapore). Running the
+    # API in Oregon put every single query across the Pacific: a trivial
+    # SELECT 1 measured ~875ms, which is ~4 round trips at ~220ms RTT.
+    # Singapore puts the API next to the database (single-digit ms) and is also
+    # much closer to the users, who are in India.
+    #
+    # IMPORTANT: Render fixes a service's region at creation and cannot move it.
+    # This value only applies to a NEW service - use "Deploy in a new region" in
+    # the dashboard, then repoint the web app at the new hostname.
+    region: singapore
     rootDir: packages/backend
     buildCommand: npm install && npx prisma generate && npx prisma migrate deploy && npm run build
     startCommand: node dist/src/server.js
