@@ -15,5 +15,8 @@ services:
         generateValue: true
       - key: PORT
         value: 5000
-    healthCheckPath: /api/health
+    # The liveness route is mounted at the root ("/health"), not under /api -
+    # everything under /api sits behind auth middleware and answers 401 here,
+    # which would fail every deploy's health check.
+    healthCheckPath: /health
     autoDeploy: true

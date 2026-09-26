@@ -227,7 +227,7 @@
 - [x] GET /api/partner/earnings - Get earnings
 
 ### Others (5+ endpoints)
-- [x] GET /api/health - Health check
+- [x] GET /health - Health check
 - [x] GET /api/pricing - Get pricing
 - [x] GET /api/settings - Get settings
 - [x] PUT /api/settings - Update settings

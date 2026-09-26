@@ -419,7 +419,7 @@ npm start  # Backend
 # Deploy frontend dist/ to CDN
 
 # 5. Verify
-curl https://yourdomain.com/api/health
+curl https://yourdomain.com/health
 ```
 
 ---
