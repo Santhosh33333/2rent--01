@@ -17,6 +17,16 @@ async function upsertVerification(userId: string) {
 // STEP 1: PERSONAL DETAILS
 // ============================================================================
 
+// Whole years elapsed since `birthDate` (UTC-anchored; matches the DOB string
+// the client submitted, so an 18th birthday on the current day counts).
+function ageFromDateOfBirth(birthDate: Date): number {
+  const now = new Date();
+  let age = now.getUTCFullYear() - birthDate.getUTCFullYear();
+  const monthDiff = now.getUTCMonth() - birthDate.getUTCMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && now.getUTCDate() < birthDate.getUTCDate())) age -= 1;
+  return age;
+}
+
 export async function submitPersonalDetails(req: AuthedRequest, res: Response): Promise<void> {
   try {
     const { fullName, dateOfBirth, gender, city, country, address } = req.body;
@@ -44,6 +54,15 @@ export async function submitPersonalDetails(req: AuthedRequest, res: Response): 
     const birthDate = new Date(`${personal.dateOfBirth}T00:00:00.000Z`);
     if (Number.isNaN(birthDate.getTime()) || birthDate.toISOString().slice(0, 10) !== personal.dateOfBirth || birthDate > new Date()) {
       sendError(res, "Enter a valid date of birth in the past.", 400, "VALIDATION_ERROR");
+      return;
+    }
+
+    // Age gate: Nabri is strictly 18+. Anyone younger is refused and the KYC
+    // flow cannot advance past step 1.
+    const MIN_AGE = 18;
+    const age = ageFromDateOfBirth(birthDate);
+    if (age < MIN_AGE) {
+      sendError(res, `You must be at least ${MIN_AGE} years old to use Nabri.`, 403, "AGE_RESTRICTION");
       return;
     }
 
@@ -235,11 +254,22 @@ export async function submitAddressProof(req: AuthedRequest, res: Response): Pro
 
 export async function submitEmergencyContact(req: AuthedRequest, res: Response): Promise<void> {
   try {
-    const { name, phone, relation } = req.body;
+    const { name, phone, relation, email } = req.body;
 
     if (!name || !phone || !relation) {
       sendError(res, "Name, phone, and relation are required.", 400, "VALIDATION_ERROR");
       return;
+    }
+
+    // Optional: lets us email the contact if an SOS is ever triggered.
+    let contactEmail: string | null = null;
+    if (email !== undefined && email !== null && String(email).trim() !== "") {
+      const candidate = String(email).trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidate)) {
+        sendError(res, "Enter a valid emergency contact email address.", 400, "VALIDATION_ERROR");
+        return;
+      }
+      contactEmail = candidate;
     }
 
     const verification = await upsertVerification(req.user!.userId);
@@ -249,6 +279,7 @@ export async function submitEmergencyContact(req: AuthedRequest, res: Response):
       data: {
         emergencyContactName: name,
         emergencyContactPhone: phone,
+        emergencyContactEmail: contactEmail,
         emergencyContactRelation: relation,
         updatedAt: new Date(),
       },

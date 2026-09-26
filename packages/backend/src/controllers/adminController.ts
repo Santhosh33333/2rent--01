@@ -17,6 +17,7 @@ import { SERVICE_KEYS } from "../services/serviceCatalog";
 import * as partnerMatching from "../services/partnerMatchingEngine";
 import { sendEmail, emailStatus, sendKycEmail, sendWelcomeEmail, sendWithdrawalPaidEmail, sendWithdrawalRejectedEmail } from "../services/emailService";
 import { createAndSendAgreements } from "../services/agreementService";
+import { bankNameFromIfsc } from "../services/bankLookup";
 import { renderEmail, paragraphHtml } from "../services/emailTemplate";
 import { ADMIN_ROLES, SUPER_ADMIN_ROLE } from "../rbac/sections";
 import { resolveAdminPermissions, hasPermission } from "../rbac/permissions";
@@ -797,11 +798,15 @@ export async function getWithdrawalRequests(req: AuthedRequest, res: Response): 
         const num = typeof ad?.accountNumber === "string" ? ad.accountNumber : "";
         const ifsc = typeof ad?.ifsc === "string" ? ad.ifsc : "";
         const masked = num ? `Bank ${num.length >= 4 ? `•••• ${num.slice(-4)}` : "••••"}` : "";
-        accountSummary = [masked, ifsc && `IFSC ${ifsc}`].filter(Boolean).join(" · ") || "—";
+        // Show the resolved bank name so finance knows where the money goes.
+        const bankName = (ad?.bankName as string | undefined) || bankNameFromIfsc(ifsc) || "";
+        accountSummary = [masked, ifsc && `IFSC ${ifsc}`, bankName].filter(Boolean).join(" · ") || "—";
       }
+      const holderName = (ad?.accountHolderName as string | undefined) || (ad?.upiBank as string | undefined) || "";
       return {
         ...w,
         accountSummary,
+        ...(holderName ? { accountHolderName: holderName } : {}),
         accountRevealed: revealAccount,
         accountDetail: revealAccount
           ? w.accountDetail
@@ -1194,6 +1199,19 @@ export async function getAgreements(req: AuthedRequest, res: Response): Promise<
     sendSuccess(res, { items, page, limit, total });
   } catch (err) {
     sendError(res, "Failed to retrieve agreements.", 500, "INTERNAL_ERROR");
+  }
+}
+
+export async function getAgreementDetail(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const agreement = await prisma.agreement.findUnique({ where: { id: req.params.id } });
+    if (!agreement) {
+      sendError(res, "Agreement not found.", 404, "NOT_FOUND");
+      return;
+    }
+    sendSuccess(res, { agreement });
+  } catch (err) {
+    sendError(res, "Failed to load agreement.", 500, "INTERNAL_ERROR");
   }
 }
 

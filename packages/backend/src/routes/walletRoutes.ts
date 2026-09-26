@@ -38,6 +38,11 @@ router.get("/topup-requests", walletController.getMyTopupRequests);
 // Wallet rules (limits shown to clients)
 router.get("/config", walletController.getWalletConfig);
 
+// Payout-destination auto-fill: IFSC -> bank name, UPI ID -> holder name/bank
+router.get("/bank-info", walletController.getBankInfo);
+router.get("/upi-info", walletController.getUpiInfo);
+
+
 // Get transactions
 router.get("/transactions", walletController.getTransactions);
 

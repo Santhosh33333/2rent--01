@@ -8,6 +8,21 @@ import { useAuth } from '../../lib/auth'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
 
+// Nabri is 18+ only. Nabri accepts people who are 18 years old — anyone under
+// 18 is refused service, so the flow must stop at the very first step.
+const MIN_AGE = 18
+
+function ageFromDob(dob: string): number | null {
+  if (!dob) return null
+  const birth = new Date(dob)
+  if (Number.isNaN(birth.getTime())) return null
+  const today = new Date()
+  let age = today.getFullYear() - birth.getFullYear()
+  const monthDiff = today.getMonth() - birth.getMonth()
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) age -= 1
+  return age
+}
+
 export function KycStep1PersonalDetails() {
   const navigate = useNavigate()
   const { user } = useAuth()
@@ -61,11 +76,23 @@ export function KycStep1PersonalDetails() {
     setFormData(prev => ({ ...prev, [name]: value }))
   }
 
+  const age = ageFromDob(formData.dateOfBirth)
+  const underage = age !== null && age < MIN_AGE
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!formData.fullName || !formData.dateOfBirth || !formData.gender) {
       toast.error('Please fill all required fields')
+      return
+    }
+    if (ageFromDob(formData.dateOfBirth) === null) {
+      toast.error('Please enter a valid date of birth')
+      return
+    }
+    // Hard stop: 18+ only, no proceeding to the next step.
+    if (underage) {
+      toast.error(`You must be at least ${MIN_AGE} years old to use Nabri`)
       return
     }
     if (submissionLock.current) return
@@ -153,7 +180,14 @@ export function KycStep1PersonalDetails() {
                 onChange={handleChange}
                 className="input w-full"
                 required
+                aria-invalid={underage || undefined}
+                aria-describedby="dob-hint"
               />
+              <p id="dob-hint" className={`text-xs mt-1 ${underage ? 'text-danger-600 dark:text-danger-400 font-medium' : 'text-surface-500'}`}>
+                {underage
+                  ? `You entered ${age} — you must be at least ${MIN_AGE} years old to use Nabri. You cannot continue.`
+                  : `You must be at least ${MIN_AGE} years old to use Nabri.`}
+              </p>
             </div>
 
             {/* Gender */}
@@ -232,10 +266,10 @@ export function KycStep1PersonalDetails() {
               </button>
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || underage}
                 className="flex-1 btn-primary flex items-center justify-center gap-2"
               >
-                {loading ? '...' : <>Next <ArrowRight className="w-4 h-4" /></>}
+                {loading ? '...' : underage ? `${MIN_AGE}+ required` : <>Next <ArrowRight className="w-4 h-4" /></>}
               </button>
             </div>
           </form>

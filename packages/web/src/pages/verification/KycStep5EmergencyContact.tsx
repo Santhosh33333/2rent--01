@@ -13,6 +13,7 @@ export function KycStep5EmergencyContact() {
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
+    email: '',
     relation: '',
   })
 
@@ -105,6 +106,22 @@ export function KycStep5EmergencyContact() {
                 required
               />
               <p className="text-xs text-surface-500 mt-1">Include country code</p>
+            </div>
+
+            {/* Email (optional) */}
+            <div>
+              <label className="block text-sm font-medium text-surface-900 dark:text-white mb-2">
+                Email Address
+              </label>
+              <input
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                placeholder="contact@example.com"
+                className="input w-full"
+              />
+              <p className="text-xs text-surface-500 mt-1">Optional — we email this address if an SOS alert is triggered for you</p>
             </div>
 
             {/* Relationship */}

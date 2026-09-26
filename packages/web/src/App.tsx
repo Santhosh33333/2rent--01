@@ -27,6 +27,8 @@ const ProfileCompletionPage = lazy(() => import('./pages/profile/ProfileCompleti
 const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage').then(m => ({ default: m.DashboardPage })))
 const ProfilePage = lazy(() => import('./pages/profile/ProfilePage').then(m => ({ default: m.ProfilePage })))
 const VerificationPage = lazy(() => import('./pages/verification/VerificationPage').then(m => ({ default: m.VerificationPage })))
+const AgreementsPage = lazy(() => import('./pages/verification/AgreementsPage').then(m => ({ default: m.AgreementsPage })))
+const AdminAgreementsPage = lazy(() => import('./pages/admin/AdminAgreementsPage').then(m => ({ default: m.AdminAgreementsPage })))
 const KycStep1PersonalDetails = lazy(() => import('./pages/verification/KycStep1PersonalDetails').then(m => ({ default: m.KycStep1PersonalDetails })))
 const KycStep2GovId = lazy(() => import('./pages/verification/KycStep2GovId').then(m => ({ default: m.KycStep2GovId })))
 const KycStep3Selfie = lazy(() => import('./pages/verification/KycStep3Selfie').then(m => ({ default: m.KycStep3Selfie })))
@@ -184,6 +186,7 @@ export function App() {
               <Route path="/verification/step5" element={<KycStep5EmergencyContact />} />
               <Route path="/verification/step6" element={<KycStep6Review />} />
               <Route path="/verification/selfie" element={<VerifySelfiePage />} />
+              <Route path="/agreements" element={<AgreementsPage />} />
               <Route path="/verification/gov-id" element={<VerifyGovIdPage />} />
               <Route path="/verification/address" element={<VerifyAddressPage />} />
               <Route path="/wallet" element={<WalletPage />} />
@@ -264,6 +267,7 @@ export function App() {
               <Route path="/admin/kyc" element={<AdminKycPage />} />
               <Route path="/admin/partners" element={<AdminPartnersPage />} />
               <Route path="/admin/withdrawals" element={<AdminWithdrawalsPage />} />
+              <Route path="/admin/agreements" element={<AdminAgreementsPage />} />
               <Route path="/admin/bookings" element={<AdminBookingsPage />} />
               <Route path="/admin/wallets" element={<AdminWalletsPage />} />
               <Route path="/admin/dispatch" element={<AdminDispatchPage />} />

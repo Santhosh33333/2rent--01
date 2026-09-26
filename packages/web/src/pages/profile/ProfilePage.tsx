@@ -360,6 +360,9 @@ export function ProfilePage() {
               <Link to="/verification" className="mt-4 btn-outline btn-sm w-full justify-center text-xs">
                 Complete Verification <ChevronRight className="w-3.5 h-3.5" />
               </Link>
+              <Link to="/agreements" className="mt-2 btn-outline btn-sm w-full justify-center text-xs">
+                My Agreements <ChevronRight className="w-3.5 h-3.5" />
+              </Link>
             </GlassCard>
 
             {/* Account Switching (USER <-> PARTNER, etc.) */}

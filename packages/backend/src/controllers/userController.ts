@@ -5,6 +5,7 @@ import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
 import { getIO } from "../services/socketService";
 import { sendSmsMessage, smsConfigured } from "../services/smsService";
+import { sendSosAlertEmail, sosRecipients } from "../services/emailService";
 import { ensureAdminUsers, activeAdminUserIds } from "../services/adminProvision";
 
 export async function getProfile(req: AuthedRequest, res: Response): Promise<void> {
@@ -361,21 +362,55 @@ export async function triggerSos(req: AuthedRequest, res: Response): Promise<voi
     // 2) SMS fan-out (best-effort; requires an SMS provider env).
     let smsSent = false;
     let smsReason: string | null = null;
+    let emailSent = false;
     const mapsLink = latitude && longitude ? `https://maps.google.com/?q=${latitude},${longitude}` : null;
+    const verification = await prisma.verification.findUnique({
+      where: { userId: req.user!.userId },
+      select: { emergencyContactPhone: true, emergencyContactName: true, emergencyContactEmail: true },
+    });
+    const senderForNotify = await prisma.user.findUnique({
+      where: { id: req.user!.userId },
+      select: { fullName: true, phone: true, email: true },
+    });
+
+    // 2a) Email fan-out: every configured admin address + the registered
+    // emergency contact (when an email is on file). Fire-and-forget — an email
+    // provider hiccup must never delay or fail the SOS response.
+    try {
+      const contactEmail = (verification?.emergencyContactEmail as string | null) || null;
+      const targets: Array<{ to: string; role: "admin" | "contact" }> = [
+        ...sosRecipients().map((to) => ({ to, role: "admin" as const })),
+        ...(contactEmail ? [{ to: contactEmail.trim().toLowerCase(), role: "contact" as const }] : []),
+      ];
+      const unique = Array.from(new Map(targets.map((t) => [t.to, t])).values());
+      const results = await Promise.allSettled(
+        unique.map((t) =>
+          sendSosAlertEmail(t.to, {
+            recipientName: t.role === "contact" ? verification?.emergencyContactName : null,
+            recipientRole: t.role,
+            userName: senderForNotify?.fullName || "A Nabri member",
+            userPhone: senderForNotify?.phone,
+            userEmail: senderForNotify?.email,
+            message: alert.message,
+            latitude,
+            longitude,
+            duringBooking: !!activeBooking,
+            alertId: alert.id,
+          })
+        )
+      );
+      emailSent = results.some((r) => r.status === "fulfilled" && r.value?.ok);
+    } catch (e) {
+      console.error("[SOS] email fan-out failed:", (e as Error)?.message);
+    }
+
     try {
       if (!smsConfigured()) {
         smsReason = "SMS_NOT_CONFIGURED";
       } else {
-        const verification = await prisma.verification.findUnique({
-          where: { userId: req.user!.userId },
-          select: { emergencyContactPhone: true, emergencyContactName: true },
-        });
         // Emergency contact fields live on Verification; fall back gracefully.
-        const contactPhone = (verification as any)?.emergencyContactPhone as string | undefined;
-        const userForSms = await prisma.user.findUnique({
-          where: { id: req.user!.userId },
-          select: { fullName: true, phone: true },
-        });
+        const contactPhone = verification?.emergencyContactPhone as string | undefined;
+        const userForSms = senderForNotify;
         const loc = mapsLink ? ` Location: ${mapsLink}` : "";
         const base = `SOS! ${userForSms?.fullName || "A Nabri user"} needs emergency help${userForSms?.phone ? ` (${userForSms.phone})` : ""}.${loc} Msg: ${alert.message || "Emergency SOS"} - Nabri Safety`;
         const targets: string[] = [];
@@ -419,7 +454,7 @@ export async function triggerSos(req: AuthedRequest, res: Response): Promise<voi
       })
       .catch(() => {});
 
-    sendSuccess(res, { ...alert, smsSent, smsReason }, "SOS alert activated.", 201);
+    sendSuccess(res, { ...alert, smsSent, smsReason, emailSent }, "SOS alert activated.", 201);
   } catch (err) {
     sendError(res, "Failed to trigger SOS.", 500, "INTERNAL_ERROR");
   }

@@ -5,6 +5,8 @@ import { AuthedRequest } from "../middleware/authTypes";
 import { getPartnerEarnings, getConfig } from "../services/pricingEngine";
 import { isDemoEmail } from "../utils/demo";
 import { moneyTransaction } from "../utils/db";
+import { sendWithdrawalRequestedEmail } from "../services/emailService";
+import { bankNameFromIfsc, isValidIfsc, lookupUpi } from "../services/bankLookup";
 
 // Serializes concurrent money-affecting operations per user so the app-level
 // "one open withdrawal at a time" rule cannot be raced by two parallel requests
@@ -294,6 +296,49 @@ export async function getWithdrawalHistory(req: AuthedRequest, res: Response): P
 }
 
 // ============================================================================
+// PAYOUT DESTINATION LOOKUPS (auto-fill for the withdrawal form)
+// ============================================================================
+
+// IFSC -> bank name. The RBI assigns the first 4 characters per bank, so this
+// resolves without any network call.
+export async function getBankInfo(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const ifsc = String(req.query.ifsc || "").trim().toUpperCase();
+    if (!ifsc) {
+      sendError(res, "IFSC is required.", 400, "VALIDATION_ERROR");
+      return;
+    }
+    if (!isValidIfsc(ifsc)) {
+      sendError(res, "Enter a valid 11-character IFSC code.", 400, "INVALID_IFSC");
+      return;
+    }
+    sendSuccess(res, { ifsc, bankName: bankNameFromIfsc(ifsc), resolved: !!bankNameFromIfsc(ifsc) });
+  } catch {
+    sendError(res, "Failed to look up IFSC.", 500, "INTERNAL_ERROR");
+  }
+}
+
+// UPI ID -> account holder name + bank/app. Uses Razorpay VPA validation when
+// real credentials exist, otherwise derives the name from the handle.
+export async function getUpiInfo(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const upiId = String(req.query.upiId || "").trim().toLowerCase();
+    if (!upiId) {
+      sendError(res, "UPI ID is required.", 400, "VALIDATION_ERROR");
+      return;
+    }
+    const result = await lookupUpi(upiId);
+    if (!result.valid) {
+      sendError(res, "Enter a valid UPI ID in the format name@bank.", 400, "INVALID_UPI_ID");
+      return;
+    }
+    sendSuccess(res, { upiId, ...result });
+  } catch {
+    sendError(res, "Failed to look up UPI ID.", 500, "INTERNAL_ERROR");
+  }
+}
+
+// ============================================================================
 // REQUEST WITHDRAWAL
 // ============================================================================
 
@@ -314,13 +359,18 @@ export async function requestWithdrawal(req: AuthedRequest, res: Response): Prom
 
     // A payout destination is mandatory and must be well-formed.
     if (method === "BANK_TRANSFER") {
-      const ad = accountDetail as { accountNumber?: string; ifsc?: string } | undefined;
+      const ad = accountDetail as { accountNumber?: string; ifsc?: string; bankName?: string; accountHolderName?: string } | undefined;
       if (!ad?.accountNumber || !ad?.ifsc) {
         sendError(res, "Bank account number and IFSC are required.", 400, "INVALID_ACCOUNT");
         return;
       }
+      // Enrich with the resolved bank name so finance sees it without looking
+      // the IFSC up. Never trust a client-supplied name over the IFSC table.
+      if (!ad.bankName || !isValidIfsc(ad.ifsc)) {
+        ad.bankName = bankNameFromIfsc(ad.ifsc) || ad.bankName;
+      }
     } else if (method === "UPI") {
-      const ad = accountDetail as { upiId?: string } | undefined;
+      const ad = accountDetail as { upiId?: string; accountHolderName?: string; upiBank?: string } | undefined;
       if (!ad?.upiId || !/^[\w.\-]+@[a-zA-Z]{2,}$/.test(ad.upiId)) {
         sendError(res, "A valid UPI ID is required.", 400, "INVALID_ACCOUNT");
         return;
@@ -432,6 +482,19 @@ export async function requestWithdrawal(req: AuthedRequest, res: Response): Prom
 
     let out: any = withdrawal;
     try { out = { ...withdrawal, accountDetail: JSON.parse((withdrawal as any).accountDetail) }; } catch { /* keep as-is */ }
+
+    // Confirmation email to the requester (fire-and-forget; best-effort).
+    const requester = await prisma.user.findUnique({ where: { id: req.user!.userId }, select: { email: true, fullName: true } }).catch(() => null);
+    if (requester?.email) {
+      void sendWithdrawalRequestedEmail(requester.email, requester.fullName || "there", {
+        withdrawalId: withdrawal.id,
+        amount,
+        method,
+        status: "PENDING",
+        createdAt: withdrawal.createdAt,
+      }).catch((err) => console.error("[EMAIL] Withdrawal requested email failed:", err));
+    }
+
     sendSuccess(res, out, "Withdrawal request submitted.", 201);
   } catch (err: any) {
     if (err?.code === "DUPLICATE_WITHDRAWAL") {

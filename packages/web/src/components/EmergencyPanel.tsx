@@ -83,9 +83,15 @@ export function EmergencyPanel() {
       }).then((res) => {
         const d = res.data?.data || res.data
         if (d?.id) setActiveAlertId(d.id)
+        // Admin + emergency-contact emails are dispatched server-side; the
+        // response flags whether at least one went out.
+        if (d?.emailSent) {
+          toast.success('SOS emailed to our safety team and your emergency contact. Stay safe.', { duration: 6000 })
+        } else {
+          toast.success('SOS sent to admins and your partner. Stay safe.', { duration: 6000 })
+        }
       })
       setActive(true)
-      toast.success('SOS sent to admins and your partner. Stay safe.', { duration: 6000 })
     } catch (err) {
       toast.error(getErrorMessage(err, 'Could not send SOS — call 112 directly.'))
     } finally {

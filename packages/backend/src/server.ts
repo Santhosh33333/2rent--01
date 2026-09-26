@@ -278,6 +278,14 @@ if (!dbAvailable) {
     console.warn("Schema reconciliation warning (Verification):", (err as Error)?.message);
   }
 
+  // Emergency-contact email (used to email SOS alerts to the contact).
+  try {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Verification" ADD COLUMN IF NOT EXISTS "emergencyContactEmail" TEXT`);
+    console.log("Schema reconciliation: Verification emergency contact email ensured.");
+  } catch (err) {
+    console.warn("Schema reconciliation warning (Verification.emergencyContactEmail):", (err as Error)?.message);
+  }
+
   // Marketing email dedup log (re-engagement sweeps). Same idempotent pattern.
   try {
     await prisma.$executeRawUnsafe(

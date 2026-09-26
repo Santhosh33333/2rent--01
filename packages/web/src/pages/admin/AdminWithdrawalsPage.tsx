@@ -15,6 +15,9 @@ interface Withdrawal {
   status: string
   method?: string
   accountDetail?: string
+  accountSummary?: string
+  accountRevealed?: boolean
+  accountHolderName?: string
   payoutProofImageUrl?: string | null
   createdAt: string
 }
@@ -47,6 +50,9 @@ const [statusFilter, setStatusFilter] = useState('PENDING')
         status: w.status,
         method: w.method || '',
 accountDetail: w.accountDetail || w.upiId || w.bankAccount || '',
+        accountSummary: w.accountSummary || '',
+        accountRevealed: !!w.accountRevealed,
+        accountHolderName: w.accountHolderName || '',
         payoutProofImageUrl: w.payoutProofImageUrl || null,
         createdAt: w.createdAt,
       })))
@@ -140,7 +146,7 @@ const handleApprove = async (id: string) => {
                   w.userEmail || '-',
                   `₹${w.amount}`,
                   w.method || '-',
-                  w.accountDetail || '-',
+                  w.accountSummary || w.accountDetail || '-',
                   w.status || '-',
                   w.createdAt ? new Date(w.createdAt).toLocaleString('en-IN') : '-',
                 ]),
@@ -208,9 +214,19 @@ const handleApprove = async (id: string) => {
                         <td className="px-4 py-3">
                           <p className="text-white text-sm font-medium">{w.userName || 'Unknown'}</p>
                           {w.userEmail && <p className="text-gray-500 text-xs">{w.userEmail}</p>}
-                          {w.accountDetail && (
+                          {(w.accountSummary || w.accountDetail) && (
                             <p className="text-gray-500 text-xs">
-                              {w.method ? `${w.method}: ` : ''}{w.accountDetail}
+                              {w.method ? `${w.method}: ` : ''}{w.accountSummary || w.accountDetail}
+                            </p>
+                          )}
+                          {w.accountHolderName && (
+                            <p className="text-gray-500 text-xs">
+                              Holder: {w.accountHolderName}
+                            </p>
+                          )}
+                          {w.accountRevealed && w.accountDetail && (
+                            <p className="text-gray-500 text-[10px] font-mono break-all mt-0.5" title="Full payout details (finance)">
+                              {w.accountDetail}
                             </p>
                           )}
                         </td>

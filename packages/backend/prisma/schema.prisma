@@ -120,6 +120,7 @@ model Verification {
   addressProofUrl          String?
   emergencyContactName     String?
   emergencyContactPhone    String?
+  emergencyContactEmail    String?
   emergencyContactRelation String?
   status                   String    @default("NOT_STARTED") // NOT_STARTED, DRAFT, SUBMITTED, PENDING_REVIEW, UNDER_VERIFICATION, APPROVED, REJECTED, RESUBMIT_REQUIRED
   reviewedBy               String?

@@ -145,6 +145,9 @@ const envSchema = z.object({
   // SOS: when set, every active SOS alert is also SMSed to this ops phone
   // (E.164), in addition to the user's emergency contact.
   SOS_SMS_TO: z.string().optional(),
+  // Comma-separated list of admin addresses that receive SOS alert emails.
+  // Defaults to ADMIN_EMAIL when unset.
+  SOS_ALERT_EMAILS: z.string().optional(),
 
   // LocationIQ — optional in dev
   LOCATIONIQ_API_KEY: z.string().default("pk_dev_placeholder"),

@@ -374,6 +374,83 @@ export async function sendBookingEmail(email: string, subject: string, body: str
 }
 
 /** KYC decision email — sent to the applicant when an admin reviews their documents. */
+// ============================================================================
+// SOS ALERT EMAILS
+// ============================================================================
+
+export interface SosAlertEmailInput {
+  recipientName: string | null | undefined;
+  recipientRole: "admin" | "contact";
+  userName: string;
+  userPhone?: string | null;
+  userEmail?: string | null;
+  message?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  duringBooking?: boolean;
+  alertId: string;
+}
+
+export function sosRecipients(): string[] {
+  const configured = (env.SOS_ALERT_EMAILS || "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  const primary = (env.ADMIN_EMAIL || "santhoshkrishna958@gmail.com").trim().toLowerCase();
+  return Array.from(new Set([...configured, primary]));
+}
+
+// Sends the SOS alert to one address. Admin copies get the operational detail
+// (live map, dashboard deep-link); the emergency contact gets a plain,
+// reassuring notice with the map link and the user's phone number.
+export async function sendSosAlertEmail(to: string, input: SosAlertEmailInput): Promise<EmailResult> {
+  const isAdmin = input.recipientRole === "admin";
+  const who = input.userName || "A Nabri member";
+  const mapsLink =
+    input.latitude != null && input.longitude != null
+      ? `https://maps.google.com/?q=${input.latitude},${input.longitude}`
+      : null;
+  const dashboardLink = `${WEB_ORIGIN}/admin/sos`;
+  const contactLine = input.userPhone
+    ? `Call them back on <strong>${escHtml(input.userPhone)}</strong>`
+    : "Contact them through the Nabri safety line";
+  const locationBlock = mapsLink
+    ? `<p style="margin:0 0 14px">Live location: <a href="${mapsLink}" style="color:#0D378B;font-weight:600">${escHtml(mapsLink)}</a></p>`
+    : `<p style="margin:0 0 14px">No location was shared with this alert.</p>`;
+
+  const bodyHtml = isAdmin
+    ? `<p style="margin:0 0 14px"><strong>Emergency SOS triggered${input.duringBooking ? " during an active booking" : ""}.</strong></p>
+       <p style="margin:0 0 8px">Member: <strong>${escHtml(who)}</strong>${input.userEmail ? ` (${escHtml(input.userEmail)})` : ""}</p>
+       <p style="margin:0 0 8px">Phone: <strong>${escHtml(input.userPhone || "not provided")}</strong></p>
+       <p style="margin:0 0 14px">Message: ${escHtml(input.message || "Emergency SOS")}</p>
+       ${locationBlock}
+       <p style="margin:0">${contactLine}.</p>`
+    : `<p style="margin:0 0 14px">Hello ${escHtml(input.recipientName || "there")},</p>
+       <p style="margin:0 0 14px">You are listed as the emergency contact for <strong>${escHtml(who)}</strong> on Nabri, and they have just triggered an SOS alert.${input.userPhone ? ` You can call them on <strong>${escHtml(input.userPhone)}</strong>.` : ""}</p>
+       <p style="margin:0 0 14px">Their message: ${escHtml(input.message || "Emergency SOS")}</p>
+       ${locationBlock}
+       <p style="margin:0">If you are able to help, please reach them or the authorities first. Nabri's safety team has already been alerted by email.</p>`;
+
+  return sendEmail(
+    to,
+    `SOS: ${who} needs emergency help`,
+    renderEmail({
+      supportEmail: env.SUPPORT_EMAIL,
+      title: isAdmin ? "SOS alert raised" : "Emergency SOS — action may be needed",
+      kicker: "Safety alert",
+      bodyHtml,
+      ctaText: isAdmin ? "Open SOS queue" : "Open live location",
+      ctaUrl: isAdmin ? dashboardLink : mapsLink || dashboardLink,
+      note: isAdmin
+        ? "This alert was generated automatically. Reply to this email if you need to coordinate."
+        : "You are receiving this because you are the registered emergency contact on Nabri.",
+    }),
+    isAdmin
+      ? `SOS triggered by ${who}. Phone: ${input.userPhone || "not provided"}. Message: ${input.message || "Emergency SOS"}.${mapsLink ? ` Location: ${mapsLink}` : ""}`
+      : `${who} (Nabri member) triggered an SOS alert.${input.userPhone ? ` Call: ${input.userPhone}.` : ""}${mapsLink ? ` Location: ${mapsLink}` : ""}`
+  );
+}
+
 export async function sendKycEmail(email: string, name: string, approved: boolean, rejectionReason?: string): Promise<EmailResult> {
   const subject = approved ? "KYC verification approved" : "KYC verification needs attention";
   const bodyHtml = approved

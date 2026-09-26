@@ -258,6 +258,7 @@ export const adminApi = {
   resetAdminPassword: (userId: string) => api.post(`/admin/admins/${userId}/reset-password`),
   // Agreement archive (legal records)
   getAgreements: (params?: PaginationParams) => api.get('/admin/agreements', { params }),
+  getAgreement: (id: string) => api.get(`/admin/agreements/${id}`),
 }
 
 // Post-KYC agreements (member self-serve)

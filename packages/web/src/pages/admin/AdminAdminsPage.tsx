@@ -20,51 +20,126 @@ interface AdminAccount {
   adminProfile?: { department?: string; role?: { name: string; permissions?: string } } | null
 }
 
-const ASSIGNABLE_ROLES = ['ADMIN', 'MODERATOR', 'SUPPORT', 'FINANCE']
+// Roles that delegate platform admin powers. Must match the backend's
+// ASSIGNABLE_ADMIN_ROLES so creation never fails with INVALID_ROLE.
+const ASSIGNABLE_ROLES = ['MODERATOR', 'SUPPORT', 'FINANCE', 'SUPPORT_ADMIN', 'FINANCE_ADMIN', 'KYC_ADMIN', 'MARKETING_ADMIN', 'PARTNER_ADMIN']
 
-// Every permission the backend's requirePermission() can check, grouped for the UI
-const PERMISSION_GROUPS: { group: string; items: { key: string; label: string }[] }[] = [
-  {
-    group: 'People',
-    items: [
-      { key: 'users.manage', label: 'Manage users' },
-      { key: 'kyc.review', label: 'Review KYC' },
-      { key: 'partners.manage', label: 'Manage partners' },
-      { key: 'reports.manage', label: 'Handle reports' },
-    ],
-  },
-  {
-    group: 'Money',
-    items: [
-      { key: 'payments.view', label: 'View payments & stats' },
-      { key: 'withdrawals.manage', label: 'Approve withdrawals' },
-      { key: 'revenue.view', label: 'View revenue analytics' },
-    ],
-  },
-  {
-    group: 'Operations',
-    items: [
-      { key: 'bookings.view', label: 'View bookings' },
-      { key: 'pricing.manage', label: 'Pricing config' },
-      { key: 'coupons.manage', label: 'Coupons' },
-      { key: 'areas.manage', label: 'Service areas' },
-      { key: 'campaigns.manage', label: 'Campaigns' },
-    ],
-  },
-  {
-    group: 'System',
-    items: [
-      { key: 'audit.view', label: 'View audit logs' },
-      { key: 'notifications.send', label: 'Send notifications' },
-    ],
-  },
+// ---------------------------------------------------------------------------
+// Permission picker — real backend tokens in `SECTION.ACTION` form.
+// The backend enforces these exactly via requireSectionAction() (never trusts
+// the UI), so the keys here MUST match rbac/sections.ts on the server.
+// ---------------------------------------------------------------------------
+type Action = 'VIEW' | 'CREATE' | 'EDIT' | 'APPROVE' | 'REJECT' | 'DELETE' | 'EXPORT'
+
+const SECTION_LABELS: Record<string, string> = {
+  USERS: 'Users',
+  PARTNERS: 'Partners',
+  KYC: 'KYC / Verification',
+  BOOKINGS: 'Bookings',
+  JOBS: 'Jobs',
+  DISPATCH: 'Dispatch',
+  PAYMENTS: 'Payments',
+  REFUNDS: 'Refunds',
+  WALLETS: 'Wallets',
+  WITHDRAWALS: 'Withdrawals',
+  PRICING: 'Pricing',
+  OFFERS: 'Offers',
+  COUPONS: 'Coupons',
+  COMMUNITIES: 'Communities',
+  EVENTS: 'Events',
+  DATING: 'Dating',
+  MOVIES: 'Movies',
+  REPORTS: 'Reports',
+  AGREEMENTS: 'Agreements',
+  SUPPORT: 'Support tickets',
+  NOTIFICATIONS: 'Notifications',
+  ANALYTICS: 'Analytics',
+  CONTENT_MODERATION: 'Content moderation',
+  SECURITY: 'Security',
+  ADMIN_MANAGEMENT: 'Admin management',
+  SYSTEM_SETTINGS: 'System settings',
+  AUDIT_LOGS: 'Audit logs',
+}
+
+const ACTION_LABELS: Record<Action, string> = {
+  VIEW: 'View',
+  CREATE: 'Create',
+  EDIT: 'Edit',
+  APPROVE: 'Approve',
+  REJECT: 'Reject',
+  DELETE: 'Delete',
+  EXPORT: 'Export',
+}
+
+// Which actions are shown per section (keeps the form usable without dumping
+// all 26×7 pairs at once).
+const SECTION_ACTIONS: Record<string, Action[]> = {
+  USERS: ['VIEW', 'EDIT'],
+  PARTNERS: ['VIEW', 'EDIT', 'APPROVE', 'REJECT'],
+  KYC: ['VIEW', 'EDIT', 'APPROVE', 'REJECT', 'EXPORT'],
+  BOOKINGS: ['VIEW', 'EDIT'],
+  JOBS: ['VIEW', 'EDIT', 'APPROVE', 'REJECT'],
+  DISPATCH: ['VIEW'],
+  PAYMENTS: ['VIEW', 'EXPORT'],
+  REFUNDS: ['VIEW', 'APPROVE', 'REJECT'],
+  WALLETS: ['VIEW', 'EDIT'],
+  WITHDRAWALS: ['VIEW', 'APPROVE', 'REJECT', 'EXPORT'],
+  PRICING: ['VIEW', 'EDIT'],
+  OFFERS: ['VIEW', 'CREATE', 'EDIT', 'DELETE'],
+  COUPONS: ['VIEW', 'CREATE', 'EDIT', 'DELETE'],
+  COMMUNITIES: ['VIEW', 'CREATE', 'EDIT'],
+  EVENTS: ['VIEW', 'CREATE', 'EDIT'],
+  DATING: ['VIEW'],
+  MOVIES: ['VIEW'],
+  REPORTS: ['VIEW', 'APPROVE', 'REJECT'],
+  SUPPORT: ['VIEW', 'EDIT', 'APPROVE', 'REJECT'],
+  NOTIFICATIONS: ['VIEW', 'CREATE'],
+  ANALYTICS: ['VIEW'],
+  CONTENT_MODERATION: ['VIEW', 'APPROVE', 'REJECT'],
+  SECURITY: ['VIEW', 'EDIT'],
+  ADMIN_MANAGEMENT: ['VIEW', 'EDIT'],
+  SYSTEM_SETTINGS: ['VIEW', 'EDIT'],
+  AUDIT_LOGS: ['VIEW', 'EXPORT'],
+  AGREEMENTS: ['VIEW', 'EXPORT'],
+}
+
+const PERMISSION_GROUPS = [
+  { group: 'People', sections: ['USERS', 'PARTNERS', 'KYC', 'REPORTS', 'SUPPORT'] },
+  { group: 'Money', sections: ['PAYMENTS', 'REFUNDS', 'WALLETS', 'WITHDRAWALS', 'PRICING'] },
+  { group: 'Operations', sections: ['BOOKINGS', 'JOBS', 'DISPATCH', 'COMMUNITIES', 'EVENTS'] },
+  { group: 'Growth', sections: ['OFFERS', 'COUPONS', 'NOTIFICATIONS', 'DATING', 'MOVIES'] },
+  { group: 'System', sections: ['CONTENT_MODERATION', 'SECURITY', 'ADMIN_MANAGEMENT', 'SYSTEM_SETTINGS', 'AUDIT_LOGS', 'AGREEMENTS'] },
 ]
 
-const ALL_PERMISSIONS = PERMISSION_GROUPS.flatMap((g) => g.items.map((i) => i.key))
+function tokensForAction(section: string, action: Action): string {
+  return `${section}.${action}`
+}
+
+const ALL_PERMISSIONS: string[] = Object.entries(SECTION_ACTIONS).flatMap(([section, actions]) =>
+  actions.map((a) => tokensForAction(section, a))
+)
+
+// Role templates mirroring backend rbac/sections.ts ROLE_TEMPLATES, so picking
+// a role pre-fills its intended default access matrix.
+const ROLE_TEMPLATES: Record<string, Record<string, Action[]>> = {
+  MODERATOR: { USERS: ['VIEW'], REPORTS: ['VIEW'], CONTENT_MODERATION: ['VIEW', 'APPROVE', 'REJECT'] },
+  SUPPORT: { USERS: ['VIEW', 'EDIT'], BOOKINGS: ['VIEW'], REPORTS: ['VIEW', 'APPROVE', 'REJECT'], SUPPORT: ['VIEW', 'EDIT', 'APPROVE', 'REJECT'] },
+  FINANCE: { WALLETS: ['VIEW', 'EDIT'], REFUNDS: ['VIEW', 'APPROVE', 'REJECT'], WITHDRAWALS: ['VIEW', 'APPROVE', 'REJECT', 'EXPORT'], PAYMENTS: ['VIEW', 'EXPORT'], ANALYTICS: ['VIEW'], REPORTS: ['VIEW'], BOOKINGS: ['VIEW'], AGREEMENTS: ['VIEW', 'EXPORT'] },
+  SUPPORT_ADMIN: { USERS: ['VIEW', 'EDIT'], REPORTS: ['VIEW', 'APPROVE', 'REJECT'], SUPPORT: ['VIEW', 'EDIT', 'APPROVE', 'REJECT'], BOOKINGS: ['VIEW'], COMMUNITIES: ['VIEW'], EVENTS: ['VIEW'], NOTIFICATIONS: ['VIEW', 'CREATE'], AUDIT_LOGS: ['VIEW'], AGREEMENTS: ['VIEW', 'EXPORT'] },
+  KYC_ADMIN: { KYC: ['VIEW', 'EDIT', 'APPROVE', 'REJECT', 'EXPORT'], USERS: ['VIEW'], REPORTS: ['VIEW'], CONTENT_MODERATION: ['VIEW', 'APPROVE', 'REJECT'], AGREEMENTS: ['VIEW'] },
+  FINANCE_ADMIN: { WALLETS: ['VIEW', 'EDIT'], REFUNDS: ['VIEW', 'APPROVE', 'REJECT'], WITHDRAWALS: ['VIEW', 'APPROVE', 'REJECT', 'EXPORT'], PAYMENTS: ['VIEW', 'EXPORT'], ANALYTICS: ['VIEW'], REPORTS: ['VIEW'], BOOKINGS: ['VIEW'], AGREEMENTS: ['VIEW', 'EXPORT'] },
+  MARKETING_ADMIN: { OFFERS: ['VIEW', 'CREATE', 'EDIT', 'DELETE'], COUPONS: ['VIEW', 'CREATE', 'EDIT', 'DELETE'], COMMUNITIES: ['VIEW', 'CREATE', 'EDIT'], EVENTS: ['VIEW', 'CREATE', 'EDIT'], NOTIFICATIONS: ['VIEW', 'CREATE'], ANALYTICS: ['VIEW'] },
+  PARTNER_ADMIN: { PARTNERS: ['VIEW', 'EDIT', 'APPROVE', 'REJECT'], JOBS: ['VIEW', 'EDIT', 'APPROVE', 'REJECT'], BOOKINGS: ['VIEW'], DISPATCH: ['VIEW'], REPORTS: ['VIEW'], COMMUNITIES: ['VIEW'] },
+}
+
+function templateTokens(role: string): string[] {
+  const tpl = ROLE_TEMPLATES[role] || {}
+  return Object.entries(tpl).flatMap(([section, actions]) => actions.map((a) => tokensForAction(section, a)))
+}
 
 function PermissionPicker({ selected, onChange }: { selected: string[]; onChange: (next: string[]) => void }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+    <div className="space-y-4">
       {PERMISSION_GROUPS.map((g) => (
         <div key={g.group} className="p-3 rounded-xl bg-gray-950/60 border border-gray-800">
           <div className="flex items-center justify-between mb-2">
@@ -72,34 +147,42 @@ function PermissionPicker({ selected, onChange }: { selected: string[]; onChange
             <button
               type="button"
               onClick={() => {
-                const keys = g.items.map((i) => i.key)
+                const keys = g.sections.flatMap((s) => (SECTION_ACTIONS[s] || []).map((a) => tokensForAction(s, a)))
                 const allOn = keys.every((k) => selected.includes(k))
                 onChange(allOn ? selected.filter((k) => !keys.includes(k)) : Array.from(new Set([...selected, ...keys])))
               }}
               className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 hover:text-white transition"
             >
-              {g.items.every((i) => selected.includes(i.key)) ? 'None' : 'All'}
+              {g.sections.every((s) => (SECTION_ACTIONS[s] || []).every((a) => selected.includes(tokensForAction(s, a)))) ? 'None' : 'All'}
             </button>
           </div>
-          <div className="space-y-1.5">
-            {g.items.map((item) => {
-              const on = selected.includes(item.key)
-              return (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => onChange(on ? selected.filter((k) => k !== item.key) : [...selected, item.key])}
-                  className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-left transition ${
-                    on ? 'bg-emerald-900/30 text-emerald-300' : 'bg-gray-800/60 text-gray-400 hover:text-white'
-                  }`}
-                >
-                  <span className={`w-4 h-4 shrink-0 rounded flex items-center justify-center border ${on ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-gray-600'}`}>
-                    {on && <Check className="w-3 h-3" />}
-                  </span>
-                  {item.label}
-                </button>
-              )
-            })}
+          <div className="space-y-3">
+            {g.sections.map((section) => (
+              <div key={section}>
+                <p className="text-[10px] font-bold uppercase tracking-wide text-gray-600 mb-1">{SECTION_LABELS[section] || section}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {(SECTION_ACTIONS[section] || []).map((action) => {
+                    const key = tokensForAction(section, action)
+                    const on = selected.includes(key)
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => onChange(on ? selected.filter((k) => k !== key) : [...selected, key])}
+                        className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs transition ${
+                          on ? 'bg-emerald-900/30 text-emerald-300' : 'bg-gray-800/60 text-gray-400 hover:text-white'
+                        }`}
+                      >
+                        <span className={`w-3.5 h-3.5 shrink-0 rounded flex items-center justify-center border ${on ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-gray-600'}`}>
+                          {on && <Check className="w-3 h-3" />}
+                        </span>
+                        {ACTION_LABELS[action]}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       ))}
@@ -116,8 +199,8 @@ export function AdminAdminsPage() {
   const [showForm, setShowForm] = useState(false)
   const [creating, setCreating] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
-  const [form, setForm] = useState({ fullName: '', email: '', phone: '', password: '', role: 'MODERATOR', department: '' })
-  const [selectedPerms, setSelectedPerms] = useState<string[]>([...ALL_PERMISSIONS])
+  const [form, setForm] = useState({ fullName: '', email: '', phone: '', password: '', role: 'SUPPORT_ADMIN', department: '' })
+  const [selectedPerms, setSelectedPerms] = useState<string[]>([...templateTokens('SUPPORT_ADMIN')])
 
   // Per-admin access editor
   const [editing, setEditing] = useState<AdminAccount | null>(null)
@@ -159,8 +242,8 @@ export function AdminAdminsPage() {
       })
       toast.success('Admin account created with access rights')
       setShowForm(false)
-      setForm({ fullName: '', email: '', phone: '', password: '', role: 'MODERATOR', department: '' })
-      setSelectedPerms([...ALL_PERMISSIONS])
+      setForm({ fullName: '', email: '', phone: '', password: '', role: 'SUPPORT_ADMIN', department: '' })
+      setSelectedPerms([...templateTokens('SUPPORT_ADMIN')])
       load()
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to create admin account'))
@@ -186,7 +269,8 @@ export function AdminAdminsPage() {
 
   const openEditor = (acc: AdminAccount) => {
     setEditing(acc)
-    setEditPerms(acc.permissions?.length ? acc.permissions : [...ALL_PERMISSIONS])
+    const known = (acc.permissions || []).filter((p) => ALL_PERMISSIONS.includes(p))
+    setEditPerms(known.length ? known : [...templateTokens(acc.role)])
   }
 
   const savePerms = async () => {
@@ -223,15 +307,16 @@ export function AdminAdminsPage() {
     if (acc.role === 'SUPER_ADMIN') {
       return <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-900/40 text-emerald-300 font-bold">FULL ACCESS</span>
     }
-    const perms = acc.permissions ?? []
-    if (perms.length === 0) {
+    const perms = (acc.permissions ?? []).filter((p) => ALL_PERMISSIONS.includes(p) || p === '*')
+    const effective = perms.length ? perms : templateTokens(acc.role)
+    if (effective.length === 0) {
       return <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-900/40 text-red-300 font-bold">NO ACCESS</span>
     }
     return (
       <>
-        <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-900/40 text-blue-300 font-bold">{perms.length} PERM{perms.length === 1 ? '' : 'S'}</span>
-        <span className="text-[10px] text-gray-500 truncate max-w-[220px]" title={perms.join(', ')}>
-          {perms.slice(0, 3).join(', ')}{perms.length > 3 ? ` +${perms.length - 3}` : ''}
+        <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-900/40 text-blue-300 font-bold">{effective.length} PERM{effective.length === 1 ? '' : 'S'}</span>
+        <span className="text-[10px] text-gray-500 truncate max-w-[220px]" title={effective.join(', ')}>
+          {effective.slice(0, 3).join(', ')}{effective.length > 3 ? ` +${effective.length - 3}` : ''}
         </span>
       </>
     )
@@ -300,7 +385,7 @@ export function AdminAdminsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <input required placeholder="Full name" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })}
                 className="px-4 py-2.5 rounded-xl bg-gray-800 border border-gray-700 text-white placeholder:text-gray-500 focus:border-emerald-500 focus:outline-none" />
-              <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}
+              <select value={form.role} onChange={(e) => { const r = e.target.value; setForm({ ...form, role: r }); setSelectedPerms([...templateTokens(r)]) }}
                 className="px-4 py-2.5 rounded-xl bg-gray-800 border border-gray-700 text-white focus:border-emerald-500 focus:outline-none">
                 {ASSIGNABLE_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
               </select>
