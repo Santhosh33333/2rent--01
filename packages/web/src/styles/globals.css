@@ -218,27 +218,25 @@ html.dark .hover\:text-primary-600:hover { color: rgb(var(--c-400)); }
   }
 
   /* ===== SECTION HEROES (one identity per area — never the same gradient twice) ===== */
+  /* Signature diagonal crest: a hard-edged facet + lime hairline over an
+     accent-aware gradient (the --c ramp follows data-accent automatically).
+     Variants only retune --hero-from/--hero-to, so the crest stays intact. */
   .hero {
     @apply relative overflow-hidden rounded-3xl p-6 sm:p-8 text-white shadow-xl;
+    --hero-from: rgb(var(--c-800));
+    --hero-to: rgb(var(--c-600));
+    background-image:
+      linear-gradient(115deg, rgba(255, 255, 255, 0.07) 0 34%, transparent 34.2%),
+      linear-gradient(rgba(210, 245, 60, 0.14) 0 1.5px, transparent 1.5px),
+      linear-gradient(135deg, var(--hero-from) 0%, var(--hero-to) 100%);
+    background-size: auto, 220px 220px, auto;
   }
-  .hero-indigo {
-    @apply hero bg-gradient-to-br from-primary-800 to-primary-600 shadow-primary-900/15;
-  }
-  .hero-emerald {
-    @apply hero bg-gradient-to-br from-primary-800 to-primary-600 shadow-primary-900/15;
-  }
-  .hero-amber {
-    @apply hero bg-gradient-to-br from-amber-700 to-amber-600 shadow-amber-900/15;
-  }
-  .hero-rose {
-    @apply hero bg-gradient-to-br from-rose-700 to-rose-600 shadow-rose-900/15;
-  }
-  .hero-sky {
-    @apply hero bg-gradient-to-br from-sky-800 to-sky-600 shadow-sky-900/15;
-  }
-  .hero-violet {
-    @apply hero bg-gradient-to-br from-primary-800 to-primary-600 shadow-primary-900/15;
-  }
+  .hero-indigo,
+  .hero-emerald,
+  .hero-violet { @apply hero shadow-primary-950/25; }
+  .hero-amber { @apply hero; --hero-from: #b45309; --hero-to: #d97706; }
+  .hero-rose { @apply hero; --hero-from: #be123c; --hero-to: #e11d48; }
+  .hero-sky { @apply hero; --hero-from: #075985; --hero-to: #0284c7; }
   .hero-dots {
     @apply absolute inset-0 opacity-30 pointer-events-none;
   }
@@ -376,7 +374,7 @@ html.dark .hover\:text-primary-600:hover { color: rgb(var(--c-400)); }
     margin-right: 0.65rem;
     vertical-align: -0.04em;
     border-radius: 2px;
-    background: linear-gradient(180deg, #d2f53c, rgb(var(--c-500)));
+    background: linear-gradient(180deg, rgb(var(--c-400)), rgb(var(--c-600)));
   }
   .route-content {
     animation: pageEnter 280ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
@@ -437,7 +435,7 @@ html.dark .hover\:text-primary-600:hover { color: rgb(var(--c-400)); }
   }
   .section-title::before {
     content: '';
-    @apply block w-1 self-stretch rounded-full bg-gradient-to-b from-primary-500 to-accent-600 shrink-0;
+    @apply block w-1 self-stretch rounded-full bg-gradient-to-b from-primary-400 to-primary-600 shrink-0;
     min-height: 1.25rem;
   }
   .section-subtitle {
@@ -494,16 +492,59 @@ html.dark .hover\:text-primary-600:hover { color: rgb(var(--c-400)); }
     @apply bg-gradient-to-r from-primary-700 to-primary-500 bg-clip-text text-transparent;
   }
   .glass-elevated { border-radius: .375rem; box-shadow: 0 16px 42px rgba(28,25,23,.08); }
+  /* ===== BRAND MARK PRESENTATION (2026 identity) =====
+     Flat navy squircle + lime beacon. The old faux-3D tumble is gone; the mark
+     now floats on a soft aura with a radar ring that breathes once per cycle. */
+  .brand-badge {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 22%;
+    background: linear-gradient(135deg, #2E63E0 0%, #163E96 52%, #0A2050 100%);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.14) inset,
+      0 10px 26px -10px rgba(8, 31, 79, 0.55);
+    overflow: hidden;
+  }
+  .brand-badge::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(120% 90% at 28% 12%, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.04) 42%, transparent 60%);
+    pointer-events: none;
+  }
+  .brand-badge > img { position: relative; z-index: 1; }
   .logo-3d {
     display: inline-block;
-    transform-style: preserve-3d;
-    animation: mark3D 7s ease-in-out infinite;
+    animation: markFloat 6s ease-in-out infinite;
     will-change: transform;
   }
-  .logo-3d:hover { animation-play-state: paused; transform: perspective(900px) rotateX(6deg) rotateY(-6deg) scale(1.05); }
-  @keyframes mark3D {
-    0%, 100% { transform: perspective(900px) rotateX(10deg) rotateY(-14deg) rotateZ(-2deg) translateY(0); }
-    50% { transform: perspective(900px) rotateX(4deg) rotateY(6deg) rotateZ(1deg) translateY(-8px); }
+  .logo-3d:hover { animation-play-state: paused; transform: translateY(-3px) scale(1.04); }
+  @keyframes markFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-7px); }
+  }
+  .brand-aura {
+    position: absolute;
+    inset: -14%;
+    border-radius: inherit;
+    border: 1px solid rgba(216, 245, 60, 0.35);
+    animation: auraBreathe 3.4s ease-in-out infinite;
+    pointer-events: none;
+  }
+  @keyframes auraBreathe {
+    0%, 100% { transform: scale(0.92); opacity: 0.75; }
+    50% { transform: scale(1.12); opacity: 0.15; }
+  }
+  .hero-sheen {
+    background-image: linear-gradient(118deg, transparent 0 42%, rgba(255,255,255,0.14) 50%, transparent 58%);
+    background-size: 220% 100%;
+    animation: sheenSweep 7s ease-in-out infinite;
+  }
+  @keyframes sheenSweep {
+    0%, 18% { background-position: 130% 0; }
+    55%, 100% { background-position: -30% 0; }
   }
   .auth-mobile-mast { border-bottom: 1px solid rgba(28,25,23,.12); }
   .auth-backdrop .glass-elevated { border-top: 3px solid rgb(var(--c-600)); }
@@ -517,13 +558,12 @@ html.dark .hover\:text-primary-600:hover { color: rgb(var(--c-400)); }
   .drawer-scrim { animation: scrimEnter 200ms ease-out both; }
   .bottom-nav-active { position: relative; }
   .bottom-nav-active::before { content: ''; position: absolute; inset: 2px 7px auto; height: 2px; background: rgb(var(--c-600)); animation: navSignal 220ms cubic-bezier(.2,.8,.2,1) both; }
-  .btn-primary, .btn-gradient { box-shadow: 0 4px 0 rgb(var(--c-800)); }
-  .btn-primary:active, .btn-gradient:active { box-shadow: 0 1px 0 rgb(var(--c-800)); }
-  /* The 3D lip is `--c-800` (near-black navy) and disappears against the dark
-     surfaces at 1.6:1, so dark mode gets a pure-black edge that is measurably
-     darker than any card. Shadow stays in the same "0 4px 0" geometry. */
-  html.dark .btn-primary, html.dark .btn-gradient { box-shadow: 0 4px 0 rgb(0 0 0 / .5); }
-  html.dark .btn-primary:active, html.dark .btn-gradient:active { box-shadow: 0 1px 0 rgb(0 0 0 / .5); }
+  /* Tighter 3px lip + a lime underlight: keeps the tactile press without the
+     chunky 2024 look, and the underlight ties buttons to the beacon accent. */
+  .btn-primary, .btn-gradient { box-shadow: 0 3px 0 rgb(var(--c-800)), 0 10px 24px -12px rgba(216, 245, 60, 0.35); }
+  .btn-primary:active, .btn-gradient:active { box-shadow: 0 1px 0 rgb(var(--c-800)), 0 4px 12px -8px rgba(216, 245, 60, 0.3); }
+  html.dark .btn-primary, html.dark .btn-gradient { box-shadow: 0 3px 0 rgb(0 0 0 / .55), 0 10px 24px -12px rgba(216, 245, 60, 0.28); }
+  html.dark .btn-primary:active, html.dark .btn-gradient:active { box-shadow: 0 1px 0 rgb(0 0 0 / .55); }
 }
 
 /* ===== MOBILE / SMALL-SCREEN TUNING ===== */

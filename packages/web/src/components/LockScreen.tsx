@@ -59,11 +59,8 @@ export function LockScreen() {
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgb(var(--c-500)/0.18),transparent_60%)]" />
       <input ref={inputRef} className="sr-only" aria-hidden="true" autoFocus />
       <div className="relative w-full max-w-xs text-center">
-        <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-surface-900/60 ring-1 ring-white/10 backdrop-blur">
-          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <rect x="4" y="11" width="16" height="10" rx="2" fill="rgb(var(--c-500)/0.25)" />
-            <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-          </svg>
+        <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center">
+          <img src="/logo-mark.svg" alt="Nabri" className="h-14 w-14 opacity-95 drop-shadow-[0_10px_24px_rgba(0,0,0,0.45)]" />
         </div>
         <h1 className="font-display text-2xl font-bold text-white">Nabri · App locked</h1>
         <p className="mt-1 text-sm text-white/70">Enter your PIN to continue</p>

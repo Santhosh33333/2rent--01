@@ -1,0 +1,10 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="adb" x1="0.08" y1="0" x2="0.92" y2="1">
+      <stop offset="0" stop-color="#2E63E0"/>
+      <stop offset="0.5" stop-color="#163E96"/>
+      <stop offset="1" stop-color="#0A2050"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#adb)"/>
+</svg>

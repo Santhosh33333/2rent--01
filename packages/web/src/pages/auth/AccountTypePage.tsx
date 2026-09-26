@@ -54,11 +54,9 @@ export function AccountTypePage() {
   return (
     <div className="min-h-screen flex flex-col bg-surface-50 dark:bg-surface-950">
       <div className="relative z-10 pt-14 pb-6 px-6 text-center">
-        <div className="w-16 h-16 mx-auto mb-6 rounded-[20px] bg-gradient-to-br from-primary-500 via-primary-400 to-accent-500 flex items-center justify-center shadow-xl shadow-primary-500/25">
-          <svg viewBox="0 0 100 100" className="w-9 h-9" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M50 18L82 44V78H58V56H42V78H18V44L50 18Z" fill="white" fillOpacity="0.93" />
-          </svg>
-        </div>
+        <span className="brand-badge mx-auto mb-6 flex h-16 w-16 items-center justify-center shadow-xl shadow-primary-500/25">
+          <img src="/logo-mark.svg" alt="Nabri" className="h-16 w-16" />
+        </span>
         <h1 className="text-2xl sm:text-3xl font-bold font-display tracking-tight text-surface-900 dark:text-white">
           How do you want to use Nabri?
         </h1>

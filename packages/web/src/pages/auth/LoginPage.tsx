@@ -241,9 +241,16 @@ export function LoginPage() {
   return (
     <div className="auth-backdrop">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-32 -right-32 w-[500px] h-[500px] bg-primary-400/10 rounded-full blur-[128px]" />
-        <div className="absolute -bottom-32 -left-32 w-[500px] h-[500px] bg-accent-400/10 rounded-full blur-[128px]" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary-500/5 rounded-full blur-[128px]" />
+        <div className="absolute -top-32 -right-32 h-[500px] w-[500px] rounded-full bg-primary-400/10 blur-[128px]" />
+        <div className="absolute -bottom-32 -left-32 h-[500px] w-[500px] rounded-full bg-primary-300/8 blur-[128px]" />
+        <div
+          className="absolute left-1/2 top-1/2 h-[640px] w-[640px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary-500/10"
+          aria-hidden
+        />
+        <div
+          className="absolute left-1/2 top-1/2 h-[860px] w-[860px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary-500/5"
+          aria-hidden
+        />
       </div>
 
       <div className="relative w-full max-w-md m-auto">
@@ -257,9 +264,9 @@ export function LoginPage() {
 <div className="text-center mb-10">
             <div className="logo-3d mb-5">
               <img
-                src="/images/logo-mark-3d.png"
+                src="/logo-mark.svg"
                 alt="Nabri logo"
-                className="w-16 h-16"
+                className="h-16 w-16 drop-shadow-[0_12px_28px_rgba(13,55,139,0.35)]"
               />
             </div>
             <h1 className="text-3xl font-bold font-display text-surface-900 dark:text-white tracking-tight">
