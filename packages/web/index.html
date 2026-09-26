@@ -3,34 +3,49 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="alternate icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/logo-mark.png" />
-    <meta name="theme-color" content="#0D378B" />
+    <meta name="theme-color" content="#081F4F" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="description" content="Nabri - Good things happen nearby." />
+    <meta name="description" content="Nabri — your partner for every side of life. CarryBuddy, walking partners, bookings, events and communities, all nearby." />
+    <meta property="og:title" content="Nabri — Good things happen nearby." />
+    <meta property="og:description" content="One app for every side of life: CarryBuddy, walking partners, bookings, events and communities." />
+    <meta property="og:image" content="/logo-mark.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
-    <title>Nabri</title>
+    <title>Nabri — Good things happen nearby.</title>
     <style>
       body { margin: 0; background: #081F4F; }
       #root-loader {
         position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
-        background: #081F4F; z-index: 9999; transition: opacity 0.3s;
+        background: radial-gradient(ellipse at 50% 22%, #0D378B 0%, #081F4F 55%, #051536 100%);
+        z-index: 9999; transition: opacity 0.3s;
       }
       #root-loader.hide { opacity: 0; pointer-events: none; }
-      .loader-spinner {
-        width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.1);
-        border-top-color: #D2F53C; border-radius: 50%; animation: spin 0.8s linear infinite;
-      }
+      .loader-ring { position: absolute; border: 1.5px solid rgba(255,255,255,0.09); border-radius: 50%; }
+      .loader-ring.r1 { width: 120px; height: 120px; animation: ringDrift 3.2s ease-in-out infinite; }
+      .loader-ring.r2 { width: 180px; height: 180px; animation: ringDrift 3.2s ease-in-out infinite 0.4s; }
+      .loader-ring.r3 { width: 240px; height: 240px; animation: ringDrift 3.2s ease-in-out infinite 0.8s; }
+      @keyframes ringDrift { 0%, 100% { transform: scale(1); opacity: 0.9; } 50% { transform: scale(1.08); opacity: 0.35; } }
+      .loader-mark { width: 72px; height: 72px; border-radius: 18px; box-shadow: 0 18px 50px rgba(3,10,32,0.55); position: relative; z-index: 2; }
+      .loader-dot { position: absolute; top: calc(50% + 46px); left: calc(50% - 4px); width: 8px; height: 8px; border-radius: 999px; background: #D2F53C; opacity: 0.65; animation: dotRise 2.6s ease-in-out infinite; }
+      @keyframes dotRise { 0% { transform: translateY(0); opacity: 0; } 18% { opacity: 0.65; } 82% { opacity: 0.65; } 100% { transform: translateY(-46px); opacity: 0; } }
       @keyframes spin { to { transform: rotate(360deg); } }
     </style>
     <!-- Google Identity Services -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>
   <body>
-    <div id="root-loader"><div class="loader-spinner"></div></div>
+    <div id="root-loader">
+      <div class="loader-ring r1"></div>
+      <div class="loader-ring r2"></div>
+      <div class="loader-ring r3"></div>
+      <img class="loader-mark" src="/logo-mark.svg" alt="" />
+      <div class="loader-dot"></div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     <script>

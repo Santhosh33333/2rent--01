@@ -199,7 +199,7 @@ export function Layout() {
       <ImpersonationBanner />
       <OfflineBanner />
       {/* Header */}
-      <header ref={headerRef} className="sticky top-0 z-50 bg-surface-50/95 dark:bg-surface-950/95 border-b border-surface-200 dark:border-surface-800 pt-[env(safe-area-inset-top)]">
+      <header ref={headerRef} className="sticky top-0 z-50 border-b border-surface-200/80 bg-surface-50/85 backdrop-blur-xl dark:border-surface-800 dark:bg-surface-950/85 pt-[env(safe-area-inset-top)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             {/* Left */}
@@ -214,9 +214,11 @@ export function Layout() {
                 <Menu className="w-5 h-5" />
               </button>
               <Link to="/dashboard" className="flex items-center gap-2.5">
-                <img src="/images/logo-mark-3d.png" alt="Nabri logo" className="w-9 h-9 transition-transform duration-300 hover:-rotate-6 hover:scale-105" />
-                <span className="text-lg font-extrabold font-display tracking-[-0.06em] text-surface-900 dark:text-surface-50 hidden sm:block">
-                  NABRI
+                <span className="brand-badge h-9 w-9">
+                  <img src="/logo-mark.svg" alt="Nabri logo" className="h-9 w-9 transition-transform duration-300 hover:-rotate-3 hover:scale-105" />
+                </span>
+                <span className="hidden items-baseline text-lg font-extrabold font-display tracking-[-0.05em] text-surface-900 dark:text-surface-50 sm:flex">
+                  Nabri<span className="ml-1 h-1.5 w-1.5 rounded-full bg-[#D2F53C] shadow-[0_0_8px_rgba(210,245,60,0.8)]" />
                 </span>
               </Link>
             </div>

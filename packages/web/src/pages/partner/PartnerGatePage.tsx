@@ -1,4 +1,4 @@
-﻿import { getErrorMessage, getErrorDetail } from '../../lib/error'
+import { getErrorMessage, getErrorDetail } from '../../lib/error'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Clock, ShieldCheck, XCircle, ArrowLeft, Check, Loader2 } from 'lucide-react'
@@ -66,9 +66,9 @@ export function PartnerGatePage() {
       <div className="flex-1 flex items-start justify-center px-6 pb-12">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <div className="w-16 h-16 mx-auto mb-5 rounded-[20px] bg-gradient-to-br from-primary-700 to-primary-900 flex items-center justify-center shadow-xl shadow-primary-800/30 ring-1 ring-white/10">
-              <img src="/images/logo-mark-3d.png" alt="Nabri logo" className="w-9 h-9" />
-            </div>
+            <span className="brand-badge mx-auto mb-5 flex h-16 w-16 items-center justify-center shadow-xl shadow-primary-800/30">
+              <img src="/logo-mark.svg" alt="Nabri logo" className="h-16 w-16" />
+            </span>
             <h1 className="text-2xl font-bold font-display tracking-tight text-surface-900 dark:text-white">Partner Access</h1>
             <p className="mt-2 text-sm text-surface-500 dark:text-surface-400">
               Partner features unlock only after an admin approves your application.

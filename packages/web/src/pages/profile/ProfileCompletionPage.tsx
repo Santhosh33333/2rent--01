@@ -151,11 +151,13 @@ export function ProfileCompletionPage() {
       <div className="relative w-full max-w-md">
         <AnimatedPage>
           <div className="text-center mb-8">
-            <img
-              src="/images/logo-mark-3d.png"
-              alt="Nabri logo"
-              className="inline-block w-14 h-14 rounded-2xl shadow-xl shadow-primary-500/25 mb-5 animate-float"
-            />
+            <span className="brand-badge mb-5 inline-flex animate-float">
+              <img
+                src="/logo-mark.svg"
+                alt="Nabri logo"
+                className="h-14 w-14 drop-shadow-[0_12px_28px_rgba(13,55,139,0.35)]"
+              />
+            </span>
             <h1 className="text-3xl font-bold font-display text-surface-900 dark:text-white tracking-tight">Complete Your Profile</h1>
             <p className="mt-2 text-surface-500 dark:text-surface-400 text-sm">Help others know you better</p>
           </div>

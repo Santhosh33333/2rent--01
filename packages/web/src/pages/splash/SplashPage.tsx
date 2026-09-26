@@ -138,25 +138,18 @@ export function SplashPage() {
         </div>
 
         <div className="relative z-10 flex flex-col items-center">
-          <div className="relative mb-6 stagger-logo">
-            <div className="w-24 h-24 flex items-center justify-center">
-              <img
-                src="/images/logo-mark-3d.png"
-                alt="Nabri logo"
-                className="w-full h-full relative z-10 drop-shadow-2xl"
-                style={{ animation: 'float-gentle 4s ease-in-out infinite' }}
-              />
-              <div
-                className="absolute inset-0 w-full h-full pointer-events-none overflow-hidden rounded-[28px]"
-                style={{ animation: 'shimmer 1.8s ease-in-out 0.8s both' }}
-              >
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent" style={{ width: '40%', height: '200%', top: '-50%' }} />
-              </div>
-            </div>
-            <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-gradient-to-br from-accent-400 to-accent-300 flex items-center justify-center shadow-lg">
-              <svg viewBox="0 0 12 12" className="w-3 h-3" fill="none">
-                <path d="M2 6L5 9L10 3" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
+          <div className="relative mb-8 stagger-logo">
+            <div className="relative flex h-28 w-28 items-center justify-center">
+              <div className="absolute inset-0 rounded-[26%] border border-[#D2F53C]/30" style={{ animation: 'auraBreathe 3.2s ease-in-out infinite' }} />
+              <div className="absolute inset-[-18%] rounded-full border border-white/10" style={{ animation: 'auraBreathe 3.2s ease-in-out 1.1s infinite' }} />
+              <span className="brand-badge h-24 w-24">
+                <img
+                  src="/logo-mark.svg"
+                  alt="Nabri logo"
+                  className="h-24 w-24 relative z-10 drop-shadow-2xl"
+                  style={{ animation: 'float-gentle 4s ease-in-out infinite' }}
+                />
+              </span>
             </div>
           </div>
 

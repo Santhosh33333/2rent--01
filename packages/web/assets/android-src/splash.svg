@@ -1,0 +1,45 @@
+<svg width="1280" height="1920" viewBox="0 0 1280 1920" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="field" cx="0.5" cy="0.22" r="1.1">
+      <stop offset="0" stop-color="#0D378B"/>
+      <stop offset="0.55" stop-color="#081F4F"/>
+      <stop offset="1" stop-color="#051536"/>
+    </radialGradient>
+    <linearGradient id="bgS" x1="0.08" y1="0" x2="0.92" y2="1">
+      <stop offset="0" stop-color="#2E63E0"/>
+      <stop offset="0.5" stop-color="#163E96"/>
+      <stop offset="1" stop-color="#0A2050"/>
+    </linearGradient>
+    <linearGradient id="limeS" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#E9FF85"/>
+      <stop offset="1" stop-color="#C4EA1E"/>
+    </linearGradient>
+    <linearGradient id="nS" x1="0" y1="0" x2="0.55" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#C7D9FF"/>
+    </linearGradient>
+    <linearGradient id="wordS" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8AB1F5"/>
+      <stop offset="0.55" stop-color="#E9F0FF"/>
+      <stop offset="1" stop-color="#D8F53C"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="1920" fill="url(#field)"/>
+  <g fill="none" stroke="#FFFFFF">
+    <circle cx="640" cy="700" r="300" stroke-opacity="0.05" stroke-width="3"/>
+    <circle cx="640" cy="700" r="430" stroke-opacity="0.04" stroke-width="3"/>
+    <circle cx="640" cy="700" r="570" stroke-opacity="0.03" stroke-width="3"/>
+  </g>
+  <g transform="translate(496 556)">
+    <rect width="288" height="288" rx="68" fill="url(#bgS)"/>
+    <g fill="url(#nS)">
+      <rect x="78" y="100" width="32" height="106" rx="16"/>
+      <rect x="178" y="100" width="32" height="106" rx="16"/>
+    </g>
+    <line x1="94" y1="111" x2="194" y2="197" stroke="url(#nS)" stroke-width="32" stroke-linecap="round"/>
+    <circle cx="214" cy="72" r="22" fill="url(#limeS)"/>
+    <circle cx="214" cy="72" r="29" fill="none" stroke="#D8F53C" stroke-opacity="0.35" stroke-width="4"/>
+  </g>
+  <text x="640" y="1010" text-anchor="middle" fill="url(#wordS)" font-family="'Plus Jakarta Sans', Inter, system-ui, sans-serif" font-size="120" font-weight="800" letter-spacing="-4">Nabri</text>
+  <text x="640" y="1078" text-anchor="middle" fill="#8FA6D4" font-family="Inter, system-ui, sans-serif" font-size="38" font-weight="500" letter-spacing="1">Good things happen nearby.</text>
+</svg>

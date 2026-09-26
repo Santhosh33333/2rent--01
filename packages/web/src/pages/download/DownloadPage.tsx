@@ -29,11 +29,11 @@ export function DownloadPage() {
         </div>
 
         <div className="relative z-10 max-w-3xl mx-auto px-5 sm:px-8 py-12 sm:py-16 text-center">
-          <Link to="/" className="inline-flex items-center gap-3 text-lg font-extrabold font-display tracking-tight text-white">
+          <Link to="/" className="inline-flex items-center gap-3 text-lg font-extrabold font-display tracking-[-0.05em] text-white">
             <span className="logo-3d">
-              <img src="/images/logo-mark-3d@2x.png" alt="Nabri logo" className="w-9 h-9" />
+              <img src="/logo-mark.svg" alt="Nabri logo" className="h-10 w-10" />
             </span>
-            NABRI
+            Nabri
           </Link>
 
           <h1 className="mt-8 text-3xl sm:text-5xl font-bold font-display tracking-tight text-gradient wordmark-on-navy">
