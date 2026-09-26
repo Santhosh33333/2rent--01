@@ -2,12 +2,11 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
-  CreditCard, Banknote, CheckCircle, XCircle, Loader2, ArrowLeft,
+  Banknote, CheckCircle, XCircle, Loader2, ArrowLeft,
   Star, Clock, MapPin, Navigation, Footprints, Package, ShieldCheck, ImagePlus, X
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { api } from '../../lib/api'
-import { openRazorpayBookingCheckout } from '../../lib/razorpay'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
 import { SkeletonLoader } from '../../components/SkeletonLoader'
@@ -31,7 +30,7 @@ interface BookingData {
   }
 }
 
-type PaymentMethod = 'ONLINE' | 'CASH' | 'UPI_MANUAL' | null
+type PaymentMethod = 'CASH' | 'UPI_MANUAL' | null
 
 interface UpiDetails {
   upiId: string
@@ -48,7 +47,6 @@ export function BookingPaymentPage() {
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<PaymentMethod>(null)
   const [confirming, setConfirming] = useState(false)
-  const [paying, setPaying] = useState(false)
   const [done, setDone] = useState(false)
   const [doneType, setDoneType] = useState<'ONLINE' | 'CASH' | 'UPI_MANUAL' | null>(null)
   const [upiInfo, setUpiInfo] = useState<UpiDetails | null>(null)
@@ -57,19 +55,6 @@ export function BookingPaymentPage() {
   const [proofFile, setProofFile] = useState<File | null>(null)
   const [proofPreview, setProofPreview] = useState<string | null>(null)
   const [proofUploading, setProofUploading] = useState(false)
-  const [onlineEnabled, setOnlineEnabled] = useState(false)
-
-  useEffect(() => {
-    // Auto-pay (Razorpay) is offered only when the backend confirms live
-    // credentials; otherwise UPI-manual + cash are the payment methods.
-    api
-      .get('/payments/config')
-      .then((res) => {
-        const d = res.data?.data || res.data
-        if (d && typeof d.razorpay === 'boolean') setOnlineEnabled(d.razorpay)
-      })
-      .catch(() => {})
-  }, [])
 
   useEffect(() => {
     if (!id) return
@@ -157,31 +142,10 @@ export function BookingPaymentPage() {
         setDone(true)
         setDoneType('CASH')
         toast.success('Cash payment confirmed!')
-      } else if (selected === 'UPI_MANUAL') {
-        // Show the QR panel below; the booking waits for admin verification.
-        toast.success('Pay on the UPI ID below, then submit your reference number.')
       } else {
-        // Proceed to Razorpay
-        setPaying(true)
-        await openRazorpayBookingCheckout({
-          amount,
-          bookingId: id,
-          onSuccess: async (paymentId, orderId, signature) => {
-            try {
-              await api.post(`/bookings/${id}/verify-payment`, { razorpayPaymentId: paymentId, razorpayOrderId: orderId, razorpaySignature: signature })
-              setDone(true)
-              setDoneType('ONLINE')
-              toast.success('Payment successful!')
-              setTimeout(() => navigate(`/bookings/${id}`), 2000)
-            } catch {
-              toast.error('Payment verification failed. Contact support.')
-            } finally { setPaying(false) }
-          },
-          onError: (err) => {
-            toast.error(getErrorMessage(err, 'Payment failed'))
-            setPaying(false)
-          },
-        })
+        // UPI only: show the QR / UPI ID panel, then the booking waits for an
+        // admin to verify the reference the customer submits.
+        toast.success('Pay on the UPI ID below, then submit your reference number.')
       }
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed. Please try again.'))
@@ -313,23 +277,8 @@ export function BookingPaymentPage() {
         <div>
           <h3 className="text-sm font-bold text-surface-500 dark:text-surface-400 uppercase tracking-wider mb-3 px-1">Choose Payment Method</h3>
           <div className="grid grid-cols-2 gap-3">
-            {/* Pay Online — only when the gateway is live */}
-            {onlineEnabled && (
-            <button
-              onClick={() => setSelected('ONLINE')}
-              className={`relative p-4 rounded-2xl border-2 text-left transition-all duration-200 ${selected === 'ONLINE' ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/10 shadow-lg shadow-emerald-500/10' : 'border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-900 hover:border-emerald-300'}`}
-            >
-              {selected === 'ONLINE' && <div className="absolute top-2.5 right-2.5 w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center"><CheckCircle className="w-3.5 h-3.5 text-white" /></div>}
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center mb-3 shadow-md shadow-emerald-500/20">
-                <CreditCard className="w-5 h-5 text-white" />
-              </div>
-              <p className="font-bold text-surface-900 dark:text-white text-sm">Pay Online</p>
-              <p className="text-xs text-surface-500 mt-1">UPI, Card, Net Banking</p>
-              <div className="flex flex-wrap gap-1 mt-2">
-                {['UPI', 'Card'].map(m => <span key={m} className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 font-medium">{m}</span>)}
-              </div>
-            </button>
-            )}
+            {/* UPI is the only online method: no card gateway, so nothing
+                loads a payment SDK and the checkout stays instant. */}
 
             {/* Pay Cash */}
             <button
@@ -467,13 +416,11 @@ export function BookingPaymentPage() {
       <AnimatedPage delay={260}>
         <button
           onClick={handleConfirm}
-          disabled={!selected || confirming || paying}
+          disabled={!selected || confirming}
           className="w-full btn-gradient py-4 text-base flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          {(confirming || paying) ? (
-            <><Loader2 className="w-5 h-5 animate-spin" /> {paying ? 'Processing Payment...' : 'Confirming...'}</>
-          ) : selected === 'ONLINE' ? (
-            <><CreditCard className="w-5 h-5" /> Pay ₹{amount.toLocaleString('en-IN')} Online</>
+          {confirming ? (
+            <><Loader2 className="w-5 h-5 animate-spin" /> Confirming...</>
           ) : selected === 'CASH' ? (
             <><Banknote className="w-5 h-5" /> Confirm Cash Booking</>
           ) : selected === 'UPI_MANUAL' ? (
@@ -483,7 +430,7 @@ export function BookingPaymentPage() {
           )}
         </button>
         <p className="text-xs text-center text-surface-400 mt-2">
-          {selected === 'ONLINE' ? '🔒 Secured by Razorpay' : selected === 'CASH' ? '📝 Transaction will be recorded' : selected === 'UPI_MANUAL' ? '🧾 Verified by admin against the bank statement' : 'Choose online, UPI or cash to continue'}
+          {selected === 'CASH' ? '📝 Transaction will be recorded' : selected === 'UPI_MANUAL' ? '🧾 Verified by admin against the bank statement' : 'Choose UPI or cash to continue'}
         </p>
       </AnimatedPage>
     </div>

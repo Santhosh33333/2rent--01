@@ -15,7 +15,25 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <!--
+      Fonts load without blocking first paint: the stylesheet is fetched with
+      media="print" and promoted to "all" once it arrives, so slow connections
+      render the app immediately and swap the font in (the URL sets
+      font-display:swap). Previously this was a render-blocking <link>, which
+      held up the whole app on mobile data.
+    -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+      media="print"
+      onload="this.media='all';this.onload=null"
+    />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
     <title>Nabri — Good things happen nearby.</title>
     <style>
       body { margin: 0; background: #081F4F; }
@@ -35,8 +53,12 @@
       @keyframes dotRise { 0% { transform: translateY(0); opacity: 0; } 18% { opacity: 0.65; } 82% { opacity: 0.65; } 100% { transform: translateY(-46px); opacity: 0; } }
       @keyframes spin { to { transform: rotate(360deg); } }
     </style>
-    <!-- Google Identity Services -->
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <!--
+      Google Identity Services is intentionally NOT loaded here. It is fetched
+      on demand by src/lib/googleAuth.ts, so signed-in users no longer download
+      the Google SDK on every page. No payment SDK is loaded: online payments
+      are UPI-only (paid to the Nabri UPI ID, verified by an admin).
+    -->
   </head>
   <body>
     <div id="root-loader">
@@ -73,6 +95,5 @@
         }, 6000);
       }());
     </script>
-    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
   </body>
 </html>

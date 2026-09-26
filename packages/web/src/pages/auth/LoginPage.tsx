@@ -68,14 +68,19 @@ export function LoginPage() {
   }, [resendIn])
 
   useEffect(() => {
+    // The Google SDK is fetched on demand and awaited, instead of being a
+    // blocking tag on every page plus a 200ms polling loop.
+    let active = true
     initGoogleSignIn(handleGoogleCredential)
-    const check = setInterval(() => {
-      if (window.google?.accounts?.id) {
-        setGoogleReady(true)
-        clearInterval(check)
-      }
-    }, 200)
-    return () => clearInterval(check)
+      .then(() => {
+        if (active && window.google?.accounts?.id) setGoogleReady(true)
+      })
+      .catch(() => {
+        // Email/OTP login stays available when Google cannot be reached.
+      })
+    return () => {
+      active = false
+    }
   }, [])
 
   useEffect(() => {
