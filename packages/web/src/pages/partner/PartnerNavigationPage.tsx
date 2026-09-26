@@ -3,6 +3,7 @@ import {
   Navigation, MapPin, Compass, Locate, ArrowUp,
   ChevronRight, Footprints
 } from 'lucide-react'
+import { Capacitor } from '@capacitor/core'
 import { api } from '../../lib/api'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
@@ -13,6 +14,10 @@ interface ActiveJob {
   type: string
   startLocation: string
   endLocation: string
+  startLatitude: number | null
+  endLatitude: number | null
+  startLongitude: number | null
+  endLongitude: number | null
   startTime: string
   fare: number
   status: string
@@ -65,6 +70,34 @@ export function PartnerNavigationPage() {
     fetchData()
   }, [])
 
+  // Google's /maps/dir/ endpoint needs BOTH origin and destination. The old link
+  // sent only a destination, so the request was malformed and the tap did
+  // nothing useful. Prefer real coordinates over the free-text address, because
+  // a partner-facing pin beats an address string that may be abbreviated or
+  // misspelled, and fall back to the text when a request was never geocoded.
+  const openDirections = (job: ActiveJob) => {
+    const hasEndCoords = job.endLatitude != null && job.endLongitude != null
+    const hasStartCoords = job.startLatitude != null && job.startLongitude != null
+    const dest = hasEndCoords ? `${job.endLatitude},${job.endLongitude}` : job.endLocation
+    const liveOrigin = location && location.lat && location.lng
+    const origin = liveOrigin
+      ? `${location.lat},${location.lng}`
+      : hasStartCoords
+        ? `${job.startLatitude},${job.startLongitude}`
+        : job.startLocation
+
+    // On Android the Maps app is the only thing that does turn-by-turn, and a
+    // plain https link in a Capacitor WebView stays in a browser tab instead of
+    // handing off. The navigation intent launches Maps directly.
+    if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android' && hasEndCoords) {
+      window.open(`google.navigation:q=${job.endLatitude},${job.endLongitude}&mode=d`, '_system')
+      return
+    }
+
+    const url = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(dest)}&travelmode=driving`
+    window.open(url, '_blank', 'noopener')
+  }
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -72,8 +105,7 @@ export function PartnerNavigationPage() {
         <div className="skeleton h-64 rounded-3xl" />
         <SkeletonLoader variant="card" />
       </div>
-    )
-  }
+    )  }
 
   return (
     <div className="space-y-6">
@@ -121,14 +153,13 @@ export function PartnerNavigationPage() {
                     </div>
                   </div>
                 </div>
-                <a
-                  href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(activeJob.endLocation)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-sm font-semibold transition-colors"
+                <button
+                  type="button"
+                  onClick={() => openDirections(activeJob)}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 active:bg-sky-800 text-white text-sm font-semibold transition-colors"
                 >
                   <Compass className="w-4 h-4" /> Open in Google Maps
-                </a>
+                </button>
               </div>
             ) : (
               <div className="text-center">
