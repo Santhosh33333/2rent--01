@@ -34,6 +34,7 @@ import { buildReferralRewardService } from "./referralController"
 import { env } from "../config/env"
 import { CancellationCutoffError, getBookingCancellationState } from "../services/bookingCancellationPolicy"
 import { bookingStatusFor, paymentStatusFor, resolvePaymentMethod } from "../services/paymentMethodPolicy"
+import { buildHourlyQr } from "../services/upiQr"
 
 const settleReferralReward = buildReferralRewardService()
 
@@ -609,12 +610,28 @@ export async function getUpiDetails(req: AuthedRequest, res: Response): Promise<
       return;
     }
 
+    // Dynamic QR: the intent URI is rebuilt every hour with a fresh
+    // transaction reference, so an old screenshot can never be matched to a
+    // later payment. The admin-uploaded image stays as a fallback.
+    const dynamicQr = buildHourlyQr({
+      payeeVpa: upiId.value,
+      payeeName: name?.value ?? null,
+      amount: booking.estimatedAmount,
+      note: `Nabri booking ${id.slice(0, 8).toUpperCase()}`,
+      scope: id,
+    });
+
       sendSuccess(
         res,
         {
           upiId: upiId.value,
           accountName: name?.value ?? null,
           qrUrl: qr?.value ?? null,
+          upiUri: dynamicQr.upiUri,
+          qrReference: dynamicQr.reference,
+          qrBucket: dynamicQr.bucket,
+          qrExpiresAt: dynamicQr.expiresAt,
+          qrExpiresInSeconds: dynamicQr.expiresInSeconds,
           amount: booking.estimatedAmount,
           currency: "INR",
           bookingId: id,

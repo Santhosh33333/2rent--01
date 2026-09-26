@@ -3,6 +3,7 @@ import { body } from "express-validator"
 import { authenticateToken } from "../middleware/auth"
 import { sanitizeInput, validateRequest } from "../middleware/validation"
 import * as paymentController from "../controllers/paymentController"
+import { lookupUpiPayee } from "../controllers/upiLookupController"
 
 const router = Router()
 
@@ -11,6 +12,15 @@ router.post("/webhook", paymentController.webhookPayment)
 
 // Authenticated routes
 router.use(authenticateToken)
+
+// Resolve a UPI ID (or phone number) to the payee's account holder name.
+router.post(
+  "/lookup-upi",
+  [body("query").isString().isLength({ min: 2, max: 100 }).withMessage("Enter a UPI ID or phone number")],
+  sanitizeInput,
+  validateRequest,
+  lookupUpiPayee
+)
 
 router.post(
   "/create-order",
