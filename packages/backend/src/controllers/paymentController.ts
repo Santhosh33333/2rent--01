@@ -113,32 +113,40 @@ export async function verifyPayment(req: AuthedRequest, res: Response): Promise<
     // Fetch payment details from Razorpay to verify capture status and amount.
     // The HMAC authenticates the callback, but it does not prove that funds
     // were captured. Keep the order retryable when the provider is unavailable.
-    let paymentDetails: { status: string; amount: number | string } | null
-    try {
-      paymentDetails = await razorpayService.fetchPayment(razorpayPaymentId)
-      if (!paymentDetails) {
-        sendError(res, "Payment verification is temporarily unavailable. Please retry.", 503, "PAYMENT_VERIFICATION_UNAVAILABLE")
-        return
-      }
-      if (paymentDetails.status !== "captured") {
-        sendError(res, "Payment not captured.", 400, "PAYMENT_NOT_CAPTURED")
-        return
-      }
-    } catch {
+    //
+    // The provider round trip is the slowest step here by far and neither read
+    // depends on it, so all three run together and the two lookups cost nothing
+    // on top of the fetch. A provider failure is captured as a value rather
+    // than thrown, which keeps the "retry later" answer distinct from the
+    // "not captured" and "no such wallet/order" answers below.
+    const [fetched, wallet, paymentOrder] = await Promise.all([
+      razorpayService.fetchPayment(razorpayPaymentId).then(
+        (v) => ({ ok: true as const, value: v }),
+        () => ({ ok: false as const, value: null }),
+      ),
+      prisma.wallet.findUnique({ where: { userId } }),
+      prisma.paymentOrder.findUnique({ where: { razorpayOrderId } }),
+    ])
+
+    if (!fetched.ok) {
       sendError(res, "Payment verification is temporarily unavailable. Please retry.", 503, "PAYMENT_VERIFICATION_UNAVAILABLE")
       return
     }
 
-    // Find wallet
-    const wallet = await prisma.wallet.findUnique({ where: { userId } })
+    const paymentDetails: { status: string; amount: number | string } | null = fetched.value
+    if (!paymentDetails) {
+      sendError(res, "Payment verification is temporarily unavailable. Please retry.", 503, "PAYMENT_VERIFICATION_UNAVAILABLE")
+      return
+    }
+    if (paymentDetails.status !== "captured") {
+      sendError(res, "Payment not captured.", 400, "PAYMENT_NOT_CAPTURED")
+      return
+    }
+
     if (!wallet) {
       sendError(res, "Wallet not found.", 404, "WALLET_NOT_FOUND")
       return
     }
-
-    const paymentOrder = await prisma.paymentOrder.findUnique({
-      where: { razorpayOrderId },
-    })
 
     if (!paymentOrder || paymentOrder.userId !== userId) {
       sendError(res, "Payment order not found.", 404, "ORDER_NOT_FOUND")

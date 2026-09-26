@@ -794,16 +794,22 @@ export async function acceptBooking(req: AuthedRequest, res: Response): Promise<
   try {
     const { id } = req.params;
 
-    const booking = await prisma.booking.findUnique({ where: { id } });
+    // The booking and the partner record are independent lookups — one keys off
+    // the route id, the other off the caller — so they are fetched together.
+    // The busy-lock check below still waits for the partner, since it filters on
+    // partnerId. Checks stay in their original order so a missing booking keeps
+    // reporting 404 ahead of the partner checks.
+    const [booking, partner] = await Promise.all([
+      prisma.booking.findUnique({ where: { id } }),
+      prisma.partner.findUnique({
+        where: { userId: req.user!.userId },
+      }),
+    ]);
 
     if (!booking) {
       sendError(res, "Booking not found.", 404, "BOOKING_NOT_FOUND");
       return;
     }
-
-    const partner = await prisma.partner.findUnique({
-      where: { userId: req.user!.userId },
-    });
 
     if (!partner) {
       sendError(res, "You are not registered as a partner.", 403, "NOT_PARTNER");

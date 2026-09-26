@@ -67,24 +67,30 @@ export async function sendMessage(req: AuthedRequest, res: Response): Promise<vo
       return;
     }
 
-    const receiver = await prisma.user.findUnique({
-      where: { id: receiverId },
-      select: { id: true },
-    });
+    // The receiver lookup and the block check are independent reads — the block
+    // lookup keys off the two ids, not off the receiver row — so they go
+    // together on this per-message path. The checks still run in their original
+    // order so a missing receiver keeps reporting 404 rather than 403.
+    const [receiver, isBlocked] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: receiverId },
+        select: { id: true },
+      }),
+      prisma.userBlock.findFirst({
+        where: {
+          OR: [
+            { blockerId: req.user!.userId, blockedId: receiverId },
+            { blockerId: receiverId, blockedId: req.user!.userId },
+          ],
+        },
+      }),
+    ]);
 
     if (!receiver) {
       sendError(res, "Receiver not found.", 404, "RECEIVER_NOT_FOUND");
       return;
     }
 
-    const isBlocked = await prisma.userBlock.findFirst({
-      where: {
-        OR: [
-          { blockerId: req.user!.userId, blockedId: receiverId },
-          { blockerId: receiverId, blockedId: req.user!.userId },
-        ],
-      },
-    });
     if (isBlocked) {
       sendError(res, "Unable to message this user.", 403, "BLOCKED");
       return;
@@ -360,16 +366,28 @@ export async function getMessages(req: AuthedRequest, res: Response): Promise<vo
     // Delivery receipt: everything the reader has now seen moves SENT ->
     // DELIVERED (READ still requires the explicit markAsRead call). Notify
     // senders so single-check becomes double-check in realtime.
-    const delivered = await prisma.message.updateMany({
-      where: { conversationId: convId, receiverId: userId, status: "SENT" },
-      data: { status: "DELIVERED" },
-    });
-    if (delivered.count > 0) {
-      const senderIds = [...new Set(items.filter((m) => m.receiverId === userId && m.senderId !== userId).map((m) => m.senderId))];
-      for (const sid of senderIds) {
-        emitToUser(sid, "messages_delivered", { conversationId: convId, readBy: userId });
+    //
+    // This runs after the response rather than before it. It is a receipt, not
+    // part of what the caller asked for, and a thread is opened constantly, so
+    // holding the response for a write nobody is waiting on puts an extra round
+    // trip on the hottest read path. If it is ever lost the next open re-runs
+    // it, so nothing is left permanently misreported.
+    void (async () => {
+      try {
+        const delivered = await prisma.message.updateMany({
+          where: { conversationId: convId, receiverId: userId, status: "SENT" },
+          data: { status: "DELIVERED" },
+        });
+        if (delivered.count > 0) {
+          const senderIds = [...new Set(items.filter((m) => m.receiverId === userId && m.senderId !== userId).map((m) => m.senderId))];
+          for (const sid of senderIds) {
+            emitToUser(sid, "messages_delivered", { conversationId: convId, readBy: userId });
+          }
+        }
+      } catch (err) {
+        console.error("[getMessages] delivery receipt failed:", (err as Error)?.message);
       }
-    }
+    })();
 
     sendSuccess(res, { items, page, limit, total });
   } catch (err: any) {

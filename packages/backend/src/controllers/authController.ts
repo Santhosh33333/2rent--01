@@ -188,29 +188,34 @@ export async function register(req: Request, res: Response): Promise<void> {
     const rawAccountType = String(accountType || role || "USER").toUpperCase();
     const normalizedAccountType = ["USER", "PARTNER"].includes(rawAccountType) ? rawAccountType : "USER";
 
-    const existing = await prisma.user.findFirst({
-      where: { OR: [{ email }, { phone }] },
-    });
-    if (existing) {
-      sendError(res, "Email or phone already registered.", 409, "DUPLICATE_USER");
-      return;
-    }
-
-const passwordHash = await bcrypt.hash(password, env.BCRYPT_SALT_ROUNDS);
-
+    // The duplicate check, the signup-proof lookup and the password hash are
+    // independent of each other. The hash is CPU bound and the two reads are
+    // round trips, so running them together removes a full round trip from the
+    // critical path instead of paying for the hash after both reads land.
+    //
     // Inline signup verification: if a VERIFIED email OTP exists for this
     // address (created via /auth/signup/* before registration), the mailbox
     // was proven server-side — trust the row, never a client boolean. The
     // proof is consumed inside the transaction so it can't be replayed.
-    const verifiedProof = await prisma.otpCode.findFirst({
-      where: {
-        identifier: email.toLowerCase(),
-        purpose: "EMAIL_VERIFICATION",
-        status: "VERIFIED",
-        expiresAt: { gte: new Date() },
-      },
-      select: { id: true },
-    });
+    const [existing, verifiedProof, passwordHash] = await Promise.all([
+      prisma.user.findFirst({
+        where: { OR: [{ email }, { phone }] },
+      }),
+      prisma.otpCode.findFirst({
+        where: {
+          identifier: email.toLowerCase(),
+          purpose: "EMAIL_VERIFICATION",
+          status: "VERIFIED",
+          expiresAt: { gte: new Date() },
+        },
+        select: { id: true },
+      }),
+      bcrypt.hash(password, env.BCRYPT_SALT_ROUNDS),
+    ]);
+    if (existing) {
+      sendError(res, "Email or phone already registered.", 409, "DUPLICATE_USER");
+      return;
+    }
     const emailVerifiedOnSignup = Boolean(verifiedProof);
 
     const user = await prisma.$transaction(async (tx) => {
@@ -257,28 +262,39 @@ const passwordHash = await bcrypt.hash(password, env.BCRYPT_SALT_ROUNDS);
     // purpose-bound, rate-limited). Delivery honesty is enforced there:
     // nothing is reported as sent unless the provider accepts it. Email is
     // only re-issued here when it was NOT verified inline during signup.
+    //
+    // The two sends are independent — different channel, identifier and purpose,
+    // so separate rate limit buckets — and each one waits on a write plus the
+    // provider. Issuing them together takes a provider round trip off the
+    // critical path instead of paying for the SMS after the email.
+    const otpJobs: Promise<unknown>[] = [];
     if (!emailVerifiedOnSignup) {
-      await issueOtp({
-        channel: "EMAIL",
-        identifier: user.email,
-        purpose: "EMAIL_VERIFICATION",
-        userId: user.id,
-        ip: getClientIp(req),
-        userAgent: req.headers["user-agent"],
-      });
+      otpJobs.push(
+        issueOtp({
+          channel: "EMAIL",
+          identifier: user.email,
+          purpose: "EMAIL_VERIFICATION",
+          userId: user.id,
+          ip: getClientIp(req),
+          userAgent: req.headers["user-agent"],
+        }),
+      );
     }
 
     // If a phone was provided, also issue a mobile code so verifyMobile works.
     if (user.phone) {
-      await issueOtp({
-        channel: "SMS",
-        identifier: user.phone,
-        purpose: "PHONE_VERIFICATION",
-        userId: user.id,
-        ip: getClientIp(req),
-        userAgent: req.headers["user-agent"],
-      });
+      otpJobs.push(
+        issueOtp({
+          channel: "SMS",
+          identifier: user.phone,
+          purpose: "PHONE_VERIFICATION",
+          userId: user.id,
+          ip: getClientIp(req),
+          userAgent: req.headers["user-agent"],
+        }),
+      );
     }
+    await Promise.all(otpJobs);
 
     // Welcome email after signup (fire-and-forget, never blocks registration
     // and never fails it — delivery is best-effort via the provider).

@@ -153,9 +153,15 @@ export async function verifyOtpLogin(req: Request, res: Response): Promise<void>
     if (channel === "SMS" && !user.mobileVerified) {
       await prisma.user.update({ where: { id: user.id }, data: { mobileVerified: true } }).catch(() => {});
     }
-    await consumeOtp(channel === "EMAIL" ? identifier.toLowerCase() : identifier, purpose).catch(() => {});
-    const { accessToken, refreshToken } = await createUserSession(user.id, req);
-    await recordLogin(user.id, req).catch(() => {});
+    // Consuming the code, minting the session and writing the login history are
+    // independent writes, and only the session is load-bearing — the other two
+    // are already best-effort. Running them together takes two round trips off
+    // the OTP login path instead of paying for each one in turn.
+    const [{ accessToken, refreshToken }] = await Promise.all([
+      createUserSession(user.id, req),
+      consumeOtp(channel === "EMAIL" ? identifier.toLowerCase() : identifier, purpose).catch(() => {}),
+      recordLogin(user.id, req).catch(() => {}),
+    ]);
     sendSuccess(
       res,
       {
