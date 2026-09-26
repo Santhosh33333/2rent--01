@@ -105,6 +105,18 @@ export async function getWalkingRequestById(req: AuthedRequest, res: Response): 
       sendError(res, "Walking request not found.", 404, "REQUEST_NOT_FOUND");
       return;
     }
+    // Access control: only the requester, the assigned partner, or an applicant
+    // of THIS request may read the request detail (including applications).
+    // Other authenticated users must not be able to enumerate others' requests
+    // or harvest applicant identities via IDOR.
+    const userId = req.user!.userId;
+    const isRequester = request.requesterId === userId;
+    const isAssigned = request.acceptedById === userId;
+    const isApplicant = request.applications.some((app) => app.applicantId === userId && app.status === "PENDING");
+    if (!isRequester && !isAssigned && !isApplicant) {
+      sendError(res, "Walking request not found.", 404, "REQUEST_NOT_FOUND");
+      return;
+    }
     sendSuccess(res, request, "Walking request retrieved.");
   } catch (err) {
     sendError(res, "Failed to retrieve walking request.", 500, "INTERNAL_ERROR");
@@ -127,10 +139,41 @@ export async function acceptWalkingRequest(req: AuthedRequest, res: Response): P
       sendError(res, "Cannot accept your own request.", 400, "INVALID_ACTION");
       return;
     }
-    const partner = await prisma.partner.findUnique({ where: { userId: req.user!.userId }, select: { status: true, providesWalking: true } });
-    if (!partner || partner.status !== "APPROVED") {
-      sendError(res, "Approved partner status required.", 403, "PARTNER_REQUIRED");
+    // The walking-request feature is built on the WalkingPartner row
+    // (applications FK to WalkingPartner.userId). Legacy partners approved only
+    // through the Partner table have no WalkingPartner row, so accept would
+    // violate the FK. Require the WalkingPartner row and backfill it on the
+    // fly only when the user is an approved Partner (migration-safe).
+    let partner = await prisma.walkingPartner.findUnique({ where: { userId: req.user!.userId } });
+    if (!partner) {
+      const legacy = await prisma.partner.findUnique({ where: { userId: req.user!.userId }, select: { status: true, isAvailable: true } });
+      if (!legacy || legacy.status !== "APPROVED") {
+        sendError(res, "Approved walking partner status required.", 403, "PARTNER_REQUIRED");
+        return;
+      }
+      if (!legacy.isAvailable) {
+        sendError(res, "You are marked unavailable. Set availability on before accepting jobs.", 403, "PARTNER_UNAVAILABLE");
+        return;
+      }
+      partner = await prisma.walkingPartner.create({
+        data: { userId: req.user!.userId, status: "APPROVED" },
+      });
+    } else if (partner.status !== "APPROVED") {
+      sendError(res, "Approved walking partner status required.", 403, "PARTNER_REQUIRED");
       return;
+    } else {
+      // Availability lives on the Partner row. The dispatch pipeline never
+      // offers jobs to unavailable partners, so the accept flow must enforce
+      // the same gate — otherwise a partner could disable availability but keep
+      // accepting jobs (bypassing the availability contract).
+      const avail = await prisma.partner.findUnique({
+        where: { userId: req.user!.userId },
+        select: { isAvailable: true },
+      });
+      if (avail && !avail.isAvailable) {
+        sendError(res, "You are marked unavailable. Set availability on before accepting jobs.", 403, "PARTNER_UNAVAILABLE");
+        return;
+      }
     }
 
     await prisma.$transaction(async (tx) => {

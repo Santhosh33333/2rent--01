@@ -88,6 +88,9 @@ export async function switchRole(req: AuthedRequest, res: Response): Promise<voi
         update: { status: "APPROVED" },
         create: { userId: req.user!.userId, status: "APPROVED", providesWalking: true, providesCarry: true },
       });
+      // The upsert happens AFTER allowedRoles is computed, so grant PARTNER
+      // here too — otherwise the freshly provisioned role 403s below.
+      allowedRoles.push("PARTNER");
     }
 
     if (!allowedRoles.includes(role)) {

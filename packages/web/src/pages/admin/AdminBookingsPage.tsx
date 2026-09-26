@@ -1,7 +1,7 @@
 import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, ChevronLeft, ChevronRight, FileDown } from 'lucide-react'
+import { ArrowLeft, ChevronLeft, ChevronRight, FileDown, Phone } from 'lucide-react'
 import { adminApi } from '../../lib/api'
 import { exportTableToPdf } from '../../lib/pdfExport'
 
@@ -9,7 +9,9 @@ interface BookingRow {
   id: string
   userName: string
   userEmail?: string
+  userPhone?: string
   partnerName?: string
+  partnerPhone?: string
   serviceType: string
   status: string
   paymentStatus?: string
@@ -66,7 +68,9 @@ export function AdminBookingsPage() {
           id: b.id,
           userName: b.user?.fullName || b.userName || 'Unknown',
           userEmail: b.user?.email || '',
+          userPhone: b.user?.phone || '',
           partnerName: b.partner?.user?.fullName || b.partnerName || '—',
+          partnerPhone: b.partner?.user?.phone || '',
           serviceType: b.serviceType || '—',
           status: b.status,
           paymentStatus: b.paymentStatus,
@@ -106,10 +110,12 @@ export function AdminBookingsPage() {
               exportTableToPdf({
                 title: 'Bookings',
                 subtitle: `Page ${page} of ${totalPages}`,
-                columns: ['User', 'Partner', 'Service', 'Status', 'Payment', 'Refund', 'Created'],
+                columns: ['User', 'User Phone', 'Partner', 'Partner Phone', 'Service', 'Status', 'Payment', 'Refund', 'Created'],
                 rows: bookings.map((b) => [
                   b.userName || '-',
+                  b.userPhone || '-',
                   b.partnerName || '-',
+                  b.partnerPhone || '-',
                   b.serviceType || '-',
                   b.status || '-',
                   b.paymentStatus || '-',
@@ -184,7 +190,21 @@ export function AdminBookingsPage() {
                           {b.userEmail && <p className="text-gray-500 text-xs">{b.userEmail}</p>}
                           <p className="text-gray-600 text-[10px] font-mono mt-0.5">{b.id.slice(0, 8)}</p>
                         </td>
-                        <td className="px-4 py-3 text-gray-300 text-sm">{b.partnerName}</td>
+                        <td className="px-4 py-3">
+                          <p className="text-gray-300 text-sm">{b.partnerName}</p>
+                          <div className="flex flex-wrap gap-1.5 mt-1">
+                            {b.userPhone && (
+                              <a href={`tel:${b.userPhone.replace(/[^+\d]/g, '')}`} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-emerald-700/30 text-emerald-300 text-[10px] font-bold hover:bg-emerald-700/50 transition">
+                                <Phone className="w-3 h-3" /> Call user
+                              </a>
+                            )}
+                            {b.partnerPhone && (
+                              <a href={`tel:${b.partnerPhone.replace(/[^+\d]/g, '')}`} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-sky-700/30 text-sky-300 text-[10px] font-bold hover:bg-sky-700/50 transition">
+                                <Phone className="w-3 h-3" /> Call partner
+                              </a>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-4 py-3 text-gray-300 text-sm">{b.serviceType}</td>
                         <td className="px-4 py-3">
                           <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${statusBadge(b.status)}`}>{b.status}</span>

@@ -23,6 +23,23 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+// Keys that only the server may write into a request's notes JSON. Client
+// payloads are scrubbed of these so the two-party completion handshake cannot
+// be pre-seeded or altered by a caller.
+const SERVER_RESERVED_NOTES = new Set(["completionRequestedBy", "completionRequestedAt"]);
+
+function stripServerReservedNotes(notes: unknown): string | null | undefined {
+  if (typeof notes === "string") return notes;
+  if (!notes || typeof notes !== "object") return notes as string | null | undefined;
+  const cleaned: Record<string, unknown> = { ...(notes as Record<string, unknown>) };
+  for (const key of SERVER_RESERVED_NOTES) {
+    if (key in cleaned) {
+      delete cleaned[key];
+    }
+  }
+  return JSON.stringify(cleaned);
+}
+
 // Platform fee fraction is admin-configurable (PLATFORM_FEE_PERCENT, default 10%).
 async function platformFeeFraction(): Promise<number> {
   return (await getConfig("PLATFORM_FEE_PERCENT", 10)) / 100;
@@ -74,7 +91,7 @@ export async function createRequest(req: AuthedRequest, res: Response): Promise<
         throw new CarryFlowError("INSUFFICIENT_FUNDS");
       }
 
-      const created = await tx.carryBuddyRequest.create({
+const created = await tx.carryBuddyRequest.create({
         data: {
           requesterId: userId,
           itemType,
@@ -84,7 +101,12 @@ export async function createRequest(req: AuthedRequest, res: Response): Promise<
           startTime: parsedStart,
           durationMinutes: durationMinutes ? Number(durationMinutes) : null,
           fare: round2(parsedFare),
-          notes,
+          // The completion handshake flags are SERVER-owned. They live in the
+          // notes JSON for storage, but a client-supplied notes payload must
+          // never be able to pre-seed them (that would let a requester claim the
+          // carrier already requested completion and confirm — and release the
+          // payout — without the handshake). Strip all server-reserved keys.
+          notes: stripServerReservedNotes(notes),
           status: "OPEN",
         },
       });
@@ -277,6 +299,15 @@ export async function completeRequest(req: AuthedRequest, res: Response): Promis
 
     if (!notes.completionRequestedBy) {
       sendError(res, "The carrier must request completion first. You confirm after delivery.", 409, "COMPLETION_NOT_REQUESTED");
+      return;
+    }
+
+    // The handshake flag must be bound to the ACTUAL accepted carrier. If a
+    // stale/mismatched flag ever appears (e.g. a pre-schema-change record or a
+    // tampered legacy payload), refuse to confirm rather than pay out to a
+    // mismatched/wrong carrier.
+    if (request.acceptedById && notes.completionRequestedBy !== request.acceptedById) {
+      sendError(res, "Completion handshake mismatch. Contact support.", 409, "HANDSHAKE_MISMATCH");
       return;
     }
 

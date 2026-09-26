@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1920" viewBox="0 0 1280 1920">
+  <defs>
+    <linearGradient id="bg" x1="0.08" y1="0" x2="0.92" y2="1">
+      <stop offset="0" stop-color="#2E63E0"/>
+      <stop offset="0.5" stop-color="#163E96"/>
+      <stop offset="1" stop-color="#0A2050"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.3" cy="0.06" r="0.9">
+      <stop offset="0" stop-color="#9FC0FF" stop-opacity="0.35"/>
+      <stop offset="0.55" stop-color="#FFFFFF" stop-opacity="0.05"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="nGrad" x1="0" y1="0" x2="0.55" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#C7D9FF"/>
+    </linearGradient>
+    <linearGradient id="limeGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#E9FF85"/>
+      <stop offset="1" stop-color="#C4EA1E"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="1920" fill="url(#bg)"/>
+  <rect width="1280" height="1920" fill="url(#glow)"/>
+  <g fill="url(#nGrad)">
+    <rect x="454" y="760" width="132" height="431" rx="66"/>
+    <rect x="1028" y="760" width="132" height="431" rx="66"/>
+  </g>
+  <line x1="520" y1="828" x2="1090" y2="1160" stroke="url(#nGrad)" stroke-width="132" stroke-linecap="round"/>
+  <circle cx="1240" cy="746" r="88" fill="url(#limeGrad)"/>
+  <circle cx="1240" cy="746" r="117" fill="none" stroke="#D8F53C" stroke-opacity="0.35" stroke-width="13"/>
+  <circle cx="1240" cy="746" r="22" fill="#FFFFFF" opacity="0.9"/>
+</svg>

@@ -129,12 +129,16 @@ export async function requireWalkingPartner(req: AuthedRequest, res: Response, n
       sendError(res, "Authentication required.", 401, "UNAUTHORIZED");
       return;
     }
-    const partner = await prisma.partner.findUnique({
+    // Guard against the WalkingPartner row the walking-request feature is built
+    // on (WalkingRequestApplication.applicantId FKs to WalkingPartner.userId).
+    // Checking prisma.partner here lets Partner-only users pass the gate and
+    // then blow up with an FK violation the moment they try to accept a walk.
+    const partner = await prisma.walkingPartner.findUnique({
       where: { userId: req.user.userId },
       select: { status: true },
     });
     if (!partner || partner.status !== "APPROVED") {
-      sendError(res, "Approved partner status required.", 403, "PARTNER_REQUIRED");
+      sendError(res, "Approved walking partner status required.", 403, "PARTNER_REQUIRED");
       return;
     }
     next();

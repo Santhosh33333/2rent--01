@@ -738,6 +738,14 @@ export async function cancelBooking(bookingId: string, cancelledBy: "USER" | "PA
   const refundableStatuses = ["PAYMENT_PENDING", "PAYMENT_INITIATED", "PAYMENT_SUCCESSFUL", "PARTNER_SEARCHING", "EXPIRED"];
   const partialRefundStatuses = ["PARTNER_ACCEPTED"];
 
+  // A refund is ONLY ever issued against money the platform actually holds in
+  // escrow. CASH (PENDING_CASH) and unverified UPI_MANUAL (VERIFICATION_PENDING)
+  // bookings are created with skipDebit — the wallet is never debited, so
+  // cancelling them must never credit wallet money. Escrow is debited (and held)
+  // for ONLINE bookings and admin-verified UPI bookings, which both land on
+  // paymentStatus PAID.
+  const escrowHeld = booking.paymentStatus === "PAID";
+
   if (claimed !== 1) {
     // Lost the race — another request already cancelled this booking
     const fresh = await prisma.booking.findUnique({ where: { id: bookingId } });
@@ -756,7 +764,7 @@ export async function cancelBooking(bookingId: string, cancelledBy: "USER" | "PA
 
   void notifyBookingStatusChange(bookingId, booking.userId, "CANCELLED");
 
-  if (refundableStatuses.includes(booking.status)) {
+  if (refundableStatuses.includes(booking.status) && escrowHeld) {
     const refundAmount = booking.estimatedAmount ?? 0;
     if (refundAmount > 0) {
       await moneyTransaction(async (tx) => {
@@ -800,14 +808,14 @@ export async function cancelBooking(bookingId: string, cancelledBy: "USER" | "PA
       });
       refundProcessed = true;
     }
-  } else if (partialRefundStatuses.includes(booking.status) && !booking.otpGeneratedAt) {
+  } else if (partialRefundStatuses.includes(booking.status) && !booking.otpGeneratedAt && escrowHeld) {
     // Accepted but start code not yet issued: standard cancellation fee.
     const cancelFee = await getServiceConfig(booking.serviceType, "CANCELLATION_FEE_USER", await getConfig("CANCELLATION_FEE_USER", 0));
     const gross = booking.finalAmount ?? booking.estimatedAmount ?? 0;
     refundProcessed = await postCancellationRefund(bookingId, booking.userId, gross, cancelFee, "PARTIAL", `Partial cancellation refund - ${cancelledBy}`, cancelledBy, reason);
   } else if (
-    booking.status === "OTP_GENERATED" ||
-    (booking.status === "PARTNER_ACCEPTED" && !!booking.otpGeneratedAt)
+    (booking.status === "OTP_GENERATED" ||
+    (booking.status === "PARTNER_ACCEPTED" && !!booking.otpGeneratedAt)) && escrowHeld
   ) {
     // Start code issued (partner committed / may have arrived): the higher
     // stage-aware fee applies. Falls back to the standard fee when unset —

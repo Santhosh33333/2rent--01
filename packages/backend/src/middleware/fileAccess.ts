@@ -46,10 +46,21 @@ export async function requireDocumentAccess(req: Request, res: Response, next: N
       select: { userId: true },
     });
 
-    const isOwner = verification?.userId === authed.user.userId;
+    let ownerId: string | null = verification?.userId ?? null;
+    if (!ownerId) {
+      // Payout-proof images (admin-uploaded at withdrawal approval) are private
+      // too: the funds' owner and privileged/finance roles may view them.
+      const withdrawal = await prisma.withdrawalRequest.findFirst({
+        where: { payoutProofImageUrl: documentUrl },
+        select: { userId: true },
+      });
+      ownerId = withdrawal?.userId ?? null;
+    }
+
+    const isOwner = ownerId === authed.user.userId;
     const isPrivileged = !!authed.user.activeRole && PRIVILEGED_ROLES.includes(authed.user.activeRole);
 
-    if (!verification || (!isOwner && !isPrivileged)) {
+    if (!ownerId || (!isOwner && !isPrivileged)) {
       sendError(res, "You do not have access to this document.", 403, "FORBIDDEN");
       return;
     }

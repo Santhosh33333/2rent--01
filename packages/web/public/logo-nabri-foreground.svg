@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 432 432" fill="none">
+  <defs>
+    <linearGradient id="badge" x1="0" y1="0" x2="0.2" y2="1">
+      <stop offset="0%" stop-color="#14439F"/>
+      <stop offset="42%" stop-color="#0B256A"/>
+      <stop offset="100%" stop-color="#050E33"/>
+    </linearGradient>
+    <radialGradient id="badgeGloss" cx="34%" cy="12%" r="72%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.30"/>
+      <stop offset="38%" stop-color="#FFFFFF" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="cynGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#39E3FF" stop-opacity="0.55"/>
+      <stop offset="42%" stop-color="#1FC7F0" stop-opacity="0.20"/>
+      <stop offset="100%" stop-color="#0E7FD0" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="nGlass" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.85"/>
+      <stop offset="38%" stop-color="#D2F8FF" stop-opacity="0.42"/>
+      <stop offset="100%" stop-color="#7FD9FF" stop-opacity="0.14"/>
+    </linearGradient>
+    <filter id="sharpGlow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+  </defs>
+
+  <!-- Badge centered at ~61% for the Android safe zone -->
+  <g transform="translate(74 74) scale(0.648)">
+    <rect x="98" y="98" width="316" height="316" rx="76" fill="url(#badge)"/>
+    <ellipse cx="256" cy="250" rx="150" ry="115" fill="url(#cynGlow)"/>
+    <rect x="106" y="106" width="300" height="300" rx="70" stroke="#FFFFFF" stroke-opacity="0.12" stroke-width="4" fill="none"/>
+    <g stroke="url(#nGlass)" stroke-width="36" stroke-linecap="round" fill="none">
+      <path d="M226 160V316"/>
+      <path d="M310 160V316"/>
+      <path d="M226 190L310 256"/>
+    </g>
+    <path d="M213 176V314" stroke="#FFFFFF" stroke-opacity="0.80" stroke-width="6" stroke-linecap="round"/>
+    <path d="M297 176V314" stroke="#FFFFFF" stroke-opacity="0.46" stroke-width="4" stroke-linecap="round"/>
+    <path d="M231 204L306 252" stroke="#FFFFFF" stroke-opacity="0.35" stroke-width="4" stroke-linecap="round"/>
+    <path d="M350 150l6 10 10 6-10 6-6 10-6-10-10-6 10-6Z" fill="#8FF4FF" filter="url(#sharpGlow)"/>
+  </g>
+</svg>

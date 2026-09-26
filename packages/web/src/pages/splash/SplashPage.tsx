@@ -42,6 +42,14 @@ export function SplashPage() {
             PARTNER: '/partner/dashboard',
             ADMIN: '/admin/dashboard',
             SUPER_ADMIN: '/admin/dashboard',
+            MODERATOR: '/admin/dashboard',
+            SUPPORT: '/admin/dashboard',
+            FINANCE: '/admin/dashboard',
+            SUPPORT_ADMIN: '/admin/dashboard',
+            FINANCE_ADMIN: '/admin/dashboard',
+            KYC_ADMIN: '/admin/dashboard',
+            MARKETING_ADMIN: '/admin/dashboard',
+            PARTNER_ADMIN: '/admin/dashboard',
           }
           navigate(ROLE_DASHBOARDS[role.toUpperCase()] || '/dashboard', { replace: true })
         }

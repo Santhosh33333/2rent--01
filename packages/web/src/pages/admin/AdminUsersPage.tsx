@@ -1,7 +1,7 @@
 ﻿import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Search, ChevronLeft, ChevronRight, Ban, Unlock, Trash2, Loader2, X, FileDown, Crown, UserMinus, Eye } from 'lucide-react'
+import { ArrowLeft, Search, ChevronLeft, ChevronRight, Ban, Unlock, Trash2, Loader2, X, FileDown, Crown, UserMinus, Eye, Phone, PencilLine } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { adminApi } from '../../lib/api'
 import { exportTableToPdf } from '../../lib/pdfExport'
@@ -39,6 +39,9 @@ export function AdminUsersPage() {
   const [blockReason, setBlockReason] = useState('')
   const [busy, setBusy] = useState(false)
   const [impersonateBusy, setImpersonateBusy] = useState<string | null>(null)
+  const [phoneTarget, setPhoneTarget] = useState<User | null>(null)
+  const [newPhone, setNewPhone] = useState('')
+  const [phoneBusy, setPhoneBusy] = useState(false)
 
   const fetchUsers = async () => {
     setLoading(true)
@@ -155,7 +158,7 @@ export function AdminUsersPage() {
   }
 
   const doPromote = async (user: User) => {
-    const role = window.prompt('Promote to role (SUPER_ADMIN, ADMIN, MODERATOR, SUPPORT, FINANCE):', 'ADMIN')
+    const role = window.prompt('Promote to role (SUPER_ADMIN, ADMIN, MODERATOR, SUPPORT, FINANCE, SUPPORT_ADMIN, FINANCE_ADMIN, KYC_ADMIN, MARKETING_ADMIN, PARTNER_ADMIN):', 'MODERATOR')
     if (!role) return
     setBusy(true)
     try {
@@ -180,6 +183,31 @@ export function AdminUsersPage() {
       toast.error(getErrorMessage(err, 'Failed to demote user'))
     } finally {
       setBusy(false)
+    }
+  }
+
+  const openPhoneEditor = (user: User) => {
+    setPhoneTarget(user)
+    setNewPhone(user.phone || '')
+  }
+
+  const savePhone = async () => {
+    if (!phoneTarget) return
+    const phone = newPhone.trim().replace(/[^+\d]/g, '')
+    if (!/^\+?[0-9]{10,15}$/.test(phone)) {
+      toast.error('Enter a valid mobile number (10–15 digits, optional +country)')
+      return
+    }
+    setPhoneBusy(true)
+    try {
+      await adminApi.updateUserPhone(phoneTarget.id, phone)
+      toast.success(`Mobile number updated for ${phoneTarget.name || phoneTarget.email}`)
+      setPhoneTarget(null)
+      fetchUsers()
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to update mobile number'))
+    } finally {
+      setPhoneBusy(false)
     }
   }
 
@@ -342,6 +370,21 @@ export function AdminUsersPage() {
                                 >
                                   {impersonateBusy === user.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Eye className="w-3.5 h-3.5" />} Login as
                                 </button>
+                                {user.phone && (
+                                  <a
+                                    href={`tel:${user.phone.replace(/[^+\d]/g, '')}`}
+                                    className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium rounded-lg transition"
+                                  >
+                                    <Phone className="w-3.5 h-3.5" /> Call
+                                  </a>
+                                )}
+                                <button
+                                  onClick={() => openPhoneEditor(user)}
+                                  disabled={phoneBusy}
+                                  className="flex items-center gap-1.5 px-3 py-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition"
+                                >
+                                  {phoneBusy && phoneTarget?.id === user.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PencilLine className="w-3.5 h-3.5" />} Change phone
+                                </button>
                                 {user.status === 'SUSPENDED' ? (
                                   <button
                                     onClick={() => doUnblock(user)}
@@ -480,6 +523,45 @@ export function AdminUsersPage() {
                 {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Ban className="w-4 h-4" />}
                 Block account
               </button>
+</div>
+          </div>
+        )}
+
+        {/* Change phone modal */}
+        {phoneTarget && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={() => !phoneBusy && setPhoneTarget(null)}>
+            <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-md border border-gray-700" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-white font-semibold">Change mobile number — {phoneTarget.name || phoneTarget.email}</h3>
+                <button onClick={() => setPhoneTarget(null)} className="p-1 rounded-lg hover:bg-gray-700 text-gray-400">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mb-3">Current number: <span className="text-gray-300">{phoneTarget.phone || 'Not provided'}</span></p>
+              <input
+                type="tel"
+                value={newPhone}
+                onChange={(e) => setNewPhone(e.target.value)}
+                placeholder="+91 98765 43210"
+                className="w-full px-3 py-2.5 mb-4 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-teal-500"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={savePhone}
+                  disabled={phoneBusy}
+                  className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition"
+                >
+                  {phoneBusy && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Save number
+                </button>
+                <button
+                  onClick={() => setPhoneTarget(null)}
+                  disabled={phoneBusy}
+                  className="px-4 py-2.5 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-gray-300 text-sm font-medium rounded-lg transition"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         )}

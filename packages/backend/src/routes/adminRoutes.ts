@@ -108,6 +108,7 @@ router.get("/bookings", bookingsView, adminController.getBookings);
 router.get("/bookings/:id", bookingsView, adminController.getBookingDetail);
 router.get("/withdrawals", withdrawalsManage, adminController.getWithdrawalRequests);
 router.get("/agreements", requireSectionAction("AGREEMENTS", "VIEW"), adminController.getAgreements);
+router.get("/agreements/:id", requireSectionAction("AGREEMENTS", "VIEW"), adminController.getAgreementDetail);
 router.get("/email/status", notificationsSend, adminController.getEmailStatus);
 router.post(
   "/email/test",

@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nabri — New Logo Preview</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: #0A0F1E;
+    color: #E8EDF8;
+    padding: 40px;
+    min-height: 100vh;
+  }
+  h1 {
+    font-size: 28px; font-weight: 700; color: #FFFFFF;
+    margin-bottom: 6px; letter-spacing: -0.5px;
+  }
+  .sub { color: #8B95B3; font-size: 14px; margin-bottom: 36px; }
+  .section { margin-bottom: 44px; }
+  .section h2 {
+    font-size: 13px; font-weight: 600; color: #FF6B35;
+    text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 16px;
+    border-bottom: 1px solid #1E2740; padding-bottom: 8px;
+  }
+  .row { display: flex; align-items: flex-end; gap: 32px; flex-wrap: wrap; margin-bottom: 20px; }
+  .cell { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .cell span { font-size: 12px; color: #6B7494; }
+  .dark-bg { background: #0E1631; padding: 20px; border-radius: 16px; }
+  .light-bg { background: #F4F6FB; padding: 20px; border-radius: 16px; }
+  .orange-bg { background: #FF6B35; padding: 20px; border-radius: 16px; }
+  .badge-only { display: flex; gap: 12px; align-items: center; }
+  .lockup { display: flex; gap: 16px; align-items: center; }
+  .lockup svg { height: 56px; width: auto; }
+  .lockup .word { font-size: 36px; font-weight: 800; color: #0B256A; letter-spacing: 1px; }
+  .lockup.light .word { color: #FFFFFF; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 20px; }
+  .grid .cell { padding: 24px; border-radius: 12px; background: #0E1631; }
+  .sizes { display: flex; align-items: flex-end; gap: 24px; padding: 32px; background: #0E1631; border-radius: 16px; }
+  .sizes .cell { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .sizes .size-label { font-size: 11px; color: #6B7494; font-family: monospace; }
+  .note { font-size: 12px; color: #5C6789; margin-top: 8px; font-style: italic; }
+</style>
+</head>
+<body>
+  <h1>Nabri — New Logo</h1>
+  <p class="sub">Concept: geometric "N" mark · navy badge · orange accent · geometric wordmark</p>
+
+  <div class="section">
+    <h2>Mark — sizes</h2>
+    <div class="sizes">
+      <div class="cell"><img src="logo-mark-new.svg" width="200" height="200"><span class="size-label">200px</span></div>
+      <div class="cell"><img src="logo-mark-new.svg" width="96" height="96"><span class="size-label">96px</span></div>
+      <div class="cell"><img src="logo-mark-new.svg" width="48" height="48"><span class="size-label">48px</span></div>
+      <div class="cell"><img src="logo-mark-new.svg" width="24" height="24"><span class="size-label">24px</span></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Cutout — orange background</h2>
+    <div class="orange-bg" style="display:inline-block; padding:24px; border-radius:16px;">
+      <img src="logo-mark-cutout.svg" width="160" height="160">
+    </div>
+    <div class="row" style="margin-top:16px;">
+      <div class="cell"><img src="logo-mark-cutout.svg" width="96" height="96"><span class="size-label">96px</span></div>
+      <div class="cell"><img src="logo-mark-cutout.svg" width="48" height="48"><span class="size-label">48px</span></div>
+      <div class="cell"><img src="logo-mark-cutout.svg" width="24" height="24"><span class="size-label">24px</span></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Lockup — dark background</h2>
+    <div class="dark-bg lockup">
+      <img src="logo-mark-new.svg" height="56">
+      <span class="word">nabri</span>
+    </div>
+    <p class="note">badge + wordmark side-by-side for splash screens, loading states</p>
+  </div>
+
+  <div class="section">
+    <h2>Lockup — light background</h2>
+    <div class="light-bg lockup light" style="padding:24px; border-radius:16px;">
+      <img src="logo-mark-new.svg" height="56">
+      <span class="word" style="color:#0B256A;">nabri</span>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Wordmark only</h2>
+    <div class="light-bg" style="padding:24px; border-radius:16px;">
+      <img src="logo-nabri-wordmark.svg" width="600" height="150">
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Mark in context — app mockup</h2>
+    <div style="background:#0E1631; padding:32px; border-radius:20px; display:inline-block;">
+      <div style="display:flex; align-items:center; gap:14px; margin-bottom:20px;">
+        <img src="logo-mark-new.svg" width="40" height="40">
+        <span style="font-size:20px; font-weight:700; color:#FFFFFF;">nabri</span>
+      </div>
+      <div style="background:#1A2140; padding:16px; border-radius:12px; width:280px;">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+          <img src="logo-mark-new.svg" width="24" height="24">
+          <span style="font-size:14px; color:#C8D0E8;">Discover homes</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+          <img src="logo-mark-new.svg" width="24" height="24">
+          <span style="font-size:14px; color:#C8D0E8;">Book a viewing</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <img src="logo-mark-new.svg" width="24" height="24">
+          <span style="font-size:14px; color:#C8D0E8;">Wallet &amp; payments</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Color palette</h2>
+    <div style="display:flex; gap:12px;">
+      <div style="background:#0B256A; padding:12px 20px; border-radius:8px; color:#fff; font-size:13px;">Navy #0B256A</div>
+      <div style="background:#0E2A6E; padding:12px 20px; border-radius:8px; color:#fff; font-size:13px;">Light Navy #0E2A6E</div>
+      <div style="background:#FF6B35; padding:12px 20px; border-radius:8px; color:#fff; font-size:13px;">Orange #FF6B35</div>
+      <div style="background:#FFFFFF; padding:12px 20px; border-radius:8px; color:#0B256A; font-size:13px;">White #FFFFFF</div>
+      <div style="background:#14439F; padding:12px 20px; border-radius:8px; color:#fff; font-size:13px;">Badge Top #14439F</div>
+    </div>
+  </div>
+
+  <p class="note" style="margin-top:40px;">Files: logo-mark-new.svg · logo-nabri-lockup.svg · logo-nabri-wordmark.svg · logo-mark-cutout.svg · favicon.svg (updated to mark)</p>
+</body>
+</html>
