@@ -29,9 +29,9 @@ export function AboutPage() {
         <GlassCard variant="elevated" padding="lg" className="text-center">
           <span className="brand-badge mx-auto mb-4 inline-flex">
             <img
-              src="/logo-mark.svg"
+              src="/logo-glyph-white.svg"
               alt="Nabri logo"
-              className="h-20 w-20 drop-shadow-[0_14px_32px_rgba(13,55,139,0.35)]"
+              className="h-11 w-11"
             />
           </span>
           <h1 className="text-2xl font-bold font-display text-surface-900 dark:text-white">Nabri</h1>

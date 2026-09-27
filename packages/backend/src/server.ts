@@ -206,6 +206,15 @@ if (!dbAvailable) {
     console.warn("Schema reconciliation warning (Message):", (err as Error)?.message);
   }
 
+  // Persisted optimistic-message id (migration 20260928_message_client_id). Idempotent.
+  try {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "clientId" TEXT`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Message_senderId_clientId_idx" ON "Message"("senderId", "clientId")`);
+    console.log("Schema reconciliation: Message clientId ensured.");
+  } catch (err) {
+    console.warn("Schema reconciliation warning (Message clientId):", (err as Error)?.message);
+  }
+
   // Movie watchlist (migration 20260922_movie_watchlist). Idempotent.
   try {
     await prisma.$executeRawUnsafe(

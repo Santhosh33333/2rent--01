@@ -305,7 +305,7 @@ export async function joinCommunity(req: AuthedRequest, res: Response): Promise<
     // count. It used to send `undefined`, so the client had no server truth to
     // reconcile against and the button could only be flipped optimistically —
     // which is how a failed toggle stayed wrong until a full remount.
-    const [after] = await prisma.$transaction([
+    const [after, memberCount] = await prisma.$transaction([
       prisma.communityMember.create({ data: { communityId: id, userId: req.user!.userId, role: "MEMBER" } }),
       prisma.community.update({ where: { id }, data: { memberCount: { increment: 1 } } }),
       prisma.auditLog.create({
@@ -317,9 +317,8 @@ export async function joinCommunity(req: AuthedRequest, res: Response): Promise<
           entityId: id,
         },
       }),
+      prisma.communityMember.count({ where: { communityId: id } }),
     ]);
-
-    const memberCount = await prisma.communityMember.count({ where: { communityId: id } });
     sendSuccess(res, { id, isMember: true, isOwner: false, membership: after, memberCount }, "Joined community.");
   } catch (err: any) {
     sendError(res, "Failed to join community.", 500, "INTERNAL_ERROR");
@@ -355,7 +354,7 @@ export async function leaveCommunity(req: AuthedRequest, res: Response): Promise
       }
     }
 
-    await prisma.$transaction([
+    const [_, __, ___, memberCount] = await prisma.$transaction([
       prisma.communityMember.delete({ where: { communityId_userId: { communityId: id, userId: req.user!.userId } } }),
       prisma.community.update({ where: { id }, data: { memberCount: { decrement: 1 } } }),
       prisma.auditLog.create({
@@ -367,12 +366,10 @@ export async function leaveCommunity(req: AuthedRequest, res: Response): Promise
           entityId: id,
         },
       }),
+      prisma.communityMember.count({ where: { communityId: id } }),
     ]);
 
-    // Mirrors joinCommunity: return the settled state so the caller never has
-    // to guess whether the toggle landed.
     const isOwner = community?.ownerId === req.user!.userId;
-    const memberCount = await prisma.communityMember.count({ where: { communityId: id } });
     sendSuccess(res, { id, isMember: false, isOwner, membership: null, memberCount }, "Left community.");
   } catch (err: any) {
     sendError(res, "Failed to leave community.", 500, "INTERNAL_ERROR");

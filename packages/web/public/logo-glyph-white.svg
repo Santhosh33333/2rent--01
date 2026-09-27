@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <!-- White brand glyph for use ON a coloured/brand surface (badges, header
+       chips, dark hero panels). Transparent background: no blue tile inside a
+       blue badge. `logo-glyph.svg` cannot be used here because it fills with
+       `currentColor`, which resolves to black inside an <img>. -->
+  <defs>
+    <linearGradient id="beacon" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#E9FF85"/>
+      <stop offset="1" stop-color="#C4EA1E"/>
+    </linearGradient>
+  </defs>
+  <g fill="#FFFFFF">
+    <rect x="134" y="170" width="60" height="196" rx="30"/>
+    <rect x="318" y="170" width="60" height="196" rx="30"/>
+  </g>
+  <line x1="164" y1="188" x2="348" y2="348" stroke="#FFFFFF" stroke-width="60" stroke-linecap="round"/>
+  <circle cx="378" cy="130" r="40" fill="url(#beacon)"/>
+  <circle cx="378" cy="130" r="10" fill="#FFFFFF" opacity="0.95"/>
+</svg>

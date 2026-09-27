@@ -136,6 +136,14 @@ export async function sendMessage(req: AuthedRequest, res: Response): Promise<vo
       linkedBookingId = booking.id;
     }
 
+    // Echo the caller's placeholder id so the client can reconcile this exact
+    // optimistic bubble rather than guessing by position. Always set, so the
+    // shape is stable: a well-formed id, or null when unusable. Persisted so a
+    // refresh still matches the placeholder to the real row.
+    const echoClientId = typeof clientId === "string" && clientId.length > 0 && clientId.length <= 64
+      ? clientId
+      : null;
+
     const message = await prisma.message.create({
       data: {
         senderId: req.user!.userId,
@@ -147,6 +155,7 @@ export async function sendMessage(req: AuthedRequest, res: Response): Promise<vo
         bookingId: linkedBookingId,
         replyToId: replyParent ? replyParent.id : null,
         status: "SENT",
+        clientId: echoClientId,
       },
       include: {
         sender: { select: USER_SELECT },
@@ -180,13 +189,10 @@ export async function sendMessage(req: AuthedRequest, res: Response): Promise<vo
       timestamp: message.createdAt,
     });
 
-    // Echo the caller's placeholder id so the client can reconcile this exact
-    // optimistic bubble rather than guessing by position. Always set, so the
-    // shape is stable: a well-formed id, or null when unusable.
-    const echoClientId = typeof clientId === "string" && clientId.length > 0 && clientId.length <= 64
-      ? clientId
-      : null;
-    (message as any).clientId = echoClientId;
+    // Echo the id on the response itself as well as persisting it, so the
+    // contract is "a well-formed id or null" no matter what the driver returns
+    // for the created row. Clients rely on the key always being present.
+    (message as { clientId?: string | null }).clientId = echoClientId;
 
     await prisma.auditLog.create({
       data: {
@@ -382,6 +388,11 @@ export async function getMessages(req: AuthedRequest, res: Response): Promise<vo
     // it, so nothing is left permanently misreported.
     void (async () => {
       try {
+        // Fix: Mark as READ immediately when conversation is opened to clear unread tallies
+        await prisma.message.updateMany({
+          where: { conversationId: convId, receiverId: userId, status: { not: "READ" } },
+          data: { status: "READ", readAt: new Date() },
+        });
         const delivered = await prisma.message.updateMany({
           where: { conversationId: convId, receiverId: userId, status: "SENT" },
           data: { status: "DELIVERED" },
@@ -392,8 +403,8 @@ export async function getMessages(req: AuthedRequest, res: Response): Promise<vo
             emitToUser(sid, "messages_delivered", { conversationId: convId, readBy: userId });
           }
         }
-      } catch (err) {
-        console.error("[getMessages] delivery receipt failed:", (err as Error)?.message);
+      } catch (err: any) {
+        console.error("[getMessages] delivery receipt failed:", err?.message);
       }
     })();
 

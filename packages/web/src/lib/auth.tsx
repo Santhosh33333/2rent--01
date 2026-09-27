@@ -52,6 +52,24 @@ interface AuthContextType {
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+/** Statuses that mean "an admin approved this KYC". Mirrors the backend's
+ *  `verification.status` terminal set. */
+const KYC_APPROVED_STATUSES = new Set(['VERIFIED', 'APPROVED'])
+
+/**
+ * Single source of truth for "has an admin approved this user's KYC".
+ *
+ * Deliberately never reads `emailVerified` / `mobileVerified`: those describe
+ * contact-detail ownership, not identity approval, and treating them as KYC
+ * let unverified users into KYC-gated features.
+ */
+export function resolveKycVerified(payload: Record<string, unknown> | null | undefined): boolean {
+  if (!payload) return false
+  if (payload.isVerified === true) return true
+  const status = typeof payload.kycStatus === 'string' ? payload.kycStatus.toUpperCase() : ''
+  return KYC_APPROVED_STATUSES.has(status)
+}
+
 function buildUserFromPayload(payload: Record<string, unknown>, fallbackName?: string): User {
   const rawRole = (payload?.role || payload?.activeRole || 'USER') as string
   const role = normalizeRole(rawRole)
@@ -64,7 +82,14 @@ function buildUserFromPayload(payload: Record<string, unknown>, fallbackName?: s
     role,
     activeRole: normalizeRole((payload?.activeRole || payload?.role || role) as string),
     accountType,
-    isVerified: Boolean(payload?.isVerified || payload?.emailVerified || payload?.mobileVerified),
+    // KYC approval ONLY. This used to be
+    // `payload.isVerified || payload.emailVerified || payload.mobileVerified`,
+    // which reported a user as verified the moment they confirmed an email or
+    // phone number. Clients gate Communities/Bookings/Events/Wallet on this
+    // flag, so that let unapproved users straight into KYC-gated features.
+    // The backend already sends a truthful `isVerified` derived from
+    // Verification.status, so prefer it and fall back to kycStatus.
+    isVerified: resolveKycVerified(payload),
     trustScore: payload?.trustScore as number,
     kycStatus: payload?.kycStatus as string,
     kycRejectionReason: (payload?.kycRejectionReason as string) ?? null,
@@ -187,7 +212,7 @@ async function restoreSessionFromRefreshToken(): Promise<User | null> {
       role: normalizeRole(p.role),
       activeRole: normalizeRole(p.activeRole || p.role),
       accountType: normalizeRole(p.accountType || p.userType || p.activeRole || p.role),
-      isVerified: p.emailVerified || p.mobileVerified,
+      isVerified: resolveKycVerified(p as unknown as Record<string, unknown>),
       trustScore: p.trustScore,
       kycStatus: p.kycStatus,
       kycRejectionReason: p.kycRejectionReason ?? null,

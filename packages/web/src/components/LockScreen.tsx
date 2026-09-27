@@ -69,7 +69,7 @@ export function LockScreen() {
       <input ref={inputRef} className="sr-only" aria-hidden="true" autoFocus />
       <div className="relative w-full max-w-xs text-center">
         <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center">
-          <img src="/logo-mark.svg" alt="Nabri" className="h-14 w-14 opacity-95 drop-shadow-[0_10px_24px_rgba(0,0,0,0.45)]" />
+          <img src="/logo-glyph-white.svg" alt="Nabri" className="h-14 w-14 drop-shadow-[0_10px_24px_rgba(0,0,0,0.45)]" />
         </div>
         <h1 className="font-display text-2xl font-bold text-white">Nabri · App locked</h1>
         <p className="mt-1 text-sm text-white/70">

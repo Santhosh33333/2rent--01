@@ -599,6 +599,7 @@ model Message {
   replyToId      String?
   reactions      Json?
   status         String   @default("SENT")
+  clientId       String?
   readAt         DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
@@ -612,6 +613,7 @@ model Message {
   @@index([conversationId])
   @@index([conversationId, createdAt])
   @@index([senderId, receiverId])
+  @@index([senderId, clientId])
 }
 
 model Conversation {

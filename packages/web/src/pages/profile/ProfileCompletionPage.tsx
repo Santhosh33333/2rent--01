@@ -154,9 +154,9 @@ export function ProfileCompletionPage() {
           <div className="text-center mb-8">
             <span className="brand-badge mb-5 inline-flex animate-float">
               <img
-                src="/logo-mark.svg"
+                src="/logo-glyph-white.svg"
                 alt="Nabri logo"
-                className="h-14 w-14 drop-shadow-[0_12px_28px_rgba(13,55,139,0.35)]"
+                className="h-8 w-8"
               />
             </span>
             <h1 className="text-3xl font-bold font-display text-surface-900 dark:text-white tracking-tight">Complete Your Profile</h1>

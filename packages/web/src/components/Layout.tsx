@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef, type MouseEvent } from 'react';
+import { useState, useEffect, type MouseEvent } from 'react';
 import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
-import {
-  Home, User, Wallet, Users, Sun, Moon, Menu, X, Bell,
-  MapPin, LogOut, Calendar, Settings, Shield, Info, LayoutDashboard,
-  ClipboardList, Search, QrCode, MoreHorizontal, Send
+import { 
+  Home, User, Wallet, Users, Sun, Moon, Menu, X, Bell, 
+  MapPin, LogOut, Calendar, Settings, Shield, Info, LayoutDashboard, 
+  ClipboardList, Search, QrCode, MoreHorizontal, Send 
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { ImpersonationBanner } from './ImpersonationBanner';
@@ -17,41 +17,30 @@ import { PartnerLiveLocationSharer } from './PartnerLiveLocationSharer';
 import { UserLiveLocationSharer } from './UserLiveLocationSharer';
 import { api } from '../lib/api';
 import { useNotifications } from '../hooks/useSocket';
-import {
-  destroyBanner,
-  isNative,
-  maybeShowInterstitial,
-  prepareInterstitial,
-  showBanner,
-  subscribeAdsState,
+import { 
+  destroyBanner, isNative, maybeShowInterstitial, 
+  prepareInterstitial, showBanner, subscribeAdsState 
 } from '../lib/ads';
+import { motion, AnimatePresence } from 'motion/react';
 
-/** Live unread badge for the header bell: initial fetch + realtime bumps. */
 function UnreadBadge() {
   const [count, setCount] = useState(0);
   const { user } = useAuth();
   const { listenToNotifications } = useNotifications();
 
   useEffect(() => {
-    if (!user) {
-      setCount(0);
-      return;
-    }
+    if (!user) { setCount(0); return; }
     let alive = true;
     const fetchCount = async () => {
       try {
         const res = await api.get('/notifications', { params: { limit: 1 } });
         const n = res.data?.data?.unreadCount;
         if (alive && Number.isFinite(Number(n))) setCount(Number(n));
-      } catch {
-        /* badge stays stale rather than breaking the header */
-      }
+      } catch { }
     };
     fetchCount();
     const timer = setInterval(fetchCount, 30000);
-    const off = listenToNotifications(() => {
-      setCount((c) => c + 1);
-    });
+    const off = listenToNotifications(() => { setCount((c) => c + 1); });
     const onFocus = () => fetchCount();
     window.addEventListener('focus', onFocus);
     return () => {
@@ -60,12 +49,11 @@ function UnreadBadge() {
       window.removeEventListener('focus', onFocus);
       if (typeof off === 'function') off();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
   if (!user || count <= 0) return null;
   return (
-    <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+    <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center shadow-lg shadow-red-500/40">
       {count > 99 ? '99+' : count}
     </span>
   );
@@ -112,98 +100,40 @@ export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [, setMobileMenuOpen] = useState(false);
-  const drawerCloseRef = useRef<HTMLButtonElement>(null);
-  const drawerRef = useRef<HTMLElement>(null);
-  const mainRef = useRef<HTMLElement>(null);
-  const headerRef = useRef<HTMLElement>(null);
-  const bottomNavRef = useRef<HTMLElement>(null);
-  const drawerOpenerRef = useRef<HTMLElement | null>(null);
   const [adsReady, setAdsReady] = useState(false);
   const [bannerUp, setBannerUp] = useState(false);
-
-  const openDrawer = (event: MouseEvent<HTMLElement>) => {
-    drawerOpenerRef.current = event.currentTarget;
-    setSidebarOpen(true);
-  };
 
   const navItems = activeRole === 'PARTNER' ? partnerNav
     : isAdminTierRole(activeRole) ? adminNav
     : userNav;
 
-  // SUPER_ADMIN-only privileges: admin-account management and audit logs sit in
-  // their own nav section so they're never confused with everyday admin tasks.
   const isSuperAdmin = isSuperAdminRole(user?.role) || activeRole === 'SUPER_ADMIN';
   const superAdminNav = isSuperAdmin
     ? [
         { to: '/admin/admins', icon: User, label: 'Admin Accounts' },
         { to: '/admin/audit-logs', icon: ClipboardList, label: 'Audit Logs' },
-      ]
-    : [];
+      ] : [];
 
-  // On phones the bottom bar holds up to 5 slots. If the role has more items
-  // (admin: 7), show the first 4 + a "More" button whose drawer holds the rest —
-  // otherwise all items are shy of the 390px width. Desktop keeps all links in
-  // the hamburger drawer regardless.
   const bottomNavItems = navItems.length > 5 ? navItems.slice(0, 4) : navItems;
   const hasMoreNav = navItems.length > 5;
-  const drawerNavItems = hasMoreNav ? navItems.slice(4) : [];
 
-  useEffect(() => {
-    setSidebarOpen(false);
-    setMobileMenuOpen(false);
-  }, [location.pathname]);
-
-  // Consent resolves asynchronously at boot, so subscribe rather than read once.
+  useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
   useEffect(() => subscribeAdsState((state) => setAdsReady(state.canRequestAds)), []);
 
-  // AdMob banner.
-  //
-  // Only mounted at >= lg, because the app's bottom navigation is fixed and
-  // `lg:hidden`. A native BOTTOM_CENTER banner draws over the WebView, so on
-  // phones it would sit on top of the nav bar and make navigation unusable --
-  // and that cannot be verified without a device. Phones get interstitials
-  // instead, which are modal and have no layout conflict. Flip this on for
-  // phones only after reserving real space for the banner and testing on device.
   useEffect(() => {
     if (!adsReady || !isNative()) return;
     let cancelled = false;
-
     const sync = async () => {
       const wide = window.matchMedia('(min-width: 1024px)').matches;
       if (cancelled) return;
-      if (wide) {
-        await showBanner();
-        if (!cancelled) setBannerUp(true);
-      } else if (bannerUp) {
-        await destroyBanner();
-        if (!cancelled) setBannerUp(false);
-      }
+      if (wide) { await showBanner(); if (!cancelled) setBannerUp(true); }
+      else if (bannerUp) { await destroyBanner(); if (!cancelled) setBannerUp(false); }
     };
-
     void sync();
     const mq = window.matchMedia('(min-width: 1024px)');
     mq.addEventListener('change', () => void sync());
-    return () => {
-      cancelled = true;
-      mq.removeEventListener('change', () => void sync());
-      setBannerUp(false);
-      void destroyBanner();
-    };
-    // bannerUp is intentionally excluded: including it would re-run this effect
-    // (and re-show the banner) every time the flag flips.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => { cancelled = true; mq.removeEventListener('change', () => void sync()); setBannerUp(false); void destroyBanner(); };
   }, [adsReady]);
-
-  // Interstitials fire between navigations on list-style screens only, and never
-  // immediately: landing on a form, a booking confirmation or a payment step is
-  // exactly the accidental-click pattern that gets an AdMob account suspended.
-  const interstitialSafePaths = useRef<Set<string>>(
-    new Set([
-      '/home', '/bookings', '/discover', '/communities',
-      '/partner/dashboard', '/partner/jobs',
-    ]),
-  );
 
   useEffect(() => {
     if (!adsReady) return;
@@ -214,59 +144,11 @@ export function Layout() {
     if (!adsReady) return;
     const path = location.pathname;
     const segment = `/${path.split('/').filter(Boolean)[0] ?? ''}`;
-    if (!interstitialSafePaths.current.has(segment)) return;
-
-    // Let the screen settle first so the ad never looks like a tap reaction.
+    const safe = new Set(['/home', '/bookings', '/discover', '/communities', '/partner/dashboard', '/partner/jobs']);
+    if (!safe.has(segment)) return;
     const timer = window.setTimeout(() => void maybeShowInterstitial(), 2500);
     return () => window.clearTimeout(timer);
   }, [adsReady, location.pathname]);
-
-  useEffect(() => {
-    if (!sidebarOpen) return;
-    drawerCloseRef.current?.focus();
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        setSidebarOpen(false);
-        return;
-      }
-      if (event.key !== 'Tab') return;
-      const drawer = drawerRef.current;
-      if (!drawer) return;
-      const tabbable = Array.from(drawer.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-      )).filter((element) => !element.hidden && element.getAttribute('aria-hidden') !== 'true');
-      if (!tabbable.length) {
-        event.preventDefault();
-        drawer.focus();
-        return;
-      }
-      const first = tabbable[0];
-      const last = tabbable[tabbable.length - 1];
-      if (event.shiftKey && (document.activeElement === first || !drawer.contains(document.activeElement))) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && (document.activeElement === last || !drawer.contains(document.activeElement))) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    const previousOverflow = document.body.style.overflow;
-    const background = [headerRef.current, mainRef.current, bottomNavRef.current].filter(
-      (element): element is HTMLElement => element !== null
-    );
-    const previousInert = background.map((element) => element.inert);
-    document.body.style.overflow = 'hidden';
-    background.forEach((element) => { element.inert = true; });
-    window.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      background.forEach((element, index) => { element.inert = previousInert[index]; });
-      window.removeEventListener('keydown', onKeyDown);
-      drawerOpenerRef.current?.focus();
-      drawerOpenerRef.current = null;
-    };
-  }, [sidebarOpen]);
 
   const handleLogout = () => {
     logout();
@@ -274,202 +156,176 @@ export function Layout() {
   };
 
   return (
-    <div className="min-h-screen bg-surface-50 dark:bg-surface-950">
+    <div className="min-h-screen bg-surface-50 dark:bg-surface-950 transition-colors duration-500">
       <ImpersonationBanner />
       <OfflineBanner />
-      {/* Header */}
-      <header ref={headerRef} className="sticky top-0 z-50 border-b border-surface-200/80 bg-surface-50/85 backdrop-blur-xl dark:border-surface-800 dark:bg-surface-950/85 pt-[env(safe-area-inset-top)]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            {/* Left */}
-            <div className="flex items-center gap-3">
-              <button
-                onClick={openDrawer}
-                className="p-2 rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 transition btn-icon lg:hidden"
-                aria-label="Open menu"
-                aria-expanded={sidebarOpen}
-                aria-controls="sidebud-navigation-drawer"
-              >
-                <Menu className="w-5 h-5" />
-              </button>
-              <Link to="/dashboard" className="flex items-center gap-2.5">
-                <span className="brand-badge h-9 w-9">
-                  <img src="/logo-mark.svg" alt="Nabri logo" className="h-9 w-9 transition-transform duration-300 hover:-rotate-3 hover:scale-105" />
-                </span>
-                <span className="hidden items-baseline text-lg font-extrabold font-display tracking-[-0.05em] text-surface-900 dark:text-surface-50 sm:flex">
-                  Nabri<span className="ml-1 h-1.5 w-1.5 rounded-full bg-[#D2F53C] shadow-[0_0_8px_rgba(210,245,60,0.8)]" />
-                </span>
-              </Link>
-            </div>
 
-            {/* Center - Role Switcher */}
-            <RoleSwitcher />
-
-            {/* Right */}
-            <div className="flex items-center gap-1 sm:gap-2">
-              <Link to="/search" className="btn-icon rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 transition hidden sm:block" title="Search" aria-label="Search">
-                <Search className="w-5 h-5" />
-              </Link>
-              <button
-                onClick={toggleTheme}
-                className="btn-icon rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 transition"
-                title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
-                aria-label="Toggle theme"
-              >
-                {theme === 'dark' ? <Sun className="w-5 h-5 text-yellow-500" /> : <Moon className="w-5 h-5 text-surface-600" />}
-              </button>
-              <Link to="/notifications" className="btn-icon rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 transition relative" aria-label="Notifications">
-                <Bell className="w-5 h-5" />
-                <UnreadBadge />
-              </Link>
-              <button
-                onClick={openDrawer}
-                className="btn-icon rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 transition hidden lg:block"
-                aria-label="Open profile menu"
-                aria-expanded={sidebarOpen}
-                aria-controls="sidebud-navigation-drawer"
-              >
-                <Avatar src={user?.avatarUrl} name={user?.name} className="w-8 h-8" />
-              </button>
-            </div>
+      {/* Floating Header Capsule */}
+      <header className="fixed top-0 inset-x-0 z-50 px-4 pt-4 pointer-events-none">
+        <motion.div 
+          initial={{ y: -20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          className="max-w-7xl mx-auto h-16 px-3 rounded-3xl bg-surface-50/60 dark:bg-surface-900/60 backdrop-blur-2xl border border-surface-200/50 dark:border-surface-800/50 shadow-xl shadow-black/5 pointer-events-auto flex items-center justify-between"
+        >
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="p-2 rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors lg:hidden"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <Link to="/dashboard" className="flex items-center gap-2 pl-1 shrink-0" aria-label="Nabri home">
+              <span className="brand-badge h-8 w-8">
+                <img src="/logo-glyph-white.svg" alt="" className="h-5 w-5" />
+              </span>
+              <span className="hidden sm:block text-lg font-black font-display tracking-tight text-surface-900 dark:text-surface-50">
+                Nabri<span className="text-primary-500">.</span>
+              </span>
+            </Link>
           </div>
-        </div>
+
+          <RoleSwitcher />
+
+          <div className="flex items-center gap-1 sm:gap-2">
+            <Link to="/search" className="p-2 rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 transition hidden sm:block">
+              <Search className="w-5 h-5" />
+            </Link>
+            <button onClick={toggleTheme} className="p-2 rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 transition">
+              {theme === 'dark' ? <Sun className="w-5 h-5 text-yellow-500" /> : <Moon className="w-5 h-5 text-surface-600" />}
+            </button>
+            <Link to="/notifications" className="p-2 rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 transition relative">
+              <Bell className="w-5 h-5" />
+              <UnreadBadge />
+            </Link>
+            <button onClick={() => setSidebarOpen(true)} className="hidden lg:block p-1 rounded-full hover:scale-110 transition">
+              <Avatar src={user?.avatarUrl} name={user?.name} className="w-8 h-8" />
+            </button>
+          </div>
+        </motion.div>
       </header>
 
-      {/* Sidebar */}
-      {sidebarOpen && (
-        <>
-          <button className="drawer-scrim fixed inset-0 bg-surface-900/55 dark:bg-black/65 z-50 cursor-default" onClick={() => setSidebarOpen(false)} aria-label="Close menu" />
-          <aside id="sidebud-navigation-drawer" ref={drawerRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Navigation menu" className="navigation-drawer fixed inset-y-0 left-0 w-80 max-w-[88vw] bg-surface-50 dark:bg-surface-900 z-50 shadow-2xl p-4 overflow-y-auto overscroll-contain pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <Avatar src={user?.avatarUrl} name={user?.name} className="w-10 h-10" textClassName="text-base" />
-                <div className="min-w-0">
-                  <p className="font-semibold text-sm truncate">{user?.name}</p>
-                  <p className="text-xs text-surface-500 truncate">{user?.email}</p>
-                </div>
-              </div>
-              <button ref={drawerCloseRef} onClick={() => setSidebarOpen(false)} className="btn-icon rounded-lg hover:bg-surface-100 dark:hover:bg-surface-800" aria-label="Close menu">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <nav className="space-y-1">
-              {drawerNavItems.length > 0 && (
-                <>
-                  <p className="px-3 pt-1 pb-1 text-xs font-semibold uppercase tracking-wide text-surface-400">Menu</p>
-                  {drawerNavItems.map(({ to, icon: Icon, label }) => (
-                    <Link
-                      key={to}
-                      to={to}
-                      className={`flex items-center gap-3 px-3 py-3 rounded-xl text-sm transition ${
-                      location.pathname === to
-                        ? 'bg-primary-100 dark:bg-primary-900/40 text-primary-800 dark:text-primary-200 font-semibold'
-                          : 'text-surface-600 dark:text-surface-400 hover:bg-surface-50 dark:hover:bg-surface-800'
-                      }`}
-                    >
-                      <Icon className="w-4 h-4" />
-                      {label}
-                    </Link>
-                  ))}
-                  <div className="h-px bg-surface-200 dark:bg-surface-800 my-2" />
-                </>
-              )}
-              {superAdminNav.length > 0 && (
-                <>
-                  <p className="px-3 pt-1 pb-1 text-xs font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-300">Super Admin</p>
-                  {superAdminNav.map(({ to, icon: Icon, label }) => (
-                    <Link
-                      key={to}
-                      to={to}
-                      className={`flex items-center gap-3 px-3 py-3 rounded-xl text-sm transition ${
-                        location.pathname === to
-                          ? 'bg-primary-100 dark:bg-primary-900/40 text-primary-800 dark:text-primary-200 font-semibold'
-                          : 'text-surface-600 dark:text-surface-400 hover:bg-surface-50 dark:hover:bg-surface-800'
-                      }`}
-                    >
-                      <Icon className="w-4 h-4" />
-                      {label}
-                      <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-300 font-medium">SUPER</span>
-                    </Link>
-                  ))}
-                  <div className="h-px bg-surface-200 dark:bg-surface-800 my-2" />
-                </>
-              )}
-              {sidebarLinks.map(({ to, icon: Icon, label }) => (
-                <Link
-                  key={to}
-                  to={to}
-                  className={`flex items-center gap-3 px-3 py-3 rounded-xl text-sm transition ${
-                    location.pathname === to
-                          ? 'bg-primary-100 dark:bg-primary-900/40 text-primary-800 dark:text-primary-200 font-semibold'
-                      : 'text-surface-600 dark:text-surface-400 hover:bg-surface-50 dark:hover:bg-surface-800'
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  {label}
-                </Link>
-              ))}
-            </nav>
-
-            <hr className="my-4 border-surface-200 dark:border-surface-800" />
-
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-3 w-full px-3 py-3 rounded-xl text-sm text-danger-500 hover:bg-danger-50 dark:hover:bg-danger-500/10 transition"
+      {/* Kinetic Sidebar Drawer */}
+      <AnimatePresence>
+        {sidebarOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm"
+            onClick={() => setSidebarOpen(false)}
+          >
+            <motion.aside
+              initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 20, stiffness: 150 }}
+              className="fixed inset-y-0 left-0 w-80 max-w-[85vw] bg-surface-50 dark:bg-surface-900 shadow-2xl p-6 flex flex-col overflow-hidden"
+              onClick={(e: MouseEvent) => e.stopPropagation()}
             >
-              <LogOut className="w-4 h-4" />
-              Sign Out
-            </button>
-          </aside>
-        </>
-      )}
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-3">
+                  <Avatar src={user?.avatarUrl} name={user?.name} className="w-12 h-12" />
+                  <div>
+                    <p className="font-bold text-surface-900 dark:text-white">{user?.name}</p>
+                    <p className="text-xs text-surface-500 truncate w-32">{user?.email}</p>
+                  </div>
+                </div>
+                <button onClick={() => setSidebarOpen(false)} className="p-2 rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
 
-      {/* Main Content */}
-      <main ref={mainRef} className={bannerUp ? 'pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-32' : 'pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-8'}>
-        {/* Partners silently stream live GPS for their active booking so the
-            user can track them in real time (no UI of its own). */}
+              {/* min-h-0 + overflow-y-auto: without it the flex child never
+                  shrinks, long nav lists overflow, and the Sign Out button is
+                  pushed off-screen where it cannot be scrolled to. */}
+              <nav className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-6 pr-1 -mr-2">
+                <div>
+                  <p className="px-3 text-[10px] font-black uppercase tracking-widest text-surface-400 mb-3">Main Menu</p>
+                  <div className="space-y-1">
+                    {navItems.map(({ to, icon: Icon, label }) => (
+                      <Link
+                        key={to} to={to}
+                        className={`flex items-center gap-3 px-3 py-3 rounded-2xl text-sm transition-all ${location.pathname === to ? 'bg-primary-500 text-white shadow-md shadow-primary-500/20' : 'text-surface-600 dark:text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-800'}`}
+                      >
+                        <Icon className="w-4 h-4" /> {label}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+
+                {superAdminNav.length > 0 && (
+                  <div>
+                    <p className="px-3 text-[10px] font-black uppercase tracking-widest text-primary-500 mb-3">Super Admin</p>
+                    <div className="space-y-1">
+                      {superAdminNav.map(({ to, icon: Icon, label }) => (
+                        <Link
+                          key={to} to={to}
+                          className={`flex items-center gap-3 px-3 py-3 rounded-2xl text-sm transition-all ${location.pathname === to ? 'bg-primary-500 text-white shadow-md shadow-primary-500/20' : 'text-surface-600 dark:text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-800'}`}
+                        >
+                          <Icon className="w-4 h-4" /> {label}
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <p className="px-3 text-[10px] font-black uppercase tracking-widest text-surface-400 mb-3">System</p>
+                  <div className="space-y-1">
+                    {sidebarLinks.map(({ to, icon: Icon, label }) => (
+                      <Link
+                        key={to} to={to}
+                        className={`flex items-center gap-3 px-3 py-3 rounded-2xl text-sm transition-all ${location.pathname === to ? 'bg-primary-500 text-white shadow-md shadow-primary-500/20' : 'text-surface-600 dark:text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-800'}`}
+                      >
+                        <Icon className="w-4 h-4" /> {label}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              </nav>
+
+              <div className="mt-4 shrink-0 border-t border-surface-200 dark:border-surface-800 pt-4">
+                <button onClick={handleLogout} className="flex w-full items-center gap-3 px-3 py-3 rounded-2xl text-sm font-semibold text-danger-500 hover:bg-danger-50 dark:hover:bg-danger-500/10 transition">
+                  <LogOut className="w-4 h-4" /> Sign Out
+                </button>
+              </div>
+            </motion.aside>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Main Viewport */}
+      <main className={`pt-24 pb-24 lg:pb-12 transition-all duration-500 ${bannerUp ? 'pb-32' : ''}`}>
         <PartnerLiveLocationSharer />
         <UserLiveLocationSharer />
-        <div key={location.pathname} className="route-content max-w-7xl mx-auto px-4 py-5 sm:px-6 sm:py-7 lg:px-8 lg:py-8">
+        <div className="max-w-7xl mx-auto px-4 py-5 sm:px-6 sm:py-7 lg:px-8 lg:py-8">
           <Outlet />
         </div>
       </main>
 
-      {/* Bottom Navigation */}
-      <nav ref={bottomNavRef} aria-label="Primary navigation" className="fixed bottom-0 inset-x-0 bg-white dark:bg-surface-950 border-t border-surface-200 dark:border-surface-800 z-40 lg:hidden pb-[env(safe-area-inset-bottom)]">
-        <div className="flex items-stretch justify-around h-16 px-2 max-w-xl mx-auto">
+      {/* Floating Bottom Dock (Mobile) */}
+      <nav className="fixed bottom-6 inset-x-0 z-40 px-6 lg:hidden">
+        <motion.div 
+          initial={{ y: 100 }} animate={{ y: 0 }}
+          className="max-w-md mx-auto h-16 px-3 rounded-full bg-surface-50/80 dark:bg-surface-900/80 backdrop-blur-2xl border border-surface-200/50 dark:border-surface-800/50 shadow-2xl shadow-black/10 flex items-center justify-around"
+        >
           {bottomNavItems.map(({ to, icon: Icon, label }) => {
             const isActive = location.pathname === to || location.pathname.startsWith(`${to}/`);
             return (
               <Link
-                key={to}
-                to={to}
-                aria-current={isActive ? 'page' : undefined}
-                className={`flex flex-col items-center justify-center gap-0.5 rounded-2xl transition-all min-w-0 flex-1 py-1 ${
-                  isActive
-                    ? 'bottom-nav-active text-primary-700 dark:text-primary-300 bg-primary-500/10 dark:bg-primary-500/15'
-                    : 'text-surface-400 dark:text-surface-500'
-                }`}
+                key={to} to={to}
+                className={`flex flex-col items-center justify-center gap-1 rounded-full transition-all w-14 h-14 ${isActive ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/40 scale-110' : 'text-surface-400 dark:text-surface-500 hover:bg-surface-100 dark:hover:bg-surface-800'}`}
               >
                 <Icon className="w-5 h-5" />
-                <span className="text-[11px] font-semibold leading-none">{label}</span>
+                <span className="text-[9px] font-bold uppercase tracking-tighter">{label}</span>
               </Link>
             );
           })}
           {hasMoreNav && (
             <button
-              onClick={openDrawer}
-              className={`flex flex-col items-center justify-center gap-0.5 rounded-xl transition-all min-w-0 flex-1 text-surface-400 dark:text-surface-500`}
-              aria-label="More menu"
+              onClick={() => setSidebarOpen(true)}
+              className="flex items-center justify-center w-14 h-14 rounded-full text-surface-400 dark:text-surface-500 hover:bg-surface-100 dark:hover:bg-surface-800 transition-all"
             >
-              <div className="p-1 rounded-xl">
-                <MoreHorizontal className="w-5 h-5" />
-              </div>
-              <span className="text-[11px] font-semibold leading-none">More</span>
+              <MoreHorizontal className="w-5 h-5" />
             </button>
           )}
-        </div>
+        </motion.div>
       </nav>
     </div>
   );

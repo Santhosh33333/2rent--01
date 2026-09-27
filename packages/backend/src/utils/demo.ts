@@ -20,17 +20,48 @@ export const DEMO_EMAILS = [DEMO_USER_EMAIL, DEMO_PARTNER_EMAIL];
 
 export const DEMO_WALLET_CEILING = 10_000_000; // Rs 1 Cr play money ~ "unlimited"
 
+/**
+ * Any address that is obviously a demo/test identity, regardless of domain.
+ *
+ * The two configured DEMO_* addresses alone were not enough: the sandbox was
+ * seeded with `demo.user@rentbuddy.app` / `demo.partner@rentbuddy.app` while
+ * the fence only knew the `*.sidebud.demo` defaults, so demo profiles leaked
+ * into real users' discovery and matching feeds. Pattern matching closes that
+ * hole, so no account that is plainly a demo can ever appear to a real user.
+ */
+const DEMO_EMAIL_PATTERNS = [
+  /^demo[._-]/i,
+  /^test[._-]/i,
+  /^qa[._-]/i,
+  /^e2e[._-]/i,
+  /^fresh(user|account|e2e)/i,
+  /^rbac-/i,
+  /^credit-/i,
+  /^upi(test|_)/i,
+  /^probe-/i,
+  /^blob(test|recv)/i,
+  /^referee_/i,
+  /@sidebud\.demo$/i,
+  /@test\.local$/i,
+  /@example\.(com|org|net)$/i,
+];
+
+/** True for configured demo addresses OR anything matching a demo/test pattern. */
 export function isDemoEmail(email?: string | null): boolean {
   if (!email) return false;
-  return DEMO_EMAILS.includes(email.toLowerCase());
+  const e = email.toLowerCase().trim();
+  if (DEMO_EMAILS.includes(e)) return true;
+  return DEMO_EMAIL_PATTERNS.some((re) => re.test(e));
 }
 
 export function isDemoPartnerEmail(email?: string | null): boolean {
   if (!email) return false;
-  return email.toLowerCase() === DEMO_PARTNER_EMAIL;
+  const e = email.toLowerCase().trim();
+  return e === DEMO_PARTNER_EMAIL || /^demo[._-]?partner/i.test(e);
 }
 
 export function isDemoUserEmail(email?: string | null): boolean {
   if (!email) return false;
-  return email.toLowerCase() === DEMO_USER_EMAIL;
+  const e = email.toLowerCase().trim();
+  return e === DEMO_USER_EMAIL || /^demo[._-]?user/i.test(e);
 }

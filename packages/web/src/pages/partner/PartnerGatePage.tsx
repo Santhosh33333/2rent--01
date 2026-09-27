@@ -67,7 +67,7 @@ export function PartnerGatePage() {
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
             <span className="brand-badge mx-auto mb-5 flex h-16 w-16 items-center justify-center shadow-xl shadow-primary-800/30">
-              <img src="/logo-mark.svg" alt="Nabri logo" className="h-16 w-16" />
+              <img src="/logo-glyph-white.svg" alt="Nabri logo" className="h-9 w-9" />
             </span>
             <h1 className="text-2xl font-bold font-display tracking-tight text-surface-900 dark:text-white">Partner Access</h1>
             <p className="mt-2 text-sm text-surface-500 dark:text-surface-400">

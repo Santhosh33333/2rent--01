@@ -164,7 +164,10 @@ export function registerCallHandlers(
         if (!ringing) return; // already accepted or ended
         await dropLiveCall(ringing);
         await prisma.callLog
-          .update({ where: { id: call.id }, data: { status: "MISSED", endedAt: new Date() } })
+          .update({
+            where: { id: call.id, status: "RINGING" },
+            data: { status: "MISSED", endedAt: new Date() },
+          })
           .catch(() => {});
         emitToPeer(userId, "call:ended", { callId: call.id, reason: "NO_ANSWER" });
         emitToPeer(receiverId, "call:ended", { callId: call.id, reason: "NO_ANSWER" });

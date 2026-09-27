@@ -195,8 +195,14 @@ export async function requireKycVerified(req: AuthedRequest, res: Response, next
       where: { userId: req.user.userId },
       select: { status: true },
     });
-    // Admin KYC approval sets status=VERIFIED (see adminController.reviewKyc)
-    if (!verification || verification.status !== "VERIFIED") {
+    // Admin KYC approval sets status=VERIFIED (see adminController.reviewKyc).
+    // APPROVED is also honoured: userController.isVerified, dispatchService and
+    // the KYC step-5 flow all treat APPROVED as a valid approved state, so
+    // gating on VERIFIED alone locked out users the rest of the app considered
+    // approved. Both are terminal admin-approved states; anything else
+    // (NOT_STARTED, DRAFT, SUBMITTED, PENDING_REVIEW, UNDER_VERIFICATION,
+    // REJECTED, RESUBMIT_REQUIRED) stays locked.
+    if (!verification || !["VERIFIED", "APPROVED"].includes(verification.status)) {
       sendError(
         res,
         !verification

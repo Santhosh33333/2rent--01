@@ -106,7 +106,16 @@ export function CommunityDetailPage() {
   // this a slower in-flight request would land last and flip the button back.
   const refreshSeq = useRef(0)
   const mountedRef = useRef(true)
-  useEffect(() => () => { mountedRef.current = false }, [])
+  // Must re-arm on EVERY mount, not just the first. Under <StrictMode> React
+  // mounts, runs cleanup, then mounts again: a cleanup-only effect left
+  // mountedRef stuck at false forever, so every refresh() bailed out at the
+  // `!mountedRef.current` guard and setLoading(false) never ran. The page then
+  // spun on "Loading" permanently and never opened, even though the API was
+  // returning 200s.
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
 
   const refresh = useCallback(async () => {
     if (!id) return
