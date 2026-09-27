@@ -596,6 +596,10 @@ export async function completeBooking(req: AuthedRequest, res: Response): Promis
       responsePayload.refundAmount = settled.refunded;
       responsePayload.platformFee = settled.platformFee;
       responsePayload.partnerEarning = settled.partnerEarning;
+      // Overage the wallet could not cover, so the client can tell the partner
+      // the extra time was billed and what is still outstanding for the user.
+      responsePayload.extraDebited = settled.extraDebited;
+      responsePayload.unpaidOverage = settled.unpaidOverage;
     }
 
     void notifyBookingStatusChange(booking.id, booking.userId, "COMPLETED");

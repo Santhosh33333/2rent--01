@@ -289,7 +289,7 @@ export async function finalizeBookingPrice(
   actualMinutes: number,
   waitingMinutes = 0,
   tx: any = prisma
-): Promise<{ finalAmount: number; platformFee: number; partnerEarning: number; refunded: number; extraDebited: number }> {
+): Promise<{ finalAmount: number; platformFee: number; partnerEarning: number; refunded: number; extraDebited: number; unpaidOverage: number }> {
   const booking = await tx.booking.findUnique({ where: { id: bookingId } });
   if (!booking) throw new Error("Booking not found");
 
@@ -348,15 +348,20 @@ export async function finalizeBookingPrice(
   const computedFinal = fare.estimatedAmount;
 
   const deposited = Number.isFinite(booking.estimatedAmount) ? Number(booking.estimatedAmount) : 0;
-  const finalAmount = Math.min(computedFinal, deposited || computedFinal);
+  // Bill what the job actually cost. This used to be capped at the deposit,
+  // which meant an overrun was never charged at all: the overage branch below
+  // was unreachable, because finalAmount could never exceed what was already
+  // paid. A job that ran past its estimate settled at the estimate.
+  const finalAmount = computedFinal;
 
-  // Recompute the platform fee off the CAPPED final amount so the partner isn't
+  // Recompute the platform fee off the final amount so the partner isn't
   // charged a fee proportional to money they were never paid.
   const platFeePercent = Number.isFinite(fare.platformFeePercent) ? fare.platformFeePercent : DEFAULT_PLATFORM_FEE_PERCENT;
   const platformFee = round2(finalAmount * (platFeePercent / 100));
 
   let refunded = 0;
   let extraDebited = 0;
+  let unpaidOverage = 0;
   if (deposited > 0) {
     if (finalAmount < deposited) {
       refunded = Math.round((deposited - finalAmount) * 100) / 100;
@@ -374,23 +379,52 @@ export async function finalizeBookingPrice(
         },
       });
     } else if (finalAmount > deposited) {
-      // Actual duration exceeded the estimate: debit the overage from the user's
-      // wallet. If the balance can't cover it, the wallet goes into a small
-      // negative (owed) position so the shortfall is recovered on the next top-up.
-      extraDebited = Math.round((finalAmount - deposited) * 100) / 100;
+      // The job outran its estimate, so bill the difference to the wallet. The
+      // balance is never allowed to go negative: take what the user actually
+      // has, carry the rest as a pending receivable, and tell them, rather than
+      // overdrawing them into a balance they did not agree to.
+      const overage = round2(finalAmount - deposited);
       const wallet = await tx.wallet.upsert({ where: { userId: booking.userId }, update: {}, create: { userId: booking.userId } });
-      await tx.wallet.update({ where: { userId: booking.userId }, data: { balance: { decrement: extraDebited } } });
-      await tx.transaction.create({
-        data: {
-          userId: booking.userId,
-          walletId: wallet.id,
-          bookingId: booking.id,
-          type: "DEBIT",
-          amount: extraDebited,
-          status: "SUCCESS",
-          description: "Booking overage charge (actual duration)",
-        },
-      });
+      const available = Math.max(0, Number(wallet.balance?.toString() ?? 0));
+      extraDebited = round2(Math.min(overage, available));
+      unpaidOverage = round2(overage - extraDebited);
+
+      if (extraDebited > 0) {
+        await tx.wallet.update({ where: { id: wallet.id }, data: { balance: { decrement: extraDebited } } });
+        await tx.transaction.create({
+          data: {
+            userId: booking.userId,
+            walletId: wallet.id,
+            bookingId: booking.id,
+            type: "DEBIT",
+            amount: extraDebited,
+            status: "SUCCESS",
+            description: "Booking overage charge (actual duration)",
+          },
+        });
+      }
+
+      if (unpaidOverage > 0) {
+        await tx.transaction.create({
+          data: {
+            userId: booking.userId,
+            walletId: wallet.id,
+            bookingId: booking.id,
+            type: "DEBIT",
+            amount: unpaidOverage,
+            status: "PENDING",
+            description: "Overage awaiting top-up (insufficient wallet balance at settlement)",
+          },
+        });
+        await tx.notification.create({
+          data: {
+            userId: booking.userId,
+            title: "Top up to settle the extra charge",
+            body: `This job ran longer than booked, so the extra ₹${unpaidOverage.toFixed(2)} could not be taken from your wallet because the balance was short. Top up ₹${unpaidOverage.toFixed(2)} or more to clear it.`,
+            data: JSON.stringify({ bookingId: booking.id, unpaidOverage }),
+          },
+        });
+      }
     }
   }
 
@@ -405,7 +439,7 @@ export async function finalizeBookingPrice(
     },
   });
 
-  return { finalAmount, platformFee, partnerEarning, refunded, extraDebited };
+  return { finalAmount, platformFee, partnerEarning, refunded, extraDebited, unpaidOverage };
 }
 
 export async function createBooking(
