@@ -11,6 +11,7 @@ import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { useChat } from '../../hooks/useSocket'
 import { useCallLauncher } from '../../hooks/useCallLauncher'
+import { Avatar } from '../../components/Avatar'
 
 interface Message {
   id: string
@@ -74,6 +75,7 @@ export function ConversationPage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [partnerName, setPartnerName] = useState<string>('Chat')
+  const [partnerAvatar, setPartnerAvatar] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -119,7 +121,12 @@ export function ConversationPage() {
           setConversationId((prev) => prev ?? cid)
         }
         const theirs = items.find((m) => m.senderId === userId && (m as any).sender?.fullName)
-        if (theirs) setPartnerName((theirs as any).sender.fullName)
+        if (theirs) {
+          setPartnerName((theirs as any).sender.fullName)
+          // The message payload already carries the peer's avatarUrl; reading
+          // only fullName is why the chat header and bubble showed initials.
+          setPartnerAvatar((theirs as any).sender.avatarUrl ?? null)
+        }
 
         setMessages((prev) => {
           const serverIds = new Set(items.map((m) => m.id))
@@ -484,9 +491,7 @@ export function ConversationPage() {
         >
           <ArrowLeft className="w-4 h-4" />
         </button>
-        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary-500/20 to-accent-500/20 flex items-center justify-center text-primary-600 dark:text-primary-400 font-semibold text-sm">
-          {partnerName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || 'U'}
-        </div>
+        <Avatar src={partnerAvatar} name={partnerName} className="w-10 h-10 rounded-2xl" textClassName="text-sm" />
         <div className="flex-1 min-w-0">
           <h3 className="font-semibold text-surface-900 dark:text-white truncate">
             {partnerName}
@@ -498,7 +503,7 @@ export function ConversationPage() {
         {/* In-app call: the chat never reveals or dials a phone number. */}
         <button
           type="button"
-          onClick={() => startCall({ id: userId ?? '', fullName: partnerName, avatarUrl: null })}
+          onClick={() => startCall({ id: userId ?? '', fullName: partnerName, avatarUrl: partnerAvatar })}
           disabled={!userId}
           title={`Call ${partnerName} inside the app`}
           aria-label={`Call ${partnerName} inside the app`}
@@ -528,9 +533,7 @@ export function ConversationPage() {
               return (
                 <div key={msg.id} className={`flex ${own ? 'justify-end' : 'justify-start'} items-end gap-2 ${showAvatar ? 'mt-4' : 'mt-0.5'}`}>
                   {!own && showAvatar && (
-                    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary-500/20 to-accent-500/20 flex items-center justify-center text-primary-600 dark:text-primary-400 text-xs font-semibold flex-shrink-0">
-                      {partnerName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || 'U'}
-                    </div>
+                    <Avatar src={partnerAvatar} name={partnerName} className="w-8 h-8 rounded-xl" textClassName="text-xs" />
                   )}
                   {!own && !showAvatar && <div className="w-8 flex-shrink-0" />}
                   <div className={`max-w-[75%] group relative ${own ? 'order-1' : 'order-0'}`}>
@@ -585,9 +588,7 @@ export function ConversationPage() {
                     </div>
                   </div>
                   {own && showAvatar && (
-                    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary-500/20 to-accent-500/20 flex items-center justify-center text-primary-600 dark:text-primary-400 text-xs font-semibold flex-shrink-0">
-                      {user?.name?.split(' ').map((n: string) => n[0]).join('').slice(0, 2) || 'M'}
-                    </div>
+                    <Avatar src={user?.avatarUrl} name={user?.name} className="w-8 h-8 rounded-xl" textClassName="text-xs" />
                   )}
                   {own && !showAvatar && <div className="w-8 flex-shrink-0" />}
                 </div>

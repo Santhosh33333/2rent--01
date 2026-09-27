@@ -25,7 +25,7 @@ interface Community {
 export function CommunitiesPage() {
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
-  const [joining, setJoining] = useState<string | null>(null)
+  const [joining, setJoining] = useState<string[]>([])
   const [list, setList] = useState<Community[]>([])
   const [showCreate, setShowCreate] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -52,21 +52,32 @@ export function CommunitiesPage() {
   )
 
   const toggleJoin = async (id: string) => {
-    setJoining(id)
+    // Track every in-flight row, not just one: a single `joining` slot left
+    // every other row clickable, and each response then wrote the whole list
+    // from its own captured snapshot, so two quick taps on different rows
+    // silently undid each other (the server accepted both, the UI showed one).
+    setJoining((prev) => (prev ? [...prev, id] : [id]))
     try {
       const community = list.find(c => c.id === id)
       if (!community) return
-      if (community.joined) {
-        await api.post(`/communities/${id}/leave`)
-      } else {
-        await api.post(`/communities/${id}/join`)
-      }
-      setList(list.map(c => c.id === id ? { ...c, joined: !c.joined, members: c.joined ? c.members - 1 : c.members + 1 } : c))
+      const res = community.joined
+        ? await api.post(`/communities/${id}/leave`)
+        : await api.post(`/communities/${id}/join`)
+      const settled = res.data?.data ?? res.data ?? {}
+      setList(prev => prev.map(c => c.id === id ? {
+        ...c,
+        // Prefer the server's settled state/count; fall back to the local flip
+        // only if this response predates the change.
+        joined: typeof settled.isMember === 'boolean' ? settled.isMember : !c.joined,
+        members: Number.isFinite(Number(settled.memberCount))
+          ? Number(settled.memberCount)
+          : c.joined ? c.members - 1 : c.members + 1,
+      } : c))
     } catch (err: any) {
       console.error('Failed to toggle join:', err)
-      toast.error(err?.response?.data?.message || 'Failed to join community')
+      toast.error(err?.response?.data?.message || 'Failed to update membership')
     } finally {
-      setJoining(null)
+      setJoining(prev => prev?.filter(x => x !== id) ?? prev)
     }
   }
 
@@ -228,7 +239,7 @@ export function CommunitiesPage() {
                   </div>
                   <button
                     onClick={() => toggleJoin(community.id)}
-                    disabled={joining === community.id}
+                    disabled={joining.includes(community.id)}
                     className={`flex-shrink-0 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 ${
                       community.joined
                         ? 'bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 hover:bg-danger-50 dark:hover:bg-danger-500/10 hover:text-danger-500 border border-surface-200 dark:border-surface-700'

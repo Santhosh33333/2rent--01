@@ -9,6 +9,7 @@ import { EmptyState } from '../../components/EmptyState'
 import { SkeletonLoader } from '../../components/SkeletonLoader'
 import { useAsync } from '../../hooks/useAsync'
 import CallUserButton from '../../components/CallUserButton'
+import { Avatar } from '../../components/Avatar'
 
 interface Conversation {
   conversationId: string
@@ -274,14 +275,15 @@ export function MessagesPage() {
                 const { text, missed } = callStatusLabel(record, myId as string)
                 return (
                   <div key={record.id} className="flex items-center gap-3 px-4 py-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-primary-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
-                      {(other.fullName || 'U')
-                        .split(' ')
-                        .map((n: string) => n[0])
-                        .join('')
-                        .slice(0, 2)
-                        .toUpperCase()}
-                    </div>
+                    {/* `other.avatarUrl` was already in scope (and even forwarded
+                        to the call button below) but this tile always drew
+                        initials, so a member's photo never showed in the list. */}
+                    <Avatar
+                      src={other.avatarUrl}
+                      name={other.fullName}
+                      className="w-10 h-10 rounded-xl"
+                      textClassName="text-xs"
+                    />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-surface-900 dark:text-white truncate">
                         {other.fullName || 'Nabri member'}

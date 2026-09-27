@@ -15,7 +15,10 @@ export type CallState = 'idle' | 'calling' | 'incoming' | 'connecting' | 'active
 export interface CallPeer {
   id: string;
   fullName: string | null;
-  avatarUrl: string | null;
+  // The socket payload only includes avatarUrl when the peer has one, so
+  // `undefined` is a real runtime value here. Declaring it `string | null`
+  // made every caller either lie with a hardcoded `null` or cast.
+  avatarUrl?: string | null;
 }
 
 export interface InAppCall {

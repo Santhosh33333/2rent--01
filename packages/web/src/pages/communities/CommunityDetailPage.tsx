@@ -101,8 +101,16 @@ export function CommunityDetailPage() {
   const [pollOpts, setPollOpts] = useState<string[]>(['', ''])
   const [pollBusy, setPollBusy] = useState(false)
 
+  // Monotonic token so a slow earlier refresh cannot overwrite a newer one with
+  // stale membership. The page re-fires refresh() on join/leave, and without
+  // this a slower in-flight request would land last and flip the button back.
+  const refreshSeq = useRef(0)
+  const mountedRef = useRef(true)
+  useEffect(() => () => { mountedRef.current = false }, [])
+
   const refresh = useCallback(async () => {
     if (!id) return
+    const seq = ++refreshSeq.current
     try {
       const [cRes, mRes, pRes, pollRes, eRes] = await Promise.all([
         api.get(`/communities/${id}`),
@@ -111,6 +119,7 @@ export function CommunityDetailPage() {
         api.get(`/communities/${id}/polls`).catch(() => null),
         api.get('/events', { params: { communityId: id } }).catch(() => null),
       ])
+      if (seq !== refreshSeq.current || !mountedRef.current) return
       const c = cRes.data?.data || cRes.data
       setCommunity(c)
       const m = mRes?.data?.data || mRes?.data
@@ -122,10 +131,16 @@ export function CommunityDetailPage() {
       const ev = eRes?.data?.data || eRes?.data
       const evItems = Array.isArray(ev) ? ev : ev?.items || []
       setEvents(evItems)
+      // A successful load clears any earlier failure. `error` was only ever
+      // set, never reset, and the render guards on `error || !community`, so a
+      // single failed sub-request permanently replaced the whole page with
+      // "Failed to Load" even when a good community was already in state.
+      setError(null)
     } catch {
+      if (seq !== refreshSeq.current || !mountedRef.current) return
       setError('Failed to load community details')
     } finally {
-      setLoading(false)
+      if (seq === refreshSeq.current && mountedRef.current) setLoading(false)
     }
   }, [id])
 
@@ -146,7 +161,11 @@ export function CommunityDetailPage() {
       }
       await refresh()
     } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Action failed')
+      const msg = e?.response?.data?.message || 'Action failed'
+      toast.error(msg)
+      // A rejected toggle leaves the server untouched, so re-read the truth
+      // instead of leaving the button claiming a membership that never landed.
+      await refresh()
     } finally {
       setJoining(false)
     }
@@ -427,7 +446,7 @@ export function CommunityDetailPage() {
             disabled={joining}
             className={`flex-shrink-0 px-5 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
               community.isMember
-                ? 'bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 border border-surface-200 dark:border-surface-700'
+                ? 'bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 hover:bg-red-50 dark:hover:red-900/20 hover:text-red-600 dark:hover:text-red-400 border border-surface-200 dark:border-surface-700'
                 : 'bg-gradient-to-r from-primary-500 to-accent-500 text-white shadow-lg shadow-primary-500/20 hover:shadow-xl hover:shadow-primary-500/30'
             }`}
           >
@@ -446,6 +465,15 @@ export function CommunityDetailPage() {
             )}
           </button>
         </div>
+        {/* `leaveCommunity` refuses while the viewer is the only ADMIN, which is
+            the normal case for the person who just created the community. That
+            used to surface as a bare 400 after a full page of dead-end taps; say
+            so up front instead. */}
+        {community.isMember && community.isOwner && (
+          <p className="mt-3 text-sm text-surface-500">
+            You own this community. Promote another member to admin before you can leave it.
+          </p>
+        )}
       </div>
 
       {/* Members Section — real data only */}

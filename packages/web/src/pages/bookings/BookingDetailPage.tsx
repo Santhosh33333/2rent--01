@@ -12,6 +12,7 @@ import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
 import { SkeletonLoader } from '../../components/SkeletonLoader'
 import { useCallLauncher } from '../../hooks/useCallLauncher'
+import { Avatar } from '../../components/Avatar'
 
 interface Booking {
   id: string
@@ -28,6 +29,7 @@ interface Booking {
   partnerEarning: number
   partnerName?: string
   partnerId?: string
+  partnerAvatar?: string | null
   partnerRating?: number
   paymentStatus?: string
   paymentId?: string
@@ -85,6 +87,7 @@ export function BookingDetailPage() {
           ...data,
           partnerName: data?.partner?.user?.fullName,
           partnerId: data?.partner?.user?.id,
+          partnerAvatar: data?.partner?.user?.avatarUrl,
           partnerRating: data?.partner?.averageRating ?? data?.partner?.user?.rating,
         })
         if (data?.notes) {
@@ -370,9 +373,7 @@ export function BookingDetailPage() {
               Partner
             </h3>
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center text-white font-bold">
-                {booking.partnerName.charAt(0).toUpperCase()}
-              </div>
+              <Avatar src={booking.partnerAvatar} name={booking.partnerName} className="w-12 h-12 rounded-2xl" textClassName="text-base" />
               <div className="flex-1">
                 <p className="text-sm font-bold text-surface-900 dark:text-white">{booking.partnerName}</p>
                 {booking.partnerRating !== undefined && (
@@ -400,7 +401,7 @@ export function BookingDetailPage() {
                     startCall({
                       id: booking.partnerId as string,
                       fullName: booking.partnerName ?? 'Partner',
-                      avatarUrl: null,
+                      avatarUrl: booking.partnerAvatar,
                     })
                   }
                   className="btn-outline btn-sm flex items-center gap-1.5"

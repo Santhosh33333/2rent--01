@@ -6,7 +6,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
 import { useAuth } from '../../lib/auth'
-import { api, assetUrl } from '../../lib/api'
+import { api } from '../../lib/api'
+import { Avatar } from '../../components/Avatar'
 import { useAvatarUpload } from '../../lib/photo'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { LocationInput } from '../../components/LocationInput'
@@ -329,7 +330,7 @@ export function ProfileCompletionPage() {
                               </div>
                             ) : (
                               <button type="button" onClick={() => fileInputRef.current?.click()} className="w-28 h-28 rounded-full border-2 border-dashed border-surface-300 dark:border-surface-600 flex flex-col items-center justify-center gap-2 text-surface-400 hover:border-primary-400 hover:text-primary-500 transition-colors duration-300">
-                                {user?.avatarUrl ? <img src={assetUrl(user.avatarUrl)} alt="Current profile" className="w-full h-full rounded-full object-cover" /> : <><Camera className="w-8 h-8" /><span className="text-xs font-medium">Add Photo</span></>}
+                                {user?.avatarUrl ? <Avatar src={user.avatarUrl} name={user?.name} className="h-full w-full" /> : <><Camera className="w-8 h-8" /><span className="text-xs font-medium">Add Photo</span></>}
                               </button>
                             )}
                           </div>

@@ -80,6 +80,7 @@
       "typedRoutes": true
     },
     "extra": {
+      "apiUrl": "https://rentbuddy-api-s7rz.onrender.com/api",
       "eas": {
         "projectId": "your-eas-project-id"
       }

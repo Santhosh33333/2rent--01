@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight, ChevronRight, GripVertical, Loader2, MapPin, Navigation, Search, SlidersHorizontal, Sparkles, Star } from 'lucide-react'
 import { DISCOVERY_CATEGORIES, QUICK_ACTIONS, type DiscoveryCategoryKey } from '../../lib/discoveryData'
-import { api, assetUrl } from '../../lib/api'
+import { api } from '../../lib/api'
+import { Avatar } from '../../components/Avatar'
 import { useGeolocation, geoStatusMessage } from '../../lib/geolocation'
 import { getErrorMessage } from '../../lib/error'
 
@@ -128,13 +129,7 @@ function NearbyPartners() {
         <div className="grid gap-3 sm:grid-cols-2">
           {partners.map((p) => (
             <div key={p.id} className="flex items-center gap-3 rounded-2xl border border-surface-200 p-3 dark:border-surface-700">
-              {p.avatarUrl ? (
-                <img src={assetUrl(p.avatarUrl) || ''} alt={p.name} className="w-12 h-12 rounded-2xl object-cover shrink-0" />
-              ) : (
-                <div className="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-700 dark:text-emerald-300 font-bold shrink-0">
-                  {(p.name || 'P').slice(0, 1).toUpperCase()}
-                </div>
-              )}
+              <Avatar src={p.avatarUrl} name={p.name} className="w-12 h-12 rounded-2xl" textClassName="text-base" />
               <div className="flex-1 min-w-0">
                 <p className="font-semibold truncate">{p.name}</p>
                 <p className="text-xs text-surface-500 flex items-center gap-1">

@@ -5,7 +5,8 @@ import {
   Wallet, LogOut, Phone, Mail, CheckCircle, Package, FileText, Check, X, MessageCircle
 } from 'lucide-react'
 import { useAuth } from '../../lib/auth'
-import { api, assetUrl } from '../../lib/api'
+import { api } from '../../lib/api'
+import { Avatar } from '../../components/Avatar'
 import { useAvatarUpload } from '../../lib/photo'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
@@ -61,8 +62,6 @@ export function PartnerProfilePage() {
     fetchProfile()
   }, [])
 
-  const initials = user?.name?.split(' ').map((n: string) => n[0]).join('').toUpperCase() || '?'
-
   if (loading) {
     return (
       <div className="space-y-6">
@@ -84,13 +83,12 @@ export function PartnerProfilePage() {
 
           <div className="relative z-10 flex flex-col sm:flex-row items-center sm:items-start gap-6">
             <div className="relative group">
-              {(avatar.previewUrl || user?.avatarUrl) ? (
-                <img src={avatar.previewUrl || assetUrl(user?.avatarUrl) || ''} alt="Partner photo" className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl object-cover ring-4 ring-white/20" />
-              ) : (
-                <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl avatar flex items-center justify-center text-white text-3xl font-bold ring-4 ring-white/20">
-                  {initials}
-                </div>
-              )}
+              <Avatar
+                src={avatar.previewUrl || user?.avatarUrl}
+                name={user?.name}
+                className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl ring-4 ring-white/20"
+                textClassName="text-3xl"
+              />
               <input
                 ref={fileInputRef}
                 type="file"

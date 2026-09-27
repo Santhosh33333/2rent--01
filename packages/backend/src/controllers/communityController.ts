@@ -16,20 +16,25 @@ export async function createCommunity(req: AuthedRequest, res: Response): Promis
       return;
     }
 
-    const community = await prisma.community.create({
-      data: {
-        name,
-        description: description || "",
-        privacy: privacy ?? "PUBLIC",
-        city: city || null,
-        ownerId: req.user!.userId,
-        memberCount: 1,
-      },
-    });
-
-    // Add owner as admin member
-    await prisma.communityMember.create({
-      data: { communityId: community.id, userId: req.user!.userId, role: "ADMIN" },
+    // The community row and its owner membership must land together: a failure
+    // between the two used to leave `memberCount: 1` on a community with zero
+    // member rows. Reads recompute the count from the rows, but search and the
+    // AI assistant read this column, so it has to be right too.
+    const community = await prisma.$transaction(async (tx) => {
+      const created = await tx.community.create({
+        data: {
+          name,
+          description: description || "",
+          privacy: privacy ?? "PUBLIC",
+          city: city || null,
+          ownerId: req.user!.userId,
+          memberCount: 1,
+        },
+      });
+      await tx.communityMember.create({
+        data: { communityId: created.id, userId: req.user!.userId, role: "ADMIN" },
+      });
+      return created;
     });
 
     await prisma.auditLog.create({
@@ -92,7 +97,7 @@ export async function getCommunities(req: AuthedRequest, res: Response): Promise
     const mineSet = new Set(mine.map((m) => m.communityId));
     const shaped = itemsWithMemberCount.map((item: any) => ({
       ...item,
-      isMember: mineSet.has(item.id) || item.ownerId === req.user!.userId,
+      isMember: mineSet.has(item.id),
       isOwner: item.ownerId === req.user!.userId,
     }));
 
@@ -259,7 +264,11 @@ export async function joinCommunity(req: AuthedRequest, res: Response): Promise<
       return;
     }
 
-    await prisma.$transaction([
+    // The response now carries the new membership state and the authoritative
+    // count. It used to send `undefined`, so the client had no server truth to
+    // reconcile against and the button could only be flipped optimistically —
+    // which is how a failed toggle stayed wrong until a full remount.
+    const [after] = await prisma.$transaction([
       prisma.communityMember.create({ data: { communityId: id, userId: req.user!.userId, role: "MEMBER" } }),
       prisma.community.update({ where: { id }, data: { memberCount: { increment: 1 } } }),
       prisma.auditLog.create({
@@ -273,7 +282,8 @@ export async function joinCommunity(req: AuthedRequest, res: Response): Promise<
       }),
     ]);
 
-    sendSuccess(res, undefined, "Joined community.");
+    const memberCount = await prisma.communityMember.count({ where: { communityId: id } });
+    sendSuccess(res, { id, isMember: true, isOwner: false, membership: after, memberCount }, "Joined community.");
   } catch (err: any) {
     sendError(res, "Failed to join community.", 500, "INTERNAL_ERROR");
   }
@@ -322,7 +332,11 @@ export async function leaveCommunity(req: AuthedRequest, res: Response): Promise
       }),
     ]);
 
-    sendSuccess(res, undefined, "Left community.");
+    // Mirrors joinCommunity: return the settled state so the caller never has
+    // to guess whether the toggle landed.
+    const isOwner = community?.ownerId === req.user!.userId;
+    const memberCount = await prisma.communityMember.count({ where: { communityId: id } });
+    sendSuccess(res, { id, isMember: false, isOwner, membership: null, memberCount }, "Left community.");
   } catch (err: any) {
     sendError(res, "Failed to leave community.", 500, "INTERNAL_ERROR");
   }

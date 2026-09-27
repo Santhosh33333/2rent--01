@@ -12,6 +12,7 @@ import { useRole } from '../lib/roleContext';
 import { isAdminTierRole, isSuperAdminRole } from '../lib/roles';
 import { useTheme } from '../lib/themeContext';
 import { RoleSwitcher } from './RoleSwitcher';
+import { Avatar } from './Avatar';
 import { PartnerLiveLocationSharer } from './PartnerLiveLocationSharer';
 import { UserLiveLocationSharer } from './UserLiveLocationSharer';
 import { api } from '../lib/api';
@@ -328,9 +329,7 @@ export function Layout() {
                 aria-expanded={sidebarOpen}
                 aria-controls="sidebud-navigation-drawer"
               >
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-accent-300 flex items-center justify-center text-white text-sm font-bold">
-                  {user?.name?.charAt(0) || 'U'}
-                </div>
+                <Avatar src={user?.avatarUrl} name={user?.name} className="w-8 h-8" />
               </button>
             </div>
           </div>
@@ -344,9 +343,7 @@ export function Layout() {
           <aside id="sidebud-navigation-drawer" ref={drawerRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Navigation menu" className="navigation-drawer fixed inset-y-0 left-0 w-80 max-w-[88vw] bg-surface-50 dark:bg-surface-900 z-50 shadow-2xl p-4 overflow-y-auto overscroll-contain pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-accent-300 flex items-center justify-center text-white font-bold">
-                  {user?.name?.charAt(0) || 'U'}
-                </div>
+                <Avatar src={user?.avatarUrl} name={user?.name} className="w-10 h-10" textClassName="text-base" />
                 <div className="min-w-0">
                   <p className="font-semibold text-sm truncate">{user?.name}</p>
                   <p className="text-xs text-surface-500 truncate">{user?.email}</p>

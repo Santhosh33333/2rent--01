@@ -16,7 +16,8 @@ import {
 } from 'lucide-react'
 import { useAvatarUpload } from '../../lib/photo'
 import toast from 'react-hot-toast'
-import { api, assetUrl } from '../../lib/api'
+import { api } from '../../lib/api'
+import { Avatar } from '../../components/Avatar'
 import { getErrorMessage } from '../../lib/error'
 
 export function ProfilePage() {
@@ -121,7 +122,6 @@ export function ProfilePage() {
   // which silently hid the Admin Portal shortcut for SUPPORT_ADMIN, FINANCE_ADMIN,
   // KYC_ADMIN, MARKETING_ADMIN and PARTNER_ADMIN accounts.
   const isAdmin = isAdminTierRole(user?.role)
-  const initials = user?.name?.split(' ').map((n: string) => n[0]).join('').toUpperCase() || '?'
 
   const stats = [
     { label: 'Walks', value: statsLoading ? '...' : (profileStats?.walksCompleted ?? '—'), icon: MapPin, gradient: 'from-emerald-500 to-emerald-600' },
@@ -140,13 +140,17 @@ export function ProfilePage() {
 
           <div className="relative z-10 flex flex-col sm:flex-row items-center sm:items-start gap-6">
             <div className="relative group">
-              {(avatar.previewUrl || user?.avatarUrl) ? (
-                <img src={avatar.previewUrl || assetUrl(user?.avatarUrl) || ''} alt="avatar" className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl object-cover ring-4 ring-white/20" />
-              ) : (
-                <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl avatar flex items-center justify-center text-white text-3xl font-bold ring-4 ring-white/20">
-                  {initials}
-                </div>
-              )}
+              {/* A truthiness check alone meant a 404 or a cold-starting API
+                  rendered a broken-image glyph here — in the exact place the
+                  photo was uploaded. Avatar falls back to initials on error.
+                  `avatar.previewUrl` is a local blob: preview, which assetUrl
+                  passes through untouched. */}
+              <Avatar
+                src={avatar.previewUrl || user?.avatarUrl}
+                name={user?.name}
+                className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl ring-4 ring-white/20"
+                textClassName="text-3xl"
+              />
               <input
                 ref={fileInputRef}
                 type="file"

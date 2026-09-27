@@ -197,6 +197,11 @@ async function restoreSessionFromRefreshToken(): Promise<User | null> {
       bio: p.bio,
       country: p.country,
       gender: p.gender,
+      // buildUserFromPayload maps avatarUrl, but this refresh-token restore path
+      // hand-builds the object and used to drop it — then overwrote the cached
+      // user in localStorage with the avatar-less copy, so the photo vanished
+      // after a reload until the 60s profile poll happened to restore it.
+      avatarUrl: p.avatarUrl,
     }
     localStorage.setItem('user', JSON.stringify(u))
     reconcileCompletionFlags(u)

@@ -1,29 +1,23 @@
 import { useEffect, useRef } from 'react';
-import { Mic, MicOff, PhoneOff, Phone, Volume2, VolumeX, User } from 'lucide-react';
+import { Mic, MicOff, PhoneOff, Phone, Volume2, VolumeX } from 'lucide-react';
 import { useInAppCall, formatCallDuration, type CallPeer } from '../hooks/useInAppCall';
-
-function initials(name: string | null): string {
-  const parts = (name || '?').trim().split(/\s+/);
-  return ((parts[0]?.[0] ?? '?') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
-}
+import { Avatar } from './Avatar';
 
 function PeerAvatar({ peer, size }: { peer: CallPeer | null; size: 'lg' | 'sm' }) {
   const dimension = size === 'lg' ? 'h-24 w-24 text-3xl' : 'h-16 w-16 text-xl';
-  if (peer?.avatarUrl) {
-    return (
-      <img
-        src={peer.avatarUrl}
-        alt={peer.fullName || 'Caller'}
-        className={`${dimension} rounded-full object-cover ring-4 ring-white/20`}
-      />
-    );
-  }
+  // `peer.avatarUrl` comes straight off the socket as a relative `/uploads/...`
+  // path. It used to be used as a raw `src`, which resolved against the *web*
+  // origin: dev hid that behind the Vite /uploads proxy, but in production the
+  // SPA catch-all answered with index.html and a 200, so the browser got HTML
+  // for an image and drew a broken glyph. Avatar resolves it via assetUrl()
+  // against the API origin and falls back to initials when it cannot load.
   return (
-    <div
-      className={`${dimension} flex items-center justify-center rounded-full bg-white/15 font-semibold text-white ring-4 ring-white/20`}
-    >
-      {peer?.fullName ? initials(peer.fullName) : <User className="h-10 w-10" aria-hidden />}
-    </div>
+    <Avatar
+      src={peer?.avatarUrl}
+      name={peer?.fullName}
+      className={`${dimension} ring-4 ring-white/20`}
+      textClassName="ring-4 ring-white/20"
+    />
   );
 }
 
