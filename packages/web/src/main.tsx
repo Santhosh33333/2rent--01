@@ -6,6 +6,7 @@ import { SplashScreen } from '@capacitor/splash-screen'
 import { AuthProvider } from './lib/auth'
 import { RoleProvider } from './lib/roleContext'
 import { App } from './App'
+import { initializeAds } from './lib/ads'
 import './styles/globals.css'
 
 declare global {
@@ -96,3 +97,7 @@ createRoot(document.getElementById('root')!).render(
 if (Capacitor.isNativePlatform()) {
   SplashScreen.hide()
 }
+
+// AdMob: resolve consent then init, off the critical path. Ads are revenue,
+// not a gate on the app, so a failure here must not block boot.
+void initializeAds()

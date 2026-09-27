@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { api } from '../../lib/api'
+import { getErrorMessage } from '../../lib/error'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
 
@@ -27,9 +28,11 @@ export function RatingPage() {
     }
     setSubmitting(true)
     try {
+      // The backend reads `score` and `comment`; these names must match or the
+      // request 400s on a missing score.
       await api.post(`/bookings/${id}/rate`, {
-        rating,
-        review,
+        score: rating,
+        comment: review,
         categories: {
           punctuality,
           behavior,
@@ -38,8 +41,10 @@ export function RatingPage() {
       })
       setSubmitted(true)
       toast.success('Rating submitted!')
-    } catch {
-      toast.error('Failed to submit rating')
+    } catch (err: any) {
+      // Surface the server's reason (e.g. ALREADY_RATED, INVALID_STATUS)
+      // instead of a generic message that hides the actual failure.
+      toast.error(getErrorMessage(err, 'Failed to submit rating'))
     } finally {
       setSubmitting(false)
     }

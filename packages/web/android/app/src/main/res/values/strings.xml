@@ -6,4 +6,10 @@
     <string name="custom_url_scheme">app.rentbuddy.app</string>
     <string name="notification_channel_name">Nabri</string>
     <string name="notification_channel_description">Notifications from Nabri</string>
+
+    <!-- Google AdMob App ID for app.rentbuddy.app.
+         This is Google's public TEST app id: it serves test ads and earns nothing.
+         Replace it with the real id from AdMob console -> App settings once the
+         app is registered, otherwise the app earns no revenue. -->
+    <string name="admob_app_id" translatable="false">ca-app-pub-3940256099942544~3347511713</string>
 </resources>

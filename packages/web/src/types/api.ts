@@ -27,7 +27,9 @@ export interface BookingVerifyPayment {
 }
 
 export interface BookingRate {
-  rating: number
+  /** Backend reads `score` (RatingPage posts it directly). */
+  score: number
+  /** Backend reads `comment`, not `review`. */
   comment?: string
 }
 

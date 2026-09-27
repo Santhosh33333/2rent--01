@@ -7,6 +7,7 @@ import { GlassCard } from '../../components/GlassCard'
 import { api } from '../../lib/api'
 import { useTheme, ACCENTS, Accent } from '../../lib/themeContext'
 import { useAppLock } from '../../lib/appLock'
+import { isPrivacyOptionsRequired, showPrivacyOptionsForm } from '../../lib/ads'
 
 interface Settings {
   theme: string
@@ -196,6 +197,11 @@ export function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const { setTheme, setAccent } = useTheme()
   const { enabled: appLockEnabled, autoLockSec, enable, disable, changePin, lockNow, setAutoLockSec } = useAppLock()
+  // Ads consent resolves at boot, which can finish after this page mounts.
+  const [adPrivacyOptionsRequired, setAdPrivacyOptionsRequired] = useState(() => isPrivacyOptionsRequired())
+  useEffect(() => {
+    setAdPrivacyOptionsRequired(isPrivacyOptionsRequired())
+  }, [])
   const [lockModal, setLockModal] = useState<null | 'setup' | 'disable' | 'change'>(null)
 
   useEffect(() => {
@@ -355,6 +361,18 @@ export function SettingsPage() {
           <SettingRow icon={Shield} label="Location Sharing" description="Share location during walks">
             <ToggleSwitch enabled={settings.allowLocationSharing} onChange={v => update('allowLocationSharing', v)} />
           </SettingRow>
+
+          {/* AdMob requires a permanent way to revisit ad/privacy choices. */}
+          {adPrivacyOptionsRequired && (
+            <SettingRow icon={Eye} label="Ad privacy choices" description="Change how ads are personalised">
+              <button
+                onClick={() => void showPrivacyOptionsForm()}
+                className="px-3 py-1 rounded-lg text-xs font-medium bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 hover:bg-surface-200 dark:hover:bg-surface-700 transition-colors"
+              >
+                Manage
+              </button>
+            </SettingRow>
+          )}
 
           {/* App Lock */}
           <h2 className="text-xs font-semibold text-surface-400 uppercase tracking-wider mb-3 mt-8">App Lock</h2>
