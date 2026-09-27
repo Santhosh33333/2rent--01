@@ -13,14 +13,16 @@ services:
     # the dashboard, then repoint the web app at the new hostname.
     region: oregon
     rootDir: packages/backend
-    # No "prisma migrate deploy" here on purpose. The Docker image this service
-    # actually runs starts with "node dist/src/server.js" and never migrates,
-    # and production carries no _prisma_migrations table at all, so a build-time
-    # migrate deploy would try to replay all fifteen migrations onto a database
-    # that already has that schema and fail. Schema changes are applied on purpose
-    # with db push or the migration tool, not as a side effect of a build.
+    # Migrations DO run at start. An earlier comment here claimed production had
+    # no _prisma_migrations table and that "migrate deploy" would try to replay
+    # all fifteen migrations; that is no longer true -- the table exists and all
+    # fifteen are recorded as applied, so "migrate deploy" applies only what is
+    # genuinely pending. Skipping it was how 20260927_drop_user_phone_verified
+    # shipped unapplied: the code deployed, the column stayed, and nothing failed.
+    # A migration that cannot apply will fail the boot loudly, which is the
+    # behaviour we want.
     buildCommand: npm install && npx prisma generate && npm run build
-    startCommand: node dist/src/server.js
+    startCommand: npx prisma migrate deploy && node dist/src/server.js
     # Render's free compute plan cannot run more than one instance, so the API
     # stays a single instance here. That is not a performance problem on its own
     # - the cross-region database round trip was - and the free plan keeps cost
