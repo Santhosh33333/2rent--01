@@ -22,8 +22,9 @@ vi.mock('firebase-admin/app', () => ({
 import { getOrCreateFirebaseApp, loadFirebaseServiceAccount } from '../services/firebaseCredential';
 
 const LEAKED_KEY_IDS = [
-  'e290c0108e874735bea19fd1be0228b22c8f4124', // nabri-9b94d
-  '3ea75160ad0c1ebff43d4ed5b5cf1804873d48cb', // nabri-9faed
+  'e290c0108e874735bea19fd1be0228b22c8f4124', // nabri-9b94d, leaked
+  '3ea75160ad0c1ebff43d4ed5b5cf1804873d48cb', // nabri-9faed, pasted
+  'ab8d12c0bbc15937ef340b9bc9967188982a08d2', // nabri-9b94d, superseded
 ];
 
 function serviceAccount(overrides: Record<string, any> = {}) {

@@ -2,16 +2,16 @@ services:
   - type: web
     name: rentbuddy-api
     runtime: node
-    # The database is Supabase in AWS ap-southeast-1 (Singapore). Running the
-    # API in Oregon put every single query across the Pacific: a trivial
-    # SELECT 1 measured ~875ms, which is ~4 round trips at ~220ms RTT.
-    # Singapore puts the API next to the database (single-digit ms) and is also
-    # much closer to the users, who are in India.
+    # The database is Neon in us-east-1. The earlier "singapore" region and its
+    # rationale were left over from the Supabase days; the cross-Pacific query
+    # problem was really Supabase being in ap-southeast-1, not Oregon itself.
+    # With Neon on us-east-1, Oregon is the correct choice: /health/db now
+    # measures ~57ms steady (it was ~875ms against Supabase in Singapore).
     #
     # IMPORTANT: Render fixes a service's region at creation and cannot move it.
     # This value only applies to a NEW service - use "Deploy in a new region" in
     # the dashboard, then repoint the web app at the new hostname.
-    region: singapore
+    region: oregon
     rootDir: packages/backend
     # No "prisma migrate deploy" here on purpose. The Docker image this service
     # actually runs starts with "node dist/src/server.js" and never migrates,
@@ -42,12 +42,19 @@ services:
       # sync: false keeps Render from overwriting a value you set by hand.
       #
       # CAUTION: a Render Key Value *internal* URL (redis://red-...:6379) only
-      # resolves from services in the SAME region. When the API is moved to
-      # Singapore the Key Value must be created in Singapore too, or REDIS_URL
-      # must point at an externally reachable Redis (e.g. Upstash) instead.
+      # resolves from services in the SAME region. The Key Value must be created
+      # in Oregon to match this service, or REDIS_URL must point at an
+      # externally reachable Redis (e.g. Upstash) instead.
       # The backend degrades to in-process state if this is missing, so a wrong
       # value costs performance, not uptime.
       - key: REDIS_URL
+        sync: false
+      # Firebase Admin service account, stored as the whole JSON minified to one
+      # line. sync: false so a fresh Blueprint deploy cannot silently come up
+      # with push half-configured: the backend treats a missing credential as
+      # "notifications unavailable" rather than failing boot, which means the
+      # omission would only be noticed by users not receiving notifications.
+      - key: FIREBASE_SERVICE_ACCOUNT
         sync: false
     # The liveness route is mounted at the root ("/health"), not under /api -
     # everything under /api sits behind auth middleware and answers 401 here,

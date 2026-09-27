@@ -57,6 +57,52 @@ let lastInterstitialAt = 0;
 let interstitialReady = false;
 let consentInFlight: Promise<void> | null = null;
 
+export type AdsState = {
+  initialized: boolean;
+  consentState: ConsentState;
+  canRequestAds: boolean;
+  privacyOptionsRequired: boolean;
+  isTestMode: boolean;
+};
+
+const listeners = new Set<(state: AdsState) => void>();
+
+function snapshot(): AdsState {
+  return {
+    initialized,
+    consentState,
+    canRequestAds: canRequestAds && initialized,
+    privacyOptionsRequired,
+    isTestMode: isTestMode(),
+  };
+}
+
+function notify(): void {
+  const state = snapshot();
+  for (const listener of listeners) {
+    try {
+      listener(state);
+    } catch (err) {
+      // A misbehaving subscriber must not stop the others or the ad pipeline.
+      console.warn('[ads] state listener threw:', err);
+    }
+  }
+}
+
+/**
+ * Observe ad state. Consent is resolved asynchronously at boot, so a component
+ * that reads isPrivacyOptionsRequired() once on mount will almost always see
+ * `false` and never render its "manage ad choices" entry. Subscribing is how
+ * the UI stays correct without polling.
+ */
+export function subscribeAdsState(listener: (state: AdsState) => void): () => void {
+  listeners.add(listener);
+  listener(snapshot());
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
 export function isNative(): boolean {
   try {
     return Capacitor.isNativePlatform();
@@ -104,6 +150,8 @@ async function resolveConsent(): Promise<void> {
       consentState = 'unknown';
       canRequestAds = false;
       console.warn('[ads] consent check failed, ads disabled:', err);
+    } finally {
+      notify();
     }
   })();
 
@@ -126,6 +174,8 @@ export async function initializeAds(): Promise<void> {
     initialized = true;
   } catch (err) {
     console.warn('[ads] initialization failed:', err);
+  } finally {
+    notify();
   }
 }
 
@@ -194,6 +244,29 @@ export async function maybeShowInterstitial(): Promise<boolean> {
     return true;
   } catch (err) {
     console.warn('[ads] showInterstitial failed:', err);
+    return false;
+  }
+}
+
+/**
+ * Rewarded video. Must only ever be called from a real, labelled opt-in ("Watch
+ * a short video for a discount"), never automatically: an unprompted rewarded
+ * ad violates the opt-in requirement and is a suspension risk.
+ *
+ * Resolves true only when the user actually earned the reward, so callers can
+ * gate a discount on it without handing out rewards for skipped ads.
+ */
+export async function showRewardedAd(): Promise<boolean> {
+  if (!canServeAds()) return false;
+  try {
+    await AdMob.prepareRewardVideoAd({ adId: AD_UNITS.rewarded, isTesting: isTestMode() });
+    // The plugin resolves this with an AdMobRewardItem ({ type, amount }) when
+    // the user earns the reward, and rejects on dismissal/failure, so reaching
+    // the return is the signal to grant whatever the caller was promising.
+    const result = await AdMob.showRewardVideoAd();
+    return result !== undefined && result !== null;
+  } catch (err) {
+    console.warn('[ads] showRewardedAd failed:', err);
     return false;
   }
 }

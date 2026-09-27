@@ -7,7 +7,7 @@ import { GlassCard } from '../../components/GlassCard'
 import { api } from '../../lib/api'
 import { useTheme, ACCENTS, Accent } from '../../lib/themeContext'
 import { useAppLock } from '../../lib/appLock'
-import { isPrivacyOptionsRequired, showPrivacyOptionsForm } from '../../lib/ads'
+import { showPrivacyOptionsForm, subscribeAdsState } from '../../lib/ads'
 
 interface Settings {
   theme: string
@@ -197,11 +197,14 @@ export function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const { setTheme, setAccent } = useTheme()
   const { enabled: appLockEnabled, autoLockSec, enable, disable, changePin, lockNow, setAutoLockSec } = useAppLock()
-  // Ads consent resolves at boot, which can finish after this page mounts.
-  const [adPrivacyOptionsRequired, setAdPrivacyOptionsRequired] = useState(() => isPrivacyOptionsRequired())
-  useEffect(() => {
-    setAdPrivacyOptionsRequired(isPrivacyOptionsRequired())
-  }, [])
+  // Ads consent resolves at boot, which can finish after this page mounts, so
+  // reading the flag once on mount hides the entry permanently. Subscribe so it
+  // appears as soon as consent has actually been resolved.
+  const [adPrivacyOptionsRequired, setAdPrivacyOptionsRequired] = useState(false)
+  useEffect(
+    () => subscribeAdsState((state) => setAdPrivacyOptionsRequired(state.privacyOptionsRequired)),
+    [],
+  )
   const [lockModal, setLockModal] = useState<null | 'setup' | 'disable' | 'change'>(null)
 
   useEffect(() => {

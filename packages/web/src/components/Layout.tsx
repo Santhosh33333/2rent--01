@@ -15,6 +15,14 @@ import { PartnerLiveLocationSharer } from './PartnerLiveLocationSharer';
 import { UserLiveLocationSharer } from './UserLiveLocationSharer';
 import { api } from '../lib/api';
 import { useNotifications } from '../hooks/useSocket';
+import {
+  destroyBanner,
+  isNative,
+  maybeShowInterstitial,
+  prepareInterstitial,
+  showBanner,
+  subscribeAdsState,
+} from '../lib/ads';
 
 /** Live unread badge for the header bell: initial fetch + realtime bumps. */
 function UnreadBadge() {
@@ -109,6 +117,8 @@ export function Layout() {
   const headerRef = useRef<HTMLElement>(null);
   const bottomNavRef = useRef<HTMLElement>(null);
   const drawerOpenerRef = useRef<HTMLElement | null>(null);
+  const [adsReady, setAdsReady] = useState(false);
+  const [bannerUp, setBannerUp] = useState(false);
 
   const openDrawer = (event: MouseEvent<HTMLElement>) => {
     drawerOpenerRef.current = event.currentTarget;
@@ -141,6 +151,73 @@ export function Layout() {
     setSidebarOpen(false);
     setMobileMenuOpen(false);
   }, [location.pathname]);
+
+  // Consent resolves asynchronously at boot, so subscribe rather than read once.
+  useEffect(() => subscribeAdsState((state) => setAdsReady(state.canRequestAds)), []);
+
+  // AdMob banner.
+  //
+  // Only mounted at >= lg, because the app's bottom navigation is fixed and
+  // `lg:hidden`. A native BOTTOM_CENTER banner draws over the WebView, so on
+  // phones it would sit on top of the nav bar and make navigation unusable --
+  // and that cannot be verified without a device. Phones get interstitials
+  // instead, which are modal and have no layout conflict. Flip this on for
+  // phones only after reserving real space for the banner and testing on device.
+  useEffect(() => {
+    if (!adsReady || !isNative()) return;
+    let cancelled = false;
+
+    const sync = async () => {
+      const wide = window.matchMedia('(min-width: 1024px)').matches;
+      if (cancelled) return;
+      if (wide) {
+        await showBanner();
+        if (!cancelled) setBannerUp(true);
+      } else if (bannerUp) {
+        await destroyBanner();
+        if (!cancelled) setBannerUp(false);
+      }
+    };
+
+    void sync();
+    const mq = window.matchMedia('(min-width: 1024px)');
+    mq.addEventListener('change', () => void sync());
+    return () => {
+      cancelled = true;
+      mq.removeEventListener('change', () => void sync());
+      setBannerUp(false);
+      void destroyBanner();
+    };
+    // bannerUp is intentionally excluded: including it would re-run this effect
+    // (and re-show the banner) every time the flag flips.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adsReady]);
+
+  // Interstitials fire between navigations on list-style screens only, and never
+  // immediately: landing on a form, a booking confirmation or a payment step is
+  // exactly the accidental-click pattern that gets an AdMob account suspended.
+  const interstitialSafePaths = useRef<Set<string>>(
+    new Set([
+      '/home', '/bookings', '/discover', '/communities',
+      '/partner/dashboard', '/partner/jobs',
+    ]),
+  );
+
+  useEffect(() => {
+    if (!adsReady) return;
+    void prepareInterstitial();
+  }, [adsReady]);
+
+  useEffect(() => {
+    if (!adsReady) return;
+    const path = location.pathname;
+    const segment = `/${path.split('/').filter(Boolean)[0] ?? ''}`;
+    if (!interstitialSafePaths.current.has(segment)) return;
+
+    // Let the screen settle first so the ad never looks like a tap reaction.
+    const timer = window.setTimeout(() => void maybeShowInterstitial(), 2500);
+    return () => window.clearTimeout(timer);
+  }, [adsReady, location.pathname]);
 
   useEffect(() => {
     if (!sidebarOpen) return;
@@ -351,7 +428,7 @@ export function Layout() {
       )}
 
       {/* Main Content */}
-      <main ref={mainRef} className="pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-8">
+      <main ref={mainRef} className={bannerUp ? 'pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-32' : 'pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-8'}>
         {/* Partners silently stream live GPS for their active booking so the
             user can track them in real time (no UI of its own). */}
         <PartnerLiveLocationSharer />

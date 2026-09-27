@@ -9,6 +9,7 @@ import { cert, getApps, initializeApp, type App } from "firebase-admin/app";
 const REVOKED_PRIVATE_KEY_IDS = new Set([
   "e290c0108e874735bea19fd1be0228b22c8f4124", // nabri-9b94d, leaked 2026-09-27, still live in Firebase
   "3ea75160ad0c1ebff43d4ed5b5cf1804873d48cb", // nabri-9faed, pasted 2026-09-27, project not adopted
+  "ab8d12c0bbc15937ef340b9bc9967188982a08d2", // nabri-9b94d, superseded earlier, found in local dev .env
 ]);
 
 export function loadFirebaseServiceAccount(): Record<string, any> | null {
