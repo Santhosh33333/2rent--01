@@ -21,7 +21,10 @@ vi.mock('firebase-admin/app', () => ({
 
 import { getOrCreateFirebaseApp, loadFirebaseServiceAccount } from '../services/firebaseCredential';
 
-const LEAKED_KEY_ID = 'e290c0108e874735bea19fd1be0228b22c8f4124';
+const LEAKED_KEY_IDS = [
+  'e290c0108e874735bea19fd1be0228b22c8f4124', // nabri-9b94d
+  '3ea75160ad0c1ebff43d4ed5b5cf1804873d48cb', // nabri-9faed
+];
 
 function serviceAccount(overrides: Record<string, any> = {}) {
   return {
@@ -63,12 +66,14 @@ describe('loadFirebaseServiceAccount', () => {
     expect(loadFirebaseServiceAccount()?.project_id).toBe('nabri-9b94d');
   });
 
-  it('rejects the exposed key that must not be used again', () => {
-    process.env.FIREBASE_SERVICE_ACCOUNT = JSON.stringify(
-      serviceAccount({ private_key_id: LEAKED_KEY_ID }),
-    );
-    expect(() => loadFirebaseServiceAccount()).toThrow(/REVOKED key/);
-    expect(() => loadFirebaseServiceAccount()).toThrow(LEAKED_KEY_ID);
+  it('rejects every exposed key that must not be used again', () => {
+    for (const keyId of LEAKED_KEY_IDS) {
+      process.env.FIREBASE_SERVICE_ACCOUNT = JSON.stringify(
+        serviceAccount({ private_key_id: keyId }),
+      );
+      expect(() => loadFirebaseServiceAccount()).toThrow(/REVOKED key/);
+      expect(() => loadFirebaseServiceAccount()).toThrow(keyId);
+    }
   });
 
   it('rejects malformed JSON with actionable guidance', () => {
@@ -109,11 +114,15 @@ describe('getOrCreateFirebaseApp', () => {
     expect(mockInitializeApp).not.toHaveBeenCalled();
   });
 
-  it('refuses to start on the revoked credential', () => {
-    process.env.FIREBASE_SERVICE_ACCOUNT = JSON.stringify(
-      serviceAccount({ private_key_id: LEAKED_KEY_ID }),
-    );
-    expect(() => getOrCreateFirebaseApp()).toThrow(/REVOKED key/);
-    expect(mockInitializeApp).not.toHaveBeenCalled();
+  it('refuses to start on any revoked credential', () => {
+    for (const keyId of LEAKED_KEY_IDS) {
+      mockInitializeApp.mockClear();
+      process.env.FIREBASE_SERVICE_ACCOUNT = JSON.stringify(
+        serviceAccount({ private_key_id: keyId }),
+      );
+      expect(() => getOrCreateFirebaseApp()).toThrow(/REVOKED key/);
+      expect(mockInitializeApp).not.toHaveBeenCalled();
+      apps.length = 0;
+    }
   });
 });
