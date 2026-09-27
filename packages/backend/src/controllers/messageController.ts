@@ -31,7 +31,7 @@ const USER_SELECT = { id: true, fullName: true, avatarUrl: true } as const;
 
 export async function sendMessage(req: AuthedRequest, res: Response): Promise<void> {
   try {
-    const { receiverId, content, messageType, mediaUrl, bookingId, replyToId } = req.body;
+    const { receiverId, content, messageType, mediaUrl, bookingId, replyToId, clientId } = req.body;
 
     const type = typeof messageType === "string" ? messageType.toUpperCase() : "TEXT";
     if (!["TEXT", "IMAGE", "VOICE"].includes(type)) {
@@ -179,6 +179,14 @@ export async function sendMessage(req: AuthedRequest, res: Response): Promise<vo
         : null,
       timestamp: message.createdAt,
     });
+
+    // Echo the caller's placeholder id so the client can reconcile this exact
+    // optimistic bubble rather than guessing by position. Always set, so the
+    // shape is stable: a well-formed id, or null when unusable.
+    const echoClientId = typeof clientId === "string" && clientId.length > 0 && clientId.length <= 64
+      ? clientId
+      : null;
+    (message as any).clientId = echoClientId;
 
     await prisma.auditLog.create({
       data: {

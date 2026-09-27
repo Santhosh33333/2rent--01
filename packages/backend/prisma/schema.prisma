@@ -33,7 +33,6 @@ model User {
   appleId                        String?   @unique
   emailVerified                  Boolean   @default(false)
   mobileVerified                 Boolean   @default(false)
-  phoneVerified                  Boolean   @default(false)
   language                       String    @default("en")
   lastLoginAt                    DateTime?
   createdAt                      DateTime  @default(now())

@@ -26,6 +26,9 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+# Shell-redirect accidents such as a bare `$log` (no extension, so *.log misses it)
+\$log*
+
 
 # OS
 .DS_Store

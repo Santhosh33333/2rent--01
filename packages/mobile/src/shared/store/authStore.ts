@@ -34,7 +34,7 @@ export interface AuthUser {
   city: string | null;
   language: string;
   emailVerified: boolean;
-  phoneVerified: boolean;
+  mobileVerified: boolean;
 }
 
 interface AuthState {

@@ -93,6 +93,7 @@ export function ConversationPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const convIdRef = useRef<string | null>(null)
+  const tempSeq = useRef(0)
   const chat = useChat(conversationId ?? '')
   const chatRef = useRef(chat)
   chatRef.current = chat
@@ -165,11 +166,23 @@ export function ConversationPage() {
         setConversationId((prev) => prev ?? data.conversationId)
       }
       setMessages((prev) => {
-        const idx = [...prev].reverse().findIndex((m) => m.id.startsWith('temp-'))
-        if (idx === -1) return prev
-        const realIdx = prev.length - 1 - idx
+        // Reconcile the EXACT optimistic bubble. Matching on "the last temp"
+        // instead crosses ids whenever two messages are in flight, because the
+        // placeholder order and the server ack order can differ.
+        let idx = -1
+        if (data.clientId) {
+          const byClient = prev.findIndex((m) => m.id === data.clientId)
+          if (byClient !== -1) idx = byClient
+        }
+        if (idx === -1) {
+          // Older servers do not echo clientId; fall back to the last placeholder
+          // so those builds still reconcile.
+          const reversed = [...prev].reverse().findIndex((m) => m.id.startsWith('temp-'))
+          if (reversed === -1) return prev
+          idx = prev.length - 1 - reversed
+        }
         const copy = [...prev]
-        copy[realIdx] = { ...copy[realIdx], id: data.messageId }
+        copy[idx] = { ...copy[idx], id: data.messageId }
         return copy
       })
     }))
@@ -257,9 +270,20 @@ export function ConversationPage() {
     e.preventDefault()
     if (!text.trim() || !userId) return
     setSending(true)
-    const tempId = `temp-${Date.now()}`
+    // Collision-free placeholder id. `Date.now()` alone repeats when two
+    // messages are sent inside the same millisecond, which would make both
+    // bubbles reconcile to the same real id.
+    const tempId = `temp-${Date.now()}-${tempSeq.current++}`
     const content = text
-    const replyingTo = replyTarget
+    // A placeholder has no server row yet, so replying to one would be rejected
+    // by the server's same-conversation parent check. The reply button is
+    // already disabled for placeholders; this is the belt-and-braces guard.
+    const replyingTo = replyTarget && !replyTarget.id.startsWith('temp-') ? replyTarget : null
+    if (replyTarget && !replyingTo) {
+      setSending(false)
+      toast.error('Wait for that message to send before replying.')
+      return
+    }
     setMessages((prev) => [
       ...prev,
       {
@@ -281,7 +305,7 @@ export function ConversationPage() {
       if (replyingTo) {
         // Replies go over REST so the server can validate the parent lives
         // in this conversation; realtime fan-out still happens server-side.
-        const res = await api.post('/messages', { receiverId: userId, content, replyToId: replyingTo.id })
+        const res = await api.post('/messages', { receiverId: userId, content, replyToId: replyingTo.id, clientId: tempId })
         const saved = res.data?.data?.message || res.data?.data || res.data
         const realId = saved?.id || saved?.message?.id
         if (realId) {
@@ -290,7 +314,8 @@ export function ConversationPage() {
       } else {
         // Real-time send. For a brand-new thread we pass receiverId so the server
         // creates the conversation; message_sent returns the real conversationId.
-        chat.sendMessage(content, conversationId ? undefined : userId)
+        // clientId lets the ack rename this exact bubble rather than "the last one".
+        chat.sendMessage(content, conversationId ? undefined : userId, tempId)
       }
     } catch {
       setMessages((prev) => prev.filter((m) => m.id !== tempId))

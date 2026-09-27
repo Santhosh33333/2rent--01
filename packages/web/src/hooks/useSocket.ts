@@ -311,8 +311,11 @@ export function useChat(conversationId: string) {
   }, [conversationId, emit]);
 
   const sendMessage = useCallback(
-    (content: string, receiverId?: string) => {
-      emit('send_message', receiverId ? { conversationId, content, receiverId } : { conversationId, content });
+    (content: string, receiverId?: string, clientId?: string) => {
+      const payload: Record<string, unknown> = { conversationId, content };
+      if (receiverId) payload.receiverId = receiverId;
+      if (clientId) payload.clientId = clientId;
+      emit('send_message', payload);
     },
     [conversationId, emit]
   );

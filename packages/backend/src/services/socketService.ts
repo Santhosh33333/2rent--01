@@ -567,9 +567,17 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
      * AUTHZ: sender must be a conversation participant. Receiver is derived
      * server-side; the message row is created atomically with membership check.
      */
-    socket.on("send_message", async (data: { conversationId?: string; receiverId?: string; content: string }) => {
+    socket.on("send_message", async (data: { conversationId?: string; receiverId?: string; content: string; clientId?: string }) => {
       try {
-        const { conversationId, receiverId, content } = data;
+        const { conversationId, receiverId, content, clientId } = data;
+
+        // Echoed back on "message_sent" so the sender can reconcile the exact
+        // optimistic bubble it created. Without it a client with two messages in
+        // flight has to guess which placeholder to rename, and concurrent sends
+        // (e.g. a reply over REST racing a realtime send) cross their ids.
+        const echoClientId = typeof clientId === "string" && clientId.length > 0 && clientId.length <= 64
+          ? clientId
+          : null;
 
         if (!content || typeof content !== "string" || content.trim().length === 0) {
           socket.emit("error", { message: "Message content required" });
@@ -649,7 +657,7 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
 
         // Send receipt to sender (incl. conversationId so the client can reconcile
         // its optimistic message and start joining the room for a brand-new thread)
-        socket.emit("message_sent", { messageId: message.id, conversationId: convId });
+        socket.emit("message_sent", { messageId: message.id, conversationId: convId, clientId: echoClientId });
       } catch (err) {
         console.error("[SOCKET] Message send error:", err);
         socket.emit("error", { message: "Failed to send message" });

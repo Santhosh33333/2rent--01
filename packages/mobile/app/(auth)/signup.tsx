@@ -61,7 +61,7 @@ export default function Signup() {
           city: u.city ?? null,
           language: u.language ?? 'en',
           emailVerified: u.emailVerified ?? false,
-          phoneVerified: u.phoneVerified ?? false,
+          mobileVerified: u.mobileVerified ?? false,
         };
         setUser(mapped);
         router.replace('/(tabs)');

@@ -53,6 +53,8 @@ export interface MessagesReadData {
 export interface MessageSentData {
   messageId: string
   conversationId: string
+  /** The caller's optimistic placeholder id, echoed back for exact reconciliation. */
+  clientId?: string | null
 }
 
   export interface MessageDeletedData {
