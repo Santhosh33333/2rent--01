@@ -13,14 +13,17 @@ services:
     # the dashboard, then repoint the web app at the new hostname.
     region: oregon
     rootDir: packages/backend
-    # Migrations DO run at start. An earlier comment here claimed production had
-    # no _prisma_migrations table and that "migrate deploy" would try to replay
-    # all fifteen migrations; that is no longer true -- the table exists and all
-    # fifteen are recorded as applied, so "migrate deploy" applies only what is
-    # genuinely pending. Skipping it was how 20260927_drop_user_phone_verified
-    # shipped unapplied: the code deployed, the column stayed, and nothing failed.
-    # A migration that cannot apply will fail the boot loudly, which is the
-    # behaviour we want.
+    # This service runs as a DOCKER service (a root Dockerfile is present), so
+    # buildCommand and startCommand below are IGNORED by Render -- the image's
+    # CMD is what starts the process. They are kept only as documentation of
+    # intent; the Dockerfile's CMD runs "prisma migrate deploy" first so pending
+    # migrations apply on deploy.
+    #
+    # Migrations used to be skipped entirely, because a comment here claimed
+    # production had no _prisma_migrations table and that "migrate deploy" would
+    # replay all fifteen and fail. That premise is false: the table exists with
+    # all fifteen recorded as applied, and "prisma migrate status" against
+    # production reports only what is genuinely pending.
     buildCommand: npm install && npx prisma generate && npm run build
     startCommand: npx prisma migrate deploy && node dist/src/server.js
     # Render's free compute plan cannot run more than one instance, so the API
