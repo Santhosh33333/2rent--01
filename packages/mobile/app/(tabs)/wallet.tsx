@@ -2,7 +2,7 @@ import { View, Text, FlatList, StyleSheet } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { Screen, Title, Card } from '../../src/lib/ui';
 import { Colors } from '../../src/design-system/tokens/colors';
-import { get } from '../../src/lib/api';
+import { get, toList } from '../../src/lib/api';
 
 function money(n?: number) {
   if (n == null) return '₹0.00';
@@ -14,7 +14,7 @@ export default function Wallet() {
   const txQ = useQuery({ queryKey: ['wallet-tx'], queryFn: () => get<any>('/wallet/transactions') });
 
   const wallet = (walletQ.data?.data ?? {}) as any;
-  const txns = (txQ.data?.data?.transactions ?? txQ.data?.data ?? []) as any[];
+  const txns = toList(txQ.data?.data, 'transactions');
 
   return (
     <Screen>

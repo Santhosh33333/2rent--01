@@ -6,6 +6,7 @@ import { env } from "../config/env";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
 import { getClientIp } from "../rbac/adminSecurity";
+import { resolveSessionActiveRole } from "../rbac/activeRole";
 import {
   issueOtp,
   verifyOtp,
@@ -179,7 +180,7 @@ export async function verifyOtpLogin(req: Request, res: Response): Promise<void>
           city: user.city,
           country: user.country,
           role: user.role,
-          activeRole: (user as any).activeRole || user.role,
+          activeRole: resolveSessionActiveRole(user.role, (user as any).activeRole),
         },
       },
       "Login successful."

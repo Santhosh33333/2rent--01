@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { Screen, Title, Card } from '../../src/lib/ui';
 import { Colors } from '../../src/design-system/tokens/colors';
-import { get } from '../../src/lib/api';
+import { get, toList } from '../../src/lib/api';
 import { useAuthStore } from '../../src/shared/store/authStore';
 
 export default function Messages() {
@@ -14,7 +14,8 @@ export default function Messages() {
     queryFn: () => get<any>('/messages/conversations'),
   });
 
-  const convos = (data?.data?.conversations ?? data?.data ?? []) as any[];
+  // `GET /messages/conversations` returns `{ items, page, limit, total }`.
+  const convos = toList(data?.data, 'conversations');
 
   const otherName = (c: any) => {
     const others = (c.participants ?? []).filter((p: any) => p.id !== meId);

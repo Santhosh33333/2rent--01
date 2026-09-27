@@ -6,27 +6,11 @@ import { initGoogleSignIn, signInWithGoogle } from '../../lib/googleAuth'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { ArrowRight, Mail, Lock, Loader2, Phone, Eye, EyeOff, Smartphone } from 'lucide-react'
 import { api } from '../../lib/api'
+import { dashboardForRole, resolveLandingRole } from '../../lib/roles'
 import toast from 'react-hot-toast'
 
-const ROLE_DASHBOARDS: Record<string, string> = {
-  USER: '/dashboard',
-  PARTNER: '/partner/dashboard',
-  ADMIN: '/admin/dashboard',
-  SUPER_ADMIN: '/admin/dashboard',
-  MODERATOR: '/admin/dashboard',
-  SUPPORT: '/admin/dashboard',
-  FINANCE: '/admin/dashboard',
-  SUPPORT_ADMIN: '/admin/dashboard',
-  FINANCE_ADMIN: '/admin/dashboard',
-  KYC_ADMIN: '/admin/dashboard',
-  MARKETING_ADMIN: '/admin/dashboard',
-  PARTNER_ADMIN: '/admin/dashboard',
-}
-
 function getDashboardForUser(user: any): string {
-  const role = user?.activeRole || user?.role || 'USER'
-  const normalizedRole = role.toUpperCase().replace(/\s+/g, '_')
-  return ROLE_DASHBOARDS[normalizedRole] || '/dashboard'
+  return dashboardForRole(resolveLandingRole(user))
 }
 
 export function LoginPage() {
@@ -85,7 +69,7 @@ export function LoginPage() {
 
   useEffect(() => {
     if (authLoading || !user) return
-    const role = user.activeRole || user.role || 'USER'
+    const role = resolveLandingRole(user)
     if (role === 'USER' && !user.city && localStorage.getItem('profile_complete') !== 'true') {
       navigate('/profile/complete', { replace: true })
       return

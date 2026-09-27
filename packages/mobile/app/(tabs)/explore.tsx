@@ -2,7 +2,7 @@ import { View, Text, FlatList, StyleSheet } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { Screen, Title, Card } from '../../src/lib/ui';
 import { Colors } from '../../src/design-system/tokens/colors';
-import { get } from '../../src/lib/api';
+import { get, toList } from '../../src/lib/api';
 
 export default function Explore() {
   const { data, isLoading } = useQuery({
@@ -10,7 +10,7 @@ export default function Explore() {
     queryFn: () => get('/discovery/people'),
   });
 
-  const people = (data?.data?.people ?? data?.data ?? []) as any[];
+  const people = toList(data?.data, 'people');
 
   return (
     <Screen>

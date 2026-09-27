@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../lib/auth'
+import { dashboardForRole, resolveLandingRole } from '../../lib/roles'
 
 export function SplashPage() {
   const navigate = useNavigate()
@@ -33,25 +34,14 @@ export function SplashPage() {
       if (!onboardingComplete) {
         navigate('/onboarding', { replace: true })
       } else if (user) {
-        const role = user.activeRole || user.role || 'USER'
+        // Admin-tier accounts always resume on their own console. Resolving from
+        // `activeRole` here is what dropped administrators on the customer home
+        // screen and made it look like the account had been demoted.
+        const role = resolveLandingRole(user)
         if (role === 'USER' && !user.city && !profileComplete) {
           navigate('/profile/complete', { replace: true })
         } else {
-          const ROLE_DASHBOARDS: Record<string, string> = {
-            USER: '/dashboard',
-            PARTNER: '/partner/dashboard',
-            ADMIN: '/admin/dashboard',
-            SUPER_ADMIN: '/admin/dashboard',
-            MODERATOR: '/admin/dashboard',
-            SUPPORT: '/admin/dashboard',
-            FINANCE: '/admin/dashboard',
-            SUPPORT_ADMIN: '/admin/dashboard',
-            FINANCE_ADMIN: '/admin/dashboard',
-            KYC_ADMIN: '/admin/dashboard',
-            MARKETING_ADMIN: '/admin/dashboard',
-            PARTNER_ADMIN: '/admin/dashboard',
-          }
-          navigate(ROLE_DASHBOARDS[role.toUpperCase()] || '/dashboard', { replace: true })
+          navigate(dashboardForRole(role), { replace: true })
         }
       } else {
         navigate('/account-type', { replace: true })

@@ -31,6 +31,9 @@ export async function getMyRoles(req: AuthedRequest, res: Response): Promise<voi
     const adminRoles = ["ADMIN", "SUPER_ADMIN", "MODERATOR", "SUPPORT", "FINANCE", "SUPPORT_ADMIN", "FINANCE_ADMIN", "KYC_ADMIN", "MARKETING_ADMIN", "PARTNER_ADMIN"];
     if (adminRoles.includes(user.role || "")) approvedRoles.push(user.role!);
 
+    // `baseRole` is the authoritative account type. The web client decides the
+    // landing surface from it, so a delegated admin previewing USER/PARTNER is
+    // still reported honestly here instead of being rewritten underneath them.
     sendSuccess(res, {
       approvedRoles,
       activeRole: user.activeRole || user.role || "USER",

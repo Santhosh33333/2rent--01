@@ -49,6 +49,31 @@ export async function get<T = any>(path: string, params?: any): Promise<ApiEnvel
   return res.data;
 }
 
+const LIST_KEYS = ['items', 'bookings', 'transactions', 'results', 'notifications', 'data'];
+
+/**
+ * Normalize a list endpoint payload into an array.
+ *
+ * List endpoints are not uniform across the API: some return a bare array
+ * (`/partner/nearby-bookings`), others return a paginated envelope
+ * (`/partner/bookings` -> `{ items, total, page, limit }`), and some wrap the
+ * page in a named key (`bookings`, `transactions`, ...). Reading
+ * `payload.data ?? []` and then calling `.find`/`.map` on it throws whenever the
+ * endpoint happens to use the paginated shape, which blanks out the whole
+ * screen. Always normalize through this helper instead.
+ */
+export function toList<T = any>(payload: unknown, ...keys: string[]): T[] {
+  if (Array.isArray(payload)) return payload as T[];
+  if (!payload || typeof payload !== 'object') return [];
+
+  const record = payload as Record<string, unknown>;
+  const candidates = [...keys, ...LIST_KEYS];
+  for (const key of candidates) {
+    if (Array.isArray(record[key])) return record[key] as T[];
+  }
+  return [];
+}
+
 export function errorMessage(err: unknown, fallback = 'Something went wrong'): string {
   if (err && typeof err === 'object' && 'response' in err) {
     const e = err as AxiosError<ApiEnvelope>;

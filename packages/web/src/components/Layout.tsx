@@ -9,6 +9,7 @@ import { useAuth } from '../lib/auth';
 import { ImpersonationBanner } from './ImpersonationBanner';
 import { OfflineBanner } from './OfflineBanner';
 import { useRole } from '../lib/roleContext';
+import { isAdminTierRole, isSuperAdminRole } from '../lib/roles';
 import { useTheme } from '../lib/themeContext';
 import { RoleSwitcher } from './RoleSwitcher';
 import { PartnerLiveLocationSharer } from './PartnerLiveLocationSharer';
@@ -126,12 +127,12 @@ export function Layout() {
   };
 
   const navItems = activeRole === 'PARTNER' ? partnerNav
-    : ['ADMIN', 'SUPER_ADMIN', 'MODERATOR', 'SUPPORT', 'FINANCE', 'SUPPORT_ADMIN', 'FINANCE_ADMIN', 'KYC_ADMIN', 'MARKETING_ADMIN', 'PARTNER_ADMIN'].includes(activeRole) ? adminNav
+    : isAdminTierRole(activeRole) ? adminNav
     : userNav;
 
   // SUPER_ADMIN-only privileges: admin-account management and audit logs sit in
   // their own nav section so they're never confused with everyday admin tasks.
-  const isSuperAdmin = String(user?.role || '').toUpperCase() === 'SUPER_ADMIN' || activeRole === 'SUPER_ADMIN';
+  const isSuperAdmin = isSuperAdminRole(user?.role) || activeRole === 'SUPER_ADMIN';
   const superAdminNav = isSuperAdmin
     ? [
         { to: '/admin/admins', icon: User, label: 'Admin Accounts' },

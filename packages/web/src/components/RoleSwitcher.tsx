@@ -2,25 +2,12 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useRole, ROLE_META, UserRole } from '../lib/roleContext'
-import { RefreshCw, Check, ChevronDown, ArrowRight } from 'lucide-react'
-
-const ROLE_DASHBOARDS: Record<string, string> = {
-  USER: '/dashboard',
-  PARTNER: '/partner/dashboard',
-  ADMIN: '/admin/dashboard',
-  SUPER_ADMIN: '/admin/dashboard',
-  MODERATOR: '/admin/dashboard',
-  SUPPORT: '/admin/dashboard',
-  FINANCE: '/admin/dashboard',
-  SUPPORT_ADMIN: '/admin/dashboard',
-  FINANCE_ADMIN: '/admin/dashboard',
-  KYC_ADMIN: '/admin/dashboard',
-  MARKETING_ADMIN: '/admin/dashboard',
-  PARTNER_ADMIN: '/admin/dashboard',
-}
+import { isAdminTierRole } from '../lib/roles'
+import { dashboardForRole } from '../lib/roles'
+import { RefreshCw, Check, ChevronDown, ArrowRight, Shield } from 'lucide-react'
 
 export function RoleSwitcher() {
-  const { approvedRoles, activeRole, switchRole } = useRole()
+  const { approvedRoles, activeRole, accountRole, switchRole } = useRole()
   const navigate = useNavigate()
   const [isOpen, setIsOpen] = useState(false)
   const [switching, setSwitching] = useState(false)
@@ -31,8 +18,7 @@ export function RoleSwitcher() {
 
   // Admin-tier accounts can preview the PARTNER view: the backend
   // auto-provisions an APPROVED partner profile when they switch.
-  const ADMIN_TIERS = ['ADMIN', 'SUPER_ADMIN', 'MODERATOR', 'SUPPORT', 'FINANCE', 'SUPPORT_ADMIN', 'FINANCE_ADMIN', 'KYC_ADMIN', 'MARKETING_ADMIN', 'PARTNER_ADMIN']
-  const isAdminTier = availableRoles.some(r => ADMIN_TIERS.includes(r))
+  const isAdminTier = availableRoles.some(r => isAdminTierRole(r))
   if (isAdminTier && !availableRoles.includes('PARTNER')) {
     availableRoles.push('PARTNER')
   }
@@ -45,6 +31,10 @@ export function RoleSwitcher() {
     return null
   }
 
+  // An admin previewing a customer/partner surface needs a one-click way back,
+  // otherwise the preview looks like a demotion and there is no way out of it.
+  const previewingFromAdmin = isAdminTierRole(accountRole) && !isAdminTierRole(activeRole)
+
   const handleSwitch = async (role: UserRole) => {
     if (role === activeRole) {
       setIsOpen(false)
@@ -56,8 +46,7 @@ export function RoleSwitcher() {
       await switchRole(role)
       setMessage({ type: 'success', text: `Switched to ${ROLE_META[role]?.label || role}` })
       setIsOpen(false)
-      const dashboard = ROLE_DASHBOARDS[role] || '/dashboard'
-      navigate(dashboard, { replace: true })
+      navigate(dashboardForRole(role), { replace: true })
     } catch (err: unknown) {
       setMessage({ type: 'error', text: getErrorMessage(err, 'Failed to switch role') })
     } finally {
@@ -68,7 +57,18 @@ export function RoleSwitcher() {
   const currentMeta = ROLE_META[activeRole] || ROLE_META.USER
 
   return (
-    <div className="relative">
+    <div className="relative flex items-center gap-2">
+      {previewingFromAdmin && (
+        <button
+          onClick={() => handleSwitch(accountRole)}
+          disabled={switching}
+          title={`Return to ${ROLE_META[accountRole]?.label || accountRole}`}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium transition-colors disabled:opacity-60"
+        >
+          <Shield className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">{ROLE_META[accountRole]?.label || accountRole}</span>
+        </button>
+      )}
       <button
         onClick={() => { setIsOpen(!isOpen); setMessage(null) }}
         className="flex items-center gap-2 px-3 py-2 rounded-xl bg-surface-100 dark:bg-surface-800 hover:bg-surface-200 dark:hover:bg-surface-700 transition-all duration-200 text-sm font-medium"

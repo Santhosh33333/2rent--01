@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { Screen, Title, Card } from '../../src/lib/ui';
 import { Colors } from '../../src/design-system/tokens/colors';
-import { get } from '../../src/lib/api';
+import { get, toList } from '../../src/lib/api';
 
 export default function Bookings() {
   const router = useRouter();
@@ -12,7 +12,7 @@ export default function Bookings() {
     queryFn: () => get('/bookings'),
   });
 
-  const bookings = (data?.data?.bookings ?? data?.data ?? []) as any[];
+  const bookings = toList(data?.data, 'bookings');
 
   return (
     <Screen>

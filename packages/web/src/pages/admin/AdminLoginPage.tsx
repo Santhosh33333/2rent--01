@@ -4,19 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { ShieldCheck, ArrowLeft, Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '../../lib/auth'
 import { api } from '../../lib/api'
-
-const ADMIN_ROLES = [
-  'SUPER_ADMIN',
-  'ADMIN',
-  'MODERATOR',
-  'SUPPORT',
-  'FINANCE',
-  'SUPPORT_ADMIN',
-  'FINANCE_ADMIN',
-  'KYC_ADMIN',
-  'MARKETING_ADMIN',
-  'PARTNER_ADMIN',
-]
+import { isAdminTierRole, resolveAccountRole } from '../../lib/roles'
 
 export function AdminLoginPage() {
   const navigate = useNavigate()
@@ -58,8 +46,11 @@ export function AdminLoginPage() {
     try {
       const userRes = await api.get('/users/profile')
       const user = userRes.data?.data || {}
-      const role = String(user.activeRole || user.role || 'USER').toUpperCase()
-      if (!ADMIN_ROLES.includes(role)) {
+      // Judge the account *type*, not the surface it happens to be previewing.
+      // Reading `activeRole` here rejected and logged out administrators whose
+      // preview was pinned to "USER".
+      const role = resolveAccountRole(user)
+      if (!isAdminTierRole(role)) {
         setError('This account does not have admin access. Use the regular sign-in instead.')
         return false
       }
@@ -67,7 +58,7 @@ export function AdminLoginPage() {
       navigate('/admin/dashboard', { replace: true })
       return true
     } catch {
-      setError('Failed to verify admin access. Please try again.')
+      setError('Failed to verify admin access. Please sign in again.')
       return false
     }
   }

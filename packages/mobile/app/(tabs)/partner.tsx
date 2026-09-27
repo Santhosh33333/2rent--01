@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Screen, Title, Card, Button, Alert } from '../../src/lib/ui';
 import { Colors } from '../../src/design-system/tokens/colors';
-import { get, post, errorMessage } from '../../src/lib/api';
+import { get, post, errorMessage, toList } from '../../src/lib/api';
 import { useAuthStore } from '../../src/shared/store/authStore';
 import { usePartnerLocationBroadcast } from '../../src/hooks/usePartnerLocationBroadcast';
 import { useCallSignaling } from '../../src/hooks/useCallSignaling';
@@ -26,14 +26,18 @@ export default function Partner() {
 
   const status = (statusQ.data?.data ?? {}) as any;
   const perf = (perfQ.data?.data ?? {}) as any;
-  const nearby = (nearbyQ.data?.data?.bookings ?? nearbyQ.data?.data ?? []) as any[];
-  const jobs = (jobsQ.data?.data?.bookings ?? jobsQ.data?.data ?? []) as any[];
+  // `/partner/nearby-bookings` returns a bare array, `/partner/bookings` returns
+  // `{ items, total, page, limit }`. Normalize both so a paginated payload can
+  // never crash the screen in `jobs.find(...)` / `jobs.map(...)`.
+  const nearby = toList(nearbyQ.data?.data, 'bookings');
+  const jobs = toList(jobsQ.data?.data, 'bookings');
 
-  const activeJobId = jobs.find((j: any) =>
+  const activeJob = jobs.find((j: any) =>
     ['ACCEPTED', 'PARTNER_ASSIGNED', 'OTP_GENERATED', 'IN_PROGRESS', 'STARTED', 'ARRIVING', 'ARRIVED'].includes(
-      (j.status || '').toUpperCase()
+      (j?.status || '').toUpperCase()
     )
-  )?.id;
+  );
+  const activeJobId = activeJob?.id;
   usePartnerLocationBroadcast(activeJobId);
   const callSig = useCallSignaling();
 

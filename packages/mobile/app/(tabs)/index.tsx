@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { Screen, Title, Card } from '../../src/lib/ui';
 import { Colors } from '../../src/design-system/tokens/colors';
-import { get } from '../../src/lib/api';
+import { get, toList } from '../../src/lib/api';
 import { useAuthStore } from '../../src/shared/store/authStore';
 
 const SERVICES = [
@@ -33,7 +33,7 @@ export default function Home() {
     queryFn: () => get('/bookings'),
     enabled: !!user,
   });
-  const myBookings = (bd?.data?.bookings ?? bd?.data ?? []) as any[];
+  const myBookings = toList(bd?.data, 'bookings');
   const ACTIVE_STATES = [
     'PARTNER_SEARCHING',
     'PARTNER_ASSIGNED',

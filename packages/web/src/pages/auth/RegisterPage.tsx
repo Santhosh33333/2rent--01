@@ -7,6 +7,7 @@ import { z } from 'zod'
 import toast from 'react-hot-toast'
 import { User, Mail, Phone, Lock, Eye, EyeOff, ArrowRight, ArrowLeft, Check, Sparkles, Cake, KeyRound, ShieldCheck, RefreshCw } from 'lucide-react'
 import { useAuth } from '../../lib/auth'
+import { resolveLandingRole } from '../../lib/roles'
 import { api } from '../../lib/api'
 import { AnimatedPage } from '../../components/AnimatedPage'
 
@@ -78,8 +79,8 @@ export function RegisterPage() {
 
   useEffect(() => {
     if (authLoading || !user) return
-    const role = user.activeRole || user.role || 'USER'
-    navigate(role === 'USER' ? '/profile/complete' : '/partner/dashboard', { replace: true })
+    const role = resolveLandingRole(user)
+    navigate(role === 'USER' ? '/profile/complete' : role === 'PARTNER' ? '/partner/dashboard' : '/admin/dashboard', { replace: true })
   }, [user, authLoading, navigate])
 
   const { register, handleSubmit, watch, trigger, setValue, formState: { errors } } = useForm<RegisterForm>({

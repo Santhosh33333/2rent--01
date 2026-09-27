@@ -4,7 +4,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { Screen, Title, Button } from '../../src/lib/ui';
 import { Colors } from '../../src/design-system/tokens/colors';
-import { get, post } from '../../src/lib/api';
+import { get, post, toList } from '../../src/lib/api';
 import { useChat } from '../../src/hooks/useChat';
 import { useAuthStore } from '../../src/shared/store/authStore';
 
@@ -26,7 +26,8 @@ export default function ChatThread() {
   useEffect(() => {
     if (seededRef.current || !data) return;
     seededRef.current = true;
-    const msgs = (data?.data?.messages ?? []) as any[];
+    // `GET /messages/:conversationId` returns `{ items, page, limit, total }`.
+    const msgs = toList(data?.data, 'messages');
     setMessages(msgs);
     const unread = msgs.filter((m) => !m.read && m.senderId !== meId).map((m) => m.id);
     if (unread.length) post(`/messages/${unread[0]}/read`, { messageIds: unread }).catch(() => {});

@@ -8,6 +8,7 @@ import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
 import { RoleSwitcher } from '../../components/RoleSwitcher'
 import { useRole } from '../../lib/roleContext'
+import { isAdminTierRole } from '../../lib/roles'
 import {
   User, Mail, Phone, Camera, Save, X, Shield, Check,
   LogOut, ChevronRight, MapPin, Calendar, Award, Edit3,
@@ -116,8 +117,10 @@ export function ProfilePage() {
     await avatar.pick(file)
   }
 
-  const adminRoles = ["SUPER_ADMIN", "ADMIN", "MODERATOR", "SUPPORT", "FINANCE"]
-  const isAdmin = user?.role && adminRoles.includes(user.role)
+  // Use the canonical admin-tier list. This used to be a 5-role local copy,
+  // which silently hid the Admin Portal shortcut for SUPPORT_ADMIN, FINANCE_ADMIN,
+  // KYC_ADMIN, MARKETING_ADMIN and PARTNER_ADMIN accounts.
+  const isAdmin = isAdminTierRole(user?.role)
   const initials = user?.name?.split(' ').map((n: string) => n[0]).join('').toUpperCase() || '?'
 
   const stats = [

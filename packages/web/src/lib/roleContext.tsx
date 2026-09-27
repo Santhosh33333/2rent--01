@@ -1,20 +1,8 @@
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react'
 import { api } from './api'
 import { useAuth } from './auth'
-
-export type UserRole = 
-  | 'USER' 
-  | 'PARTNER'
-  | 'MODERATOR'
-  | 'SUPPORT'
-  | 'FINANCE'
-  | 'SUPER_ADMIN'
-  | 'ADMIN'
-  | 'SUPPORT_ADMIN'
-  | 'FINANCE_ADMIN'
-  | 'KYC_ADMIN'
-  | 'MARKETING_ADMIN'
-  | 'PARTNER_ADMIN'
+import { isAdminTierRole, normalizeRole, resolveAccountRole } from './roles'
+import type { UserRole } from './roles'
 
 export interface RoleInfo {
   label: string
@@ -41,6 +29,7 @@ export const ROLE_META: Record<string, RoleInfo> = {
 interface RoleContextType {
   approvedRoles: UserRole[]
   activeRole: UserRole
+  accountRole: UserRole
   loading: boolean
   switchRole: (role: UserRole) => Promise<void>
   applyForRole: (role: UserRole) => Promise<void>
@@ -52,18 +41,37 @@ interface RoleContextType {
 
 const RoleContext = createContext<RoleContextType | undefined>(undefined)
 
-function normalizeRole(raw: any): UserRole {
-  if (!raw) return 'USER'
-  return String(raw).toUpperCase().replace(/\s+/g, '_') as UserRole
-}
-
 export function RoleProvider({ children }: { children: ReactNode }) {
   const { user, refreshProfile } = useAuth()
   const [approvedRoles, setApprovedRoles] = useState<UserRole[]>(['USER'])
   const [activeRole, setActiveRole] = useState<UserRole>(() => {
+    // An admin-tier account must not boot into a customer preview that a
+    // previous session persisted. Only trust the cached preview for accounts
+    // that are not administrators.
+    const accountRole = resolveAccountRole(user)
+    if (isAdminTierRole(accountRole)) return accountRole
     return normalizeRole(localStorage.getItem('activeRole') || user?.activeRole || user?.role || 'USER')
   })
   const [loading, setLoading] = useState(false)
+
+  // The account type, recomputed from the auth profile. This is the value that
+  // grants admin access; `activeRole` is only the surface being previewed.
+  const accountRole = resolveAccountRole(user)
+
+  // A newly promoted admin holds a preview their account could never own
+  // ("USER" from before the promotion). Snap it to the account type exactly
+  // once, when the account type changes, so a deliberate preview is never
+  // silently reverted by the periodic role poll.
+  const lastAccountRoleRef = useRef<UserRole | null>(null)
+  useEffect(() => {
+    if (lastAccountRoleRef.current === accountRole) return
+    const first = lastAccountRoleRef.current === null
+    lastAccountRoleRef.current = accountRole
+    if (first) return
+    if (isAdminTierRole(accountRole)) {
+      setActiveRole((current) => (isAdminTierRole(current) ? current : accountRole))
+    }
+  }, [accountRole])
 
   const refreshRoles = useCallback(async () => {
     try {
@@ -72,20 +80,33 @@ export function RoleProvider({ children }: { children: ReactNode }) {
       if (data) {
         const roles = (data.approvedRoles || ['USER']).map(normalizeRole)
         setApprovedRoles(roles)
-        const ar = normalizeRole(data.activeRole || data.baseRole || 'USER')
+        // `baseRole` is the account type. It is the fallback whenever the stored
+        // preview is missing or is not a role this account is actually approved
+        // for, so a promoted admin never inherits a preview their account cannot
+        // back. A preview the user picked deliberately is left alone.
+        const baseRole = normalizeRole(data.baseRole || data.activeRole || 'USER')
+        const preview = normalizeRole(data.activeRole || baseRole)
+        const ar = roles.includes(preview) ? preview : baseRole
         setActiveRole(ar)
         localStorage.setItem('activeRole', ar)
       }
     } catch (err) {
-      // API might not be available — use cached role
-      const saved = localStorage.getItem('activeRole')
-      if (saved) setActiveRole(normalizeRole(saved))
-      else if (user?.activeRole) setActiveRole(normalizeRole(user.activeRole))
-      else if (user?.role) setActiveRole(normalizeRole(user.role))
+      // API might not be available — fall back to the account type first so a
+      // failed request can never strand an admin on the customer surface.
+      const account = resolveAccountRole(user)
+      if (isAdminTierRole(account)) {
+        setActiveRole(account)
+      } else {
+        const saved = localStorage.getItem('activeRole')
+        if (saved) setActiveRole(normalizeRole(saved))
+        else if (user?.activeRole) setActiveRole(normalizeRole(user.activeRole))
+        else if (user?.role) setActiveRole(normalizeRole(user.role))
+      }
     } finally {
       setLoading(false)
     }
   }, [user])
+
 
   useEffect(() => {
     if (user) {
@@ -154,13 +175,16 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   }, [refreshRoles])
 
   const isPartner = activeRole === 'PARTNER'
-  const isAdmin = ['ADMIN', 'SUPER_ADMIN', 'MODERATOR', 'SUPPORT', 'FINANCE', 'SUPPORT_ADMIN', 'FINANCE_ADMIN', 'KYC_ADMIN', 'MARKETING_ADMIN', 'PARTNER_ADMIN'].includes(activeRole)
-  const isUser = activeRole === 'USER'
+  // Admin capability follows the account type, so a customer preview an admin
+  // deliberately switched into cannot hide the admin affordances.
+  const isAdmin = isAdminTierRole(accountRole)
+  const isUser = !isAdmin && activeRole === 'USER'
 
   return (
     <RoleContext.Provider value={{
       approvedRoles,
       activeRole,
+      accountRole,
       loading,
       switchRole,
       applyForRole,
@@ -181,3 +205,8 @@ export function useRole() {
   }
   return context
 }
+
+// Role vocabulary now lives in ./roles so the many call sites that each kept
+// their own copy of the admin list cannot drift apart again.
+export type { UserRole }
+export { normalizeRole }

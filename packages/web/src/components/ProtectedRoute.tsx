@@ -1,30 +1,20 @@
 import { Navigate, useLocation, Outlet } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { useRole } from '../lib/roleContext'
+import {
+  ADMIN_TIER_ROLES,
+  ROLE_DASHBOARDS,
+  isAdminTierRole,
+  isSuperAdminRole,
+  resolveAccountRole,
+} from '../lib/roles'
 
 interface ProtectedRouteProps {
   children?: React.ReactNode
   allowedRoles?: string[]
 }
 
-const ALL_ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN', 'MODERATOR', 'SUPPORT', 'FINANCE', 'SUPPORT_ADMIN', 'FINANCE_ADMIN', 'KYC_ADMIN', 'MARKETING_ADMIN', 'PARTNER_ADMIN']
-
 const SUPER_ADMIN_ONLY_PREFIXES = ['/admin/admins', '/admin/audit-logs', '/admin/settings']
-
-const ROLE_DASHBOARDS: Record<string, string> = {
-  USER: '/dashboard',
-  PARTNER: '/partner/dashboard',
-  ADMIN: '/admin/dashboard',
-  SUPER_ADMIN: '/admin/dashboard',
-  MODERATOR: '/admin/dashboard',
-  SUPPORT: '/admin/dashboard',
-  FINANCE: '/admin/dashboard',
-  SUPPORT_ADMIN: '/admin/dashboard',
-  FINANCE_ADMIN: '/admin/dashboard',
-  KYC_ADMIN: '/admin/dashboard',
-  MARKETING_ADMIN: '/admin/dashboard',
-  PARTNER_ADMIN: '/admin/dashboard',
-}
 
 export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
   const { user, loading } = useAuth()
@@ -46,12 +36,18 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     return <Navigate to="/login" state={{ from: location }} replace />
   }
 
-  const effectiveRole = activeRole || user.activeRole || user.role || 'USER'
-  const isAdminUser = ALL_ADMIN_ROLES.includes(effectiveRole)
-  const isSuperAdmin = effectiveRole === 'SUPER_ADMIN'
+  // Administrative access is decided by the account type, never by the
+  // role the account happens to be previewing. Reading `activeRole` here used
+  // to let a stale "USER" value lock an administrator out of /admin entirely.
+  const accountRole = resolveAccountRole(user)
+  const isAdminUser = isAdminTierRole(accountRole)
+  const isSuperAdmin = isSuperAdminRole(accountRole)
   const isAdminRoute = location.pathname.startsWith('/admin')
 
-  // ---- ADMIN ROLE GATING (Issue 1 fix) ----
+  // A non-admin account is governed by the surface it is previewing.
+  const effectiveRole = isAdminUser ? accountRole : (activeRole || accountRole)
+
+  // ---- ADMIN ROLE GATING ----
   // Admins bypass profile/KYC gates on USER routes, but on admin routes
   // we still enforce allowedRoles and SUPER_ADMIN-only routes.
   if (isAdminUser) {
@@ -62,7 +58,7 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
         return <Navigate to="/admin/dashboard" replace />
       }
       // Enforce allowedRoles on admin routes
-      if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(effectiveRole)) {
+      if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(accountRole)) {
         return <Navigate to="/admin/dashboard" replace />
       }
     }
@@ -76,13 +72,13 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   const isAuthRoute = ['/login', '/register', '/forgot-password', '/verify-email', '/verify-mobile', '/onboarding'].includes(location.pathname)
 
   // Only USER-surface routes enforce the shared completion page.
-  if (!profileComplete && !isProfileRoute && !isAuthRoute && (!activeRole || activeRole === 'USER')) {
+  if (!profileComplete && !isProfileRoute && !isAuthRoute && effectiveRole === 'USER') {
     return <Navigate to="/profile/complete" replace />
   }
 
   // ---- KYC GATE (USER surface): no features until admin-approved KYC ----
   const kycOk = user.kycStatus === 'VERIFIED' || user.kycStatus === 'APPROVED'
-  if ((!activeRole || activeRole === 'USER') && !kycOk) {
+  if (effectiveRole === 'USER' && !kycOk) {
     const kycAllowedPrefixes = ['/verification', '/profile', '/settings', '/notifications']
     const isKycAllowed = kycAllowedPrefixes.some((p) => location.pathname.startsWith(p))
     if (!isKycAllowed) {
@@ -106,4 +102,5 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   return children ? <>{children}</> : <Outlet />
 }
 
-export { ROLE_DASHBOARDS }
+export { ROLE_DASHBOARDS, ADMIN_TIER_ROLES }
+

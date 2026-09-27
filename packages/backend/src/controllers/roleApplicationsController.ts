@@ -2,6 +2,8 @@ import { Response } from "express";
 import { prisma } from "../config/database";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
+import { ADMIN_ROLES } from "../rbac/sections";
+import type { AdminRoleName } from "../rbac/sections";
 import { ZodError } from "zod";
 
 interface RoleApplicationCreateData {
@@ -176,9 +178,12 @@ export async function getRoleApplication(req: AuthedRequest, res: Response): Pro
       return;
     }
 
-    // Check permissions — verify the REQUESTING user's role, not the applicant's
+    // Check permissions — verify the REQUESTING user's account type, not the
+    // applicant's. This used to accept only ADMIN/SUPER_ADMIN/MODERATOR, so
+    // SUPPORT, FINANCE and the five *_ADMIN roles were refused here even though
+    // `requireAdmin` on the route already admitted them.
     const requestingUser = await prisma.user.findUnique({ where: { id: userId }, select: { role: true, activeRole: true } });
-    const isAdmin = ["ADMIN", "SUPER_ADMIN", "MODERATOR"].includes(requestingUser?.activeRole || requestingUser?.role || "");
+    const isAdmin = ADMIN_ROLES.includes((requestingUser?.activeRole || requestingUser?.role || "") as AdminRoleName);
     if (!isAdmin && roleApplication.userId !== userId) {
       sendError(res, "Access denied.", 403, "FORBIDDEN");
       return;
