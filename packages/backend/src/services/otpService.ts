@@ -54,6 +54,21 @@ function hashCode(code: string): string {
   return crypto.createHash("sha256").update(code).digest("hex");
 }
 
+/**
+ * Dev-only escape hatch for the phone-OTP flow when no SMS aggregator exists.
+ *
+ * Returns true only when BOTH hold:
+ *   - NODE_ENV is not "production"
+ *   - OTP_DEV_ECHO_CODE is explicitly "true"
+ *
+ * The default is off, so a production deploy that never sets the flag is safe
+ * even if NODE_ENV were misconfigured.
+ */
+function devEchoEnabled(): boolean {
+  if (process.env.NODE_ENV === "production") return false;
+  return (process.env.OTP_DEV_ECHO_CODE || "").toLowerCase() === "true";
+}
+
 // The six OTP limits all live in the same settings table and are read on every
 // issue and every verify. Reading them one at a time cost six round trips per
 // call, so they load together and sit behind a short cache: one round trip per
@@ -301,6 +316,32 @@ export async function issueOtp(opts: {
   // SMS channel.
   const sms = smsStatus();
   if (!sms.configured) {
+    // No aggregator is configured. Rather than dead-end the flow, a developer
+    // running locally can read the code off the server console and complete the
+    // real verification against the real stored hash — so the whole phone-OTP
+    // path stays testable before a paid provider exists.
+    //
+    // Hard-gated three ways so this can never reach production: NODE_ENV must
+    // not be production, the row must be a dev row, and the caller must opt in
+    // explicitly. The code is only logged, never returned in the API response,
+    // so there is no response body to leak.
+    if (devEchoEnabled()) {
+      console.warn(
+        `\n[OTP-DEV] ${opts.channel}/${opts.purpose} code for ${identifier}: ${code}\n` +
+          `         expires in ${policy.expiryMinutes} min. Provider is not configured, so this was NOT sent by SMS.\n`
+      );
+      await prisma.otpCode.update({ where: { id: row.id }, data: { status: "SENT", provider: "dev-console", deliveryStatus: "SENT" } });
+      return {
+        sent: true,
+        maskedTo: maskIdentifier(opts.channel, identifier),
+        channel: opts.channel,
+        purpose: opts.purpose,
+        expiresInSec: policy.expiryMinutes * 60,
+        resendInSec: policy.resendSeconds,
+        provider: "dev-console",
+        messageId: `dev-${row.id}`,
+      };
+    }
     await prisma.otpCode.update({ where: { id: row.id }, data: { status: "FAILED", provider: "none", failureReason: "SMS_NOT_CONFIGURED" } });
     return fail(opts, "SMS is not configured yet. Use email code instead.", "SMS_NOT_CONFIGURED", { provider: "none" });
   }
