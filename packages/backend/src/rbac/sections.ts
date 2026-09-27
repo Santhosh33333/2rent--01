@@ -116,7 +116,7 @@ export const ROLE_TEMPLATES: Record<string, Partial<Record<Section, Action[]>>> 
     ANALYTICS: ["VIEW"],
     REPORTS: ["VIEW"],
     BOOKINGS: ["VIEW"],
-    AGREEMENTS: ["VIEW", "EXPORT"],
+    AGREEMENTS: ["VIEW", "EDIT", "EXPORT"],
   },
   SUPPORT_ADMIN: {
     USERS: ["VIEW", "EDIT"],

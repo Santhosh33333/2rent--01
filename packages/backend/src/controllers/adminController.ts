@@ -1268,6 +1268,120 @@ export async function getAgreementDetail(req: AuthedRequest, res: Response): Pro
   }
 }
 
+// ---------------------------------------------------------------------------
+// Versioned legal documents + consent ledger (AGREEMENTS section).
+// ---------------------------------------------------------------------------
+
+/** Every version of every document, current first. */
+export async function getLegalDocuments(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const documents = await prisma.legalDocument.findMany({
+      orderBy: [{ kind: "asc" }, { version: "desc" }],
+      select: {
+        id: true,
+        kind: true,
+        version: true,
+        title: true,
+        summary: true,
+        isCurrent: true,
+        effectiveFrom: true,
+        createdAt: true,
+        _count: { select: { acceptances: true } },
+      },
+    });
+    sendSuccess(res, { documents });
+  } catch (err) {
+    sendError(res, "Failed to load legal documents.", 500, "INTERNAL_ERROR");
+  }
+}
+
+/**
+ * Publish a new version. The previous current row is flipped to isCurrent=false
+ * in the same transaction, so there is never a moment with two "current"
+ * versions of one kind, and every prior acceptance keeps pointing at the exact
+ * wording the person signed.
+ */
+export async function publishLegalDocument(req: AuthedRequest, res: Response): Promise<void> {
+  const { kind, title, summary, contentHtml, plainText } = req.body || {};
+  if (!kind || !title || !contentHtml) {
+    sendError(res, "kind, title and contentHtml are required.", 400, "VALIDATION_ERROR");
+    return;
+  }
+  try {
+    const latest = await prisma.legalDocument.findFirst({
+      where: { kind },
+      orderBy: { version: "desc" },
+      select: { version: true, title: true },
+    });
+    const nextVersion = (latest?.version ?? 0) + 1;
+
+    const document = await prisma.$transaction(async (tx) => {
+      await tx.legalDocument.updateMany({ where: { kind, isCurrent: true }, data: { isCurrent: false } });
+      return tx.legalDocument.create({
+        data: {
+          kind,
+          version: nextVersion,
+          title,
+          summary: summary || null,
+          contentHtml,
+          plainText: plainText || stripHtml(contentHtml),
+          isCurrent: true,
+        },
+        select: { id: true, kind: true, version: true, title: true, effectiveFrom: true },
+      });
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        actorId: req.user!.userId,
+        actorType: "ADMIN",
+        action: "LEGAL_DOCUMENT_PUBLISHED",
+        entityType: "LegalDocument",
+        entityId: document.id,
+        metadata: JSON.stringify({ kind, version: nextVersion }),
+      },
+    });
+    sendSuccess(res, { document }, "Legal document published.");
+  } catch (err) {
+    sendError(res, "Failed to publish legal document.", 500, "INTERNAL_ERROR");
+  }
+}
+
+function stripHtml(html: string): string {
+  return html
+    .replace(/<li>/g, "\n  - ")
+    .replace(/<\/(p|h3|li)>/g, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/** The consent ledger: who signed what version, when, from where. */
+export async function getLegalAcceptances(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const { kind, userId, page = 1, limit = 50 } = req.query as Record<string, string>;
+    const take = Math.min(200, Math.max(1, Number(limit) || 50));
+    const skip = (Math.max(1, Number(page) || 1) - 1) * take;
+    const where: Record<string, unknown> = {};
+    if (kind) where.kind = kind;
+    if (userId) where.userId = userId;
+
+    const [acceptances, total] = await Promise.all([
+      prisma.legalAcceptance.findMany({
+        where,
+        orderBy: { acceptedAt: "desc" },
+        skip,
+        take,
+        include: { user: { select: { id: true, fullName: true, email: true, phone: true } } },
+      }),
+      prisma.legalAcceptance.count({ where }),
+    ]);
+    sendSuccess(res, { acceptances, total, page: Math.floor(skip / take) + 1, limit: take });
+  } catch (err) {
+    sendError(res, "Failed to load consent records.", 500, "INTERNAL_ERROR");
+  }
+}
+
 export async function resolveReport(req: AuthedRequest, res: Response): Promise<void> {
   try {
     const { id } = req.params;

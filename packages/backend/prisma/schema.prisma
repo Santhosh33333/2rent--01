@@ -73,6 +73,7 @@ model User {
   auditLogs                      AuditLog[]
   withdrawalRequests             WithdrawalRequest[]
   agreements                     Agreement[]
+  legalAcceptances               LegalAcceptance[]
   adminProfile                   AdminUser?
   partnerLevel                   PartnerLevel?
   partnerEarnings                PartnerEarnings?
@@ -350,6 +351,70 @@ model Agreement {
 
   @@index([userId])
   @@index([status])
+}
+
+// ============================================================================
+// Published legal documents + signed acceptances.
+//
+// LegalDocument is the VERSIONED master copy of each policy. A new version is a
+// new row (isCurrent=false on the old one) so an old acceptance always points at
+// the exact wording the person actually signed, and a material change can
+// require re-consent instead of silently rewriting history.
+//
+// LegalAcceptance is the binding record: who, which kind, which version, when,
+// from which IP/device, what consent flow triggered it, and the signature
+// itself. It is append-only by design — a correction is a new record, never an
+// edit of an accepted one.
+// ============================================================================
+
+model LegalDocument {
+  id            String    @id @default(uuid())
+  kind          String // USER_AGREEMENT | PARTNER_AGREEMENT | PRIVACY_POLICY | COMMUNITY_GUIDELINES | BOOKING_POLICY
+  version       Int
+  title         String
+  summary       String?
+  contentHtml   String
+  plainText     String
+  effectiveFrom DateTime  @default(now())
+  isCurrent     Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  acceptances LegalAcceptance[]
+
+  // One current row per kind; versions of the same kind are allowed.
+  @@unique([kind, version])
+  @@index([kind, isCurrent])
+}
+
+model LegalAcceptance {
+  id         String   @id @default(uuid())
+  userId     String
+  documentId String
+  kind       String
+  version    Int
+  title      String
+  // SIGNUP | PARTNER_ONBOARDING | BOOKING | RE_CONSENT
+  consentType String  @default("SIGNUP")
+  // TYPED_NAME | DRAWN
+  signatureType String @default("TYPED_NAME")
+  // Typed full name, or a data: URL for a drawn signature.
+  signatureValue String
+  // Hash of the exact document text that was signed, so tampering with the
+  // stored HTML after acceptance is detectable.
+  contentSha256  String
+  ipAddress      String?
+  userAgent      String?
+  acceptedAt     DateTime @default(now())
+  // Set when the person withdraws consent; the row is retained as evidence.
+  withdrawnAt    DateTime?
+
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  document LegalDocument  @relation(fields: [documentId], references: [id])
+
+  @@index([userId, kind])
+  @@index([kind, version])
+  @@index([userId, withdrawnAt])
 }
 
 model PaymentOrder {

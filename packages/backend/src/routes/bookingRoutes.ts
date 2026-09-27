@@ -4,6 +4,7 @@ import { authenticateToken, requireKycVerified } from "../middleware/auth";
 import { sanitizeInput, validateRequest } from "../middleware/validation";
 import { upload } from "../middleware/upload";
 import { preventDuplicateBooking, preventDuplicatePayment } from "../middleware/fraudPrevention";
+import { requireLegalConsent } from "../middleware/legalConsent";
 import * as bookingController from "../controllers/bookingController";
 import { SERVICE_KEYS } from "../services/serviceCatalog";
 
@@ -34,6 +35,7 @@ router.post(
   ],
   sanitizeInput,
   validateRequest,
+  requireLegalConsent("BOOKING"),
   preventDuplicateBooking,
   bookingController.createBooking
 );

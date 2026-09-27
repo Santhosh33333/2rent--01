@@ -3,6 +3,7 @@ import { body } from "express-validator";
 import { authenticateToken, requireKycVerified } from "../middleware/auth";
 import { validateRequest } from "../middleware/validation";
 import { idempotencyMiddleware } from "../middleware/idempotency";
+import { requireLegalConsent } from "../middleware/legalConsent";
 import * as partnerController from "../controllers/partnerController";
 import * as bookingController from "../controllers/bookingController";
 
@@ -15,6 +16,10 @@ router.post(
   requireKycVerified,
   [body("providesWalking").isBoolean(), body("providesCarry").isBoolean()],
   validateRequest,
+  // The Partner Agreement plus the base terms must be signed before someone can
+  // register to take jobs, otherwise the contract is unenforceable at the point
+  // it matters most.
+  requireLegalConsent("PARTNER_ONBOARDING"),
   partnerController.applyAsPartner
 );
 

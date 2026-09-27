@@ -48,6 +48,7 @@ import searchRoutes from "./routes/searchRoutes";
 import discoveryRoutes from "./routes/discoveryRoutes";
 import moviesRoutes from "./routes/moviesRoutes";
 import aiRoutes from "./routes/aiRoutes";
+import legalRoutes from "./routes/legalRoutes";
 import referralRoutes from "./routes/referralRoutes";
 import otpApiRoutes from "./routes/otpApiRoutes";
 
@@ -322,6 +323,8 @@ app.use("/api/partner", partnerRoutes);
 app.use("/api/discovery", discoveryRoutes);
 app.use("/api/movies", moviesRoutes);
   app.use("/api/ai", aiRoutes);
+  // Versioned legal documents + signed consent capture.
+  app.use("/api/legal", legalRoutes);
   // Public generic OTP API (generate/verify) — registered BEFORE the /api
   // search router (which applies auth globally) so it stays unauthenticated,
   // mirroring the reference otp-service's open endpoints.

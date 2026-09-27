@@ -110,6 +110,19 @@ router.get("/bookings/:id", bookingsView, adminController.getBookingDetail);
 router.get("/withdrawals", withdrawalsManage, adminController.getWithdrawalRequests);
 router.get("/agreements", requireSectionAction("AGREEMENTS", "VIEW"), adminController.getAgreements);
 router.get("/agreements/:id", requireSectionAction("AGREEMENTS", "VIEW"), adminController.getAgreementDetail);
+// Versioned legal documents + the consent ledger.
+router.get("/legal-documents", requireSectionAction("AGREEMENTS", "VIEW"), adminController.getLegalDocuments);
+router.post(
+  "/legal-documents",
+  requireSectionAction("AGREEMENTS", "EDIT"),
+  sanitizeInput,
+  adminController.publishLegalDocument
+);
+router.get(
+  "/legal-acceptances",
+  requireSectionAction("AGREEMENTS", "VIEW"),
+  adminController.getLegalAcceptances
+);
 router.get("/email/status", notificationsSend, adminController.getEmailStatus);
 router.post(
   "/email/test",

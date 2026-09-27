@@ -10,6 +10,7 @@ import { initRedis } from "./services/redisClient";
 import { emitToUser } from "./services/socketService";
 import { processTimeoutBookings, sendUpcomingReminders } from "./services/bookingEngine";
 import { runReengagementSweep } from "./services/emailService";
+import { ensureLegalDocumentsSeeded } from "./services/legalConsentService";
 
 const TIMEOUT_SWEEP_INTERVAL_MS = 30_000;
 const REMINDER_SWEEP_INTERVAL_MS = 60_000;
@@ -387,6 +388,14 @@ if (!dbAvailable) {
   startTimeoutSweeper();
   startReminderSweeper();
   startReengagementSweeper();
+
+  // Publish version 1 of any legal document that has no current row. Idempotent
+  // and never overwrites existing wording, so it is safe on every boot.
+  ensureLegalDocumentsSeeded()
+    .then(({ inserted }) => {
+      if (inserted > 0) console.log(`[LEGAL] published ${inserted} legal document version(s)`);
+    })
+    .catch((err) => console.error("[LEGAL] document seed failed:", err));
 
   server.listen(env.PORT, () => {
     console.log(`Nabri API server listening on port ${env.PORT} [${env.NODE_ENV}]`);
