@@ -3,6 +3,10 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../config/database";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
+import {
+  EVENT_LATE_END_MESSAGE,
+  isEventEndWithinHours,
+} from "../services/eventSchedulingWindow";
 
 class EventAlreadyRegisteredError extends Error {}
 class EventFullError extends Error {}
@@ -586,6 +590,10 @@ export async function createEvent(req: AuthedRequest, res: Response): Promise<vo
     // (start <= now < end), so it would silently never appear in Live Now.
     // Give it a sensible default rather than a broken record.
     const resolvedEnd = endTime ? new Date(endTime) : new Date(new Date(startTime).getTime() + 2 * 60 * 60 * 1000);
+    if (!isEventEndWithinHours(new Date(startTime), resolvedEnd)) {
+      sendError(res, EVENT_LATE_END_MESSAGE, 400, "EVENT_AFTER_HOURS");
+      return;
+    }
 
     const event = await prisma.event.create({
       data: {
@@ -875,14 +883,22 @@ export async function updateEvent(req: AuthedRequest, res: Response): Promise<vo
           ? null
           : String(subcategory).toLowerCase().trim().slice(0, 32) || null;
 
+    const nextStart = startTime ? new Date(startTime) : event.startTime;
+    const nextEnd = endTime ? new Date(endTime) : event.endTime;
+    // Re-check on update so an event cannot be pushed past 10 PM after creation.
+    if (nextEnd && !isEventEndWithinHours(nextStart, nextEnd)) {
+      sendError(res, EVENT_LATE_END_MESSAGE, 400, "EVENT_AFTER_HOURS");
+      return;
+    }
+
     const updated = await prisma.event.update({
       where: { id },
       data: {
         title: title || event.title,
         description: description !== undefined ? description : event.description,
         location: location !== undefined ? location : event.location,
-        startTime: startTime ? new Date(startTime) : event.startTime,
-        endTime: endTime ? new Date(endTime) : event.endTime,
+        startTime: nextStart,
+        endTime: nextEnd,
         capacity: capacity !== undefined ? capacity : event.capacity,
         status: status || event.status,
         coverImageUrl: coverImageUrl !== undefined ? coverImageUrl || null : event.coverImageUrl,
