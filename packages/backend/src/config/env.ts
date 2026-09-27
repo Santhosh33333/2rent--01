@@ -116,9 +116,10 @@ const envSchema = z.object({
   // the reference otp-service spam gate. Defaults apply when unset.
   SPAM_BLOCK_WORDS: z.string().optional(),
 
-  // SMS provider abstraction: twilio | msg91 | none. Without provider env, SMS
-  // OTP honestly reports SMS_NOT_CONFIGURED (email fallback offered instead).
-  SMS_PROVIDER: z.enum(["twilio", "msg91", "none"]).default("none"),
+  // Messaging provider abstraction: twilio | msg91 | brevo | whatsapp | none.
+  // Without provider env, SMS OTP honestly reports SMS_NOT_CONFIGURED (email
+  // fallback offered instead).
+  SMS_PROVIDER: z.enum(["twilio", "msg91", "brevo", "whatsapp", "none"]).default("none"),
   SMS_SENDER_ID: z.string().optional(),
   SMS_REGION: z.string().default("IN"),
 
@@ -133,6 +134,17 @@ const envSchema = z.object({
   // for delivery in India.
   MSG91_AUTH_KEY: z.string().optional(),
   MSG91_SENDER_ID: z.string().optional(),
+
+  // WhatsApp Business Cloud API — optional. Delivery inside the 24h
+  // customer-service window is free, but standing this up needs a verified Meta
+  // Business Manager, a WhatsApp Business Account, a permanent (not temporary)
+  // system-user token, and a Meta-approved message template. WHATSAPP_OTP_TEMPLATE
+  // must be the approved template NAME, and that template needs a {{1}}
+  // placeholder for the code.
+  WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+  WHATSAPP_ACCESS_TOKEN: z.string().optional(),
+  WHATSAPP_OTP_TEMPLATE: z.string().optional(),
+  WHATSAPP_OTP_LANGUAGE: z.string().default("en"),
 
   // Signup gate: when enabled, accounts that have BOTH an email and a phone
   // cannot log in until BOTH channels are OTP-verified. Admin accounts are
