@@ -982,6 +982,30 @@ export async function approveWithdrawal(req: AuthedRequest, res: Response): Prom
         data: { status: "COMPLETED", description: "Withdrawal approved and settled" },
       });
 
+      // `PartnerEarnings.withdrawableBalance` is the figure the partner
+      // dashboard reports as "Available to withdraw". It was only ever
+      // incremented on booking completion, so it kept growing after payouts and
+      // disagreed with the `Wallet.balance` the withdrawal gate actually
+      // validates against. Settle it down as the money leaves.
+      //
+      // The new value is computed in JS rather than with `{ decrement }`: a
+      // decrement that would go negative is rejected by Postgres, and catching
+      // that error mid-transaction aborts the whole interactive transaction
+      // (Prisma does not open a savepoint per statement), taking the approval
+      // down with it.
+      const earnings = await tx.partnerEarnings.findUnique({
+        where: { userId: request.userId },
+        select: { withdrawableBalance: true },
+      });
+      if (earnings) {
+        const remaining = Number(earnings.withdrawableBalance) - Number(request.amount);
+        await tx.partnerEarnings.update({
+          where: { userId: request.userId },
+          data: { withdrawableBalance: Number.isFinite(remaining) ? Math.max(0, remaining) : 0 },
+        });
+      }
+
+
 await tx.auditLog.create({
         data: { actorId: req.user!.userId, actorType: "ADMIN", action: "WITHDRAWAL_APPROVE", entityType: "WithdrawalRequest", entityId: id },
       });

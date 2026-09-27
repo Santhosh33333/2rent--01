@@ -6,11 +6,22 @@ import { useAuth } from "./auth";
 const SETTINGS_KEY = "applock_settings";
 export const LOCKOUT_AFTER_ATTEMPTS = 5;
 export const LOCKOUT_SECONDS = 30;
+export const MIN_PIN_LENGTH = 4;
+export const MAX_PIN_LENGTH = 6;
 
 interface AppLockSettings {
   enabled: boolean;
   salt?: string;
   pinHash?: string;
+  /**
+   * How many digits the stored PIN actually has. The unlock keypad needs this
+   * because a SHA-256 hash carries no length: it used to auto-submit at four
+   * digits, so a 5- or 6-digit PIN could never be entered — the four-digit
+   * prefix was hashed, compared, failed, and the buffer was wiped, and every
+   * attempt also counted toward the lockout. Absent on pre-existing installs,
+   * where the only length that could ever have been set up successfully was 4.
+   */
+  pinLength?: number;
   autoLockSec: number;
   wrongAttempts: number;
   lastWrongAt?: number;
@@ -21,6 +32,7 @@ interface AppLockContextValue {
   autoLockSec: number;
   locked: boolean;
   lockoutSecondsLeft: number;
+  pinLength: number;
   verify: (pin: string) => Promise<boolean>;
   enable: (pin: string, autoLockSec?: number) => Promise<void>;
   disable: (pin: string) => Promise<boolean>;
@@ -35,10 +47,15 @@ function readSettings(): AppLockSettings {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) return { enabled: false, autoLockSec: 0, wrongAttempts: 0 };
     const p = JSON.parse(raw) as Partial<AppLockSettings>;
+    const storedLength = Number(p.pinLength);
     return {
       enabled: Boolean(p.enabled),
       salt: typeof p.salt === "string" ? p.salt : undefined,
       pinHash: typeof p.pinHash === "string" ? p.pinHash : undefined,
+      pinLength:
+        Number.isInteger(storedLength) && storedLength >= MIN_PIN_LENGTH && storedLength <= MAX_PIN_LENGTH
+          ? storedLength
+          : undefined,
       autoLockSec: Number.isFinite(Number(p.autoLockSec)) ? Number(p.autoLockSec) : 0,
       wrongAttempts: Number.isFinite(Number(p.wrongAttempts)) ? Number(p.wrongAttempts) : 0,
       lastWrongAt: typeof p.lastWrongAt === "number" ? p.lastWrongAt : undefined,
@@ -87,7 +104,7 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
     if (settingsRef.current.enabled) setLocked(true);
   }, []);
   const enable = useCallback(async (pin: string, autoLockSec = 0) => {
-    const next: AppLockSettings = { enabled: true, salt: newId(), pinHash: "", autoLockSec, wrongAttempts: 0, lastWrongAt: undefined };
+    const next: AppLockSettings = { enabled: true, salt: newId(), pinHash: "", pinLength: pin.length, autoLockSec, wrongAttempts: 0, lastWrongAt: undefined };
     next.pinHash = await hashPin(pin, next.salt!);
     writeSettings(next);
     setSettings(next);
@@ -122,7 +139,7 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
       const s = readSettings();
       if (!s.pinHash || !s.salt) return false;
       if ((await hashPin(pin, s.salt)) !== s.pinHash) return false;
-      const next: AppLockSettings = { enabled: false, autoLockSec: 0, wrongAttempts: 0, lastWrongAt: undefined, salt: undefined, pinHash: undefined };
+      const next: AppLockSettings = { enabled: false, autoLockSec: 0, wrongAttempts: 0, lastWrongAt: undefined, salt: undefined, pinHash: undefined, pinLength: undefined };
       writeSettings(next);
       setSettings(next);
       setLocked(false);
@@ -137,7 +154,7 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
       if ((await hashPin(oldPin, s.salt)) !== s.pinHash) return "wrong";
       const salt = newId();
       const pinHash = await hashPin(newPin, salt);
-      const next: AppLockSettings = { ...s, salt, pinHash, wrongAttempts: 0, lastWrongAt: undefined };
+      const next: AppLockSettings = { ...s, salt, pinHash, pinLength: newPin.length, wrongAttempts: 0, lastWrongAt: undefined };
       writeSettings(next);
       setSettings(next);
       return "ok";
@@ -199,6 +216,7 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
     autoLockSec: settings.autoLockSec,
     locked,
     lockoutSecondsLeft,
+    pinLength: settings.pinLength ?? MIN_PIN_LENGTH,
     verify,
     enable,
     disable,

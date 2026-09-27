@@ -1,21 +1,26 @@
 import { useEffect, useRef, useState } from "react";
-import { useAppLock } from "../lib/appLock";
+import { MAX_PIN_LENGTH, MIN_PIN_LENGTH, useAppLock } from "../lib/appLock";
 
 const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "⌫"];
 
 export function LockScreen() {
-  const { verify, lockoutSecondsLeft, signOut } = useAppLock();
+  const { verify, lockoutSecondsLeft, signOut, pinLength } = useAppLock();
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // The keypad auto-submits, so it has to know how long the stored PIN is.
+  // A hash carries no length; without this the screen submitted at four digits
+  // and no PIN longer than four could ever be entered.
+  const expectedLength = pinLength >= MIN_PIN_LENGTH && pinLength <= MAX_PIN_LENGTH ? pinLength : MIN_PIN_LENGTH;
 
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
 
   const submit = async (value: string) => {
-    if (busy || value.length < 4) return;
+    if (busy || value.length < MIN_PIN_LENGTH) return;
     setBusy(true);
     setError("");
     const ok = await verify(value);
@@ -32,10 +37,10 @@ export function LockScreen() {
       setPin((p) => p.slice(0, -1));
       return;
     }
-    if (k && pin.length < 6) {
+    if (k && pin.length < expectedLength) {
       const next = pin + k;
       setPin(next);
-      if (next.length >= 4) void submit(next);
+      if (next.length === expectedLength) void submit(next);
     }
   };
 
@@ -63,10 +68,12 @@ export function LockScreen() {
           <img src="/logo-mark.svg" alt="Nabri" className="h-14 w-14 opacity-95 drop-shadow-[0_10px_24px_rgba(0,0,0,0.45)]" />
         </div>
         <h1 className="font-display text-2xl font-bold text-white">Nabri · App locked</h1>
-        <p className="mt-1 text-sm text-white/70">Enter your PIN to continue</p>
+        <p className="mt-1 text-sm text-white/70">
+          Enter your {expectedLength}-digit PIN to continue
+        </p>
 
         <div className="mt-6 flex justify-center gap-3">
-          {Array.from({ length: 6 }).map((_, i) => (
+          {Array.from({ length: expectedLength }).map((_, i) => (
             <span
               key={i}
               className={`h-3 w-3 rounded-full transition-all ${

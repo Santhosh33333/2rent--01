@@ -46,7 +46,30 @@ export async function getWallet(req: AuthedRequest, res: Response): Promise<void
       return;
     }
 
-    sendSuccess(res, wallet, "Wallet retrieved.");
+    // `Wallet` has no stored withdrawable column, so every client had to guess
+    // one. The mobile wallet read `wallet.withdrawable`, found nothing, and
+    // rendered the literal text "₹NaN" next to a zero balance.
+    //
+    // `withdrawable` is the live balance: `requestWithdrawal` debits the wallet
+    // the moment a payout is opened, so the balance is already net of anything
+    // in flight and must not be reduced again. The open amount is reported
+    // alongside purely so the UI can say why a second payout is not offered.
+    const [openAgg, minWithdrawal] = await Promise.all([
+      prisma.withdrawalRequest.aggregate({
+        where: { walletId: wallet.id, status: { in: ["PENDING", "PROCESSING"] } },
+        _sum: { amount: true },
+      }),
+      getConfig("MIN_WITHDRAWAL_AMOUNT", 100).catch(() => 100),
+    ]);
+    const inFlight = Number(openAgg._sum.amount ?? 0);
+
+    sendSuccess(res, {
+      ...wallet,
+      withdrawable: Number(wallet.balance),
+      amountInFlight: inFlight,
+      minWithdrawalAmount: Number(minWithdrawal),
+      hasOpenWithdrawalRequest: inFlight > 0,
+    }, "Wallet retrieved.");
   } catch (err: any) {
     sendError(res, "Failed to retrieve wallet.", 500, "INTERNAL_ERROR");
   }

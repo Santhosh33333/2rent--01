@@ -284,7 +284,10 @@ export const walletApi = {
   uploadTopupProof: (id: string, proof: File) => {
     const fd = new FormData()
     fd.append('proof', proof)
-    return api.post(`/wallet/topup-requests/${id}/topup-proof`, fd, {
+    // The backend route is `POST /api/wallet/:id/topup-proof`. This used to
+    // include an extra "topup-requests/" segment, so every proof upload 404'd
+    // (and the upload has no fallback that would have saved it).
+    return api.post(`/wallet/${id}/topup-proof`, fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 120000,
     })

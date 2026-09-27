@@ -1,8 +1,8 @@
 ﻿import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
-import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, IndianRupee, Building2, CreditCard, Loader2, CheckCircle, Wallet, Search } from 'lucide-react'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { ArrowLeft, IndianRupee, Building2, CreditCard, Loader2, CheckCircle, Wallet, Search, AlertCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
@@ -41,10 +41,12 @@ function HolderNameField({ register, autoFilled, verified }: { register: Registe
 
 export function WithdrawalPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [loading, setLoading] = useState(false)
   const [balanceLoading, setBalanceLoading] = useState(true)
   const [success, setSuccess] = useState(false)
   const [balance, setBalance] = useState(0)
+  const [hasOpenWithdrawal, setHasOpenWithdrawal] = useState(false)
   const [method, setMethod] = useState<Method>('BANK_TRANSFER')
   // Auto-fill from IFSC / UPI lookups (bank name + account holder name).
   const [ifscLookup, setIfscLookup] = useState<{ loading: boolean; bankName: string | null; error: string }>({ loading: false, bankName: null, error: '' })
@@ -54,6 +56,15 @@ export function WithdrawalPage() {
     defaultValues: { amount: '', accountNumber: '', ifsc: '', upiId: '', accountHolderName: '' },
   })
 
+  // Arriving from a wallet/earnings surface with a known available balance:
+  // prefill the amount so the form opens ready to complete. Guarded to a
+  // positive finite number — a stale or absent `state` must never inject text
+  // into the field the request amount is read from.
+  const suggested = Number((location.state as { amount?: unknown } | null)?.amount)
+  useEffect(() => {
+    if (Number.isFinite(suggested) && suggested > 0) setValue('amount', String(suggested))
+  }, [suggested, setValue])
+
   const amountValue = watch('amount')
   const ifscValue = watch('ifsc')
   const upiValue = watch('upiId')
@@ -62,7 +73,13 @@ export function WithdrawalPage() {
     const fetchBalance = async () => {
       try {
         const res = await api.get('/wallet')
-        setBalance(res.data.data?.balance ?? res.data.balance ?? 0)
+        const w = res.data?.data ?? res.data ?? {}
+        // `GET /wallet` publishes a computed `withdrawable` and whether a payout
+        // is already in flight. The API only allows one open withdrawal at a
+        // time, so surfacing that here beats letting the user fill the whole
+        // form and collect a 400 at the end.
+        setBalance(Number(w.withdrawable ?? w.balance ?? 0))
+        setHasOpenWithdrawal(Boolean(w.hasOpenWithdrawalRequest))
       } catch {
         toast.error('Failed to fetch wallet balance')
       } finally {
@@ -198,7 +215,24 @@ export function WithdrawalPage() {
             </div>
           </div>
 
+          {!balanceLoading && hasOpenWithdrawal && (
+            <div className="mb-6 flex items-start gap-3 rounded-xl border border-amber-300/60 bg-amber-500/10 p-4">
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
+              <div className="text-sm">
+                <p className="font-semibold text-amber-700 dark:text-amber-300">A withdrawal is already in review</p>
+                <p className="mt-1 text-surface-500">
+                  Only one withdrawal can be open at a time. Track the current one under{' '}
+                  <button type="button" onClick={() => navigate('/wallet/history')} className="underline underline-offset-2">
+                    transaction history
+                  </button>{' '}
+                  — the amount is already held, so it is not part of your available balance.
+                </p>
+              </div>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+            <fieldset disabled={balanceLoading || hasOpenWithdrawal} className="space-y-5 disabled:opacity-50">
             <div>
               <label className="label">Amount (₹)</label>
               <div className="relative">
@@ -315,7 +349,7 @@ export function WithdrawalPage() {
             </div>
 
             <div className="flex gap-3 pt-2">
-              <button type="submit" disabled={loading || balanceLoading} className="btn-primary flex-1">
+              <button type="submit" disabled={loading || balanceLoading || hasOpenWithdrawal} className="btn-primary flex-1">
                 {loading ? (
                   <span className="flex items-center justify-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" /> Processing...
@@ -327,7 +361,8 @@ export function WithdrawalPage() {
                 )}
               </button>
               <button type="button" onClick={() => navigate('/wallet')} className="btn-secondary">Cancel</button>
-            </div>
+              </div>
+            </fieldset>
           </form>
         </GlassCard>
       </AnimatedPage>

@@ -6,7 +6,7 @@ import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
 import { api } from '../../lib/api'
 import { useTheme, ACCENTS, Accent } from '../../lib/themeContext'
-import { useAppLock } from '../../lib/appLock'
+import { MAX_PIN_LENGTH, MIN_PIN_LENGTH, useAppLock } from '../../lib/appLock'
 import { showPrivacyOptionsForm, subscribeAdsState } from '../../lib/ads'
 
 interface Settings {
@@ -111,7 +111,11 @@ function PinEntryModal({
   const [busy, setBusy] = useState(false)
 
   const heading =
-    step === 'old' ? `Enter your current PIN` : step === 'new' ? 'Choose a PIN (4–6 digits)' : 'Repeat the new PIN'
+    step === 'old'
+      ? `Enter your current PIN`
+      : step === 'new'
+        ? `Choose a PIN (${MIN_PIN_LENGTH}–${MAX_PIN_LENGTH} digits)`
+        : 'Repeat the new PIN'
 
   const next = async () => {
     if (step === 'old') {
@@ -134,7 +138,10 @@ function PinEntryModal({
       return
     }
     if (step === 'new') {
-      if (pin1.length < 4) { setError('PIN must be 4–6 digits'); return }
+      if (pin1.length < MIN_PIN_LENGTH || pin1.length > MAX_PIN_LENGTH) {
+        setError(`PIN must be ${MIN_PIN_LENGTH}–${MAX_PIN_LENGTH} digits`)
+        return
+      }
       setError('')
       setStep('confirm')
       return
@@ -148,7 +155,7 @@ function PinEntryModal({
 
   const type = (k: string) => {
     const set = step === 'old' ? setOldPin : step === 'new' ? setPin1 : setPin2
-    set(prev => (k === '⌫' ? prev.slice(0, -1) : prev.length < 6 ? prev + k : prev))
+    set(prev => (k === '⌫' ? prev.slice(0, -1) : prev.length < MAX_PIN_LENGTH ? prev + k : prev))
   }
 
   const pinLen = step === 'old' ? oldPin.length : step === 'new' ? pin1.length : pin2.length

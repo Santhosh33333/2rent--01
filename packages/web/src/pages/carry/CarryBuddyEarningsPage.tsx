@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   DollarSign, TrendingUp, ArrowDownRight, ArrowUpRight, Wallet,
   Clock, Download, AlertTriangle, Gift, IndianRupee, RefreshCw
 } from 'lucide-react'
 import { api } from '../../lib/api'
+import { getErrorMessage } from '../../lib/error'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
 import { SkeletonLoader } from '../../components/SkeletonLoader'
@@ -34,6 +36,7 @@ const TIME_TABS: { key: TimeRange; label: string }[] = [
 ]
 
 export function CarryBuddyEarningsPage() {
+  const navigate = useNavigate()
   const [activeRange, setActiveRange] = useState<TimeRange>('today')
   const [earnings, setEarnings] = useState<EarningsData>({ total: 0, today: 0, week: 0, month: 0, transactions: [] })
   const [loading, setLoading] = useState(true)
@@ -78,11 +81,24 @@ export function CarryBuddyEarningsPage() {
   }, [])
 
   const handleWithdraw = async () => {
+    // `POST /api/wallet/withdraw` requires `method` (BANK_TRANSFER | UPI) and
+    // `accountDetail` (bank account number + IFSC, or a `name@bank` UPI id).
+    // This posted only `{ amount }`, so every tap came back 422 and the catch
+    // block swallowed it — the button did nothing at all. Withdrawal details are
+    // the user's to supply, so send them to the real form instead of guessing.
     setWithdrawing(true)
     try {
-      await api.post('/wallet/withdraw', { amount: earnings.total })
-    } catch {
-      // silently fail
+      const res = await api.get('/wallet')
+      const w = res.data?.data ?? res.data ?? {}
+      const available = Number(w.withdrawable ?? w.withdrawableBalance ?? w.balance ?? earnings.total)
+      if (!(available > 0)) {
+        setError('Nothing available to withdraw yet.')
+        return
+      }
+      setError('')
+      navigate('/wallet/withdraw', { state: { amount: available } })
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to start withdrawal.'))
     } finally {
       setWithdrawing(false)
     }

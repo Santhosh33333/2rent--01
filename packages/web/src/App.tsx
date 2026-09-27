@@ -191,10 +191,6 @@ export function App() {
               <Route path="/verification/gov-id" element={<VerifyGovIdPage />} />
               <Route path="/verification/address" element={<VerifyAddressPage />} />
               <Route path="/wallet" element={<WalletPage />} />
-              <Route path="/wallet/topup" element={<TopUpPage />} />
-              <Route path="/wallet/withdraw" element={<WithdrawalPage />} />
-              <Route path="/wallet/transactions" element={<TransactionHistoryPage />} />
-              <Route path="/wallet/history" element={<TransactionHistoryPage />} />
               {/* New Home & Discovery */}
               <Route path="/home" element={<HomePage />} />
               <Route path="/discover" element={<DiscoverPage />} />
@@ -224,6 +220,24 @@ export function App() {
               <Route path="/settings/privacy/privacy-policy" element={<PrivacyPolicyPage />} />
               <Route path="/settings/privacy/terms" element={<TermsOfServicePage />} />
               <Route path="/search" element={<SearchPage />} />
+            </Route>
+          </Route>
+
+          {/* Wallet money movement is shared with the partner surface.
+              `POST /api/wallet/withdraw` and the top-up/proof endpoints are
+              role-agnostic (authenticateToken + requireKycVerified, no partner or
+              admin gate), and `POST /api/roles/switch` gives an approved partner
+              their PARTNER role. But the partner wallet's Withdraw button links
+              straight to /wallet/withdraw, which used to sit inside the USER-only
+              block above: ProtectedRoute bounced the partner back to
+              /partner/dashboard with `replace`, so the form never rendered and
+              the button looked completely dead. */}
+          <Route element={<ProtectedRoute allowedRoles={['USER', 'PARTNER']} />}>
+            <Route element={<Layout />}>
+              <Route path="/wallet/topup" element={<TopUpPage />} />
+              <Route path="/wallet/withdraw" element={<WithdrawalPage />} />
+              <Route path="/wallet/transactions" element={<TransactionHistoryPage />} />
+              <Route path="/wallet/history" element={<TransactionHistoryPage />} />
             </Route>
           </Route>
 

@@ -5,7 +5,7 @@ import { Colors } from '../../src/design-system/tokens/colors';
 import { get, toList } from '../../src/lib/api';
 
 function money(n?: number) {
-  if (n == null) return '₹0.00';
+  if (n == null || !Number.isFinite(Number(n))) return '₹0.00';
   return `₹${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
@@ -15,15 +15,21 @@ export default function Wallet() {
 
   const wallet = (walletQ.data?.data ?? {}) as any;
   const txns = toList(txQ.data?.data, 'transactions');
+  // `GET /wallet` returns a computed `withdrawable`. Fall back to the balance
+  // rather than rendering "₹NaN" if an older deployment omits it.
+  const balance = Number(wallet.balance);
+  const withdrawable = Number.isFinite(Number(wallet.withdrawable))
+    ? Number(wallet.withdrawable)
+    : balance;
 
   return (
     <Screen>
       <Title>Wallet</Title>
       <Card>
         <Text style={styles.label}>Balance</Text>
-        <Text style={styles.balance}>{money(Number(wallet.balance))}</Text>
+        <Text style={styles.balance}>{money(balance)}</Text>
         <Text style={styles.label}>Withdrawable</Text>
-        <Text style={styles.value}>{money(Number(wallet.withdrawable ?? wallet.withdrawableBalance))}</Text>
+        <Text style={styles.value}>{money(withdrawable)}</Text>
       </Card>
 
       <Text style={styles.section}>Transactions</Text>
