@@ -41,6 +41,45 @@ export interface InAppCall {
   toggleSpeaker: () => void;
 }
 
+// How long to wait for ICE to settle before declaring the network unusable.
+const ICE_NEGOTIATION_TIMEOUT_MS = 15000;
+
+/**
+ * Raise a desktop notification for an incoming call.
+ *
+ * Without this the only alert is the in-page overlay plus the ringtone, and an
+ * overlay in a background tab is invisible: the user only ever "saw it ring"
+ * after the call had already timed out. Clicking the notification focuses the
+ * tab so they can actually answer it. Silently no-ops where the Notification
+ * API is unavailable or permission was never granted.
+ */
+function notifyIncomingCall(peer: CallPeer): void {
+  if (typeof document === 'undefined' || typeof Notification === 'undefined') return;
+  if (document.visibilityState === 'visible') return;
+  if (Notification.permission !== 'granted') {
+    void Notification.requestPermission().catch(() => undefined);
+    return;
+  }
+  try {
+    const who = peer.fullName || 'Someone';
+    const n = new Notification(`Incoming call · ${who}`, {
+      body: 'Tap to open Nabri and answer.',
+      tag: `nabri-call-${peer.id}`,
+      requireInteraction: true,
+    });
+    n.onclick = () => {
+      try {
+        window.focus();
+      } catch {
+        /* focus can be refused; the click still dismisses the notification */
+      }
+      n.close();
+    };
+  } catch {
+    // Some browsers throw for requireInteraction; the overlay still rings.
+  }
+}
+
 // Google's public STUN servers let most peers find each other directly. Networks
 // that block direct connections additionally need a relay, configured through
 // VITE_TURN_URL / VITE_TURN_USERNAME / VITE_TURN_CREDENTIAL.
@@ -70,6 +109,11 @@ const UNAVAILABLE_MESSAGES: Record<string, string> = {
   REPLACED: 'Call cancelled.',
   DISCONNECTED: 'The other person lost connection.',
   CONNECTION_LOST: 'The call connection dropped.',
+  // The two sides agreed on the call and the signalling handshake finished, but
+  // ICE never found a usable path. Almost always a missing TURN relay: STUN
+  // alone cannot get through symmetric NAT or carrier-grade NAT, which is what
+  // mobile/corporate networks use.
+  NO_RELAY: 'No audio path could be found on this network. Set up a TURN relay (VITE_TURN_URL) to fix this.',
 };
 
 export function useInAppCall(): InAppCall {
@@ -189,6 +233,32 @@ export function useInAppCall(): InAppCall {
           endWithNotice('CONNECTION_LOST');
         }
       };
+
+      // ICE failing is reported reliably, but ICE *stalling* is not: a
+      // STUN-only client behind symmetric/CGNAT NAT can sit in "checking"
+      // forever. Without this the user sees an accepted call with no audio and
+      // no error at all, which reads as "the app is broken". Give up loudly
+      // instead of leaving them talking into a dead line.
+      pc.oniceconnectionstatechange = () => {
+        if (pc.iceConnectionState === 'failed') {
+          emit('call:end', { callId: targetCallId });
+          endWithNotice('NO_RELAY');
+        }
+      };
+      const iceWatchdog = setTimeout(() => {
+        const s = pc.iceConnectionState;
+        if (pcRef.current !== pc) return;
+        if (s === 'new' || s === 'checking') {
+          emit('call:end', { callId: targetCallId });
+          endWithNotice('NO_RELAY');
+        }
+      }, ICE_NEGOTIATION_TIMEOUT_MS);
+      pc.addEventListener('icegatheringstatechange', () => {
+        if (pc.iceGatheringState === 'complete') clearTimeout(iceWatchdog);
+      });
+      pc.addEventListener('connectionstatechange', () => {
+        if (pc.connectionState === 'connected') clearTimeout(iceWatchdog);
+      });
 
       return pc;
     },
@@ -313,6 +383,7 @@ export function useInAppCall(): InAppCall {
       setDirection('incoming');
       applyState('incoming');
       startCallRingtone();
+      notifyIncomingCall(data.peer);
     });
 
     // The caller is the single offerer; the callee only answers. Sending two
@@ -426,13 +497,16 @@ export function useInAppCall(): InAppCall {
     return () => window.clearInterval(timer);
   }, [state]);
 
-  // Drop an unanswered ring when the app goes to the background, but keep a
-  // connected call alive (the user may be checking another app).
+  // An OUTGOING ring is dropped when the app is backgrounded: nobody is
+  // waiting on us, and holding the call open would leave the caller's mic
+  // warm indefinitely. An INCOMING ring must be kept, otherwise switching to
+  // another tab to check something cancels the call before the user can ever
+  // answer it - the exact reason "it only rings" happened in the first place.
   useEffect(() => {
     if (typeof document === 'undefined') return;
     const onVisibility = () => {
       if (document.visibilityState !== 'hidden') return;
-      if (stateRef.current === 'calling' || stateRef.current === 'incoming') endCall();
+      if (stateRef.current === 'calling') endCall();
     };
     document.addEventListener('visibilitychange', onVisibility);
     return () => document.removeEventListener('visibilitychange', onVisibility);
