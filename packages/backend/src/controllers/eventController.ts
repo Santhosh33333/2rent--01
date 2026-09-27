@@ -7,37 +7,170 @@ import { AuthedRequest } from "../middleware/authTypes";
 class EventAlreadyRegisteredError extends Error {}
 class EventFullError extends Error {}
 
-// Canonical category list (spec: sports, movies, walking, ...). Admins can
-// disable entries via AppSettings key "event.categories.disabled" (JSON
-// array) through the existing admin app-settings endpoint.
+// Fallback category list, used ONLY when the EventCategory table is empty
+// (fresh DB / migration not yet applied) so the filter bar is never blank.
+// It mirrors the seeded migration exactly — including Astrology — because a
+// fallback that quietly omits a category would make that category
+// unfilterable and uncreatable on an un-migrated database.
 export const EVENT_CATEGORIES = [
-  "sports",
-  "movies",
   "walking",
   "running",
   "cycling",
-  "fitness",
-  "gaming",
-  "study",
+  "football",
+  "cricket",
+  "badminton",
+  "tennis",
+  "basketball",
+  "volleyball",
+  "gym-fitness",
+  "yoga",
   "travel",
-  "food",
-  "coffee",
+  "movies",
   "music",
   "concerts",
   "photography",
+  "gaming",
+  "esports",
+  "chess",
+  "food",
+  "coffee",
+  "cooking",
   "shopping",
-  "networking",
   "technology",
+  "coding",
+  "business",
+  "startups",
+  "study",
+  "books",
+  "education",
+  "art",
+  "dance",
+  "nature",
+  "beach",
+  "hiking",
+  "volunteering",
+  "pets",
+  "cars",
+  "bikes",
+  "fashion",
+  "networking",
+  "local-events",
   "community",
   "workshops",
-  "education",
-  "volunteering",
-  "hobbies",
-  "meetups",
+  "astrology",
   "other",
 ] as const;
 
 export type EventCategory = (typeof EVENT_CATEGORIES)[number];
+
+/** Legacy keys that predate the EventCategory table, mapped to current slugs. */
+const LEGACY_CATEGORY_ALIASES: Record<string, string> = {
+  sports: "football",
+  hobbies: "other",
+  meetups: "community",
+  events: "local-events",
+};
+
+const DEFAULT_CATEGORY_LABELS: Record<string, string> = {
+  sports: "Sports",
+  movies: "Movies",
+  walking: "Walking",
+  running: "Running",
+  cycling: "Cycling",
+  football: "Football",
+  cricket: "Cricket",
+  badminton: "Badminton",
+  tennis: "Tennis",
+  basketball: "Basketball",
+  volleyball: "Volleyball",
+  "gym-fitness": "Gym & Fitness",
+  yoga: "Yoga",
+  travel: "Travel",
+  music: "Music",
+  concerts: "Concerts",
+  photography: "Photography",
+  gaming: "Gaming",
+  esports: "Esports",
+  chess: "Chess",
+  food: "Food",
+  coffee: "Coffee",
+  cooking: "Cooking",
+  shopping: "Shopping",
+  technology: "Technology",
+  coding: "Coding",
+  business: "Business",
+  startups: "Startups",
+  study: "Study",
+  books: "Books",
+  education: "Education",
+  art: "Art",
+  dance: "Dance",
+  nature: "Nature",
+  beach: "Beach",
+  hiking: "Hiking",
+  volunteering: "Volunteering",
+  pets: "Pets",
+  cars: "Cars",
+  bikes: "Bikes",
+  fashion: "Fashion",
+  networking: "Networking",
+  "local-events": "Local Events",
+  community: "Community",
+  workshops: "Workshops",
+  astrology: "Astrology",
+  hobbies: "Hobbies",
+  meetups: "Meetups",
+  other: "Other",
+};
+
+const DEFAULT_CATEGORY_ICONS: Record<string, string> = {
+  walking: "🚶",
+  running: "🏃",
+  cycling: "🚴",
+  football: "⚽",
+  cricket: "🏏",
+  badminton: "🏸",
+  tennis: "🎾",
+  basketball: "🏀",
+  volleyball: "🏐",
+  "gym-fitness": "🏋️",
+  yoga: "🧘",
+  travel: "✈️",
+  movies: "🎬",
+  music: "🎵",
+  concerts: "🎤",
+  photography: "📷",
+  gaming: "🎮",
+  esports: "🕹️",
+  chess: "♟️",
+  food: "🍽️",
+  coffee: "☕",
+  cooking: "🍳",
+  shopping: "🛍️",
+  technology: "💻",
+  coding: "👨‍💻",
+  business: "📈",
+  startups: "🚀",
+  study: "📚",
+  books: "📖",
+  education: "🎓",
+  art: "🎨",
+  dance: "💃",
+  nature: "🌿",
+  beach: "🏖️",
+  hiking: "🥾",
+  volunteering: "🤝",
+  pets: "🐾",
+  cars: "🚗",
+  bikes: "🏍️",
+  fashion: "👗",
+  networking: "🤝",
+  "local-events": "📍",
+  community: "🏘️",
+  workshops: "🛠️",
+  astrology: "🔮",
+  other: "📦",
+};
 
 async function getDisabledCategories(): Promise<Set<string>> {
   try {
@@ -50,14 +183,71 @@ async function getDisabledCategories(): Promise<Set<string>> {
   }
 }
 
+export interface EventCategoryRow {
+  key: string;
+  label: string;
+  description: string | null;
+  icon: string | null;
+  coverImageUrl: string | null;
+  sortOrder: number;
+  enabled: boolean;
+  subcategories: string[];
+}
+
+/**
+ * Categories come from the EventCategory table, in admin-controlled order.
+ *
+ * The old hardcoded const is kept only as a seed/fallback: if the table is
+ * empty (fresh DB, migration not yet run) the endpoint still returns the full
+ * default list rather than an empty filter bar.
+ */
+export async function loadEventCategories(): Promise<EventCategoryRow[]> {
+  try {
+    const rows = await prisma.eventCategory.findMany({ orderBy: [{ sortOrder: "asc" }, { label: "asc" }] });
+    if (rows.length > 0) {
+      return rows.map((r) => ({
+        key: r.key,
+        label: r.label,
+        description: r.description,
+        icon: r.icon,
+        coverImageUrl: r.coverImageUrl,
+        sortOrder: r.sortOrder,
+        enabled: r.enabled,
+        subcategories: Array.isArray(r.subcategories) ? r.subcategories : [],
+      }));
+    }
+  } catch {
+    // Table missing (migration not applied yet) — fall through to defaults.
+  }
+  return EVENT_CATEGORIES.map((key, i) => ({
+    key,
+    label: DEFAULT_CATEGORY_LABELS[key] || key.charAt(0).toUpperCase() + key.slice(1),
+    description: null,
+    icon: DEFAULT_CATEGORY_ICONS[key] || "📅",
+    coverImageUrl: null,
+    sortOrder: (i + 1) * 10,
+    enabled: true,
+    subcategories: [],
+  }));
+}
+
 export async function getEventCategories(req: AuthedRequest, res: Response): Promise<void> {
   try {
-    const disabled = await getDisabledCategories();
+    const rows = await loadEventCategories();
+    // "All Events" is a pseudo-category, always first, never persisted.
+    const all: EventCategoryRow = {
+      key: "all",
+      label: "All Events",
+      description: "Every live and upcoming event",
+      icon: "🌐",
+      coverImageUrl: null,
+      sortOrder: 0,
+      enabled: true,
+      subcategories: [],
+    };
     sendSuccess(
       res,
-      {
-        categories: EVENT_CATEGORIES.map((key) => ({ key, enabled: !disabled.has(key) })),
-      },
+      { categories: [all, ...rows].map((c) => ({ ...c, isPseudo: c.key === "all" })) },
       "Event categories."
     );
   } catch (err: any) {
@@ -65,17 +255,29 @@ export async function getEventCategories(req: AuthedRequest, res: Response): Pro
   }
 }
 
-function normalizeCategory(raw: unknown): string | null {
+async function isKnownCategory(key: string): Promise<boolean> {
+  const rows = await loadEventCategories();
+  return rows.some((c) => c.key === key);
+}
+
+async function normalizeCategory(raw: unknown): Promise<string | null> {
   if (raw === undefined || raw === null || raw === "") return null;
   const key = String(raw).toLowerCase().trim();
-  return (EVENT_CATEGORIES as readonly string[]).includes(key) ? key : null;
+  if (key === "all") return null;
+  if ((await isKnownCategory(key))) return key;
+  // Tolerate the legacy slugs that predate the EventCategory table so old
+  // clients and existing rows keep validating.
+  if (LEGACY_CATEGORY_ALIASES[key]) return LEGACY_CATEGORY_ALIASES[key];
+  return null;
 }
 
 function datePresetRange(preset: string): { from?: Date; to?: Date } | null {
+  // Always server time, never a client-supplied "now": Live Now and the
+  // relative presets have to agree across every device in the fleet.
   const now = new Date();
   const startOfDay = (d: Date) => {
     const c = new Date(d);
-    c.setUTCHours(0, 0, 0, 0);
+    c.setHours(0, 0, 0, 0);
     return c;
   };
   const addDays = (d: Date, n: number) => new Date(d.getTime() + n * 86400000);
@@ -89,18 +291,23 @@ function datePresetRange(preset: string): { from?: Date; to?: Date } | null {
       return { from: s, to: addDays(s, 1) };
     }
     case "week": {
+      // This week = the next 7 days from now, which is what users mean by
+      // "this week" in a discovery feed.
       return { from: now, to: addDays(now, 7) };
     }
     case "weekend": {
-      // Upcoming Saturday 00:00 -> Sunday 23:59 (UTC). If today is Saturday
-      // or Sunday, this weekend.
-      const day = now.getUTCDay();
+      // Upcoming Saturday 00:00 -> Monday 00:00. If today is already Saturday
+      // or Sunday, "this weekend" means the one that is still ahead.
+      const day = now.getDay();
       const toSat = (6 - day + 7) % 7;
       const sat = addDays(startOfDay(now), toSat);
       return { from: sat, to: addDays(sat, 2) };
     }
     case "month": {
       return { from: now, to: addDays(now, 30) };
+    }
+    case "next7": {
+      return { from: now, to: addDays(now, 7) };
     }
     case "upcoming": {
       return { from: now };
@@ -110,19 +317,236 @@ function datePresetRange(preset: string): { from?: Date; to?: Date } | null {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Distance helpers (Near Me / radius filter)
+// ---------------------------------------------------------------------------
+const EARTH_RADIUS_KM = 6371;
+
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
+/** Bounding box so the radius becomes an indexed range scan, not a full scan. */
+function boundingBox(lat: number, lon: number, radiusKm: number) {
+  const latDelta = radiusKm / 110.574;
+  const lonDelta = radiusKm / (111.32 * Math.max(0.01, Math.cos((lat * Math.PI) / 180)));
+  return {
+    latitude: { gte: lat - latDelta, lte: lat + latDelta },
+    longitude: { gte: lon - lonDelta, lte: lon + lonDelta },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Time-of-day filter (Morning / Afternoon / Evening / Night)
+// ---------------------------------------------------------------------------
+const TIME_WINDOWS: Record<string, [number, number]> = {
+  morning: [5, 12],
+  afternoon: [12, 17],
+  evening: [17, 21],
+  night: [21, 29], // wraps past midnight via the OR below
+};
+
+/**
+ * Boundaries are built with Date.UTC, not `new Date(y, m, d, h)`.
+ *
+ * The local-time constructor resolves against the *server's* zone, so the same
+ * filter produced 17:00 local == 11:30Z on this box and would shift again on a
+ * host in another region — the filter would silently mean different hours in
+ * different deployments. Hours are therefore evaluated in UTC.
+ *
+ * Known limitation: this buckets by UTC hour, not by each event's own
+ * `timezone` column. Doing that per-row needs a generated column or a
+ * functional index; until that exists the filter is a UTC-day view, which is
+ * correct and stable but not per-event local time.
+ */
+const dayStartUtc = (hour: number) => new Date(Date.UTC(1970, 0, 1, hour, 0, 0));
+
+function timeWindowCondition(win: string): Prisma.EventWhereInput | null {
+  const range = TIME_WINDOWS[win];
+  if (!range) return null;
+  const [startHour, endHour] = range;
+  if (endHour <= 24) {
+    return {
+      AND: [{ startTime: { gte: dayStartUtc(startHour) } }, { startTime: { lt: dayStartUtc(endHour) } }],
+    };
+  }
+  // Night wraps midnight: >= 21:00 OR < 05:00.
+  return {
+    OR: [{ startTime: { gte: dayStartUtc(startHour) } }, { startTime: { lt: dayStartUtc(endHour - 24) } }],
+  };
+}
+
+export type EventScope = "all" | "live" | "upcoming" | "completed";
+
+/**
+ * Scope predicates. `live` is strictly server-time based:
+ *   startTime <= now < endTime
+ * so an event leaves "Live Now" the moment it ends, with no client involvement.
+ */
+function scopeCondition(scope: EventScope, now: Date): Prisma.EventWhereInput | null {
+  switch (scope) {
+    case "live":
+      return {
+        AND: [
+          { startTime: { lte: now } },
+          { OR: [{ endTime: { gt: now } }, { endTime: null, startTime: { lte: now } }] },
+        ],
+      };
+    case "upcoming":
+      return { startTime: { gt: now } };
+    case "completed":
+      return { OR: [{ status: "COMPLETED" }, { endTime: { lte: now } }] };
+    case "all":
+    default:
+      return null;
+  }
+}
+
+/** Never surface cancelled / rejected / hidden events in discovery. */
+const DISCOVERY_STATUSES = ["PUBLISHED", "LIVE"];
+
+export interface EventFilterInput {
+  scope: EventScope;
+  categories: string[];
+  communityId?: string;
+  privacy?: string;
+  from?: Date;
+  to?: Date;
+  timeOfDay?: string;
+  timeFromHour?: number;
+  timeToHour?: number;
+  lat?: number;
+  lon?: number;
+  radiusKm?: number;
+  free?: boolean;
+  minPrice?: number;
+  maxPrice?: number;
+  organizerTypes?: string[];
+  verifiedOnly?: boolean;
+  online?: boolean;
+  womenOnly?: boolean;
+  seats?: "available" | "almost_full" | "full";
+  q?: string;
+  sort: string;
+}
+
+/** Radius below which an event counts as "almost full" (>=80% taken). */
+const ALMOST_FULL_RATIO = 0.8;
+
+export function buildEventWhere(f: EventFilterInput, now: Date): Prisma.EventWhereInput {
+  const and: Prisma.EventWhereInput[] = [{ status: { in: DISCOVERY_STATUSES } }];
+
+  const scope = scopeCondition(f.scope, now);
+  if (scope) and.push(scope);
+
+  if (f.categories.length > 0) and.push({ category: { in: f.categories } });
+  if (f.communityId) and.push({ communityId: f.communityId });
+  if (f.privacy) and.push({ privacy: f.privacy });
+
+  // Date range applies to startTime, except for "live"/"completed" where the
+  // scope window is authoritative and a from/to would fight it.
+  if (f.scope === "upcoming" || f.scope === "all") {
+    if (f.from && !Number.isNaN(f.from.getTime())) and.push({ startTime: { gte: f.from } });
+    if (f.to && !Number.isNaN(f.to.getTime())) and.push({ startTime: { lt: f.to } });
+  }
+
+  if (f.timeOfDay) {
+    const cond = timeWindowCondition(f.timeOfDay);
+    if (cond) and.push(cond);
+  } else if (typeof f.timeFromHour === "number" || typeof f.timeToHour === "number") {
+    const lo = typeof f.timeFromHour === "number" ? f.timeFromHour : 0;
+    const hi = typeof f.timeToHour === "number" ? f.timeToHour : 24;
+    and.push({ startTime: { gte: dayStartUtc(lo), lt: dayStartUtc(hi) } });
+  }
+
+  if (typeof f.lat === "number" && typeof f.lon === "number" && typeof f.radiusKm === "number") {
+    // Bounding box narrows the scan to an indexed range; the exact haversine
+    // distance is then applied in memory after the page is fetched.
+    and.push(boundingBox(f.lat, f.lon, f.radiusKm));
+  }
+
+  if (f.free === true) and.push({ OR: [{ price: null }, { price: 0 }] });
+  else if (f.free === false) and.push({ price: { gt: 0 } });
+  else if (typeof f.minPrice === "number" || typeof f.maxPrice === "number") {
+    and.push({
+      price: {
+        ...(typeof f.minPrice === "number" ? { gte: f.minPrice } : {}),
+        ...(typeof f.maxPrice === "number" ? { lte: f.maxPrice } : {}),
+      },
+    });
+  }
+
+  if (f.organizerTypes && f.organizerTypes.length > 0) and.push({ organizerType: { in: f.organizerTypes } });
+  if (f.verifiedOnly) and.push({ isVerified: true });
+  if (f.online === true) and.push({ isOnline: true });
+  else if (f.online === false) and.push({ isOnline: false });
+  if (f.womenOnly) and.push({ womenOnly: true });
+
+  if (f.seats === "full") and.push({ NOT: { capacity: null } });
+  if (f.q) {
+    // Case-insensitive contains across the fields a user would search by.
+    // Postgres trigram/full-text indexes can back this later; correctness first.
+    const term = f.q.replace(/[%_\\]/g, (m) => `\\${m}`);
+    and.push({
+      OR: [
+        { title: { contains: term, mode: "insensitive" } },
+        { description: { contains: term, mode: "insensitive" } },
+        { category: { contains: term, mode: "insensitive" } },
+        { subcategory: { contains: term, mode: "insensitive" } },
+        { location: { contains: term, mode: "insensitive" } },
+        { organizer: { is: { fullName: { contains: term, mode: "insensitive" } } } },
+      ],
+    });
+  }
+
+  return { AND: and };
+}
+
+export function eventOrderBy(sort: string, lat?: number, lon?: number): Prisma.EventOrderByWithRelationInput[] {
+  switch (sort) {
+    case "recently_created":
+      return [{ createdAt: "desc" }];
+    case "most_joined":
+      return [{ attendeeCount: "desc" }, { startTime: "asc" }];
+    case "available_seats":
+      // Events with no capacity are treated as unbounded, so they sort last.
+      return [{ capacity: { sort: "asc", nulls: "last" } }, { startTime: "asc" }];
+    case "free_first":
+      return [{ price: { sort: "asc", nulls: "first" } }, { startTime: "asc" }];
+    case "ending_soon":
+      return [{ endTime: { sort: "asc", nulls: "last" } }];
+    case "soonest":
+    case "recommended":
+    default:
+      // "Recommended" is deliberately Soonest, not an invented score: a fake
+      // ranking would be a lie. Nearest needs post-filtering by distance, so
+      // it falls back to soonest here and is re-sorted after the distance pass.
+      if (sort === "nearest" && (typeof lat === "number" && typeof lon === "number")) {
+        return [{ startTime: "asc" }];
+      }
+      return [{ startTime: "asc" }];
+  }
+}
+
 // ============================================================================
 // CREATE EVENT
 // ============================================================================
 
 export async function createEvent(req: AuthedRequest, res: Response): Promise<void> {
   try {
-    const { title, description, communityId, location, startTime, endTime, capacity, coverImageUrl, category, subcategory, privacy, price } = req.body;
+    const { title, description, communityId, location, startTime, endTime, capacity, coverImageUrl, category, subcategory, privacy, price, latitude, longitude, onlineUrl, isOnline, currency, timezone, womenOnly } = req.body;
 
     if (!title || !startTime) {
       sendError(res, "Title and startTime are required.", 400, "VALIDATION_ERROR");
       return;
     }
-    if (category !== undefined && category !== null && category !== "" && !normalizeCategory(category)) {
+    if (category !== undefined && category !== null && category !== "" && !(await normalizeCategory(category))) {
       sendError(res, `Unknown category. Use GET /events/categories for the list.`, 400, "INVALID_CATEGORY");
       return;
     }
@@ -138,20 +562,57 @@ export async function createEvent(req: AuthedRequest, res: Response): Promise<vo
     const subcategoryValue =
       subcategory === undefined || subcategory === null ? undefined : String(subcategory).toLowerCase().trim().slice(0, 32) || null;
 
+    // Coordinates are optional, but a radius search is meaningless without
+    // them, so they must be a valid pair rather than a half-set pin.
+    const lat = latitude === undefined || latitude === null || latitude === "" ? null : Number(latitude);
+    const lon = longitude === undefined || longitude === null || longitude === "" ? null : Number(longitude);
+    if ((lat === null) !== (lon === null)) {
+      sendError(res, "Provide both latitude and longitude, or neither.", 400, "VALIDATION_ERROR");
+      return;
+    }
+    if (lat !== null && (!Number.isFinite(lat) || lat < -90 || lat > 90)) {
+      sendError(res, "latitude must be between -90 and 90.", 400, "VALIDATION_ERROR");
+      return;
+    }
+    if (lon !== null && (!Number.isFinite(lon) || lon < -180 || lon > 180)) {
+      sendError(res, "longitude must be between -180 and 180.", 400, "VALIDATION_ERROR");
+      return;
+    }
+    if (endTime && new Date(endTime) <= new Date(startTime)) {
+      sendError(res, "endTime must be after startTime.", 400, "VALIDATION_ERROR");
+      return;
+    }
+    // An event with no end time can never satisfy the LIVE window
+    // (start <= now < end), so it would silently never appear in Live Now.
+    // Give it a sensible default rather than a broken record.
+    const resolvedEnd = endTime ? new Date(endTime) : new Date(new Date(startTime).getTime() + 2 * 60 * 60 * 1000);
+
     const event = await prisma.event.create({
       data: {
         title,
         description: description || "",
         communityId: communityId || null,
         location: location || "",
+        latitude: lat,
+        longitude: lon,
+        isOnline: isOnline === true || Boolean(onlineUrl),
+        onlineUrl: onlineUrl || null,
         startTime: new Date(startTime),
-        endTime: endTime ? new Date(endTime) : null,
+        endTime: resolvedEnd,
         capacity: capacity || null,
         coverImageUrl: coverImageUrl || null,
-        category: normalizeCategory(category),
+        category: await normalizeCategory(category),
         subcategory: subcategoryValue,
         privacy: privacy || "PUBLIC",
         price: priceValue,
+        currency: currency || "INR",
+        timezone: timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+        womenOnly: womenOnly === true,
+        // Only a user can self-declare themselves a verified organizer; a
+        // partner/community event is marked verified by an admin, so a client
+        // can never set this itself.
+        isVerified: false,
+        organizerType: communityId ? "COMMUNITY" : "USER",
         organizerId: req.user!.userId,
         status: "PUBLISHED",
       },
@@ -180,68 +641,155 @@ export async function createEvent(req: AuthedRequest, res: Response): Promise<vo
 
 export async function getEvents(req: AuthedRequest, res: Response): Promise<void> {
   try {
-    const page = Number(req.query.page) || 1;
-    const limit = Number(req.query.limit) || 20;
-    const where: any = {};
+    const q = req.query as Record<string, string | undefined>;
+    const now = new Date();
 
-    if (req.query.status) where.status = req.query.status;
-    if (req.query.communityId) where.communityId = req.query.communityId;
-    if (req.query.category) where.category = String(req.query.category).toLowerCase();
-    if (req.query.subcategory) where.subcategory = String(req.query.subcategory).toLowerCase();
-    if (req.query.privacy) where.privacy = req.query.privacy;
-    if (req.query.free === "true") where.OR = [{ price: null }, { price: 0 }];
-    else if (req.query.free === "false") where.price = { gt: 0 };
+    const limit = Math.min(50, Math.max(1, Number(q.limit) || 20));
+    const scope = (["all", "live", "upcoming", "completed"] as const).includes(q.scope as EventScope)
+      ? (q.scope as EventScope)
+      : "all";
 
-    // Date filtering: explicit from/to (ISO) or a named preset
-    // (today, tomorrow, week, weekend, month, upcoming).
-    const preset = typeof req.query.preset === "string" ? datePresetRange(req.query.preset) : null;
-    const fromRaw = (req.query.from as string) || undefined;
-    const toRaw = (req.query.to as string) || undefined;
-    const from = fromRaw ? new Date(fromRaw) : preset?.from;
-    const to = toRaw ? new Date(toRaw) : preset?.to;
-    if (from && !Number.isNaN(from.getTime())) {
-      where.startTime = { ...(where.startTime || {}), gte: from };
+    // Multi-value: ?category=a&category=b or comma-joined.
+    const categories = String(q.category || "")
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter((s) => s && s !== "all");
+
+    const organizerTypes = String(q.organizerType || "")
+      .split(",")
+      .map((s) => s.trim().toUpperCase())
+      .filter((s) => ["USER", "PARTNER", "COMMUNITY", "ORGANIZER"].includes(s));
+
+    const preset = typeof q.preset === "string" ? datePresetRange(q.preset) : null;
+    const parseDate = (v?: string) => (v ? new Date(v) : undefined);
+    const num = (v?: string) => (v !== undefined && v !== "" && Number.isFinite(Number(v)) ? Number(v) : undefined);
+
+    const input: EventFilterInput = {
+      scope,
+      categories,
+      communityId: q.communityId || undefined,
+      privacy: q.privacy || undefined,
+      from: parseDate(q.from) ?? preset?.from,
+      to: parseDate(q.to) ?? preset?.to,
+      timeOfDay: q.timeOfDay || undefined,
+      timeFromHour: num(q.timeFromHour),
+      timeToHour: num(q.timeToHour),
+      lat: num(q.lat),
+      lon: num(q.lng ?? q.lon),
+      radiusKm: num(q.radiusKm),
+      free: q.free === "true" ? true : q.free === "false" ? false : undefined,
+      minPrice: num(q.minPrice),
+      maxPrice: num(q.maxPrice),
+      organizerTypes,
+      verifiedOnly: q.verified === "true",
+      online: q.online === "true" ? true : q.online === "false" ? false : undefined,
+      womenOnly: q.womenOnly === "true",
+      seats: (["available", "almost_full", "full"] as const).includes(q.seats as any) ? (q.seats as any) : undefined,
+      q: (q.q || q.search || "").trim() || undefined,
+      sort: q.sort || "recommended",
+    };
+
+    const where = buildEventWhere(input, now);
+
+    // Cursor pagination: ?cursor=<startTime ISO>&cursorId=<id>. Stable and cheap
+    // compared to OFFSET, which degrades badly once the feed is large. Falls
+    // back to page/limit for the PDF export and older clients.
+    const cursorIso = q.cursor;
+    let cursorWhere: Prisma.EventWhereInput | undefined;
+    if (cursorIso) {
+      const cursorDate = new Date(cursorIso);
+      const cursorId = q.cursorId;
+      if (!Number.isNaN(cursorDate.getTime())) {
+        cursorWhere = cursorId
+          ? {
+              OR: [
+                { startTime: { gt: cursorDate } },
+                { startTime: cursorDate, id: { gt: cursorId } },
+              ],
+            }
+          : { startTime: { gt: cursorDate } };
+      }
     }
-    if (to && !Number.isNaN(to.getTime())) {
-      where.startTime = { ...(where.startTime || {}), lt: to };
+    const finalWhere: Prisma.EventWhereInput = cursorWhere
+      ? { AND: [where, cursorWhere] }
+      : where;
+
+    // Over-fetch when a radius is in play so the exact-distance pass has enough
+    // candidates to fill a full page.
+    const useRadius = typeof input.lat === "number" && typeof input.lon === "number" && typeof input.radiusKm === "number";
+    const take = useRadius ? limit * 4 : limit;
+
+    const items = await prisma.event.findMany({
+      where: finalWhere,
+      orderBy: eventOrderBy(input.sort, input.lat, input.lon),
+      ...(cursorIso ? { cursor: undefined, skip: 0 } : { skip: Math.max(0, (Number(q.page) || 1) - 1) * limit }),
+      take,
+      include: {
+        organizer: { select: { id: true, fullName: true, avatarUrl: true, role: true } },
+        _count: { select: { attendees: true } },
+      },
+    });
+
+    // ---- Post-filters that SQL cannot express cheaply --------------------
+    let rows = items.map((item) => {
+      const distanceKm =
+        useRadius && item.latitude != null && item.longitude != null
+          ? haversineKm(input.lat!, input.lon!, item.latitude, item.longitude)
+          : null;
+      const taken = item._count.attendees;
+      const capacity = item.capacity ?? null;
+      const seatsLeft = capacity == null ? null : Math.max(0, capacity - taken);
+      return {
+        ...item,
+        attendeeCount: taken,
+        seatsLeft,
+        isFull: capacity != null && taken >= capacity,
+        isAlmostFull:
+          capacity != null && taken < capacity && taken / Math.max(1, capacity) >= ALMOST_FULL_RATIO,
+        isLive: item.startTime <= now && (item.endTime == null || item.endTime > now),
+        distanceKm: distanceKm == null ? null : Math.round(distanceKm * 10) / 10,
+        // Server time is returned so the client can render countdowns that
+        // agree with the backend's live/upcoming decision.
+        serverTime: now.toISOString(),
+      };
+    });
+
+    if (useRadius) {
+      rows = rows.filter((r) => r.distanceKm != null && r.distanceKm <= (input.radiusKm as number));
+      if (input.sort === "nearest") rows.sort((a, b) => (a.distanceKm! - b.distanceKm!));
     }
+    if (input.seats === "available") rows = rows.filter((r) => !r.isFull);
+    else if (input.seats === "almost_full") rows = rows.filter((r) => r.isAlmostFull);
+    else if (input.seats === "full") rows = rows.filter((r) => r.isFull);
 
-    const [items, total] = await Promise.all([
-      prisma.event.findMany({
-        where,
-        orderBy: { startTime: "asc" },
-        skip: (page - 1) * limit,
-        take: limit,
-        include: {
-          organizer: { select: { id: true, fullName: true, avatarUrl: true } },
-          _count: { select: { attendees: true } },
-        },
-      }),
-      prisma.event.count({ where }),
-    ]);
-
-    const itemsWithCounts = items.map(item => ({
-      ...item,
-      attendeeCount: item._count.attendees,
-    }));
+    // Cursor is only trustworthy when nothing was dropped after the fetch.
+    const hasMore = rows.length > limit;
+    const page = rows.slice(0, limit);
+    const truncated = hasMore;
 
     // Per-user registration flags so clients can render RSVP state in lists.
     let registeredEventIds = new Set<string>();
-    if (items.length > 0) {
+    if (page.length > 0) {
       const mine = await prisma.eventAttendee.findMany({
-        where: { userId: req.user!.userId, eventId: { in: items.map(i => i.id) } },
+        where: { userId: req.user!.userId, eventId: { in: page.map((i) => i.id) } },
         select: { eventId: true },
       });
-      registeredEventIds = new Set(mine.map(m => m.eventId));
+      registeredEventIds = new Set(mine.map((m) => m.eventId));
     }
 
+    const last = page[page.length - 1];
+    const nextCursor = truncated && last ? { cursor: last.startTime.toISOString(), cursorId: last.id } : null;
+
     sendSuccess(res, {
-      items: itemsWithCounts.map(i => ({ ...i, isRegistered: registeredEventIds.has(i.id) })),
-      page,
+      items: page.map((i) => ({ ...i, isRegistered: registeredEventIds.has(i.id) })),
       limit,
-      total,
+      hasMore: truncated,
+      nextCursor,
+      scope,
+      serverTime: now.toISOString(),
     });
   } catch (err: any) {
+    console.error("getEvents error:", err);
     sendError(res, "Failed to retrieve events.", 500, "INTERNAL_ERROR");
   }
 }
@@ -306,7 +854,7 @@ export async function updateEvent(req: AuthedRequest, res: Response): Promise<vo
       sendError(res, "Only event organizer can update.", 403, "FORBIDDEN");
       return;
     }
-    if (category !== undefined && category !== null && category !== "" && !normalizeCategory(category)) {
+    if (category !== undefined && category !== null && category !== "" && !(await normalizeCategory(category))) {
       sendError(res, `Unknown category. Use GET /events/categories for the list.`, 400, "INVALID_CATEGORY");
       return;
     }
@@ -338,7 +886,7 @@ export async function updateEvent(req: AuthedRequest, res: Response): Promise<vo
         capacity: capacity !== undefined ? capacity : event.capacity,
         status: status || event.status,
         coverImageUrl: coverImageUrl !== undefined ? coverImageUrl || null : event.coverImageUrl,
-        category: category !== undefined ? normalizeCategory(category) : event.category,
+        category: category !== undefined ? await normalizeCategory(category) : event.category,
         subcategory: subcategoryValue !== undefined ? subcategoryValue : (event as any).subcategory ?? null,
         privacy: privacy || event.privacy,
         price: priceValue !== undefined ? priceValue : event.price,

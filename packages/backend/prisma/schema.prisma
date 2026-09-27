@@ -538,22 +538,64 @@ model CommunityPollVote {
   @@index([optionId])
 }
 
+// ============================================================================
+// EVENT CATEGORIES (admin-managed, DB-driven ordering)
+// ============================================================================
+// The category list used to be a hardcoded const in eventController. That made
+// "reorder", "rename", "hide" and "add category" impossible without a code
+// change and redeploy. Order, label, icon, visibility and subcategories are all
+// rows now, so admin edits take effect immediately for every client.
+//
+// `key` is the stable slug stored on Event.category (a plain string, not an FK,
+// so existing event rows and existing queries keep working unchanged). "All
+// Events" is a pseudo-category and lives in the response, not in this table.
+model EventCategory {
+  id            String   @id @default(uuid())
+  key           String   @unique
+  label         String
+  description   String?
+  icon          String? // emoji or icon key, e.g. "🏃"
+  coverImageUrl String?
+  sortOrder     Int      @default(0)
+  enabled       Boolean  @default(true) // shown in the user-facing filter list
+  isVerifiedOnly Boolean @default(false) // category is itself curated
+  subcategories String[] @default([])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([enabled, sortOrder])
+}
+
 model Event {
   id            String    @id @default(uuid())
   title         String
   description   String?
   organizerId   String
+  // USER | PARTNER | COMMUNITY | ORGANIZER — lets the filter panel offer
+  // "organized by a partner/community/verified organizer".
+  organizerType String    @default("USER")
   communityId   String?
   location      String?
+  // Coordinates power the Near Me / radius filter. Nullable because a lot of
+  // events are online-only or listed without a map pin.
+  latitude      Float?
+  longitude     Float?
+  isOnline      Boolean   @default(false)
+  onlineUrl     String?
   coverImageUrl String?
   category      String?
   subcategory   String?
-  privacy       String  @default("PUBLIC") // PUBLIC, PRIVATE
+  privacy       String    @default("PUBLIC") // PUBLIC, PRIVATE
   price         Float?
+  currency      String    @default("INR")
   startTime     DateTime
   endTime       DateTime?
+  timezone      String?
   capacity      Int?
   attendeeCount Int       @default(0)
+  // Verified organizer events surface a trust badge in the UI.
+  isVerified    Boolean   @default(false)
+  womenOnly     Boolean   @default(false)
   status        String    @default("PUBLISHED")
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -565,6 +607,14 @@ model Event {
     @@index([status, startTime])
     @@index([category])
     @@index([category, subcategory])
+    // Discovery queries filter on (status, startTime) and sort on startTime;
+    // endTime drives the "live now" window and capacity filters.
+    @@index([status, endTime])
+    @@index([privacy, startTime])
+    @@index([createdAt])
+    @@index([price])
+    @@index([organizerType])
+    @@index([latitude, longitude])
 }
 
 model EventAttendee {
