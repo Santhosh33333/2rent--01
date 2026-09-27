@@ -1,29 +1,20 @@
-import { initializeApp, cert, getApps, type App } from "firebase-admin/app";
+import { type App } from "firebase-admin/app";
 import { getAuth, Auth, UserRecord, DecodedIdToken } from "firebase-admin/auth";
+import { getOrCreateFirebaseApp } from "./firebaseCredential.js";
 
 let firebaseApp: App | null = null;
 let firebaseAuth: Auth | null = null;
 
 export function initializeFirebaseAuth(): void {
   try {
-    const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT;
-    if (!serviceAccountJson) {
+    firebaseApp = getOrCreateFirebaseApp();
+    if (!firebaseApp) {
       console.warn("FIREBASE_SERVICE_ACCOUNT not set. Firebase Auth will be disabled.");
       return;
     }
-    const serviceAccount = JSON.parse(serviceAccountJson);
-    
-    if (getApps().length === 0) {
-      firebaseApp = initializeApp({
-        credential: cert(serviceAccount),
-      });
-    } else {
-      firebaseApp = getApps()[0];
-    }
-    
     firebaseAuth = getAuth(firebaseApp);
   } catch (err) {
-    console.warn("Failed to initialize Firebase Auth:", err);
+    console.error("Failed to initialize Firebase Auth:", err instanceof Error ? err.message : err);
   }
 }
 

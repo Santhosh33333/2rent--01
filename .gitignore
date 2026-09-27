@@ -84,3 +84,15 @@ packages/backend/uploads/
 *.rar
 *.zip
 
+# Cloud provider credentials -- never commit these.
+# Firebase/Google service-account keys grant full project control.
+firebase-adminsdk-*.json
+*firebase-adminsdk*.json
+*-firebase-adminsdk-fbsvc*
+service-account*.json
+serviceAccount*.json
+*-service-account.json
+gcp-*.json
+*credential*.json
+
+

@@ -1,21 +1,20 @@
-import { initializeApp as initFirebaseApp, cert, type App } from "firebase-admin/app";
+import { type App } from "firebase-admin/app";
 import { getMessaging } from "firebase-admin/messaging";
+import { getOrCreateFirebaseApp } from "./firebaseCredential.js";
 
 let firebaseApp: App | null = null;
 
 export function initializeFirebase(): void {
   try {
-    const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT;
-    if (!serviceAccountJson) {
+    // Shares the default app with firebaseAuthService. Initialising it a second
+    // time here used to throw and get swallowed, leaving firebaseApp null and
+    // silently disabling every push notification.
+    firebaseApp = getOrCreateFirebaseApp();
+    if (!firebaseApp) {
       console.warn("FIREBASE_SERVICE_ACCOUNT not set. Push notifications will be disabled.");
-      return;
     }
-    const serviceAccount = JSON.parse(serviceAccountJson);
-    firebaseApp = initFirebaseApp({
-      credential: cert(serviceAccount),
-    });
   } catch (err) {
-    console.warn("Failed to initialize Firebase Admin:", err);
+    console.error("Failed to initialize Firebase Admin:", err instanceof Error ? err.message : err);
   }
 }
 
