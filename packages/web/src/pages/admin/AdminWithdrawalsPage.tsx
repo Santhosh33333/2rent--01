@@ -1,7 +1,7 @@
 ﻿import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, ChevronLeft, ChevronRight, Check, X, FileDown, ImagePlus, Loader2 } from 'lucide-react'
+import { ArrowLeft, ChevronLeft, ChevronRight, Check, X, FileDown, ImagePlus, Loader2, Copy } from 'lucide-react'
 import { adminApi, assetUrl } from '../../lib/api'
 import { exportTableToPdf } from '../../lib/pdfExport'
 import toast from 'react-hot-toast'
@@ -22,6 +22,61 @@ interface Withdrawal {
   createdAt: string
 }
 
+/** `accountDetail` is JSON for bank payouts and a bare string for UPI. */
+function parseAccountDetail(w: Withdrawal): Record<string, string> {
+  const raw = (w.accountDetail || '').trim()
+  if (!raw) return {}
+  if (raw.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(raw)
+      return parsed && typeof parsed === 'object' ? (parsed as Record<string, string>) : {}
+    } catch {
+      return {}
+    }
+  }
+  return { upiId: raw }
+}
+
+/**
+ * Paste-ready block for the admin's banking app. The list is already ordered
+ * oldest-first by the API, so payouts are worked through in request order.
+ */
+function payInstruction(w: Withdrawal): string {
+  const a = parseAccountDetail(w)
+  const lines = [
+    `Amount: Rs ${Number(w.amount || 0).toFixed(2)}`,
+    `To: ${w.accountHolderName || w.userName || '-'}`,
+  ]
+  if ((w.method || '').toUpperCase() === 'UPI') {
+    lines.push(`UPI ID: ${a.upiId || '-'}`)
+    if (a.upiBank) lines.push(`Bank: ${a.upiBank}`)
+  } else {
+    lines.push(`Account no: ${a.accountNumber || '-'}`)
+    if (a.ifsc) lines.push(`IFSC: ${a.ifsc}`)
+    const bank = a.bankName || ''
+    if (bank) lines.push(`Bank: ${bank}`)
+    if (a.accountHolderName) lines.push(`Account holder: ${a.accountHolderName}`)
+  }
+  lines.push(`Withdrawal ID: ${w.id.slice(0, 8).toUpperCase()}`)
+  return lines.join('\n')
+}
+
+/** The clipboard API needs a secure context; fall back for plain http. */
+async function writeClipboard(text: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text)
+  } catch {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+  }
+}
+
 export function AdminWithdrawalsPage() {
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([])
   const [loading, setLoading] = useState(true)
@@ -31,6 +86,30 @@ export function AdminWithdrawalsPage() {
 const [statusFilter, setStatusFilter] = useState('PENDING')
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [proofFile, setProofFile] = useState<Record<string, File>>({})
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+
+  const copyPay = async (w: Withdrawal) => {
+    if (!w.accountRevealed) {
+      toast.error('You need the Approve permission to copy payout details.')
+      return
+    }
+    await writeClipboard(payInstruction(w))
+    setCopiedId(w.id)
+    toast.success('Payment details copied — paste into your banking app')
+    setTimeout(() => setCopiedId((cur) => (cur === w.id ? null : cur)), 2000)
+  }
+
+  /** Copy the oldest still-unpaid request so payouts run one by one. */
+  const copyNextPay = async () => {
+    const next = withdrawals.find((w) => w.status === 'PENDING')
+    if (!next) {
+      toast.success('No pending withdrawals in this view')
+      return
+    }
+    await copyPay(next)
+    setStatusFilter('PENDING')
+    setPage(1)
+  }
 
   const fetchWithdrawals = async () => {
     setLoading(true)
@@ -155,9 +234,16 @@ const handleApprove = async (id: string) => {
               })
             }
             disabled={withdrawals.length === 0}
-            className="ml-auto inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-gray-300 hover:text-white text-sm transition"
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-gray-300 hover:text-white text-sm transition"
           >
             <FileDown className="w-4 h-4" /> PDF
+          </button>
+          <button
+            type="button"
+            onClick={() => void copyNextPay()}
+            className="ml-auto inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm transition"
+          >
+            <Copy className="w-4 h-4" /> Copy next payout
           </button>
         </div>
 
@@ -243,7 +329,16 @@ const handleApprove = async (id: string) => {
                             {w.createdAt ? new Date(w.createdAt).toLocaleDateString('en-IN') : '-'}
                           </span>
                         </td>
-<td className="px-4 py-3">
+                        <td className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => void copyPay(w)}
+                            title={w.accountRevealed ? 'Copy payout details' : 'Requires the Approve permission'}
+                            className="mb-2 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 hover:text-white text-xs transition"
+                          >
+                            {copiedId === w.id ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                            {copiedId === w.id ? 'Copied' : 'Copy details'}
+                          </button>
                           {w.payoutProofImageUrl && (
                             <div className="mb-2">
                               <a href={assetUrl(w.payoutProofImageUrl)} target="_blank" rel="noreferrer" title="View payout proof">

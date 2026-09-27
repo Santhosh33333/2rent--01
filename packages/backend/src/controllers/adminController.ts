@@ -20,6 +20,7 @@ import { createAndSendAgreements } from "../services/agreementService";
 import { bankNameFromIfsc } from "../services/bankLookup";
 import { renderEmail, paragraphHtml } from "../services/emailTemplate";
 import { ADMIN_ROLES, SUPER_ADMIN_ROLE } from "../rbac/sections";
+import { readBlob } from "../services/blobStorage";
 import { resolveAdminPermissions, hasPermission } from "../rbac/permissions";
 
 // An account is "privileged" when it carries an admin role. Only a SUPER_ADMIN
@@ -1111,12 +1112,25 @@ export async function approveWithdrawalWithProof(req: AuthedRequest, res: Respon
 
     const paidUser = await prisma.user.findUnique({ where: { id: request.userId }, select: { email: true, fullName: true } });
     if (paidUser) {
+      // The payout screenshot has to reach the user's inbox, not just sit in
+      // the DB. Attach the raw bytes: the proof lives under /uploads/private/
+      // which needs an Authorization header, so an inline <img> in the email
+      // would render broken for every recipient.
+      let proofAttachment: { filename: string; content: Buffer } | undefined;
+      try {
+        const blob = await readBlob(payoutProofImageUrl);
+        if (blob) proofAttachment = { filename: blob.filename || "payout-proof.jpg", content: blob.data };
+      } catch (err) {
+        console.error("[EMAIL] Could not read payout proof blob:", err);
+      }
       void sendWithdrawalPaidEmail(paidUser.email, paidUser.fullName || "there", {
         withdrawalId: request.id,
         amount: Number(request.amount),
         method: request.method,
         status: "APPROVED",
         processedAt: new Date(),
+        payoutProofImageUrl,
+        payoutProofImage: proofAttachment,
       }).catch((err) => console.error("[EMAIL] Withdrawal paid email failed:", err));
     }
 

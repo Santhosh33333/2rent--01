@@ -624,6 +624,10 @@ export interface WithdrawalEmailData {
   processedAt?: Date;
   rejectionReason?: string;
   walletBalance?: number;
+  /** Absolute URL of the payout screenshot the admin uploaded. */
+  payoutProofImageUrl?: string;
+  /** Raw bytes of the payout screenshot, attached to the email. */
+  payoutProofImage?: { filename: string; content: Buffer };
 }
 
 function withdrawalMethodLabel(method: string): string {
@@ -672,13 +676,25 @@ export async function sendWithdrawalPaidEmail(email: string, name: string, d: Wi
     ["Paid on", processed],
     ["Wallet balance", d.walletBalance !== undefined ? rupee(d.walletBalance) : "—"],
   ];
-  const rowsHtml = rows
+  // Payout proof: the user asked for the payment screenshot to land in their
+  // inbox. It is attached as a real file rather than inlined as an <img>,
+  // because proof images live under /uploads/private/ and that route requires
+  // an Authorization header — an email client has no token, so an inline image
+  // would render as a broken image for every recipient.
+  const hasProof = Boolean(d.payoutProofImage || d.payoutProofImageUrl);
+  const allRows: Array<[string, string]> = hasProof
+    ? [...rows, ["Payout proof", "Attached to this email"]]
+    : rows;
+  const rowsHtml = allRows
     .map(
       ([k, v]) =>
         `<tr><td style="padding:10px 14px;border-top:1px solid #EFE8DC;font-size:13px;color:#6B6558">${escHtml(k)}</td><td style="padding:10px 14px;border-top:1px solid #EFE8DC;font-size:13px;color:#1C1917;font-weight:600;text-align:right">${escHtml(String(v))}</td></tr>`
     )
     .join("");
-  const bodyHtml = `<p style="margin:0 0 14px">Hi ${escHtml(name)},</p><p style="margin:0 0 14px">Great news — your withdrawal of <strong>${rupee(d.amount)}</strong> has been <strong>paid out</strong> to your ${escHtml(withdrawalMethodLabel(d.method))}.</p><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #EFE8DC;border-radius:14px;overflow:hidden;margin:0 0 20px"><tr><td style="background:#FBF7EF;padding:12px 14px;font-size:12px;color:#0D378B;font-weight:800;letter-spacing:1px">NABRI · WITHDRAWAL PAID</td></tr>${rowsHtml}</table><p style="margin:0 0 14px">Depending on your bank or UPI provider, the funds may take a few hours to appear in your account.</p>`;
+  const proofNote = hasProof
+    ? `<p style="margin:0 0 14px">The payment proof screenshot is attached to this email, and you can also reopen it any time from your wallet withdrawal history.</p>`
+    : "";
+  const bodyHtml = `<p style="margin:0 0 14px">Hi ${escHtml(name)},</p><p style="margin:0 0 14px">Great news — your withdrawal of <strong>${rupee(d.amount)}</strong> has been <strong>paid out</strong> to your ${escHtml(withdrawalMethodLabel(d.method))}.</p><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #EFE8DC;border-radius:14px;overflow:hidden;margin:0 0 20px"><tr><td style="background:#FBF7EF;padding:12px 14px;font-size:12px;color:#0D378B;font-weight:800;letter-spacing:1px">NABRI · WITHDRAWAL PAID</td></tr>${rowsHtml}</table>${proofNote}<p style="margin:0 0 14px">Depending on your bank or UPI provider, the funds may take a few hours to appear in your account.</p>`;
   return sendEmail(
     email,
     `Withdrawal paid · ${rupee(d.amount)}`,
@@ -690,7 +706,8 @@ export async function sendWithdrawalPaidEmail(email: string, name: string, d: Wi
       ctaUrl: `${WEB_ORIGIN}/wallet`,
       note: "Need help? Reply to this email and we'll get back to you.",
     }),
-    `Hi ${name}, your withdrawal of ${rupee(d.amount)} has been paid to your ${withdrawalMethodLabel(d.method)}.`
+    `Hi ${name}, your withdrawal of ${rupee(d.amount)} has been paid to your ${withdrawalMethodLabel(d.method)}.${hasProof ? " The payment proof is attached to this email." : ""}`,
+    d.payoutProofImage ? { attachments: [d.payoutProofImage] } : undefined
   );
 }
 
