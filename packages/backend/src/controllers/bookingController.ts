@@ -1718,6 +1718,17 @@ export async function getCompletionOtp(req: AuthedRequest, res: Response): Promi
   try {
     const { id } = req.params;
     const result = await issueCompletionOtp(id, req.user!.userId);
+    if (result.alreadyIssued) {
+      // A live code already exists and its plaintext only ever existed in the
+      // notification, so it cannot be shown again here without invalidating
+      // the copy the partner has already been given.
+      sendSuccess(
+        res,
+        { bookingId: id, alreadyIssued: true, expiresAt: result.expiresAt },
+        "Your completion code is already active. Read out the code from your notification."
+      );
+      return;
+    }
     sendSuccess(res, { bookingId: id, completionOtp: result.otp, expiresAt: result.expiresAt }, "Share this code with your partner in person.");
   } catch (err: any) {
     workflowError(res, err, "Failed to generate completion code.");

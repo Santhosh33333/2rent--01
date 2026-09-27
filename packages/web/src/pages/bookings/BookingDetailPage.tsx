@@ -146,11 +146,18 @@ export function BookingDetailPage() {
       if (kind === 'start') {
         setStartCode(data.startOtp)
         setStartCodeExpiry(data.expiresAt)
+      } else if (data?.alreadyIssued) {
+        // A live code already went out in a notification. Do not blank the
+        // field: the partner is holding that code, so pointing the user at the
+        // notification is the only correct instruction.
+        setCompletionCode('')
+        setCompletionCodeExpiry(data.expiresAt)
+        toast('Your code is already active — read out the one in your notifications.')
       } else {
         setCompletionCode(data.completionOtp)
         setCompletionCodeExpiry(data.expiresAt)
       }
-      toast.success('Code ready — share it in person only')
+      if (kind === 'start' || !data?.alreadyIssued) toast.success('Code ready — share it in person only')
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Code not available yet')
     } finally {

@@ -302,8 +302,18 @@ export async function issueCompletionOtp(bookingId: string, actorUserId: string,
   if (booking.status !== "COMPLETION_REQUESTED") {
     throw otpError("INVALID_STATUS", "Completion code is available only after the partner requests completion.", 409);
   }
-  const otp = generateOtp();
   const notes = parseNotes(booking.notes);
+  // Never rotate a code that is still live. requestCompletion already issued
+  // one and delivered the plaintext in a notification, which the user may
+  // already have read aloud. Minting a fresh code here silently invalidated
+  // whatever the partner was just told, so the two channels disagreed and a
+  // correct code was rejected as INVALID_OTP until the attempt limit locked
+  // the booking. The hash cannot be reversed back to the plaintext, so the
+  // existing code has to stand and the caller is told where to find it.
+  if (completionOtpAlive(notes, now)) {
+    return { alreadyIssued: true as const, expiresAt: notes.completionOtp!.expiresAt! };
+  }
+  const otp = generateOtp();
   notes.completionOtp = {
     hash: hashOtp(otp),
     expiresAt: new Date(now.getTime() + COMPLETION_OTP_TTL_MIN * 60_000).toISOString(),
