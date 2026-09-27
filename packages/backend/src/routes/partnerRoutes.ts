@@ -2,6 +2,7 @@ import { Router } from "express";
 import { body } from "express-validator";
 import { authenticateToken, requireKycVerified } from "../middleware/auth";
 import { validateRequest } from "../middleware/validation";
+import { idempotencyMiddleware } from "../middleware/idempotency";
 import * as partnerController from "../controllers/partnerController";
 import * as bookingController from "../controllers/bookingController";
 
@@ -76,9 +77,18 @@ router.post("/bookings/:id/request-completion", requireKycVerified, bookingContr
 router.post(
   "/bookings/:id/complete",
   requireKycVerified,
+  // Parity with POST /api/bookings/:id/complete, which is mounted behind
+  // idempotencyMiddleware in app.ts. This route used to point at a
+  // partnerController.completeBooking duplicate of that handler, so the same
+  // money operation was reachable at a path with no idempotency protection,
+  // and the duplicate had drifted: it settled through a raw prisma.$transaction
+  // instead of moneyTransaction (no retry on serialization failure), recorded no
+  // status history, and returned different errors for the same conditions.
+  // Every other route in this file already delegates to bookingController.
+  idempotencyMiddleware,
   [body("completionOtp").optional().isString().trim().isLength({ min: 4, max: 10 })],
   validateRequest,
-  partnerController.completeBooking
+  bookingController.completeBooking
 );
 
 export default router;

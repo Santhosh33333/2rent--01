@@ -1147,6 +1147,19 @@ export async function completeBooking(req: AuthedRequest, res: Response): Promis
     let netEarnings = 0;
     let actualDurationMinutes = 0;
     const { waitingMinutes } = req.body;
+    // Deliberately no initializer: an explicit `= null` seeds control-flow
+    // narrowing, and because the only assignment happens inside the transaction
+    // callback TypeScript narrows the later `if (settlement)` to `never`.
+    let settlement:
+      | {
+          finalAmount: number;
+          platformFee: number;
+          partnerEarning: number;
+          refunded: number;
+          extraDebited: number;
+          unpaidOverage: number;
+        }
+      | undefined;
     const result = await moneyTransaction(async (tx) => {
       const claimed = await tx.booking.updateMany({
         where: {
@@ -1185,6 +1198,7 @@ export async function completeBooking(req: AuthedRequest, res: Response): Promis
         waitingMinutes ? Math.floor(Number(waitingMinutes)) : 0,
         tx
       );
+      settlement = settled;
 
       grossEarnings = settled.finalAmount;
       netEarnings = settled.partnerEarning;
@@ -1304,7 +1318,24 @@ export async function completeBooking(req: AuthedRequest, res: Response): Promis
       console.error("[EMAIL] Booking completion emails failed:", err)
     );
 
-    sendSuccess(res, updated, "Booking completed.");
+    // The settlement figures the client needs on the completion response. This
+    // handler used to return the bare Booking row, which is why a duplicate
+    // completion handler existed at POST /api/partner/bookings/:id/complete just
+    // to expose them; that route now points here, so the numbers have to be on
+    // this response. extraDebited/unpaidOverage matter when the final fare
+    // exceeds the prepaid deposit: the client shows the partner that the extra
+    // time was billed and what the user still owes.
+    const responsePayload: any = { ...updated };
+    if (settlement) {
+      responsePayload.finalAmount = settlement.finalAmount;
+      responsePayload.refundAmount = settlement.refunded;
+      responsePayload.platformFee = settlement.platformFee;
+      responsePayload.partnerEarning = settlement.partnerEarning;
+      responsePayload.extraDebited = settlement.extraDebited;
+      responsePayload.unpaidOverage = settlement.unpaidOverage;
+    }
+
+    sendSuccess(res, responsePayload, "Booking completed.");
   } catch (err: any) {
     sendError(res, "Failed to complete booking.", 500, "INTERNAL_ERROR");
   }
