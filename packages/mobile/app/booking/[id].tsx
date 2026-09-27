@@ -154,6 +154,7 @@ export default function BookingDetail() {
         onAccept={() => { callSig.accept(); if (partnerPhone) Linking.openURL(`tel:${partnerPhone}`); }}
         onReject={callSig.reject}
         onEnd={callSig.end}
+        onDismiss={callSig.reset}
       />
 
       <Alert message="Live GPS tracking is shared with your partner during an active booking." tone="info" />

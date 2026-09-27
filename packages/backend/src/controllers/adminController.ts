@@ -29,8 +29,16 @@ import { resolveAdminPermissions, hasPermission } from "../rbac/permissions";
 function isPrivilegedTarget(role?: string | null): boolean {
   return Boolean(role && ADMIN_ROLES.includes(role as any));
 }
+/**
+ * The owner/root account is permanently locked against privilege changes:
+ * no other super admin may demote, suspend, re-permission, or delete it.
+ *
+ * Compared case-insensitively and trimmed because a guard that only matches an
+ * exact-cased email is trivially bypassed by any row whose email casing differs.
+ */
 function isPrimarySuperAdmin(email?: string | null): boolean {
-  return (env.ADMIN_EMAIL ?? "santhoshkrishna958@gmail.com") === email;
+  const protectedEmail = (env.ADMIN_EMAIL ?? "santhoshkrishna958@gmail.com").trim().toLowerCase();
+  return (email ?? "").trim().toLowerCase() === protectedEmail;
 }
 
 async function assertCanMutateTarget(
@@ -334,7 +342,7 @@ export async function blockUser(req: AuthedRequest, res: Response): Promise<void
       sendError(res, guard.error.message, 403, guard.error.code);
       return;
     }
-    if (target.role === "SUPER_ADMIN" && isPrimarySuperAdmin(target.email)) {
+    if (isPrimarySuperAdmin(target.email)) {
       sendError(res, "Super admins cannot be blocked.", 403, "FORBIDDEN");
       return;
     }
@@ -467,6 +475,13 @@ export async function deleteUser(req: AuthedRequest, res: Response): Promise<voi
     const target = await prisma.user.findUnique({ where: { id }, select: { email: true } });
     if (!target) {
       sendError(res, "User not found.", 404, "NOT_FOUND");
+      return;
+    }
+    // The root super admin is undeletable by ANYONE, including other super
+    // admins. This guard is keyed on the email alone (not on the current role)
+    // so it cannot be side-stepped by changing the role first.
+    if (isPrimarySuperAdmin(target.email)) {
+      sendError(res, "The primary super admin account cannot be deleted.", 403, "PROTECTED_ACCOUNT");
       return;
     }
     // Audit first using admin as actor (log survives the delete)
@@ -2918,8 +2933,11 @@ export async function demoteUserRole(req: AuthedRequest, res: Response): Promise
       sendError(res, "User not found.", 404, "NOT_FOUND");
       return;
     }
-    if (target.role === "SUPER_ADMIN" && isPrimarySuperAdmin(target.email)) {
-      sendError(res, "Cannot demote a SUPER_ADMIN.", 403, "FORBIDDEN");
+    // Keyed on the email alone so the lock survives any role change, and the
+    // message names the real reason instead of implying all super admins are
+    // undeletable.
+    if (isPrimarySuperAdmin(target.email)) {
+      sendError(res, "The primary super admin account cannot be deleted by anyone.", 403, "PROTECTED_ACCOUNT");
       return;
     }
 

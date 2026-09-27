@@ -96,6 +96,7 @@ router.get("/topup-requests", paymentsView, adminController.listTopupRequests);
 router.post("/topup-requests/:id/verify", paymentsView, adminController.verifyTopupRequest);
 router.post("/wallets/credit", requireSuperAdmin, adminController.creditUserWallet);
 router.delete("/users/:id", requireSuperAdmin, adminController.deleteUser);
+router.delete("/communities/:id", requireSuperAdmin, communityController.adminDeleteCommunity);
 router.get("/kyc-queue", kycReview, adminController.getKycQueue);
 router.post("/kyc/:id/approve", requireSectionAction("KYC", "APPROVE"), adminController.approveKyc);
 router.post("/kyc/:id/reject", requireSectionAction("KYC", "REJECT"), [body("reason").optional().isString()], sanitizeInput, validateRequest, adminController.rejectKyc);

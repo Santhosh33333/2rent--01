@@ -20,7 +20,7 @@ export function LockScreen() {
   }, []);
 
   const submit = async (value: string) => {
-    if (busy || value.length < MIN_PIN_LENGTH) return;
+    if (busy || value.length < expectedLength) return;
     setBusy(true);
     setError("");
     const ok = await verify(value);
@@ -40,7 +40,11 @@ export function LockScreen() {
     if (k && pin.length < expectedLength) {
       const next = pin + k;
       setPin(next);
-      if (next.length === expectedLength) void submit(next);
+      if (next.length === expectedLength) {
+        void submit(next);
+      }
+    } else if (k === '⌫') {
+      setPin(prev => prev.slice(0, -1));
     }
   };
 

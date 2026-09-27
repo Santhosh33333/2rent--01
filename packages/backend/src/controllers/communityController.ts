@@ -199,8 +199,34 @@ export async function updateCommunity(req: AuthedRequest, res: Response): Promis
   }
 }
 
+/**
+ * Shared body for both community delete entry points. Children are removed
+ * BEFORE the parent: the membership rows hold a foreign key to Community, so
+ * deleting the parent first fails the whole transaction and the admin sees a
+ * 500 for a community that was never removed.
+ */
+async function performCommunityDelete(
+  id: string,
+  actorId: string,
+  actorType: "USER" | "ADMIN"
+): Promise<void> {
+  await prisma.$transaction([
+    prisma.communityMember.deleteMany({ where: { communityId: id } }),
+    prisma.community.delete({ where: { id } }),
+    prisma.auditLog.create({
+      data: {
+        actorId,
+        actorType,
+        action: "COMMUNITY_DELETE",
+        entityType: "Community",
+        entityId: id,
+      },
+    }),
+  ]);
+}
+
 // ============================================================================
-// DELETE COMMUNITY
+// DELETE COMMUNITY (owner only, user-facing route)
 // ============================================================================
 
 export async function deleteCommunity(req: AuthedRequest, res: Response): Promise<void> {
@@ -220,21 +246,32 @@ export async function deleteCommunity(req: AuthedRequest, res: Response): Promis
       return;
     }
 
-    await prisma.$transaction([
-      prisma.communityMember.deleteMany({ where: { communityId: id } }),
-      prisma.community.delete({ where: { id } }),
-      prisma.auditLog.create({
-        data: {
-          actorId: req.user!.userId,
-          actorType: "USER",
-          action: "COMMUNITY_DELETE",
-          entityType: "Community",
-          entityId: id,
-        },
-      }),
-    ]);
+    await performCommunityDelete(id, req.user!.userId, "USER");
 
     sendSuccess(res, undefined, "Community deleted.");
+  } catch (err: any) {
+    sendError(res, "Failed to delete community.", 500, "INTERNAL_ERROR");
+  }
+}
+
+/**
+ * Super-admin delete. Intentionally does NOT reuse `deleteCommunity`: that
+ * handler is scoped to the community owner, so routing an admin request
+ * through it would 403 on every community the admin does not personally own.
+ */
+export async function adminDeleteCommunity(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+
+    const community = await prisma.community.findUnique({ where: { id } });
+    if (!community) {
+      sendError(res, "Community not found.", 404, "COMMUNITY_NOT_FOUND");
+      return;
+    }
+
+    await performCommunityDelete(id, req.user!.userId, "ADMIN");
+
+    sendSuccess(res, undefined, "Community deleted successfully.");
   } catch (err: any) {
     sendError(res, "Failed to delete community.", 500, "INTERNAL_ERROR");
   }

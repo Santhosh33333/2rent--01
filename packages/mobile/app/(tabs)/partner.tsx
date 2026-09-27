@@ -126,6 +126,7 @@ export default function Partner() {
         onAccept={callSig.accept}
         onReject={callSig.reject}
         onEnd={callSig.end}
+        onDismiss={callSig.reset}
       />
     </Screen>
   );
