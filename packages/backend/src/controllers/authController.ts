@@ -3,7 +3,10 @@ import bcrypt from "bcryptjs";
 import { v4 as uuidv4 } from "uuid";
 import { createHash, createPublicKey, verify as cryptoVerify } from "crypto";
 import { prisma } from "../config/database";
+import type { Prisma } from "@prisma/client";
 import { env } from "../config/env";
+import { recordConsent } from "../services/legalConsentService";
+import { CONSENT_REQUIREMENTS } from "../legal/documents";
 import { generateAccessToken, generateRefreshToken, generateImpersonationAccessToken, verifyRefreshToken } from "../utils/jwt";
 import { generateOTP } from "../utils/otp";
 import { issueOtp, verifyOtp, consumeOtp, maskIdentifier, isOtpDevEchoOnly } from "../services/otpService";
@@ -148,9 +151,45 @@ async function createOrGetUserFromFirebase(uid: string, email?: string, phone?: 
   return user;
 }
 
+/**
+ * Record the signup gate's documents for a brand-new account.
+ *
+ * Runs on the caller's transaction client so the acceptance and the account are
+ * written together. Fails loudly rather than skipping: an account created
+ * without its terms is a real legal gap, and a silent skip is exactly how that
+ * gap would reach production unnoticed.
+ */
+async function recordSignupConsent(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  legalConsent: { accepted?: boolean; signatureValue?: string } | undefined,
+  req: Request
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!legalConsent?.accepted) return { ok: false, error: "You must accept the terms to continue." };
+  const signatureValue = String(legalConsent.signatureValue || "").trim();
+  if (signatureValue.length < 2) return { ok: false, error: "Type your full name to sign the terms." };
+
+  for (const kind of CONSENT_REQUIREMENTS.SIGNUP) {
+    const result = await recordConsent({
+      userId,
+      kind,
+      signatureType: "TYPED_NAME",
+      signatureValue,
+      consentType: "SIGNUP",
+      ipAddress: req.ip ?? null,
+      userAgent: req.get("user-agent") ?? null,
+      db: tx,
+    });
+    if (!result.ok) {
+      return { ok: false, error: "We could not record your acceptance of the terms. Please try again." };
+    }
+  }
+  return { ok: true };
+}
+
 export async function register(req: Request, res: Response): Promise<void> {
   try {
-    const { email, phone, password, fullName, dateOfBirth, gender, accountType, role } = req.body;
+    const { email, phone, password, fullName, dateOfBirth, gender, accountType, role, legalConsent } = req.body;
 
     // Input validation
     // Both channels are mandatory so signup can always dual-verify.
@@ -264,6 +303,15 @@ export async function register(req: Request, res: Response): Promise<void> {
       }
 
       await tx.wallet.create({ data: { userId: u.id } });
+
+      // Terms are accepted in the same transaction as the account. Recording
+      // them afterwards would leave a window where a live account is bound to
+      // terms it never accepted, and a failure would be silent.
+      const accepted = await recordSignupConsent(tx, u.id, legalConsent, req);
+      if (!accepted.ok) {
+        throw new Error(accepted.error);
+      }
+
       return u;
     });
 
@@ -357,6 +405,18 @@ const responseUser = {
       201
     );
   } catch (err) {
+    // A consent failure is the caller's problem, not a server fault: the user
+    // did not accept (or we could not seal) the terms. Surface it as a 400 with
+    // the real reason instead of a generic 500 that reads like an outage.
+    const message = err instanceof Error ? err.message : "";
+    if (
+      message === "You must accept the terms to continue." ||
+      message === "Type your full name to sign the terms." ||
+      message === "We could not record your acceptance of the terms. Please try again."
+    ) {
+      sendError(res, message, 400, "LEGAL_CONSENT_REQUIRED");
+      return;
+    }
     console.error("register error:", err);
     sendError(res, "Registration failed.", 500, "INTERNAL_ERROR");
   }

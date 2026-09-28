@@ -233,4 +233,50 @@ describe("Acceptance records are sealed and append-only", () => {
     expect(res.ok).toBe(false);
     expect(res.error).toBe("DOCUMENT_NOT_FOUND");
   });
+
+  // Signup writes the acceptance inside the account-creation transaction, so a
+  // crash or a failed consent write must not leave a live account that is bound
+  // to terms nobody agreed to. That only works if recordConsent actually uses
+  // the injected client rather than the shared prisma instance.
+  it("writes through the injected transaction client, not the shared prisma", async () => {
+    const calls: string[] = [];
+    const fakeTx: any = {
+      legalDocument: {
+        findFirst: async ({ where }: any) => {
+          calls.push("tx.legalDocument.findFirst");
+          return state.docs.find((d) => d.kind === where.kind && d.isCurrent) || null;
+        },
+      },
+      legalAcceptance: {
+        findFirst: async () => null,
+        create: async ({ data }: any) => {
+          calls.push("tx.legalAcceptance.create");
+          return { id: "acc-tx", acceptedAt: new Date(), ...data };
+        },
+      },
+      auditLog: { create: async () => ({}) },
+    };
+
+    const res = await svc.recordConsent({
+      userId: "u-atomic",
+      kind: "USER_AGREEMENT",
+      signatureType: "TYPED_NAME",
+      signatureValue: "Asha Rao",
+      consentType: "SIGNUP",
+      db: fakeTx,
+    });
+
+    expect(res.ok).toBe(true);
+    expect(calls).toEqual(["tx.legalDocument.findFirst", "tx.legalAcceptance.create"]);
+    // The shared client must not have been touched.
+    expect(state.created.some((r) => r.userId === "u-atomic")).toBe(false);
+  });
+
+  it("the SIGNUP gate covers user agreement, privacy and community guidelines", () => {
+    expect(docs.CONSENT_REQUIREMENTS.SIGNUP).toEqual([
+      "USER_AGREEMENT",
+      "PRIVACY_POLICY",
+      "COMMUNITY_GUIDELINES",
+    ]);
+  });
 });

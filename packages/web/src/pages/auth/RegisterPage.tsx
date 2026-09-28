@@ -582,8 +582,13 @@ export function RegisterPage() {
                     <label htmlFor="terms" className="text-sm text-surface-600 dark:text-surface-400 leading-relaxed">
                       I agree to the{' '}
                       <Link to="/terms" className="font-semibold text-primary-600 dark:text-primary-400 hover:underline">Terms of Service</Link>
-                      {' '}and{' '}
+                      {', '}
                       <Link to="/privacy" className="font-semibold text-primary-600 dark:text-primary-400 hover:underline">Privacy Policy</Link>
+                      {' '}and{' '}
+                      <Link to="/legal/consent" className="font-semibold text-primary-600 dark:text-primary-400 hover:underline">Community Guidelines</Link>
+                      {'. I sign as '}
+                      <span className="font-semibold text-surface-700 dark:text-surface-200">{watch('name') || 'my typed name'}</span>
+                      {' '}and a dated copy of each is recorded and emailed to me.
                     </label>
                   </div>
                   {errors.terms && <p className="text-xs text-danger-500 font-medium">{errors.terms.message}</p>}

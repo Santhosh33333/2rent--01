@@ -18,6 +18,16 @@ router.post(
     body("fullName").notEmpty().withMessage("Full name is required"),
     body("dateOfBirth").isISO8601().withMessage("Valid date of birth is required"),
     body("gender").isIn(["MALE", "FEMALE", "OTHER"]).withMessage("Valid gender is required"),
+    // Signup is where the terms are actually agreed to. The checkbox in the app
+    // is a convenience; this is the control, so a client that skips it cannot
+    // create an account that is already bound to terms it never accepted.
+    // Accepts a real boolean or its string form, because JSON and form encoders
+    // disagree on this and neither may be treated as consent by accident.
+    body("legalConsent").isObject().withMessage("You must accept the terms to continue"),
+    body("legalConsent.accepted")
+      .custom((v) => v === true || v === "true")
+      .withMessage("You must accept the terms to continue"),
+    body("legalConsent.signatureValue").isString().trim().isLength({ min: 2, max: 120 }).withMessage("Type your full name to sign"),
   ],
   sanitizeInput,
   validateRequest,

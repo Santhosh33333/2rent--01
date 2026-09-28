@@ -15,6 +15,7 @@
 // ============================================================================
 import crypto from "crypto";
 import { prisma } from "../config/database";
+import type { Prisma } from "@prisma/client";
 import { env } from "../config/env";
 import { sendEmail } from "./emailService";
 import { renderEmail, escHtml, WEB_ORIGIN } from "./emailTemplate";
@@ -137,6 +138,13 @@ export interface RecordConsentInput {
   consentType: ConsentGate;
   ipAddress?: string | null;
   userAgent?: string | null;
+  /**
+   * Client to run the reads/writes on. Defaults to the shared prisma instance.
+   * Signup passes its transaction client so the acceptance and the account are
+   * created atomically: an account must never exist without the terms it was
+   * created under.
+   */
+  db?: Prisma.TransactionClient;
 }
 
 export interface RecordConsentResult {
@@ -147,19 +155,20 @@ export interface RecordConsentResult {
 
 /** Sealed, append-only acceptance of one document at its current version. */
 export async function recordConsent(input: RecordConsentInput): Promise<RecordConsentResult> {
-  const doc = await prisma.legalDocument.findFirst({
+  const db = input.db ?? prisma;
+  const doc = await db.legalDocument.findFirst({
     where: { kind: input.kind, isCurrent: true },
     select: { id: true, kind: true, version: true, title: true, contentHtml: true, plainText: true },
   });
   if (!doc) return { ok: false, error: "DOCUMENT_NOT_FOUND" };
 
-  const already = await prisma.legalAcceptance.findFirst({
+  const already = await db.legalAcceptance.findFirst({
     where: { userId: input.userId, documentId: doc.id, withdrawnAt: null },
     select: { id: true },
   });
   if (already) return { ok: true, acceptanceId: already.id };
 
-  const acceptance = await prisma.legalAcceptance.create({
+  const acceptance = await db.legalAcceptance.create({
     data: {
       userId: input.userId,
       documentId: doc.id,
@@ -175,7 +184,7 @@ export async function recordConsent(input: RecordConsentInput): Promise<RecordCo
     },
   });
 
-  await prisma.auditLog
+  await (input.db ?? prisma).auditLog
     .create({
       data: {
         actorId: input.userId,

@@ -383,6 +383,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       gender: data.gender || 'MALE',
       accountType: data.accountType || 'USER',
       role: data.role || 'USER',
+      // Terms acceptance is sealed server-side during the signup transaction.
+      // The typed full name is the signature of record, and it must match the
+      // name on the account so the acceptance is attributable.
+      legalConsent: {
+        accepted: true,
+        signatureValue: data.fullName || data.name,
+      },
     }
 
     const response = await api.post('/auth/register', payload)
