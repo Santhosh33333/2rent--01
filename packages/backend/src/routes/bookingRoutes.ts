@@ -4,7 +4,7 @@ import { authenticateToken, requireKycVerified } from "../middleware/auth";
 import { sanitizeInput, validateRequest } from "../middleware/validation";
 import { upload } from "../middleware/upload";
 import { preventDuplicateBooking, preventDuplicatePayment } from "../middleware/fraudPrevention";
-import { requireLegalConsent } from "../middleware/legalConsent";
+import { requireLegalConsent, requireReConsent } from "../middleware/legalConsent";
 import * as bookingController from "../controllers/bookingController";
 import { SERVICE_KEYS } from "../services/serviceCatalog";
 
@@ -36,6 +36,11 @@ router.post(
   sanitizeInput,
   validateRequest,
   requireLegalConsent("BOOKING"),
+  // Legacy accounts get a grace period before a lapsed notice actually blocks a
+  // new booking. Applied to creating one only: a user who already has money or
+  // a scheduled service in flight must still be able to see, pay for and close
+  // it out, which blocking every booking route would make impossible.
+  requireReConsent(),
   preventDuplicateBooking,
   bookingController.createBooking
 );

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { body } from "express-validator";
 import { authenticateToken, requireKycVerified } from "../middleware/auth";
 import { sanitizeInput, validateRequest } from "../middleware/validation";
+import { requireReConsent } from "../middleware/legalConsent";
 import * as messageController from "../controllers/messageController";
 
 const router = Router();
@@ -20,6 +21,11 @@ router.post(
   ],
   sanitizeInput,
   validateRequest,
+  // Starting a new conversation is the commitment, so that is what is gated.
+  // Reading and reacting to an existing thread stays open: cutting a user off
+  // from history they are already part of is not what this notice promises, and
+  // a lapsed grace period should not strand a conversation mid-flight.
+  requireReConsent(),
   messageController.sendMessage
 );
 
