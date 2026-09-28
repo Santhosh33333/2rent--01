@@ -61,6 +61,27 @@ services:
       # omission would only be noticed by users not receiving notifications.
       - key: FIREBASE_SERVICE_ACCOUNT
         sync: false
+      # Cashfree credentials for the PG migration.
+      #
+      # sync: false for the same reason as REDIS_URL above: these are set by
+      # hand in the dashboard, and a Blueprint sync would overwrite them. They
+      # are declared anyway so a new service provisioned from this file knows
+      # which variables it needs instead of booting without them.
+      #
+      # CASHFREE_SECRET_KEY is deliberately NOT a distinct webhook secret:
+      # Cashfree signs inbound webhooks with this same PG secret key. When keys
+      # are rotated, signature verification must use the OLDEST active key pair,
+      # because that is the one Cashfree signs with.
+      - key: CASHFREE_APP_ID
+        sync: false
+      - key: CASHFREE_SECRET_KEY
+        sync: false
+      # Which gateway handles live payments. Left as razorpay on purpose: the
+      # switch to cashfree should only happen after a real end-to-end payment
+      # has been observed crediting a wallet, not on the strength of a health
+      # probe.
+      - key: PAYMENT_PROVIDER
+        value: razorpay
     # The liveness route is mounted at the root ("/health"), not under /api -
     # everything under /api sits behind auth middleware and answers 401 here,
     # which would fail every deploy's health check.
