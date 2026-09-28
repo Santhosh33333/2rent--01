@@ -211,6 +211,10 @@ export function ConversationPage() {
           senderId: data.senderId,
           content: data.content,
           status: 'SENT',
+          // Live messages now carry the sender profile, same as the REST shape.
+          // Without it a message that arrived over the socket had no name or
+          // avatar and fell back to initials until the next refresh.
+          sender: (data as any).sender,
           replyToId: (data as any).replyToId || undefined,
           replyTo: (data as any).replyTo || undefined,
           reactions: (data as any).reactions || undefined,
@@ -318,11 +322,23 @@ export function ConversationPage() {
         if (realId) {
           setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, id: realId } : m)))
         }
-      } else {
+      } else if (chat.isConnected()) {
         // Real-time send. For a brand-new thread we pass receiverId so the server
         // creates the conversation; message_sent returns the real conversationId.
         // clientId lets the ack rename this exact bubble rather than "the last one".
         chat.sendMessage(content, conversationId ? undefined : userId, tempId)
+      } else {
+        // The socket emit is fire-and-forget: when the socket is down it only
+        // logs a warning and never throws, so the optimistic bubble would sit
+        // there forever with no error and no message delivered. Fall back to the
+        // REST endpoint, which authenticates and validates the same way, so a
+        // dropped websocket degrades into a slower send instead of silent loss.
+        const res = await api.post('/messages', { receiverId: userId, content, clientId: tempId })
+        const saved = res.data?.data?.message || res.data?.data || res.data
+        const realId = saved?.id || saved?.message?.id
+        if (realId) {
+          setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, id: realId } : m)))
+        }
       }
     } catch {
       setMessages((prev) => prev.filter((m) => m.id !== tempId))

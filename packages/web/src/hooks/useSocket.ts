@@ -310,6 +310,8 @@ export function useChat(conversationId: string) {
     emit('leave_chat', conversationId);
   }, [conversationId, emit]);
 
+  const isConnected = useCallback(() => globalSocket?.connected === true, []);
+
   const sendMessage = useCallback(
     (content: string, receiverId?: string, clientId?: string) => {
       const payload: Record<string, unknown> = { conversationId, content };
@@ -417,6 +419,10 @@ export function useChat(conversationId: string) {
     joinChat,
     leaveChat,
     sendMessage,
+    // Lets callers detect a dead socket before emitting. `emit` is
+    // fire-and-forget and never throws, so without this a send on a dropped
+    // connection looks like it worked and the message is silently lost.
+    isConnected,
     markAsRead,
     setTyping,
     listenToMessages,

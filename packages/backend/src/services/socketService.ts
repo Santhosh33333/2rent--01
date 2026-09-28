@@ -641,11 +641,22 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
           .update({ where: { id: convId! }, data: { updatedAt: new Date(), lastMessageId: message.id } })
           .catch(() => {});
 
+        const senderProfile = await prisma.user
+          .findUnique({ where: { id: userId }, select: { id: true, fullName: true, avatarUrl: true } })
+          .catch(() => null);
+
         const payload = {
           conversationId: convId,
+          // `id` mirrors the REST shape and `messageId` is kept for older clients,
+          // so a live message renders identically to one loaded on refresh.
+          id: message.id,
           messageId: message.id,
           senderId: userId,
           content,
+          messageType: message.messageType,
+          replyToId: message.replyToId,
+          reactions: message.reactions,
+          sender: senderProfile,
           timestamp: message.createdAt.toISOString(),
         };
 
