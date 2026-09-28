@@ -374,13 +374,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const register = async (data: RegisterInput) => {
+    // Never substitute a placeholder for identity data. The server requires a
+    // real date of birth and enforces the 18+ gate against it, so a defaulted
+    // value would both misstate the user's age and defeat that check. An absent
+    // value has to travel as absent and be rejected by the server, not papered
+    // over here.
+    if (!data.dateOfBirth) {
+      throw new Error('Date of birth is required to create an account.')
+    }
+    if (!data.gender) {
+      throw new Error('Please select your gender.')
+    }
+    if (data.legalConsent?.accepted !== true) {
+      throw new Error('You must accept the terms and conditions to continue.')
+    }
+
     const payload = {
       fullName: data.fullName || data.name,
       email: data.email,
       phone: data.phone,
       password: data.password,
-      dateOfBirth: data.dateOfBirth || '2000-01-01',
-      gender: data.gender || 'MALE',
+      dateOfBirth: data.dateOfBirth,
+      gender: data.gender,
       accountType: data.accountType || 'USER',
       role: data.role || 'USER',
       // Terms acceptance is sealed server-side during the signup transaction.

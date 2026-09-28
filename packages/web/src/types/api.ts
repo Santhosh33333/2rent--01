@@ -119,13 +119,23 @@ export interface PriceEstimateParams {
 }
 
 export interface RegisterInput {
-  fullName?: string
-  name?: string
-  email: string
-  phone: string
-  password: string
-  dateOfBirth?: string
-  gender?: string
-  accountType?: string
-  role?: string
-}
+    fullName?: string
+    name?: string
+    email: string
+    phone: string
+    password: string
+    dateOfBirth?: string
+    gender?: string
+    accountType?: string
+    role?: string
+    /**
+     * The terms acceptance, carried through from the signup form. This is
+     * deliberately part of the input contract rather than something the auth
+     * client fills in on the caller's behalf, so the value the server records
+     * is the value the user actually gave.
+     */
+    legalConsent?: {
+      accepted?: boolean
+      signatureValue?: string
+    }
+  }

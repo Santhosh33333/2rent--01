@@ -179,7 +179,14 @@ export function RegisterPage() {
         accountType,
         role: accountType,
         dateOfBirth: data.dateOfBirth,
-        gender: data.gender || 'OTHER',
+        gender: data.gender,
+        // Forward the real acceptance state. The auth client refuses to
+        // register without it, so a submission that skipped the box is
+        // rejected instead of being recorded as consent the user never gave.
+        legalConsent: {
+          accepted: data.terms === true,
+          signatureValue: data.name,
+        },
       })
       // If the user signed up with a valid referral code, link them as soon as
       // the account exists. Non-fatal on failure (e.g. invalid/unused code).
