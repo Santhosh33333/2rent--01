@@ -624,29 +624,28 @@ export async function cashfreeWebhook(req: Request, res: Response): Promise<void
  * credentials needed to verify a real signature are present and non-placeholder.
  */
 export async function cashfreeWebhookHealth(_req: Request, res: Response): Promise<void> {
-  const webhookSecret = (env.CASHFREE_WEBHOOK_SECRET || "").trim()
   const appId = (env.CASHFREE_APP_ID || "").trim()
+  // The same key signs outbound API calls and inbound webhooks, so readiness
+  // depends on this one value.
   const secretKey = (env.CASHFREE_SECRET_KEY || "").trim()
 
   const configured = (value: string) => Boolean(value) && !value.includes("placeholder")
-  const ready =
-    configured(webhookSecret) && configured(appId) && configured(secretKey)
+  const ready = configured(appId) && configured(secretKey)
 
   res.status(200).json({
     received: true,
     // false here is expected and correct: this endpoint settles nothing.
     applied: false,
     reachable: true,
-    webhookConfigured: configured(webhookSecret),
+    webhookConfigured: configured(secretKey),
     activeProvider: ACTIVE_PROVIDER,
     ready,
     // Spells out what is still missing, so setup can be finished without
     // guessing from a generic failure.
-    missing: [
-      configured(webhookSecret) ? null : "CASHFREE_WEBHOOK_SECRET",
-      configured(appId) ? null : "CASHFREE_APP_ID",
-      configured(secretKey) ? null : "CASHFREE_SECRET_KEY",
-    ].filter(Boolean),
+      missing: [
+        configured(appId) ? null : "CASHFREE_APP_ID",
+        configured(secretKey) ? null : "CASHFREE_SECRET_KEY",
+      ].filter(Boolean),
   })
 }
 

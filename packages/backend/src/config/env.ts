@@ -73,12 +73,15 @@ const envSchema = z.object({
   // actually selected.
   PAYMENT_PROVIDER: z.enum(["razorpay", "cashfree"]).default("razorpay"),
 
-  // Cashfree - the active payment gateway going forward. The webhook secret is
-  // a different secret from the API secret and must never share a default,
-  // because an unset webhook secret that "passes" is a forged-payment hole.
+  // Cashfree - the active payment gateway going forward.
+  //
+  // There is no separate webhook secret. Cashfree signs webhooks with the same
+  // PG secret key used for API calls, so an earlier assumption that a distinct
+  // CASHFREE_WEBHOOK_SECRET existed would have left setup impossible to
+  // complete. If keys have been rotated, signature verification must use the
+  // OLDEST active key pair, because that is the one Cashfree signs with.
   CASHFREE_APP_ID: z.string().default("cashfree_app_id_placeholder"),
   CASHFREE_SECRET_KEY: z.string().default("cashfree_secret_placeholder"),
-  CASHFREE_WEBHOOK_SECRET: z.string().default("cashfree_webhook_secret_placeholder"),
 
   // Payment settings
   PLATFORM_COMMISSION_PERCENT: z.string().default("10").transform(Number),
@@ -272,23 +275,14 @@ if (env.isProduction) {
     );
   }
 
-  // Cashfree webhook secret: without it, inbound payment notifications cannot
-  // be authenticated, and the only way to keep accepting them would be to trust
-  // unsigned callbacks. That is the exact shape of a forged payment, so refuse
-  // to start rather than run with it unset.
+  // The Cashfree secret key is also what authenticates inbound webhooks, so
+  // without it payment notifications cannot be verified and the only way to
+  // keep accepting them would be to trust unsigned callbacks. That is the exact
+  // shape of a forged payment, so refuse to start rather than run with it unset.
   //
   // Only enforced once Cashfree is the selected provider, so that switching the
   // gateway and supplying its secrets can happen in separate deploys.
   if (env.PAYMENT_PROVIDER === "cashfree") {
-    if (
-      isPlaceholder(env.CASHFREE_WEBHOOK_SECRET) ||
-      env.CASHFREE_WEBHOOK_SECRET?.includes("placeholder")
-    ) {
-      throw new Error(
-        "CASHFREE_WEBHOOK_SECRET is required in production and must be the real webhook secret from the Cashfree dashboard (not the placeholder).",
-      );
-    }
-
     if (isPlaceholder(env.CASHFREE_APP_ID) || env.CASHFREE_APP_ID?.includes("placeholder")) {
       throw new Error(
         "CASHFREE_APP_ID is required in production and must be the real app id (not the placeholder).",

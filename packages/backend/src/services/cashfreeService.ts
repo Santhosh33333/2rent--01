@@ -6,7 +6,7 @@
  *
  *   - CASHFREE_SECRET_KEY      signs and verifies client-side payment proofs,
  *                              and authenticates our calls to Cashfree.
- *   - CASHFREE_WEBHOOK_SECRET  signs inbound webhooks only.
+ *   - CASHFREE_SECRET_KEY       signs inbound webhooks as well as API calls.
  *
  * Conflating them is how deployments end up accepting unsigned webhooks, so
  * they are separate variables and each is checked independently.
@@ -202,31 +202,45 @@ export function isValidPaymentSignature(
  * MUST be called with the exact raw request bytes. Re-serialising the parsed
  * body produces different bytes and the HMAC will not match, which is why
  * app.ts captures req.rawBody before the JSON parser runs.
+ *
+ * Cashfree signs `timestamp + rawBody` and sends the result base64-encoded, so
+ * the timestamp is part of the signed payload rather than metadata. A checksum
+ * over the body alone would not match, and hex encoding would not either.
+ *
+ * The signing key is the same PG secret key used for API calls. If keys have
+ * been rotated, this must be the oldest active key pair.
  */
 export function verifyWebhookSignature(
   rawBody: string | Buffer,
-  signature: string | undefined
+  signature: string | undefined,
+  timestamp: string | undefined
 ): boolean {
-  const secret = env.CASHFREE_WEBHOOK_SECRET?.trim();
+  const secret = env.CASHFREE_SECRET_KEY?.trim();
   if (!secret || !signature) return false;
 
   if (env.isProduction && isPlaceholder(secret)) {
-    // Fail closed. An unset webhook secret must never mean "accept anything",
-    // because that is precisely the forged-payment path.
-    throw new Error("CASHFREE_WEBHOOK_SECRET is a placeholder; refusing to trust webhooks");
+    // Fail closed. An unset secret must never mean "accept anything", because
+    // that is precisely the forged-payment path.
+    throw new Error("CASHFREE_SECRET_KEY is a placeholder; refusing to trust webhooks");
   }
 
-  return isValidWebhookSignature(rawBody, signature, secret);
+  return isValidWebhookSignature(rawBody, signature, secret, timestamp);
 }
 
 /** Pure form of the webhook check. See isValidPaymentSignature for rationale. */
 export function isValidWebhookSignature(
   rawBody: string | Buffer,
   signature: string | undefined,
-  secret: string
+  secret: string,
+  timestamp: string | undefined
 ): boolean {
-  if (!signature || !secret) return false;
-  const expected = crypto.createHmac("sha256", secret).update(rawBody).digest("hex");
+  if (!signature || !secret || !timestamp) return false;
+
+  const signedPayload = `${timestamp}${rawBody.toString()}`;
+  const expected = crypto
+    .createHmac("sha256", secret)
+    .update(signedPayload)
+    .digest("base64");
   return timingSafeEquals(expected, signature);
 }
 

@@ -304,7 +304,9 @@ export function verifyInboundWebhook(
 ): boolean {
   if (provider === "cashfree") {
     const signature = firstHeader(headers["x-webhook-signature"]);
-    return cashfreeService.verifyWebhookSignature(rawBody, signature);
+    // The timestamp is part of Cashfree's signed payload, not just metadata.
+    const timestamp = firstHeader(headers["x-webhook-timestamp"]);
+    return cashfreeService.verifyWebhookSignature(rawBody, signature, timestamp);
   }
   const signature = firstHeader(headers["x-razorpay-signature"]);
   return razorpayService.verifyWebhookSignature(String(rawBody), signature ?? "");

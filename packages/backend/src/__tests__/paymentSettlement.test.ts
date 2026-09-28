@@ -26,7 +26,7 @@ vi.hoisted(() => {
   process.env.PAYMENT_PROVIDER = "cashfree";
   process.env.CASHFREE_APP_ID = "test_app_id";
   process.env.CASHFREE_SECRET_KEY = "test_secret_key";
-  process.env.CASHFREE_WEBHOOK_SECRET = "test_webhook_secret";
+
 });
 
 const SECRET = "test_secret_key";
@@ -376,16 +376,20 @@ describe("forged and mismatched requests", () => {
 // ============================================================================
 
 describe("cashfree webhook", () => {
-  const WEBHOOK_SECRET = "test_webhook_secret";
-  const signBody = (raw: string) =>
-    crypto.createHmac("sha256", WEBHOOK_SECRET).update(raw).digest("hex");
+  // Cashfree signs `timestamp + rawBody` with the PG secret key, base64-encoded.
+  const SECRET = "test_secret_key";
+  const TS = "1617695238078";
+  const signBody = (raw: string, ts = TS) =>
+    crypto.createHmac("sha256", SECRET).update(`${ts}${raw}`).digest("base64");
 
-  function webhookReq(payload: unknown, signature?: string) {
+  function webhookReq(payload: unknown, signature?: string, ts: string = TS) {
     const raw = JSON.stringify(payload);
     return {
       body: payload,
       rawBody: Buffer.from(raw, "utf8"),
-      headers: signature ? { "x-webhook-signature": signature } : {},
+      headers: signature
+        ? { "x-webhook-signature": signature, "x-webhook-timestamp": ts }
+        : { "x-webhook-timestamp": ts },
     } as any;
   }
 
@@ -497,11 +501,15 @@ describe("cashfree webhook", () => {
     const req = {
       body: JSON.parse(tampered),
       rawBody: Buffer.from(tampered, "utf8"),
-      headers: { "content-type": "text/plain", "x-webhook-signature": signBody(original) },
+      headers: {
+        "content-type": "text/plain",
+        "x-webhook-signature": signBody(original),
+        "x-webhook-timestamp": TS,
+      },
     } as any;
-    gateway.verifyWebhookSignature.mockImplementation((raw: any, sig: any) => {
+    gateway.verifyWebhookSignature.mockImplementation((raw: any, sig: any, ts: any) => {
       const bytes = Buffer.isBuffer(raw) ? raw.toString("utf8") : raw;
-      return isValidWebhookSignature(bytes, sig, WEBHOOK_SECRET);
+      return isValidWebhookSignature(bytes, sig, SECRET, ts);
     });
 
     const { res, state } = fakeRes();

@@ -31,7 +31,6 @@ vi.hoisted(() => {
   process.env.ADMIN_PASSWORD = "TestPass123!";
   process.env.CASHFREE_APP_ID = "test_app_id";
   process.env.CASHFREE_SECRET_KEY = "test_secret_key";
-  process.env.CASHFREE_WEBHOOK_SECRET = "test_webhook_secret";
 });
 
 import {
@@ -41,15 +40,15 @@ import {
   createOrder,
   fetchPayments,
 } from "../services/cashfreeService";
-
 const SECRET = "test_secret_key";
-const WEBHOOK_SECRET = "test_webhook_secret";
 
 const signPayment = (orderId: string, paymentId: string, secret = SECRET) =>
   crypto.createHmac("sha256", secret).update(`${orderId}${paymentId}`).digest("hex");
 
-const signWebhook = (raw: string, secret = WEBHOOK_SECRET) =>
-  crypto.createHmac("sha256", secret).update(raw).digest("hex");
+// Cashfree signs `timestamp + rawBody` with the PG secret key and sends the
+// result base64-encoded.
+const signWebhook = (ts: string, raw: string, secret = SECRET) =>
+  crypto.createHmac("sha256", secret).update(`${ts}${raw}`).digest("base64");
 
 let fetchMock: ReturnType<typeof vi.fn>;
 
@@ -106,13 +105,16 @@ describe("webhook signature", () => {
     null,
     2
   );
+  const ts = "1617695238078";
 
   it("accepts the exact raw bytes the provider sent", () => {
-    expect(isValidWebhookSignature(body, signWebhook(body), WEBHOOK_SECRET)).toBe(true);
+    expect(isValidWebhookSignature(body, signWebhook(ts, body), SECRET, ts)).toBe(true);
   });
 
   it("accepts a Buffer body identically to a string body", () => {
-    expect(isValidWebhookSignature(Buffer.from(body, "utf8"), signWebhook(body), WEBHOOK_SECRET)).toBe(true);
+    expect(
+      isValidWebhookSignature(Buffer.from(body, "utf8"), signWebhook(ts, body), SECRET, ts)
+    ).toBe(true);
   });
 
   it("rejects the re-serialised body a JSON round-trip would produce", () => {
@@ -120,27 +122,48 @@ describe("webhook signature", () => {
     // re-stringified JSON instead of the bytes that were actually received.
     const reparsed = JSON.stringify(JSON.parse(body));
     expect(reparsed).not.toBe(body);
-    expect(isValidWebhookSignature(reparsed, signWebhook(body), WEBHOOK_SECRET)).toBe(false);
+    expect(isValidWebhookSignature(reparsed, signWebhook(ts, body), SECRET, ts)).toBe(false);
   });
 
   it("rejects a payload altered by one character", () => {
     const tampered = body.replace("pay_9", "pay_8");
-    expect(isValidWebhookSignature(tampered, signWebhook(body), WEBHOOK_SECRET)).toBe(false);
+    expect(isValidWebhookSignature(tampered, signWebhook(ts, body), SECRET, ts)).toBe(false);
   });
 
   it("rejects an absent signature header", () => {
-    expect(isValidWebhookSignature(body, undefined, WEBHOOK_SECRET)).toBe(false);
-    expect(isValidWebhookSignature(body, "", WEBHOOK_SECRET)).toBe(false);
+    expect(isValidWebhookSignature(body, undefined, SECRET, ts)).toBe(false);
+    expect(isValidWebhookSignature(body, "", SECRET, ts)).toBe(false);
   });
 
-  it("rejects when the webhook secret is unset rather than trusting the payload", () => {
-    expect(isValidWebhookSignature(body, "anything", "")).toBe(false);
+  it("rejects a missing timestamp", () => {
+    // The timestamp is part of the signed payload. Verifying without it would
+    // compute a different HMAC and accept nothing real.
+    expect(isValidWebhookSignature(body, signWebhook(ts, body), SECRET, undefined)).toBe(false);
   });
 
-  it("does not accept a signature made with the API secret", () => {
-    // Guards against wiring the two Cashfree secrets into each other: signing
-    // with the API secret must not satisfy webhook verification.
-    expect(isValidWebhookSignature(body, signWebhook(body, SECRET), WEBHOOK_SECRET)).toBe(false);
+  it("rejects a signature made for a different timestamp", () => {
+    expect(
+      isValidWebhookSignature(body, signWebhook(ts, body), SECRET, "1617695238079")
+    ).toBe(false);
+  });
+
+  it("rejects when the secret is unset rather than trusting the payload", () => {
+    expect(isValidWebhookSignature(body, "anything", "", ts)).toBe(false);
+  });
+
+  it("rejects a hex signature where the provider sends base64", () => {
+    // The encoding is part of the contract. Accepting a hex digest here would
+    // mean a caller controls the encoding, which is a forgery surface.
+    const hex = crypto.createHmac("sha256", SECRET).update(`${ts}${body}`).digest("hex");
+    expect(isValidWebhookSignature(body, hex, SECRET, ts)).toBe(false);
+  });
+
+  it("matches the signature format Cashfree documents", () => {
+    // base64 of HMAC-SHA256(timestamp + rawBody) keyed by the secret, so the
+    // result is 44 characters ending in '='.
+    const sig = signWebhook(ts, body);
+    expect(sig).toHaveLength(44);
+    expect(sig.endsWith("=")).toBe(true);
   });
 });
 
