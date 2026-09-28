@@ -204,6 +204,40 @@ describe("order creation", () => {
       /order_id already exists/
     );
   });
+
+  it("sends the API version and credentials Cashfree actually requires", async () => {
+    // `x-cf-version` was silently ignored by the gateway, which would have left
+    // every order call running on an unspecified API version. Cashfree reads
+    // `x-api-version`.
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ order_id: "o1", order_status: "ACTIVE" }),
+    });
+
+    await createOrder({ orderId: "o1", amount: 10, customerId: "c1" });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const headers = init.headers as Record<string, string>;
+    expect(headers["x-api-version"]).toBe("2025-01-01");
+    expect(headers["x-client-id"]).toBe("test_app_id");
+    expect(headers["x-client-secret"]).toBe("test_secret_key");
+    // The misspelled header must not be sent at all.
+    expect(headers["x-cf-version"]).toBeUndefined();
+  });
+
+  it("calls the production orders endpoint", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ order_id: "o1", order_status: "ACTIVE" }),
+    });
+
+    await createOrder({ orderId: "o1", amount: 10, customerId: "c1" });
+
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url).toBe("https://api.cashfree.com/pg/orders");
+  });
 });
 
 describe("amount integrity", () => {

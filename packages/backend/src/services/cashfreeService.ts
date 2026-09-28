@@ -17,7 +17,11 @@ import crypto from "crypto"
 import { env } from "../config/env"
 
 const CASHFREE_API_BASE = "https://api.cashfree.com/pg"
-const CASHFREE_API_VERSION = "2022-09-01"
+// The header is `x-api-version`. An earlier `x-cf-version` was silently ignored
+// by Cashfree, which would have left every order call on a default API version.
+// Pinning the version explicitly keeps order, fetch and refund calls on the same
+// contract.
+const CASHFREE_API_VERSION = "2025-01-01"
 
 export interface CashfreeOrderRequest {
   orderId: string
@@ -78,7 +82,7 @@ function headers(appId: string, secret: string): Record<string, string> {
   return {
     "x-client-id": appId,
     "x-client-secret": secret,
-    "x-cf-version": CASHFREE_API_VERSION,
+    "x-api-version": CASHFREE_API_VERSION,
     "Content-Type": "application/json",
   }
 }
