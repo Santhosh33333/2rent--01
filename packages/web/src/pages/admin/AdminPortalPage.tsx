@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import {
   LayoutDashboard, Users, ShieldCheck, Handshake,
-  Banknote, Flag, ScrollText, ArrowLeft, Settings, Percent, CalendarCheck, Wallet, Radio, Users2, CalendarDays, Layers, ShieldAlert, QrCode, Siren, FileSignature
+  Banknote, Flag, ScrollText, ArrowLeft, Settings, Percent, CalendarCheck, Wallet, Radio, Users2, CalendarDays, Layers, ShieldAlert, QrCode, Siren, FileSignature, LifeBuoy
 } from 'lucide-react'
 import { RoleSwitcher } from '../../components/RoleSwitcher'
 
@@ -25,6 +25,7 @@ export function AdminPortalPage() {
     { path: '/admin/upi-verification', title: 'UPI Verification', desc: 'Verify manual UPI payments', icon: QrCode },
     { path: '/admin/topups', title: 'Wallet Top-ups', desc: 'Verify manual UPI top-ups & credit', icon: Wallet },
     { path: '/admin/reports', title: 'Reports', desc: 'Review user reports', icon: Flag },
+  { path: '/admin/support', title: 'Support desk', desc: 'Answer user requests', icon: LifeBuoy },
     { path: '/admin/audit-logs', title: 'Audit Logs', desc: 'System activity logs', icon: ScrollText },
     { path: '/admin/pricing', title: 'Pricing & Fees', desc: 'User & partner fee control', icon: Percent },
     { path: '/admin/settings', title: 'Settings', desc: 'Platform configuration', icon: Settings },

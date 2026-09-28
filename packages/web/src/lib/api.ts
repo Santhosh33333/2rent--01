@@ -336,3 +336,33 @@ export const walletApi = {
   requestWithdrawal: (data: { amount: number; method: string; accountDetail: string }) => api.post('/wallet/withdraw', data),
   cancelWithdrawal: (id: string) => api.delete(`/wallet/withdraw/${id}`),
 }
+
+export type SupportTicketStatus = 'OPEN' | 'IN_PROGRESS' | 'WAITING_ON_USER' | 'RESOLVED' | 'CLOSED'
+export type SupportPriority = 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT'
+export const SUPPORT_CATEGORIES = [
+  { value: 'ACCOUNT', label: 'Account & login' },
+  { value: 'PAYMENT', label: 'Payments & refunds' },
+  { value: 'BOOKING', label: 'A booking' },
+  { value: 'SAFETY', label: 'Safety concern' },
+  { value: 'TECHNICAL', label: 'Something is broken' },
+  { value: 'PARTNER_ONBOARDING', label: 'Becoming a partner' },
+  { value: 'OTHER', label: 'Something else' },
+] as const
+
+// Support desk. Ticket ids are server uuids; `reference` (NBR-XXXXXX) is what
+// the user quotes in an email, so the UI always shows the reference too.
+export const supportApi = {
+  myTickets: () => api.get('/support/tickets'),
+  myTicket: (id: string) => api.get(`/support/tickets/${id}`),
+  createTicket: (data: { category: string; subject: string; body: string }) =>
+    api.post('/support/tickets', data),
+  reply: (id: string, body: string) => api.post(`/support/tickets/${id}/replies`, { body }),
+  updateStatus: (id: string, status: string, extra?: { resolution?: string; note?: string }) =>
+    api.patch(`/support/tickets/${id}/status`, { status, ...extra }),
+  // Staff only.
+  queue: (params?: { status?: string; mine?: boolean }) => api.get('/support/queue', { params }),
+  setPriority: (id: string, priority: SupportPriority) =>
+    api.patch(`/support/tickets/${id}/priority`, { priority }),
+  assign: (id: string, assigneeId: string) =>
+    api.patch(`/support/tickets/${id}/assign`, { assigneeId }),
+}

@@ -80,6 +80,8 @@ const AdminServicesPage = lazy(() => import('./pages/admin/AdminServicesPage').t
 const AdminChatReportsPage = lazy(() => import('./pages/admin/AdminChatReportsPage').then(m => ({ default: m.AdminChatReportsPage })))
 const AdminSosPage = lazy(() => import('./pages/admin/AdminSosPage').then(m => ({ default: m.AdminSosPage })))
 const AdminReportsPage = lazy(() => import('./pages/admin/AdminReportsPage').then(m => ({ default: m.AdminReportsPage })))
+const AdminSupportQueuePage = lazy(() => import('./pages/admin/AdminSupportQueuePage').then(m => ({ default: m.AdminSupportQueuePage })))
+const SupportPage = lazy(() => import('./pages/support/SupportPage').then(m => ({ default: m.SupportPage })))
 const AdminAuditLogsPage = lazy(() => import('./pages/admin/AdminAuditLogsPage').then(m => ({ default: m.AdminAuditLogsPage })))
 const AdminAdminsPage = lazy(() => import('./pages/admin/AdminAdminsPage').then(m => ({ default: m.AdminAdminsPage })))
 const AdminPaymentsPage = lazy(() => import('./pages/admin/AdminPaymentsPage').then(m => ({ default: m.AdminPaymentsPage })))
@@ -240,6 +242,9 @@ export function App() {
               <Route path="/wallet/withdraw" element={<WithdrawalPage />} />
               <Route path="/wallet/transactions" element={<TransactionHistoryPage />} />
               <Route path="/wallet/history" element={<TransactionHistoryPage />} />
+              {/* Support desk. Available to partners too: they are members with
+                  the same billing and booking problems as anyone else. */}
+              <Route path="/support" element={<SupportPage />} />
             </Route>
           </Route>
 
@@ -294,6 +299,7 @@ export function App() {
               <Route path="/admin/chat-reports" element={<AdminChatReportsPage />} />
               <Route path="/admin/sos" element={<AdminSosPage />} />
               <Route path="/admin/reports" element={<AdminReportsPage />} />
+              <Route path="/admin/support" element={<AdminSupportQueuePage />} />
               <Route path="/admin/audit-logs" element={<AdminAuditLogsPage />} />
               <Route path="/admin/admins" element={<AdminAdminsPage />} />
                <Route path="/admin/payments" element={<AdminPaymentsPage />} />

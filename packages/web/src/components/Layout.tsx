@@ -3,7 +3,7 @@ import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
 import { 
   Home, User, Wallet, Users, Sun, Moon, Menu, X, Bell, 
   MapPin, LogOut, Calendar, Settings, Shield, Info, LayoutDashboard, 
-  ClipboardList, Search, QrCode, MoreHorizontal, Send 
+  ClipboardList, Search, QrCode, MoreHorizontal, Send, LifeBuoy 
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { ImpersonationBanner } from './ImpersonationBanner';
@@ -85,11 +85,13 @@ const adminNav = [
   { to: '/admin/live-tracking', icon: MapPin, label: 'Live' },
   { to: '/admin/email', icon: Send, label: 'Email All' },
   { to: '/admin/reports', icon: Shield, label: 'Reports' },
+  { to: '/admin/support', icon: LifeBuoy, label: 'Support' },
 ];
 
 const sidebarLinks = [
   { to: '/settings', icon: Settings, label: 'Settings' },
   { to: '/notifications', icon: Bell, label: 'Notifications' },
+  { to: '/support', icon: LifeBuoy, label: 'Help & support' },
   { to: '/settings/privacy', icon: Shield, label: 'Privacy' },
   { to: '/home', icon: Info, label: 'About' },
 ];
