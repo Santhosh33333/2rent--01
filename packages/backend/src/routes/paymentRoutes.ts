@@ -13,6 +13,14 @@ const router = Router()
 router.post("/webhook", paymentController.webhookPayment)
 router.post("/webhook/cashfree", paymentController.cashfreeWebhook)
 
+// Reachability probe for the provider dashboard's "test endpoint" button.
+//
+// A GET is unauthenticated by design, like the POST routes, and deliberately
+// reports configuration only. It accepts no event, moves no money, and cannot
+// be used to confirm a payment: a caller must supply a real signature on the
+// POST route for anything to be settled.
+router.get("/webhook/cashfree", paymentController.cashfreeWebhookHealth)
+
 // Authenticated routes
 router.use(authenticateToken)
 

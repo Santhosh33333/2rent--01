@@ -60,6 +60,14 @@ const { db, gateway } = vi.hoisted(() => ({
 
 vi.mock("../config/database", () => ({ prisma: db }));
 
+// Used to prove that a text/plain webhook is verified against the same bytes.
+vi.mock("../services/cashfreeService", async () => {
+  const actual = await vi.importActual<typeof import("../services/cashfreeService")>(
+    "../services/cashfreeService"
+  );
+  return { ...actual, isValidWebhookSignature: actual.isValidWebhookSignature };
+});
+
 vi.mock("../services/cashfreeService", async () => {
   const actual = await vi.importActual<typeof import("../services/cashfreeService")>(
     "../services/cashfreeService"
@@ -67,6 +75,7 @@ vi.mock("../services/cashfreeService", async () => {
   return { ...actual, ...gateway };
 });
 
+import { isValidWebhookSignature } from "../services/cashfreeService";
 import * as paymentController from "../controllers/paymentController";
 
 // --- helpers ---------------------------------------------------------------
@@ -460,6 +469,58 @@ describe("cashfree webhook", () => {
 
     expect(state.statusCode).toBe(400);
     expect(db.wallet.update).not.toHaveBeenCalled();
+  });
+
+  it("verifies a webhook that arrived as text, not JSON", async () => {
+    // The parser is bypassed for webhook paths so the original bytes survive
+    // whatever Content-Type the gateway used. Verifying the same bytes must
+    // produce the same answer as the JSON case.
+    const raw = JSON.stringify(successEvent(), null, 2);
+    const req = {
+      body: JSON.parse(raw),
+      rawBody: Buffer.from(raw, "utf8"),
+      headers: { "content-type": "text/plain" },
+    } as any;
+
+    const { res, state } = fakeRes();
+    await paymentController.cashfreeWebhook(req, res);
+
+    expect(state.statusCode).toBe(200);
+    expect(db.wallet.update).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a text webhook whose bytes were altered", async () => {
+    // A Buffer body must be signed and compared exactly as sent, so a single
+    // changed character still fails verification.
+    const original = JSON.stringify(successEvent(), null, 2);
+    const tampered = original.replace("PAYMENT_SUCCESS", "PAYMENT_FAILD");
+    const req = {
+      body: JSON.parse(tampered),
+      rawBody: Buffer.from(tampered, "utf8"),
+      headers: { "content-type": "text/plain", "x-webhook-signature": signBody(original) },
+    } as any;
+    gateway.verifyWebhookSignature.mockImplementation((raw: any, sig: any) => {
+      const bytes = Buffer.isBuffer(raw) ? raw.toString("utf8") : raw;
+      return isValidWebhookSignature(bytes, sig, WEBHOOK_SECRET);
+    });
+
+    const { res, state } = fakeRes();
+    await paymentController.cashfreeWebhook(req, res);
+
+    expect(state.body.received).toBe(false);
+    expect(db.wallet.update).not.toHaveBeenCalled();
+  });
+
+  it("reports readiness on the health probe without settling anything", async () => {
+    const { res, state } = fakeRes();
+    await paymentController.cashfreeWebhookHealth({} as any, res);
+
+    expect(state.statusCode).toBe(200);
+    expect(state.body.reachable).toBe(true);
+    // A reachability check must never be able to confirm or move a payment.
+    expect(state.body.applied).toBe(false);
+    expect(db.wallet.update).not.toHaveBeenCalled();
+    expect(db.$transaction).not.toHaveBeenCalled();
   });
 
   it("leaves the order open when the user abandons checkout", async () => {

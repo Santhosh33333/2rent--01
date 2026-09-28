@@ -613,6 +613,44 @@ export async function cashfreeWebhook(req: Request, res: Response): Promise<void
 }
 
 /**
+ * Reports whether the Cashfree webhook is correctly configured.
+ *
+ * Exists so the provider dashboard's endpoint test has an unambiguous target:
+ * a GET reachability probe is a common convention, and previously such a
+ * request fell through to the API's auth handling and surfaced as a
+ * connectivity failure even though the webhook itself was fine.
+ *
+ * This endpoint moves no money and confirms no payment. It reports whether the
+ * credentials needed to verify a real signature are present and non-placeholder.
+ */
+export async function cashfreeWebhookHealth(_req: Request, res: Response): Promise<void> {
+  const webhookSecret = (env.CASHFREE_WEBHOOK_SECRET || "").trim()
+  const appId = (env.CASHFREE_APP_ID || "").trim()
+  const secretKey = (env.CASHFREE_SECRET_KEY || "").trim()
+
+  const configured = (value: string) => Boolean(value) && !value.includes("placeholder")
+  const ready =
+    configured(webhookSecret) && configured(appId) && configured(secretKey)
+
+  res.status(200).json({
+    received: true,
+    // false here is expected and correct: this endpoint settles nothing.
+    applied: false,
+    reachable: true,
+    webhookConfigured: configured(webhookSecret),
+    activeProvider: ACTIVE_PROVIDER,
+    ready,
+    // Spells out what is still missing, so setup can be finished without
+    // guessing from a generic failure.
+    missing: [
+      configured(webhookSecret) ? null : "CASHFREE_WEBHOOK_SECRET",
+      configured(appId) ? null : "CASHFREE_APP_ID",
+      configured(secretKey) ? null : "CASHFREE_SECRET_KEY",
+    ].filter(Boolean),
+  })
+}
+
+/**
  * Credits a settled Cashfree order, exactly once.
  *
  * Returns true only for the caller that actually performed the credit, so a

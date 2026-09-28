@@ -138,6 +138,31 @@ export function createApp(): http.Server {
 // body. Re-serialising the parsed object produces different bytes, so a
 // webhook verified against JSON.stringify(req.body) can never match. Keeping
 // the buffer here is what makes signature verification possible at all.
+// Payment gateways sign the exact bytes of the request, so those bytes must be
+// available verbatim on the webhook path. `express.json` only runs its `verify`
+// hook when it decides to parse a body, which means a webhook arriving as
+// text/plain (or with no Content-Type at all) would reach the handler with no
+// raw body and be rejected as unverifiable.
+//
+// A type:any bypasses JSON parsing so every request's body reaches the handler
+// as a Buffer. It is scoped to the webhook paths only and immediately hands off
+// to express.json, so normal API traffic keeps the usual parsing behaviour and
+// the 10mb limit still applies to it.
+const WEBHOOK_PATHS = ["/webhook", "/webhook/cashfree"];
+app.use(
+  "/api/payments",
+  (req: Request, res: Response, next: NextFunction) => {
+    if (!WEBHOOK_PATHS.includes(req.path) || req.method !== "POST") return next();
+    express.json({
+      limit: "2mb",
+      type: () => true,
+      verify: (_req, _res, buf) => {
+        (_req as Request & { rawBody?: Buffer }).rawBody = buf;
+      },
+    })(req, res, (err?: unknown) => (err ? next(err) : next()));
+  },
+);
+
 app.use(
   express.json({
     limit: "10mb",
@@ -146,7 +171,7 @@ app.use(
     },
   }),
 );
-  app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
   app.use(morgan(env.isProduction ? "combined" : "dev"));
   app.use(generalRateLimiter);
 
