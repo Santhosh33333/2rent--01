@@ -18,6 +18,7 @@ import * as partnerMatching from "../services/partnerMatchingEngine";
 import { sendEmail, emailStatus, sendKycEmail, sendWelcomeEmail, sendWithdrawalPaidEmail, sendWithdrawalRejectedEmail } from "../services/emailService";
 import { createAndSendAgreements } from "../services/agreementService";
 import { bankNameFromIfsc } from "../services/bankLookup";
+import { PHONE_VERIFICATION_UNAVAILABLE_MESSAGE } from "../services/phoneVisibility";
 import { renderEmail, paragraphHtml } from "../services/emailTemplate";
 import { ADMIN_ROLES, SUPER_ADMIN_ROLE } from "../rbac/sections";
 import { readBlob } from "../services/blobStorage";
@@ -295,7 +296,7 @@ export async function updateUserPhone(req: AuthedRequest, res: Response): Promis
       sendError(res, "A valid phone number is required (10–15 digits, optional +country).", 400, "VALIDATION_ERROR");
       return;
     }
-    const target = await prisma.user.findUnique({ where: { id }, select: { id: true, role: true, activeRole: true } });
+    const target = await prisma.user.findUnique({ where: { id }, select: { id: true, role: true, activeRole: true, phone: true, mobileVerified: true } });
     if (!target) {
       sendError(res, "User not found.", 404, "USER_NOT_FOUND");
       return;
@@ -310,11 +311,35 @@ export async function updateUserPhone(req: AuthedRequest, res: Response): Promis
       sendError(res, "Another account already uses this number.", 409, "DUPLICATE_PHONE");
       return;
     }
-    const user = await prisma.user.update({ where: { id }, data: { phone: String(phone) } });
-    await prisma.auditLog.create({
-      data: { actorId: req.user!.userId, actorType: "ADMIN", action: "UPDATE_USER_PHONE", entityType: "User", entityId: id, metadata: JSON.stringify({ phone }) },
+    // Changing the number must clear the verified flag. The previous value was
+    // not reset, so an account kept a "verified number" badge for a number
+    // nobody had proven control of - a new number can never inherit the
+    // verification of the old one.
+    const user = await prisma.user.update({
+      where: { id },
+      data: { phone: String(phone), mobileVerified: false },
     });
-    sendSuccess(res, { id: user.id, phone: user.phone }, "Mobile number updated.");
+    await prisma.auditLog.create({
+      data: {
+        actorId: req.user!.userId,
+        actorType: "ADMIN",
+        action: "UPDATE_USER_PHONE",
+        entityType: "User",
+        entityId: id,
+        // Both values recorded so an admin can see exactly what was replaced.
+        metadata: JSON.stringify({
+          previousPhone: target.phone,
+          phone: String(phone),
+          previousMobileVerified: target.mobileVerified,
+          mobileVerifiedReset: Boolean(target.mobileVerified),
+        }),
+      },
+    });
+    sendSuccess(
+      res,
+      { id: user.id, phone: user.phone, phoneVerified: user.mobileVerified, phoneVerificationNotice: PHONE_VERIFICATION_UNAVAILABLE_MESSAGE },
+      "Mobile number updated. It is unverified until verification is available."
+    );
   } catch (err) {
     console.error("updateUserPhone error:", err);
     sendError(res, "Failed to update mobile number.", 500, "INTERNAL_ERROR");

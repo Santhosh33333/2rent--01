@@ -201,7 +201,11 @@ export function AdminUsersPage() {
     setPhoneBusy(true)
     try {
       await adminApi.updateUserPhone(phoneTarget.id, phone)
-      toast.success(`Mobile number updated for ${phoneTarget.name || phoneTarget.email}`)
+      // The server always clears the verified flag on a number change, so the
+      // admin must not expect the account to stay verified.
+      toast.success(
+        `Mobile number updated for ${phoneTarget.name || phoneTarget.email}. It is unverified until verification is available.`
+      )
       setPhoneTarget(null)
       fetchUsers()
     } catch (err: unknown) {
@@ -538,6 +542,10 @@ export function AdminUsersPage() {
                 </button>
               </div>
               <p className="text-xs text-gray-500 mb-3">Current number: <span className="text-gray-300">{phoneTarget.phone || 'Not provided'}</span></p>
+              <p className="text-xs text-amber-400/80 mb-3">
+                Phone verification is currently unavailable. The new number will be saved
+                as unverified and the account will not be able to use verified-only features.
+              </p>
               <input
                 type="tel"
                 value={newPhone}

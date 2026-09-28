@@ -275,7 +275,16 @@ export function ProfilePage() {
                   <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 shrink-0 pointer-events-none text-surface-400" />
                   <input {...register('phone')} disabled className="input pl-11" placeholder="+91 98765 43210" />
                 </div>
-                {editing && <p className="mt-1 text-xs text-surface-500">Phone changes require verification and cannot be changed here.</p>}
+                {user?.phone && !user?.phoneVerified && (
+                  <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                    Not verified. Phone verification is not available right now &mdash; it will be enabled in a future update.
+                  </p>
+                )}
+                {editing && (
+                  <p className="mt-1 text-xs text-surface-500">
+                    Your mobile number can only be changed by Nabri support or an administrator. Please contact us.
+                  </p>
+                )}
               </div>
 
               <div>
@@ -352,7 +361,10 @@ export function ProfilePage() {
                     uploaded ? (kycDone ? 'verified' as const : kycRejected ? 'rejected' as const : 'pending' as const) : 'not-started' as const
                   return [
                     { label: 'Email', status: user?.isVerified ? 'verified' as const : 'not-started' as const },
-                    { label: 'Mobile', status: user?.phone ? 'verified' as const : 'not-started' as const },
+                    // Having a number on file is NOT verification. Report the
+                    // server's real flag, so this badge cannot claim a number
+                    // was confirmed when it never was.
+                    { label: 'Mobile', status: user?.phoneVerified ? 'verified' as const : user?.phone ? 'pending' as const : 'not-started' as const },
                     { label: 'Selfie', status: docStatus(has('selfie', 'selfie')) },
                     { label: 'Government ID', status: docStatus(has('govId', 'govId')) },
                     { label: 'Address Proof', status: docStatus(has('addressProof', 'addressProof')) },

@@ -6,7 +6,11 @@ import { prisma } from "../config/database";
 import { env } from "../config/env";
 import { generateAccessToken, generateRefreshToken, generateImpersonationAccessToken, verifyRefreshToken } from "../utils/jwt";
 import { generateOTP } from "../utils/otp";
-import { issueOtp, verifyOtp, consumeOtp, maskIdentifier } from "../services/otpService";
+import { issueOtp, verifyOtp, consumeOtp, maskIdentifier, isOtpDevEchoOnly } from "../services/otpService";
+import {
+  PHONE_VERIFICATION_ENABLED,
+  PHONE_VERIFICATION_UNAVAILABLE_MESSAGE,
+} from "../services/phoneVisibility";
 import { emailStatus, sendIntroductionEmail, sendWelcomeEmail } from "../services/emailService";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
@@ -132,7 +136,11 @@ async function createOrGetUserFromFirebase(uid: string, email?: string, phone?: 
       activeRole: "USER",
       firebaseUid: uid,
       emailVerified: !!email,
-      mobileVerified: !!phone,
+      // A number merely present in a Firebase payload is not proof this person
+      // controls it, and phone verification is currently switched off, so the
+      // account starts unverified. Re-enabling verification must be an explicit
+      // decision, not a side effect of a provider being configured.
+      mobileVerified: false,
     },
   });
 
@@ -282,19 +290,12 @@ export async function register(req: Request, res: Response): Promise<void> {
       );
     }
 
-    // If a phone was provided, also issue a mobile code so verifyMobile works.
-    if (user.phone) {
-      otpJobs.push(
-        issueOtp({
-          channel: "SMS",
-          identifier: user.phone,
-          purpose: "PHONE_VERIFICATION",
-          userId: user.id,
-          ip: getClientIp(req),
-          userAgent: req.headers["user-agent"],
-        }),
-      );
-    }
+    // No phone OTP is issued at signup. Phone verification is switched off
+    // (see services/phoneVisibility.ts) and there is no SMS sender, so issuing
+    // a code here could only ever be satisfied by the dev console echo - which
+    // would mark the number verified without anyone proving they own it. The
+    // number is stored unverified and verification is announced as future work.
+
     await Promise.all(otpJobs);
 
     // Welcome email after signup (fire-and-forget, never blocks registration
@@ -326,6 +327,8 @@ const responseUser = {
       accountType: normalizedAccountType,
       emailVerified: user.emailVerified,
       mobileVerified: user.mobileVerified,
+      phoneVerificationEnabled: PHONE_VERIFICATION_ENABLED,
+      phoneVerificationNotice: user.mobileVerified ? null : PHONE_VERIFICATION_UNAVAILABLE_MESSAGE,
     };
 
     sendSuccess(
@@ -337,14 +340,20 @@ const responseUser = {
         verification: {
           emailVerified: user.emailVerified,
           mobileVerified: user.mobileVerified,
-          required: true,
+          // Only email is required right now. Reporting `required: true` for
+          // the combined check pushed every new account straight at a phone
+          // screen that could not succeed.
+          required: !emailVerifiedOnSignup,
           emailOtpSent: !emailVerifiedOnSignup,
-          phoneOtpSent: !!user.phone,
+          // Truthfully false: nothing was sent, and nothing can be sent yet.
+          phoneOtpSent: false,
+          phoneVerificationEnabled: PHONE_VERIFICATION_ENABLED,
+          phoneVerificationNotice: PHONE_VERIFICATION_UNAVAILABLE_MESSAGE,
         },
       },
       emailVerifiedOnSignup
-        ? "Registration successful. Verify your phone to activate your account."
-        : "Registration successful. OTP sent for email and phone verification.",
+        ? "Registration successful."
+        : "Registration successful. OTP sent for email verification.",
       201
     );
   } catch (err) {
@@ -532,6 +541,9 @@ export async function verifyPhoneOTP(req: Request, res: Response): Promise<void>
 
     const placeholderEmail = `${phone.replace(/\D/g, '')}@phone.placeholder`;
     const passwordHash = await bcrypt.hash(generateOTP(32), env.BCRYPT_SALT_ROUNDS);
+    // A code read off the server console is not proof of handset control, so
+    // the login still works but the number stays unverified.
+    const proofOfControl = !isOtpDevEchoOnly();
     let user = await prisma.user.findUnique({ where: { phone } });
     if (!user) {
       try {
@@ -543,7 +555,7 @@ export async function verifyPhoneOTP(req: Request, res: Response): Promise<void>
             fullName: "Phone User",
             dateOfBirth: new Date("2000-01-01"),
             gender: "OTHER",
-            mobileVerified: true,
+            mobileVerified: proofOfControl,
           },
         });
         await prisma.wallet.create({ data: { userId: user.id } });
@@ -556,7 +568,8 @@ export async function verifyPhoneOTP(req: Request, res: Response): Promise<void>
         }
       }
     } else {
-      await prisma.user.update({ where: { id: user.id }, data: { mobileVerified: true } });
+      // Only ever move false -> true. Never clear an existing verified state.
+      await prisma.user.update({ where: { id: user.id }, data: { mobileVerified: user.mobileVerified || proofOfControl } });
     }
 
     if (!user) {
@@ -567,7 +580,7 @@ export async function verifyPhoneOTP(req: Request, res: Response): Promise<void>
     const { accessToken, refreshToken } = await createUserSession(user.id, req);
     await recordLogin(user.id, req);
 
-    sendSuccess(res, { accessToken, refreshToken, user: { id: user.id, email: user.email, fullName: user.fullName, phone: user.phone, dateOfBirth: user.dateOfBirth, gender: user.gender, avatarUrl: user.avatarUrl, bio: user.bio, city: user.city, country: user.country, role: user.role, activeRole: resolveSessionActiveRole(user.role, user.activeRole) } }, "Phone verified and logged in.");
+    sendSuccess(res, { accessToken, refreshToken, user: { id: user.id, email: user.email, fullName: user.fullName, phone: user.phone, dateOfBirth: user.dateOfBirth, gender: user.gender, avatarUrl: user.avatarUrl, bio: user.bio, city: user.city, country: user.country, role: user.role, activeRole: resolveSessionActiveRole(user.role, user.activeRole) } }, proofOfControl ? "Logged in with your phone number." : "Logged in. Your number is unverified.");
   } catch (err) {
     console.error("verifyPhoneOTP error:", err);
     sendError(res, "Phone verification failed.", 500, "INTERNAL_ERROR");
@@ -657,7 +670,9 @@ export async function googleSignIn(req: Request, res: Response): Promise<void> {
             dateOfBirth: new Date("2000-01-01"),
             gender: "OTHER",
             emailVerified: true,
-            mobileVerified: !!phone_number,
+            // Same rule as the Firebase UID path: a supplied number is not
+            // proof of ownership while phone verification is switched off.
+            mobileVerified: false,
             avatarUrl: picture,
           },
         });
@@ -936,38 +951,16 @@ export async function verifyEmail(req: Request, res: Response): Promise<void> {
 }
 
 export async function verifyMobile(req: Request, res: Response): Promise<void> {
-  try {
-    const { userId, otp } = req.body;
-    if (!userId) {
-      sendError(res, "User ID is required.", 400, "MISSING_USER_ID");
-      return;
-    }
-    if (!otp) {
-      sendError(res, "OTP is required.", 400, "MISSING_OTP");
-      return;
-    }
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, phone: true } });
-    if (!user) {
-      sendError(res, "User not found.", 404, "USER_NOT_FOUND");
-      return;
-    }
-    // Do NOT auto-send OTP here - that enables SMS bombing via unauthenticated
-    // requests. User must call /auth/resend-otp to request a new code.
-    if (!user.phone) {
-      sendError(res, "No phone number on this account.", 400, "MISSING_PHONE");
-      return;
-    }
-    const v = await verifyOtp({ channel: "SMS", identifier: user.phone, purpose: "PHONE_VERIFICATION", code: otp });
-    if (!v.ok) {
-      sendError(res, v.error || "Invalid or expired OTP.", 400, "INVALID_OTP");
-      return;
-    }
-    await prisma.user.update({ where: { id: userId }, data: { mobileVerified: true } });
-    await consumeOtp(user.phone, "PHONE_VERIFICATION").catch(() => {});
-    sendSuccess(res, undefined, "Mobile verified successfully.");
-  } catch (err) {
-    sendError(res, "Mobile verification failed.", 500, "INTERNAL_ERROR");
-  }
+  // Phone verification by SMS OTP is currently switched off, and the old
+  // implementation is removed rather than left dormant.
+  //
+  // It used to verify a code and set mobileVerified=true. With no real SMS
+  // aggregator in production, that path could only be satisfied through the
+  // dev-only console echo, which would mark numbers verified without ever
+  // proving ownership. Refusing explicitly keeps the account honestly
+  // unverified instead of carrying a badge it never earned. The old
+  // verifyOtp/consumeOtp logic is intentionally not called.
+  sendError(res, PHONE_VERIFICATION_UNAVAILABLE_MESSAGE, 501, "PHONE_VERIFICATION_UNAVAILABLE");
 }
 
 export async function resendOTP(req: Request, res: Response): Promise<void> {
@@ -978,21 +971,23 @@ export async function resendOTP(req: Request, res: Response): Promise<void> {
       sendError(res, "User not found.", 404, "USER_NOT_FOUND");
       return;
     }
-    const isMobile = channel === "mobile";
-    if (isMobile && !user.phone) {
-      sendError(res, "No phone number on this account.", 400, "MISSING_PHONE");
+    if (channel === "mobile") {
+      // Refuse before issuing anything: with phone verification switched off,
+      // sending a code could only be satisfied by the dev console echo, which
+      // would mark the number verified without proving ownership.
+      sendError(res, PHONE_VERIFICATION_UNAVAILABLE_MESSAGE, 501, "PHONE_VERIFICATION_UNAVAILABLE");
       return;
     }
     // Same honesty rule as forgot-password: globally-down providers get a
-    // uniform 503 (identical for every account — nothing leaks).
-    if (!isMobile && emailStatus().provider === "none") {
+    // uniform 503 (identical for every account - nothing leaks).
+    if (emailStatus().provider === "none") {
       sendError(res, "Email sending is currently unavailable. Contact support.", 503, "EMAIL_NOT_CONFIGURED");
       return;
     }
     const r = await issueOtp({
-      channel: isMobile ? "SMS" : "EMAIL",
-      identifier: isMobile ? user.phone! : user.email,
-      purpose: isMobile ? "PHONE_VERIFICATION" : "EMAIL_VERIFICATION",
+      channel: "EMAIL",
+      identifier: user.email,
+      purpose: "EMAIL_VERIFICATION",
       userId,
       ip: getClientIp(req),
       userAgent: req.headers["user-agent"],
@@ -1001,7 +996,7 @@ export async function resendOTP(req: Request, res: Response): Promise<void> {
       sendError(res, r.error || "Could not resend the code.", 429, "OTP_RATE_LIMITED");
       return;
     }
-    sendSuccess(res, { maskedTo: r.maskedTo, resendInSec: r.resendInSec }, `OTP resent to ${channel}.`);
+    sendSuccess(res, { maskedTo: r.maskedTo, resendInSec: r.resendInSec }, `OTP resent to email.`);
   } catch (err) {
     sendError(res, "Failed to resend OTP.", 500, "INTERNAL_ERROR");
   }

@@ -69,6 +69,18 @@ function devEchoEnabled(): boolean {
   return (process.env.OTP_DEV_ECHO_CODE || "").toLowerCase() === "true";
 }
 
+/**
+ * Whether a code could have been read off the server console rather than
+ * actually delivered to the handset.
+ *
+ * Callers use this to decide whether an OTP result is evidence of anything. A
+ * code obtained through the dev echo proves only that the caller can read
+ * server logs, so it must never be allowed to mark a phone number as verified.
+ */
+export function isOtpDevEchoOnly(): boolean {
+  return devEchoEnabled();
+}
+
 // The six OTP limits all live in the same settings table and are read on every
 // issue and every verify. Reading them one at a time cost six round trips per
 // call, so they load together and sit behind a short cache: one round trip per

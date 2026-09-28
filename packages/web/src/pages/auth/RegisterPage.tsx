@@ -195,14 +195,15 @@ export function RegisterPage() {
       if (userId) {
         const emailVerified = result?.verification?.emailVerified === true
         if (emailVerified) {
-          // Email was verified inline during signup — straight to mobile verify.
-          navigate(
-            `/verify-mobile?userId=${encodeURIComponent(userId)}&phone=${encodeURIComponent(data.phone)}`,
-            { replace: true }
-          )
+          // Phone verification is switched off, so onboarding must not stop
+          // for it. The number is saved unverified and the profile shows that
+          // state; routing to /verify-mobile here would be a dead end.
+          navigate('/profile/complete', { replace: true })
         } else {
+          // Still ask for the email code — that verification is real and gates
+          // KYC-gated features.
           navigate(
-            `/verify-email?userId=${encodeURIComponent(userId)}&email=${encodeURIComponent(result?.email || data.email)}&next=verify-mobile`,
+            `/verify-email?userId=${encodeURIComponent(userId)}&email=${encodeURIComponent(result?.email || data.email)}`,
             { replace: true }
           )
         }

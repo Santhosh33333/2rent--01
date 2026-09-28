@@ -11,7 +11,6 @@ export function VerifyEmailPage() {
   const [searchParams] = useSearchParams()
   const userId = searchParams.get('userId') || ''
   const email = searchParams.get('email') || ''
-  const next = searchParams.get('next')
 
   const [otp, setOtp] = useState('')
   const [loading, setLoading] = useState(false)
@@ -40,8 +39,9 @@ export function VerifyEmailPage() {
       await api.post('/auth/verify-email', { userId, otp })
       setSuccess(true)
       toast.success('Email verified successfully!')
-      const to = next === 'verify-mobile' ? `/verify-mobile?userId=${encodeURIComponent(userId)}` : '/login'
-      setTimeout(() => navigate(to, { replace: true }), 2000)
+      // `next=verify-mobile` is no longer sent: phone verification is switched
+      // off, so email confirmation now lands on the profile/onboarding.
+      setTimeout(() => navigate('/profile/complete', { replace: true }), 2000)
     } catch (err: unknown) {
       setApiError(getErrorMessage(err, 'Verification failed'))
     } finally {
@@ -79,7 +79,7 @@ export function VerifyEmailPage() {
             </h1>
             <p className="mt-2 text-surface-500 dark:text-surface-400 text-sm">
               {success
-                ? next === 'verify-mobile' ? 'Now verify your phone...' : 'Redirecting you to login...'
+                ? 'Email verified. Taking you to your profile...'
                 : email
                   ? `We sent a 6-digit code to ${email}`
                   : 'Enter the 6-digit code sent to your email'}

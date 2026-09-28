@@ -9,6 +9,11 @@ interface User {
   email: string
   name: string
   phone?: string
+  /** Server-confirmed verification state. Absent/`false` means unverified:
+   *  having a number on file proves nothing. */
+  phoneVerified?: boolean
+  phoneVerificationEnabled?: boolean
+  phoneVerificationNotice?: string | null
   role?: string
   activeRole?: string
   accountType?: string
@@ -79,6 +84,11 @@ function buildUserFromPayload(payload: Record<string, unknown>, fallbackName?: s
     email: (payload?.email as string) || fallbackName || 'user@Sidebud.local',
     name: (payload?.fullName as string) || (payload?.name as string) || fallbackName || 'Nabri User',
     phone: payload?.phone as string,
+    // Only ever true when the backend says so. Never infer this from the mere
+    // presence of a number.
+    phoneVerified: payload?.phoneVerified === true,
+    phoneVerificationEnabled: payload?.phoneVerificationEnabled === true,
+    phoneVerificationNotice: (payload?.phoneVerificationNotice as string | null) ?? null,
     role,
     activeRole: normalizeRole((payload?.activeRole || payload?.role || role) as string),
     accountType,

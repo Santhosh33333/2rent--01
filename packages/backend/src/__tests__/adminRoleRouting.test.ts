@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { isAdminTierRole, resolveActiveRole, resolveSessionActiveRole } from '../rbac/activeRole';
 import { ADMIN_ROLES } from '../rbac/sections';
+import { guardRole } from '../rbac/permissions';
 
 /**
  * Guards "the admin account shows the user screen instead of the admin screen".
@@ -55,6 +56,61 @@ describe('session role resolution', () => {
     expect(isAdminTierRole('PARTNER')).toBe(false);
     expect(isAdminTierRole(null)).toBe(false);
     expect(isAdminTierRole(undefined)).toBe(false);
+  });
+});
+
+/**
+ * The web app was fixed for this, but the *backend* guards were not, and the
+ * consequence was that a real account was locked out of the entire console.
+ *
+ * The live root admin had `role = SUPER_ADMIN` with `activeRole = USER`.
+ * `resolveActiveRole` honours that preview on purpose, and every server guard
+ * then read `activeRole || role` - so `requireAdmin` and `requireSectionAction`
+ * both resolved the account to "USER" and returned 403 for all admin routes.
+ * That includes the screens an admin needs to correct a user's phone number or
+ * answer a support ticket: the very work the preview is supposed to let them do
+ * side-by-side.
+ *
+ * Authorization must depend on who the account IS, not on which surface it is
+ * currently looking at.
+ */
+describe('server-side admin guards authorize on the account role, not the preview', () => {
+  it('resolves an admin-tier account to its own role even with a USER preview', () => {
+    for (const role of ADMIN_ROLES) {
+      expect(guardRole({ role, activeRole: 'USER' })).toBe(role);
+      expect(guardRole({ role, activeRole: 'PARTNER' })).toBe(role);
+    }
+  });
+
+  it('never lets a preview escalate a non-admin account', () => {
+    // The other half of the rule: a USER/PARTNER account must not borrow admin
+    // authority from a stale activeRole left behind by a demotion.
+    expect(guardRole({ role: 'USER', activeRole: 'SUPER_ADMIN' })).toBe('USER');
+    expect(guardRole({ role: 'USER', activeRole: 'SUPPORT_ADMIN' })).toBe('USER');
+    expect(guardRole({ role: 'PARTNER', activeRole: 'SUPER_ADMIN' })).toBe('PARTNER');
+  });
+
+  it('falls back to activeRole only when the account role is absent', () => {
+    // The auth middleware always populates `role` from the database, so this
+    // branch is defensive only.
+    expect(guardRole({ activeRole: 'PARTNER' })).toBe('PARTNER');
+    expect(guardRole({ role: null, activeRole: 'PARTNER' })).toBe('PARTNER');
+  });
+
+  it('returns undefined for an unauthenticated request', () => {
+    expect(guardRole(null)).toBeUndefined();
+    expect(guardRole(undefined)).toBeUndefined();
+    expect(guardRole({})).toBeUndefined();
+  });
+
+  it('keeps the shadowing expression out of the guards that caused the lockout', () => {
+    const perms = readFileSync(join(__dirname, '../rbac/permissions.ts'), 'utf8');
+    const auth = readFileSync(join(__dirname, '../middleware/auth.ts'), 'utf8');
+    // `activeRole || role` is the exact expression that let a preview outrank
+    // the real role. Its reappearance in a guard is the regression.
+    for (const src of [perms, auth]) {
+      expect(src).not.toMatch(/activeRole\s*\|\|\s*(req\.user\??\.)?role/);
+    }
   });
 });
 

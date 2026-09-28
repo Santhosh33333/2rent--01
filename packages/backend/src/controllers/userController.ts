@@ -7,6 +7,11 @@ import { getIO } from "../services/socketService";
 import { sendSmsMessage, smsConfigured } from "../services/smsService";
 import { sendSosAlertEmail, sosRecipients } from "../services/emailService";
 import { ensureAdminUsers, activeAdminUserIds } from "../services/adminProvision";
+import {
+  PHONE_CHANGE_ADMIN_ONLY_CODE,
+  PHONE_CHANGE_ADMIN_ONLY_MESSAGE,
+  phoneVerificationState,
+} from "../services/phoneVisibility";
 
 export async function getProfile(req: AuthedRequest, res: Response): Promise<void> {
   try {
@@ -45,6 +50,7 @@ export async function getProfile(req: AuthedRequest, res: Response): Promise<voi
       res,
       {
         ...profile,
+        ...phoneVerificationState(profile.mobileVerified),
         kycStatus: verification?.status ?? "NOT_STARTED",
         kycRejectionReason: verification?.rejectionReason ?? null,
         partnerStatus: partner?.status ?? null,
@@ -60,6 +66,15 @@ export async function getProfile(req: AuthedRequest, res: Response): Promise<voi
 export async function updateProfile(req: AuthedRequest, res: Response): Promise<void> {
   try {
     const { fullName, dateOfBirth, bio, city, country, gender } = req.body;
+
+    // The mobile number is deliberately not editable by the account owner.
+    // `phone` is not in the allowlist below, so it would be silently ignored;
+    // saying so explicitly is better than letting someone believe they changed
+    // it. Only an administrator can update a number.
+    if (req.body && Object.prototype.hasOwnProperty.call(req.body, "phone")) {
+      sendError(res, PHONE_CHANGE_ADMIN_ONLY_MESSAGE, 403, PHONE_CHANGE_ADMIN_ONLY_CODE);
+      return;
+    }
 
     // Input validation with length limits
     const sanitized: Record<string, any> = {};

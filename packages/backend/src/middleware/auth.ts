@@ -3,7 +3,8 @@ import { verifyAccessToken } from "../utils/jwt";
 import { prisma } from "../config/database";
 import { sendError } from "../utils/response";
 import { AuthedRequest, AuthenticatedUser, UserRole } from "./authTypes";
-import { resolveActiveRole } from "../rbac/activeRole";
+import { resolveActiveRole, isAdminTierRole } from "../rbac/activeRole";
+import { guardRole } from "../rbac/permissions";
 
 const ADMIN_TIER_ROLES = ["SUPER_ADMIN", "ADMIN", "MODERATOR", "SUPPORT", "FINANCE", "SUPPORT_ADMIN", "FINANCE_ADMIN", "KYC_ADMIN", "MARKETING_ADMIN", "PARTNER_ADMIN"];
 
@@ -153,7 +154,13 @@ export async function requireAdmin(req: AuthedRequest, res: Response, next: Next
       sendError(res, "Admin actions are unavailable while impersonating a user.", 403, "IMPERSONATION_FORBIDDEN");
       return;
     }
-    if (!req.user?.activeRole || !ADMIN_ROLES.includes(req.user.activeRole)) {
+    // Authorize on the account's real role only. `activeRole` may hold a
+    // USER/PARTNER preview (resolveActiveRole honours that deliberately), and
+    // reading it here both locked a previewing admin out of every admin route
+    // and handed admin authority back to a demoted account that still had the
+    // old value in it. The preview is a UI concern, never an authz input.
+    const role = guardRole(req.user);
+    if (!role || !ADMIN_ROLES.includes(role)) {
       sendError(res, "Admin access required.", 403, "FORBIDDEN");
       return;
     }
