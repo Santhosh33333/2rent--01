@@ -393,14 +393,24 @@ export type EventScope = "all" | "live" | "upcoming" | "completed";
  *   startTime <= now < endTime
  * so an event leaves "Live Now" the moment it ends, with no client involvement.
  */
+/**
+ * Scope filters, all evaluated against the server clock.
+ *
+ * "Live Now" means the event has provably started AND provably not finished:
+ * `startTime <= now < endTime`. It used to also treat an event with no
+ * `endTime` as live, which invented activity - an event with no known end has
+ * no evidence it is running right now, and displaying it under "Live Now"
+ * claimed something the data does not support.
+ *
+ * The default "all" scope returns only events that have not finished yet, so
+ * a months-old event cannot sit in the main feed looking current. Callers that
+ * genuinely want history must ask for `completed` explicitly.
+ */
 function scopeCondition(scope: EventScope, now: Date): Prisma.EventWhereInput | null {
   switch (scope) {
     case "live":
       return {
-        AND: [
-          { startTime: { lte: now } },
-          { OR: [{ endTime: { gt: now } }, { endTime: null, startTime: { lte: now } }] },
-        ],
+        AND: [{ startTime: { lte: now } }, { endTime: { gt: now } }],
       };
     case "upcoming":
       return { startTime: { gt: now } };
@@ -408,7 +418,9 @@ function scopeCondition(scope: EventScope, now: Date): Prisma.EventWhereInput | 
       return { OR: [{ status: "COMPLETED" }, { endTime: { lte: now } }] };
     case "all":
     default:
-      return null;
+      // Not finished. `endTime: null` is excluded because an event with no end
+      // cannot be shown as still current.
+      return { endTime: { gt: now } };
   }
 }
 
@@ -442,6 +454,23 @@ export interface EventFilterInput {
 
 /** Radius below which an event counts as "almost full" (>=80% taken). */
 const ALMOST_FULL_RATIO = 0.8;
+
+/**
+ * Whether an event is happening right now, decided against the server clock.
+ *
+ * An event only counts as live when there is proof both ways: it has started,
+ * and it has not finished. A missing endTime is deliberately NOT treated as
+ * "still going" - it is the absence of evidence, and it must not be rendered as
+ * a "Live Now" badge. Exported so the badge and the `live` scope cannot drift
+ * apart, and so this is unit-testable without a database.
+ */
+export function isEventLive(
+  startTime: Date,
+  endTime: Date | null,
+  now: Date
+): boolean {
+  return startTime <= now && endTime != null && endTime > now;
+}
 
 export function buildEventWhere(f: EventFilterInput, now: Date): Prisma.EventWhereInput {
   const and: Prisma.EventWhereInput[] = [{ status: { in: DISCOVERY_STATUSES } }];
@@ -754,7 +783,8 @@ export async function getEvents(req: AuthedRequest, res: Response): Promise<void
         isFull: capacity != null && taken >= capacity,
         isAlmostFull:
           capacity != null && taken < capacity && taken / Math.max(1, capacity) >= ALMOST_FULL_RATIO,
-        isLive: item.startTime <= now && (item.endTime == null || item.endTime > now),
+        // Strictly live, matching the `scope=live` predicate exactly.
+        isLive: isEventLive(item.startTime, item.endTime, now),
         distanceKm: distanceKm == null ? null : Math.round(distanceKm * 10) / 10,
         // Server time is returned so the client can render countdowns that
         // agree with the backend's live/upcoming decision.

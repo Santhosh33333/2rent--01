@@ -19,6 +19,7 @@ type Mod = {
   eventOrderBy: (sort: string, lat?: number, lon?: number) => any;
   loadEventCategories: () => Promise<any[]>;
   datePresetRange?: (p: string) => any;
+  isEventLive: (startTime: Date, endTime: Date | null, now: Date) => boolean;
 };
 
 let mod: Mod;
@@ -52,11 +53,44 @@ describe('Event scope: LIVE uses server time', () => {
     expect(json).toContain(NOW.toISOString());
   });
 
-  it('live excludes events with no endTime only when it is truly ongoing', () => {
+  it('live requires a provable end time in the future', () => {
     const where = mod.buildEventWhere({ scope: 'live', categories: [], sort: 'soonest' }, NOW);
     const json = JSON.stringify(where);
-    // An event with a null endTime counts as live while it has started.
+    // An event with a null endTime must NOT be treated as live. There is no
+    // evidence it is running right now, and listing it under "Live Now" would
+    // claim something the data does not support. The old predicate accepted
+    // `endTime: null` and invented activity.
     expect(json).toContain('endTime');
+    expect(json).not.toContain('null');
+  });
+
+  it('isLive flag is strict and matches the live scope', () => {
+    const started = new Date(NOW.getTime() - 60 * 60 * 1000);
+    const ends = new Date(NOW.getTime() + 60 * 60 * 1000);
+    const later = new Date(NOW.getTime() + 2 * 60 * 60 * 1000);
+
+    // Running right now.
+    expect(mod.isEventLive(started, ends, NOW)).toBe(true);
+    // Started but no endTime: absence of evidence, not proof of "live".
+    expect(mod.isEventLive(started, null, NOW)).toBe(false);
+    // Finished.
+    expect(mod.isEventLive(started, new Date(NOW.getTime() - 1000), NOW)).toBe(false);
+    // Starts exactly now counts as live.
+    expect(mod.isEventLive(NOW, ends, NOW)).toBe(true);
+    // Not started yet.
+    expect(mod.isEventLive(later, ends, NOW)).toBe(false);
+    // Ends exactly now is no longer live.
+    expect(mod.isEventLive(started, NOW, NOW)).toBe(false);
+  });
+
+  it('all shows only events that have not finished', () => {
+    const where = mod.buildEventWhere({ scope: 'all', categories: [], sort: 'soonest' }, NOW);
+    const json = JSON.stringify(where);
+    // The default feed must not present a months-old event as if it were
+    // current. History is available through the `completed` scope instead.
+    expect(json).toContain('endTime');
+    expect(json).toContain('gt');
+    expect(json).toContain(NOW.toISOString());
   });
 
   it('upcoming = startTime > now', () => {

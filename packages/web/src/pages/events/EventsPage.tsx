@@ -16,6 +16,9 @@ interface Event {
   id: number
   name: string
   date: string
+  endTime?: string | null
+  /** Decided by the backend from its own clock, never recomputed in the browser. */
+  isLive?: boolean
   location: string
   rsvp: boolean
   description?: string
@@ -127,6 +130,11 @@ export function EventsPage() {
         id: ev.id,
         name: ev.title || 'Event',
         date: ev.startTime,
+        endTime: ev.endTime ?? null,
+        // The backend decides this against its own clock, so the badge can
+        // never disagree with the "Live Now" list. Recomputing it in the browser
+        // from the device time is what made this drift.
+        isLive: ev.isLive === true,
         location: ev.location ?? 'TBA',
         description: ev.description ?? '',
         category: ev.category,
@@ -159,6 +167,63 @@ export function EventsPage() {
     if (datePreset === 'rsvped') return matchesSearch && e.rsvp
     return matchesSearch
   })
+
+  // Split on the server's decision. The default feed already excludes events
+  // that have finished, so anything not live here genuinely has not started.
+  const liveNow = filtered.filter(e => e.isLive)
+  const upcoming = filtered.filter(e => !e.isLive)
+
+  const renderCard = (event: Event) => {
+    const eventDate = new Date(event.date)
+    const isFull = event.capacity != null && (event.attendees ?? 0) >= event.capacity
+    return (
+      <Link key={event.id} to={`/events/${event.id}`}
+        className="glass-card p-5 group hover:-translate-y-0.5 transition-all duration-300 block">
+        {event.coverImageUrl && (
+          <img src={assetUrl(event.coverImageUrl) || ''} alt="" className="w-full h-36 rounded-2xl object-cover mb-3" loading="lazy" />
+        )}
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-md shadow-amber-500/20 group-hover:scale-110 transition-transform flex-shrink-0">
+                <Calendar className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h3 className="font-bold font-display text-surface-900 dark:text-white group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
+                  {event.name}
+                </h3>
+                {event.category && <span className="badge-primary text-[10px]">{event.category}</span>}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 mt-2">
+              <span className="text-xs text-surface-500 flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> {format(eventDate, 'MMM d, yyyy')}</span>
+              <span className="text-xs text-surface-500 flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {format(eventDate, 'h:mm a')}</span>
+              <span className="text-xs text-surface-500 flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {event.location}</span>
+              {event.attendees !== undefined && <span className="text-xs text-surface-500 flex items-center gap-1"><Users className="w-3.5 h-3.5" /> {event.attendees}{event.capacity != null ? `/${event.capacity}` : ''} attending</span>}
+              {event.price != null && (
+                <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                  {Number(event.price) === 0 ? 'Free' : `₹${event.price}`}
+                </span>
+              )}
+              {isFull && !event.isLive && <span className="badge-danger text-[10px]">Event Full</span>}
+            </div>
+          </div>
+          <div className="flex flex-col items-end gap-2 flex-shrink-0">
+            {event.isLive ? (
+              <span className="badge-danger text-[10px] flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" /> Live Now
+              </span>
+            ) : (
+              <span className={event.rsvp ? 'badge-success' : 'badge-primary'}>
+                {event.rsvp ? 'Going' : 'Upcoming'}
+              </span>
+            )}
+            <ChevronRight className="w-4 h-4 text-surface-300 dark:text-surface-600 group-hover:text-primary-500 transition-colors" />
+          </div>
+        </div>
+      </Link>
+    )
+  }
 
   if (loading) {
     return (
@@ -284,53 +349,30 @@ export function EventsPage() {
           <EmptyState icon={Calendar} title={search ? 'No events match' : 'No events found'}
             description={search ? 'Try a different search term' : 'Check back later for upcoming events'} />
         ) : (
-          <div className="grid gap-4">
-            {filtered.map(event => {
-              const eventDate = new Date(event.date)
-              const isPast = eventDate < new Date()
-              const isFull = event.capacity != null && (event.attendees ?? 0) >= event.capacity
-              return (
-                <Link key={event.id} to={`/events/${event.id}`}
-                  className="glass-card p-5 group hover:-translate-y-0.5 transition-all duration-300 block">
-                  {event.coverImageUrl && (
-                    <img src={assetUrl(event.coverImageUrl) || ''} alt="" className="w-full h-36 rounded-2xl object-cover mb-3" loading="lazy" />
-                  )}
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3 mb-2">
-                        <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-md shadow-amber-500/20 group-hover:scale-110 transition-transform flex-shrink-0">
-                          <Calendar className="w-5 h-5 text-white" />
-                        </div>
-                        <div>
-                          <h3 className="font-bold font-display text-surface-900 dark:text-white group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
-                            {event.name}
-                          </h3>
-                          {event.category && <span className="badge-primary text-[10px]">{event.category}</span>}
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-3 mt-2">
-                        <span className="text-xs text-surface-500 flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> {format(eventDate, 'MMM d, yyyy')}</span>
-                        <span className="text-xs text-surface-500 flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {format(eventDate, 'h:mm a')}</span>
-                        <span className="text-xs text-surface-500 flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {event.location}</span>
-                        {event.attendees !== undefined && <span className="text-xs text-surface-500 flex items-center gap-1"><Users className="w-3.5 h-3.5" /> {event.attendees}{event.capacity != null ? `/${event.capacity}` : ''} attending</span>}
-                        {event.price != null && (
-                          <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                            {Number(event.price) === 0 ? 'Free' : `₹${event.price}`}
-                          </span>
-                        )}
-                        {isFull && !isPast && <span className="badge-danger text-[10px]">Event Full</span>}
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                      <span className={event.rsvp ? 'badge-success' : isPast ? 'badge-neutral' : 'badge-primary'}>
-                        {event.rsvp ? 'Going' : isPast ? 'Ended' : 'Upcoming'}
-                      </span>
-                      <ChevronRight className="w-4 h-4 text-surface-300 dark:text-surface-600 group-hover:text-primary-500 transition-colors" />
-                    </div>
-                  </div>
-                </Link>
-              )
-            })}
+          <div className="space-y-8">
+            {liveNow.length > 0 && (
+              <section>
+                <div className="flex items-center gap-2 mb-3">
+                  <h2 className="font-display text-lg font-bold text-surface-900 dark:text-white">Live Now</h2>
+                  <span className="badge-danger text-[10px] flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" /> {liveNow.length} happening
+                  </span>
+                </div>
+                <div className="grid gap-4">{liveNow.map(renderCard)}</div>
+              </section>
+            )}
+
+            <section>
+              <h2 className="font-display text-lg font-bold text-surface-900 dark:text-white mb-3">
+                {liveNow.length > 0 ? 'Coming Up' : 'Upcoming'}
+              </h2>
+              {upcoming.length === 0 ? (
+                <EmptyState icon={Calendar} title="Nothing else coming up"
+                  description="You can create the first one." />
+              ) : (
+                <div className="grid gap-4">{upcoming.map(renderCard)}</div>
+              )}
+            </section>
           </div>
         )}
       </AnimatedPage>
