@@ -97,9 +97,12 @@ model User {
   mutedBy                        MuteList[]           @relation("MuteTarget")
   chatReportsFiled               ChatReport[]         @relation("ChatReportFiledBy")
   paymentOrders                  PaymentOrder[]
-  creditLedgers                   CreditLedger[]
+  creditLedgers                  CreditLedger[]
   topupRequests                  TopupRequest[]
   movieWatchlist                 MovieWatchlist[]
+  supportTickets                 SupportTicket[]        @relation("SupportRequester")
+  supportTicketsAssigned         SupportTicket[]        @relation("SupportAssignee")
+  supportMessages                SupportMessage[]
 
   @@index([status])
   @@index([role])
@@ -439,6 +442,77 @@ model LegalReConsent {
 
   @@index([satisfiedAt])
   @@index([notifiedAt])
+}
+
+model SupportTicket {
+  id String @id @default(uuid())
+  // Human-facing id, e.g. NBR-7F3K2M. Users quote this in emails, so it must be
+  // short, unambiguous and never expose the sequential uuid.
+  reference    String    @unique
+  requesterId  String
+  category     String
+  subject      String
+  // OPEN | IN_PROGRESS | WAITING_ON_USER | RESOLVED | CLOSED
+  status       String    @default("OPEN")
+  // LOW | NORMAL | HIGH | URGENT
+  priority     String    @default("NORMAL")
+  assignedToId String?
+  // What the ticket is about, when it points at something concrete (a booking, a
+  // payment, a reported user). Kept loose so support can cover a report without
+  // this table needing to know every entity type.
+  relatedEntityType String?
+  relatedEntityId   String?
+  // Response tracking. firstResponseAt is the number that matters: it is how we
+  // prove a service level was actually met rather than claiming it was.
+  firstResponseAt DateTime?
+  lastRepliedAt   DateTime?
+  resolvedAt      DateTime?
+  closedAt        DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  requester  User  @relation("SupportRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  assignedTo User? @relation("SupportAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  messages   SupportMessage[]
+  events     SupportTicketEvent[]
+
+  @@index([requesterId])
+  @@index([status])
+  @@index([assignedToId])
+  @@index([createdAt])
+}
+
+model SupportMessage {
+  id       String   @id @default(uuid())
+  ticketId String
+  authorId String
+  body     String
+  // Set from the author's role at write time, not from the request, so a
+  // tampered client cannot claim to be staff on a public endpoint.
+  isStaff  Boolean  @default(false)
+  // Marks the message that closed the ticket, so the resolution is locatable.
+  isResolution Boolean @default(false)
+  createdAt DateTime @default(now())
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+}
+
+model SupportTicketEvent {
+  id        String   @id @default(uuid())
+  ticketId  String
+  actorId   String?
+  action    String
+  fromValue String?
+  toValue   String?
+  note      String?
+  createdAt DateTime @default(now())
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
 }
 
 model PaymentOrder {
