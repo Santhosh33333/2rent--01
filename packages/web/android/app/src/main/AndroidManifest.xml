@@ -62,8 +62,14 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!--
+      SCHEDULE_EXACT_ALARM is kept because booking and call reminders are
+      time-critical. USE_EXACT_ALARM is deliberately NOT declared: Google Play
+      restricts it to alarm-clock and calendar apps and rejects other
+      categories, and this app does not need that level of privilege. Reminders
+      fall back to inexact scheduling, which is the right trade for a social app.
+    -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
     <!-- Location - requested at runtime -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
