@@ -538,11 +538,25 @@ export async function cashfreeWebhook(req: Request, res: Response): Promise<void
       return
     }
 
-    if (!verifyInboundWebhook("cashfree", rawBody, req.headers)) {
-      console.warn("Invalid Cashfree webhook signature — ignoring")
-      res.status(200).json({ received: false, reason: "Invalid signature" })
-      return
-    }
+      if (!verifyInboundWebhook("cashfree", rawBody, req.headers)) {
+        // A rejected webhook means this order was NOT credited, and Cashfree
+        // will not retry a 2xx. A customer who closes the tab after paying never
+        // gets a wallet credit, so this must be visible rather than a quiet warn:
+        // either a genuine provider retry, or a signature mismatch that would
+        // otherwise silently swallow every payment. Check the order id below.
+        const rejectedOrderId =
+          (req.body as any)?.data?.order?.order_id ??
+          (req.body as any)?.data?.payment?.order_id ??
+          "unknown"
+        console.error(
+          `[cashfree-webhook] SIGNATURE REJECTED - order ${rejectedOrderId} was NOT credited. ` +
+            "If no matching wallet credit exists, this order needs manual reconciliation. " +
+            "Check that CASHFREE_SECRET_KEY is the oldest active key pair and that " +
+            "CASHFREE_API_ENV matches the configured keys."
+        )
+        res.status(200).json({ received: false, reason: "Invalid signature" })
+        return
+      }
 
     const event = req.body ?? {}
     const payment = event?.data?.payment

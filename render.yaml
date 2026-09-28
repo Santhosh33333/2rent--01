@@ -76,12 +76,14 @@ services:
         sync: false
       - key: CASHFREE_SECRET_KEY
         sync: false
-      # Which gateway handles live payments. Left as razorpay on purpose: the
-      # switch to cashfree should only happen after a real end-to-end payment
-      # has been observed crediting a wallet, not on the strength of a health
-      # probe.
+      # Which gateway handles live payments. Cashfree only.
       - key: PAYMENT_PROVIDER
-        value: razorpay
+        value: cashfree
+      # Cashfree runs test and production on separate hosts with separate
+      # credentials, and each rejects keys issued for the other. Keep this in
+      # step with whichever keys are set above.
+      - key: CASHFREE_API_ENV
+        value: production
     # The liveness route is mounted at the root ("/health"), not under /api -
     # everything under /api sits behind auth middleware and answers 401 here,
     # which would fail every deploy's health check.
