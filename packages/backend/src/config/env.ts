@@ -97,6 +97,11 @@ const envSchema = z.object({
   // records always reach the owner; add more addresses here as needed.
   AGREEMENT_ARCHIVE_EMAILS: z.string().optional(),
 
+  // Days a pre-consent account keeps full access after being told about the
+  // current terms. The clock starts at notification, never at deploy, so no one
+  // is locked out by a deadline they never saw. 0 means block immediately.
+  LEGAL_RECONSENT_GRACE_DAYS: z.coerce.number().int().min(0).max(365).optional(),
+
   // Gmail SMTP — used when EMAIL_PROVIDER=gmail. Requires a Google App Password
   // (Google Account → Security → 2-Step Verification → App passwords). The
   // sending address is locked to GMAIL_USER; EMAIL_FROM should match it.

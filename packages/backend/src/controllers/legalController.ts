@@ -3,6 +3,7 @@ import { prisma } from "../config/database";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
 import { getCurrentDocuments, getConsentStatus, recordConsent, ConsentGate } from "../services/legalConsentService";
+import { getReConsentState } from "../services/legalReConsentService";
 import { CONSENT_REQUIREMENTS } from "../legal/documents";
 
 const VALID_GATES: ConsentGate[] = ["SIGNUP", "PARTNER_ONBOARDING", "BOOKING", "RE_CONSENT"];
@@ -98,4 +99,14 @@ export async function getMyAcceptances(req: AuthedRequest, res: Response): Promi
     },
   });
   sendSuccess(res, { acceptances: rows });
+}
+
+/**
+ * Whether this account still owes a signature, and how long its grace window has
+ * left. The client uses this to show the notice banner; it is also what decides
+ * whether consent-gated actions are refused.
+ */
+export async function getMyReConsentState(req: AuthedRequest, res: Response): Promise<void> {
+  const state = await getReConsentState(req.user!.userId);
+  sendSuccess(res, { reConsent: state });
 }

@@ -74,6 +74,7 @@ model User {
   withdrawalRequests             WithdrawalRequest[]
   agreements                     Agreement[]
   legalAcceptances               LegalAcceptance[]
+  legalReConsent                 LegalReConsent?
   adminProfile                   AdminUser?
   partnerLevel                   PartnerLevel?
   partnerEarnings                PartnerEarnings?
@@ -415,6 +416,29 @@ model LegalAcceptance {
   @@index([userId, kind])
   @@index([kind, version])
   @@index([userId, withdrawnAt])
+}
+
+// Accounts that predate consent enforcement hold no LegalAcceptance rows: they
+// were created under a version of the product that never asked. Their consent
+// is NOT reconstructed here, because a signature nobody gave is not consent and
+// would poison an append-only evidence table. Instead this row records the
+// moment each person was actually told, which is the only honest start point for
+// a grace clock.
+model LegalReConsent {
+  userId String @id
+  // When the person was first notified. The grace clock starts here, never at
+  // deploy time, so nobody is locked out by a deadline they never saw.
+  notifiedAt DateTime @default(now())
+  graceDays Int @default(30)
+  // Bumped each time a reminder goes out, so reminders stay idempotent and
+  // auditable rather than firing on every page load.
+  reminders Int @default(0)
+  lastRemindedAt DateTime?
+  satisfiedAt DateTime?
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([satisfiedAt])
+  @@index([notifiedAt])
 }
 
 model PaymentOrder {

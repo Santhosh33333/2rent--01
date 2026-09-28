@@ -299,6 +299,7 @@ export const legalApi = {
     consentType: string
   }) => api.post('/legal/accept', body),
   myAcceptances: () => api.get('/legal/acceptances'),
+  reConsent: () => api.get('/legal/re-consent'),
 }
 
 export type LegalDocKind =

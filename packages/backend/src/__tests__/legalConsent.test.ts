@@ -279,4 +279,16 @@ describe("Acceptance records are sealed and append-only", () => {
       "COMMUNITY_GUIDELINES",
     ]);
   });
+
+  // The route validator has always advertised RE_CONSENT as a valid
+  // consentType, but CONSENT_REQUIREMENTS had no such key, so the controller
+  // rejected every re-consent with a 400 and an updated-terms notice could
+  // never be cleared. This pins the key to the same core terms as signup.
+  it("every gate the routes accept actually exists in CONSENT_REQUIREMENTS", () => {
+    for (const gate of ["SIGNUP", "PARTNER_ONBOARDING", "BOOKING", "RE_CONSENT"]) {
+      expect(docs.CONSENT_REQUIREMENTS[gate], `gate ${gate} must be defined`).toBeDefined();
+      expect(docs.CONSENT_REQUIREMENTS[gate].length).toBeGreaterThan(0);
+    }
+    expect(docs.CONSENT_REQUIREMENTS.RE_CONSENT).toEqual(docs.CONSENT_REQUIREMENTS.SIGNUP);
+  });
 });

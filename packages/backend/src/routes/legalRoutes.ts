@@ -30,4 +30,8 @@ router.post(
 router.get("/consent", authenticateToken, legalController.getMyConsentStatus);
 router.get("/acceptances", authenticateToken, legalController.getMyAcceptances);
 
+// Readable before acceptance on purpose: a person who is blocked by the
+// re-consent gate must still be able to see what they are being asked to sign.
+router.get("/re-consent", authenticateToken, legalController.getMyReConsentState);
+
 export default router;

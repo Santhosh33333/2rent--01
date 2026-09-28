@@ -222,4 +222,9 @@ export const CONSENT_REQUIREMENTS: Record<string, LegalDocKind[]> = {
   SIGNUP: ["USER_AGREEMENT", "PRIVACY_POLICY", "COMMUNITY_GUIDELINES"],
   PARTNER_ONBOARDING: ["PARTNER_AGREEMENT", "USER_AGREEMENT", "PRIVACY_POLICY", "COMMUNITY_GUIDELINES"],
   BOOKING: ["BOOKING_POLICY"],
+  // Re-consent asks for the same core terms as signup. The route validator has
+  // always advertised RE_CONSENT as a valid consentType, but this map had no
+  // such key, so the controller rejected every re-consent with a 400 and nobody
+  // could ever clear an updated-terms notice.
+  RE_CONSENT: ["USER_AGREEMENT", "PRIVACY_POLICY", "COMMUNITY_GUIDELINES"],
 };

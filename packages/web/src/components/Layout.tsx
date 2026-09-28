@@ -22,6 +22,7 @@ import {
   prepareInterstitial, showBanner, subscribeAdsState 
 } from '../lib/ads';
 import { motion, AnimatePresence } from 'motion/react';
+import { ReConsentBanner } from './legal/ReConsentBanner';
 
 function UnreadBadge() {
   const [count, setCount] = useState(0);
@@ -294,8 +295,9 @@ export function Layout() {
       <main className={`pt-24 pb-24 lg:pb-12 transition-all duration-500 ${bannerUp ? 'pb-32' : ''}`}>
         <PartnerLiveLocationSharer />
         <UserLiveLocationSharer />
-        <div className="max-w-7xl mx-auto px-4 py-5 sm:px-6 sm:py-7 lg:px-8 lg:py-8">
-          <Outlet />
+      <div className="max-w-7xl mx-auto px-4 py-5 sm:px-6 sm:py-7 lg:px-8 lg:py-8">
+        <ReConsentBanner />
+        <Outlet />
         </div>
       </main>
 
