@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
-import { User, Mail, Phone, Lock, Eye, EyeOff, ArrowRight, ArrowLeft, Check, Sparkles, Cake, KeyRound, ShieldCheck, RefreshCw } from 'lucide-react'
+import { User, Mail, Phone, Lock, Eye, EyeOff, ArrowRight, ArrowLeft, Check, Sparkles, Cake, KeyRound, ShieldCheck, RefreshCw, PersonStanding, UserRound, Users, Handshake } from 'lucide-react'
 import { useAuth } from '../../lib/auth'
 import { resolveLandingRole } from '../../lib/roles'
 import { api } from '../../lib/api'
@@ -21,10 +21,43 @@ function ageFrom(dob: string): number {
   return age
 }
 
+/**
+ * Render a stored ISO date the way a person would read it. The date input
+ * hands back "1995-03-12", which on the review step looked like a database
+ * value rather than something the user had just typed.
+ */
+function formatDob(value?: string): string {
+  if (!value) return '—'
+  const parsed = new Date(value)
+  if (isNaN(parsed.getTime())) return value
+  return parsed.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+/**
+ * Password strength, for feedback only. The server's floor is 6 characters and
+ * that stays the rule; this exists so the user is told the truth about a weak
+ * choice instead of discovering it somewhere else later.
+ */
+function scorePassword(value: string): { score: number; label: string; tone: string } {
+  if (!value) return { score: 0, label: '', tone: '' }
+  let score = 0
+  if (value.length >= 8) score++
+  if (value.length >= 12) score++
+  if (/[a-z]/.test(value) && /[A-Z]/.test(value)) score++
+  if (/\d/.test(value)) score++
+  if (/[^A-Za-z0-9]/.test(value)) score++
+  if (value.length < 6) score = 0
+  const capped = Math.min(score, 4)
+  if (capped <= 1) return { score: capped, label: 'Too weak', tone: 'bg-danger-500' }
+  if (capped === 2) return { score: capped, label: 'Weak', tone: 'bg-danger-500' }
+  if (capped === 3) return { score: capped, label: 'Good', tone: 'bg-amber-500' }
+  return { score: capped, label: 'Strong', tone: 'bg-emerald-500' }
+}
+
 const GENDERS = [
-  { value: 'MALE', label: 'Male', icon: '👨' },
-  { value: 'FEMALE', label: 'Female', icon: '👩' },
-  { value: 'OTHER', label: 'Other', icon: '🧑' },
+  { value: 'MALE', label: 'Male', icon: PersonStanding },
+  { value: 'FEMALE', label: 'Female', icon: UserRound },
+  { value: 'OTHER', label: 'Other', icon: Users },
 ]
 
 const MAX_DOB = new Date()
@@ -89,6 +122,19 @@ export function RegisterPage() {
   })
 
   const emailValue = watch('email')
+  const passwordValue = watch('password')
+  const strength = scorePassword(passwordValue || '')
+
+  // Steps are only reachable backwards once they have been passed. Without the
+  // guard the indicator would let a jump skip the email proof, because step 2
+  // is where verification happens.
+  const furthestStep = useRef(1)
+  useEffect(() => {
+    if (step > furthestStep.current) furthestStep.current = step
+  }, [step])
+  const jumpTo = (target: number) => {
+    if (target >= 1 && target < step && target <= furthestStep.current) setStep(target)
+  }
 
   // If the user changes the email after verifying, reset the inline OTP state.
   useEffect(() => {
@@ -247,25 +293,42 @@ export function RegisterPage() {
           </div>
 
           {/* Step indicators */}
-          <div className="flex items-center justify-center gap-2 mb-6">
-            {steps.map((s, i) => (
-              <div key={s.id} className="flex items-center gap-2">
-                <div className={`flex items-center justify-center w-9 h-9 rounded-xl text-xs font-bold transition-all duration-500 ${
-                  step > s.id
-                    ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25'
-                    : step === s.id
-                    ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 border-2 border-primary-400 dark:border-primary-500'
-                    : 'bg-surface-100 dark:bg-surface-800 text-surface-400'
-                }`}>
-                  {step > s.id ? <Check className="w-4 h-4" /> : s.id}
-                </div>
-                {i < steps.length - 1 && (
-                  <div className={`w-10 h-0.5 rounded-full transition-colors duration-500 ${
-                    step > s.id ? 'bg-primary-500' : 'bg-surface-200 dark:bg-surface-700'
-                  }`} />
-                )}
-              </div>
-            ))}
+          <div className="mb-6">
+            <div className="flex items-center justify-between gap-2">
+              {steps.map((s, i) => {
+                const done = step > s.id
+                const current = step === s.id
+                const reachable = done && s.id <= furthestStep.current
+                return (
+                  <div key={s.id} className="flex items-center gap-2 flex-1 last:flex-none">
+                    <button
+                      type="button"
+                      onClick={() => jumpTo(s.id)}
+                      disabled={!reachable}
+                      aria-current={current ? 'step' : undefined}
+                      aria-label={`Step ${s.id}: ${s.title}`}
+                      className={`flex items-center justify-center w-9 h-9 shrink-0 rounded-xl text-xs font-bold transition-all duration-500 ${
+                        done
+                          ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25'
+                          : current
+                          ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 border-2 border-primary-400 dark:border-primary-500'
+                          : 'bg-surface-100 dark:bg-surface-800 text-surface-400'
+                      } ${reachable ? 'cursor-pointer hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500' : 'cursor-default'}`}
+                    >
+                      {done ? <Check className="w-4 h-4" /> : s.id}
+                    </button>
+                    {i < steps.length - 1 && (
+                      <div className={`flex-1 h-0.5 rounded-full transition-colors duration-500 ${
+                        step > s.id ? 'bg-primary-500' : 'bg-surface-200 dark:bg-surface-700'
+                      }`} />
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+            <p className="mt-3 text-xs font-medium uppercase tracking-wider text-surface-400">
+              Step {step} of {steps.length}
+            </p>
           </div>
 
           {/* Card */}
@@ -282,36 +345,42 @@ export function RegisterPage() {
                     <button
                       type="button"
                       onClick={() => setAccountType('USER')}
+                      aria-pressed={accountType === 'USER'}
                       className={`w-full rounded-2xl border p-4 text-left transition ${
                         accountType === 'USER'
                           ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-950/30 dark:text-primary-300'
                           : 'border-surface-200 bg-white text-surface-700 hover:border-primary-200 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-200'
                       }`}
                     >
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between gap-3">
                         <div>
                           <div className="font-semibold">I'm a User</div>
                           <div className="text-sm opacity-75">Book services, discover local help, and manage my account</div>
                         </div>
-                        <div className="text-xl">👤</div>
+                        <div className={`flex items-center justify-center w-10 h-10 shrink-0 rounded-xl ${accountType === 'USER' ? 'bg-primary-500 text-white' : 'bg-surface-100 text-surface-500 dark:bg-surface-800 dark:text-surface-400'}`}>
+                          <User className="w-5 h-5" />
+                        </div>
                       </div>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => setAccountType('PARTNER')}
+                      aria-pressed={accountType === 'PARTNER'}
                       className={`w-full rounded-2xl border p-4 text-left transition ${
                         accountType === 'PARTNER'
                           ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300'
                           : 'border-surface-200 bg-white text-surface-700 hover:border-emerald-200 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-200'
                       }`}
                     >
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between gap-3">
                         <div>
                           <div className="font-semibold">I'm a Partner</div>
                           <div className="text-sm opacity-75">Offer services, accept work, and get paid securely</div>
                         </div>
-                        <div className="text-xl">🤝</div>
+                        <div className={`flex items-center justify-center w-10 h-10 shrink-0 rounded-xl ${accountType === 'PARTNER' ? 'bg-emerald-500 text-white' : 'bg-surface-100 text-surface-500 dark:bg-surface-800 dark:text-surface-400'}`}>
+                          <Handshake className="w-5 h-5" />
+                        </div>
                       </div>
                     </button>
                   </div>
@@ -427,20 +496,30 @@ export function RegisterPage() {
                       </div>
                     )}
                   </div>
-                  <div>
-                    <label htmlFor="referralCode" className="label">Referral Code <span className="text-surface-400 font-normal">(optional)</span></label>
-                    <div className="relative">
+                  {/* Optional, so it is set apart rather than sitting in the middle
+                      of the required fields where it reads as mandatory. */}
+                  <div className="rounded-2xl border border-dashed border-surface-200 dark:border-surface-700 p-4">
+                    <label htmlFor="referralCode" className="label mb-0">
+                      Referral code <span className="text-surface-400 font-normal">— optional</span>
+                    </label>
+                    <div className="relative mt-2">
                       <Sparkles className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 shrink-0 pointer-events-none text-surface-400" />
                       <input {...register('referralCode')} type="text" id="referralCode" className="input pl-11 uppercase" placeholder="RB-XXXXXXXX" />
                     </div>
                     <p className="mt-2 text-xs text-surface-500">Enter a friend's code to earn a sign-up reward on both sides.</p>
                   </div>
-                  <button type="button" onClick={handleNext} className="btn-gradient w-full btn-lg group">
-                    <span className="flex items-center justify-center gap-2">
-                      Continue
-                      <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                    </span>
-                  </button>
+                  <div className="flex gap-3">
+                    <button type="button" onClick={() => setStep(1)} className="btn-outline flex-1">
+                      <ArrowLeft className="w-4 h-4" />
+                      Back
+                    </button>
+                    <button type="button" onClick={handleNext} className="btn-gradient flex-1 group">
+                      <span className="flex items-center justify-center gap-2">
+                        Continue
+                        <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                      </span>
+                    </button>
+                  </div>
                 </>
               )}
 
@@ -449,21 +528,26 @@ export function RegisterPage() {
                   <div>
                     <label className="label">Gender</label>
                     <div className="grid grid-cols-3 gap-2">
-                      {GENDERS.map((g) => (
-                        <button
-                          key={g.value}
-                          type="button"
-                          onClick={() => setValue('gender', g.value, { shouldValidate: true })}
-                          className={`rounded-xl border px-2 py-3 text-center transition ${
-                            watch('gender') === g.value
-                              ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-950/30 dark:text-primary-300'
-                              : 'border-surface-200 bg-white text-surface-700 hover:border-primary-200 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-200'
-                          }`}
-                        >
-                          <div className="text-xl mb-1">{g.icon}</div>
-                          <div className="text-xs font-semibold truncate">{g.label}</div>
-                        </button>
-                      ))}
+                      {GENDERS.map((g) => {
+                        const Icon = g.icon
+                        const selected = watch('gender') === g.value
+                        return (
+                          <button
+                            key={g.value}
+                            type="button"
+                            onClick={() => setValue('gender', g.value, { shouldValidate: true })}
+                            aria-pressed={selected}
+                            className={`rounded-xl border px-2 py-3 text-center transition ${
+                              selected
+                                ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-950/30 dark:text-primary-300'
+                                : 'border-surface-200 bg-white text-surface-700 hover:border-primary-200 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-200'
+                            }`}
+                          >
+                            <Icon className="w-5 h-5 mx-auto mb-1.5" />
+                            <div className="text-xs font-semibold truncate">{g.label}</div>
+                          </button>
+                        )
+                      })}
                     </div>
                     {errors.gender && <p className="mt-2 text-xs text-danger-500 font-medium">{errors.gender.message}</p>}
                   </div>
@@ -520,6 +604,24 @@ export function RegisterPage() {
                       </button>
                     </div>
                     {errors.password && <p className="mt-2 text-xs text-danger-500 font-medium">{errors.password.message}</p>}
+                    {passwordValue && (
+                      <div className="mt-2.5 flex items-center gap-2.5">
+                        <div className="flex-1 flex gap-1" aria-hidden="true">
+                          {[1, 2, 3, 4].map((n) => (
+                            <div
+                              key={n}
+                              className={`h-1 flex-1 rounded-full transition-colors ${
+                                n <= strength.score ? strength.tone : 'bg-surface-200 dark:bg-surface-700'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                        <span className="text-xs font-semibold text-surface-500" role="status">{strength.label}</span>
+                      </div>
+                    )}
+                    {!errors.password && !passwordValue && (
+                      <p className="mt-2 text-xs text-surface-500">At least 6 characters. Longer and mixed is stronger.</p>
+                    )}
                   </div>
                   <div>
                     <label htmlFor="confirmPassword" className="label">Confirm Password</label>
@@ -557,9 +659,9 @@ export function RegisterPage() {
                       <span className="font-semibold text-surface-900 dark:text-white">{watch('name') || '—'}</span>
                     </div>
                     <div className="h-px bg-surface-200 dark:bg-surface-700" />
-                    <div className="flex justify-between items-center">
-                      <span className="text-surface-500">Email</span>
-                      <span className="font-semibold text-surface-900 dark:text-white">{watch('email') || '—'}</span>
+                    <div className="flex justify-between items-center gap-4">
+                      <span className="text-surface-500 shrink-0">Email</span>
+                      <span className="font-semibold text-surface-900 dark:text-white text-right break-all">{watch('email') || '—'}</span>
                     </div>
                     <div className="h-px bg-surface-200 dark:bg-surface-700" />
                     <div className="flex justify-between items-center">
@@ -569,9 +671,9 @@ export function RegisterPage() {
                       </span>
                     </div>
                     <div className="h-px bg-surface-200 dark:bg-surface-700" />
-                    <div className="flex justify-between items-center">
-                      <span className="text-surface-500">Date of Birth</span>
-                      <span className="font-semibold text-surface-900 dark:text-white">{watch('dateOfBirth') || '—'}</span>
+                    <div className="flex justify-between items-center gap-4">
+                      <span className="text-surface-500 shrink-0">Date of Birth</span>
+                      <span className="font-semibold text-surface-900 dark:text-white text-right">{formatDob(watch('dateOfBirth'))}</span>
                     </div>
                     <div className="h-px bg-surface-200 dark:bg-surface-700" />
                     <div className="flex justify-between items-center">
@@ -579,26 +681,33 @@ export function RegisterPage() {
                       <span className="font-semibold text-surface-900 dark:text-white">{watch('phone') || '—'}</span>
                     </div>
                   </div>
-                  <div className="flex items-start gap-3">
-                    <input
-                      {...register('terms')}
-                      type="checkbox"
-                      id="terms"
-                      className="mt-0.5 h-4 w-4 rounded border-surface-300 text-primary-500 focus:ring-primary-500"
-                    />
-                    <label htmlFor="terms" className="text-sm text-surface-600 dark:text-surface-400 leading-relaxed">
-                      I agree to the{' '}
-                      <Link to="/terms" className="font-semibold text-primary-600 dark:text-primary-400 hover:underline">Terms of Service</Link>
-                      {', '}
-                      <Link to="/privacy" className="font-semibold text-primary-600 dark:text-primary-400 hover:underline">Privacy Policy</Link>
-                      {' '}and{' '}
-                      <Link to="/legal/consent" className="font-semibold text-primary-600 dark:text-primary-400 hover:underline">Community Guidelines</Link>
-                      {'. I sign as '}
-                      <span className="font-semibold text-surface-700 dark:text-surface-200">{watch('name') || 'my typed name'}</span>
-                      {' '}and a dated copy of each is recorded and emailed to me.
-                    </label>
+                  <div className="rounded-2xl border border-surface-200 dark:border-surface-700 p-4">
+                    <div className="flex items-start gap-3">
+                      <input
+                        {...register('terms')}
+                        type="checkbox"
+                        id="terms"
+                        className="mt-0.5 h-4 w-4 shrink-0 rounded border-surface-300 text-primary-500 focus:ring-primary-500"
+                      />
+                      <label htmlFor="terms" className="text-sm text-surface-600 dark:text-surface-400 leading-relaxed">
+                        I agree to the{' '}
+                        <Link to="/terms" className="font-semibold text-primary-600 dark:text-primary-400 hover:underline">Terms of Service</Link>
+                        {', '}
+                        <Link to="/privacy" className="font-semibold text-primary-600 dark:text-primary-400 hover:underline">Privacy Policy</Link>
+                        {' '}and{' '}
+                        <Link to="/legal/consent" className="font-semibold text-primary-600 dark:text-primary-400 hover:underline">Community Guidelines</Link>
+                        {'. A dated copy of each is recorded and emailed to you.'}
+                      </label>
+                    </div>
+                    <div className="mt-3 flex items-center gap-2 border-t border-surface-200 dark:border-surface-700 pt-3">
+                      <ShieldCheck className="w-4 h-4 text-surface-400 shrink-0" />
+                      <p className="text-xs text-surface-500">
+                        Signed as{' '}
+                        <span className="font-semibold text-surface-700 dark:text-surface-200">{watch('name') || 'your typed name'}</span>
+                      </p>
+                    </div>
+                    {errors.terms && <p className="mt-2 text-xs text-danger-500 font-medium">{errors.terms.message}</p>}
                   </div>
-                  {errors.terms && <p className="text-xs text-danger-500 font-medium">{errors.terms.message}</p>}
                   <div className="flex gap-3">
                     <button type="button" onClick={() => setStep(4)} className="btn-outline flex-1">
                       <ArrowLeft className="w-4 h-4" />
