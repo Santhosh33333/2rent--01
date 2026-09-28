@@ -82,6 +82,11 @@ const envSchema = z.object({
   // OLDEST active key pair, because that is the one Cashfree signs with.
   CASHFREE_APP_ID: z.string().default("cashfree_app_id_placeholder"),
   CASHFREE_SECRET_KEY: z.string().default("cashfree_secret_placeholder"),
+  // "test" routes orders to Cashfree's sandbox, "production" to the live host.
+  // Defaults to production, so an unset value cannot silently downgrade or
+  // upgrade where real money moves. Test credentials only work on the sandbox
+  // host and vice versa, so this must match whichever keys are configured.
+  CASHFREE_API_ENV: z.enum(["test", "production"]).default("production"),
 
   // Payment settings
   PLATFORM_COMMISSION_PERCENT: z.string().default("10").transform(Number),
@@ -289,12 +294,25 @@ if (env.isProduction) {
       );
     }
 
-    if (isPlaceholder(env.CASHFREE_SECRET_KEY) || env.CASHFREE_SECRET_KEY?.includes("placeholder")) {
-      throw new Error(
-        "CASHFREE_SECRET_KEY is required in production and must be the real secret key (not the placeholder).",
-      );
+      if (isPlaceholder(env.CASHFREE_SECRET_KEY) || env.CASHFREE_SECRET_KEY?.includes("placeholder")) {
+        throw new Error(
+          "CASHFREE_SECRET_KEY is required in production and must be the real secret key (not the placeholder).",
+        );
+      }
+
+      // Fail loudly on the mismatch that is otherwise invisible: test keys sent
+      // to the production host (or the reverse) fail with a generic auth error
+      // on the first order, long after deploy.
+      const expectsSandbox = env.CASHFREE_API_ENV === "test";
+      const looksLikeTestKey = /^(test|sandbox)/i.test(env.CASHFREE_APP_ID || "");
+      if (expectsSandbox === looksLikeTestKey) {
+        throw new Error(
+          `CASHFREE_API_ENV is "${env.CASHFREE_API_ENV}" but CASHFREE_APP_ID looks like a ` +
+            `${looksLikeTestKey ? "test" : "production"} key. Cashfree rejects credentials on the ` +
+            "wrong host. Set CASHFREE_API_ENV to match the keys you configured.",
+        );
+      }
     }
-  }
 
   // SMTP: OTP email + transactional notifications won't be delivered without it.
   if (isPlaceholder(env.SMTP_HOST) || isPlaceholder(env.SMTP_USER) || isPlaceholder(env.SMTP_PASS)) {

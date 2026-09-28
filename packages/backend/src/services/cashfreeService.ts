@@ -16,7 +16,14 @@
 import crypto from "crypto"
 import { env } from "../config/env"
 
-const CASHFREE_API_BASE = "https://api.cashfree.com/pg"
+// Cashfree keeps test and production on separate hosts with separate
+// credentials, and a test key is rejected by the production host. Hardcoding the
+// production URL meant there was no way to exercise the flow without real money,
+// so the base is selectable: CASHFREE_API_ENV=test points at the sandbox.
+const CASHFREE_API_BASE =
+  (env.CASHFREE_API_ENV || "").trim().toLowerCase() === "test"
+    ? "https://sandbox.cashfree.com/pg"
+    : "https://api.cashfree.com/pg"
 // The header is `x-api-version`. An earlier `x-cf-version` was silently ignored
 // by Cashfree, which would have left every order call on a default API version.
 // Pinning the version explicitly keeps order, fetch and refund calls on the same
