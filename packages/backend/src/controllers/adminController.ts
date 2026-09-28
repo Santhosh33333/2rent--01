@@ -38,8 +38,22 @@ function isPrivilegedTarget(role?: string | null): boolean {
  * Compared case-insensitively and trimmed because a guard that only matches an
  * exact-cased email is trivially bypassed by any row whose email casing differs.
  */
+/**
+ * True only for the configured primary super admin.
+ *
+ * Deliberately has no hardcoded fallback. A baked-in address here is a silent
+ * privilege-escalation path: with ADMIN_EMAIL unset or blank, a real person's
+ * mailbox would quietly become the one account that can never be demoted,
+ * suspended or deleted. Failing closed means the worst case is "no one is
+ * protected", which is recoverable, rather than "an attacker with one mailbox is
+ * root forever".
+ *
+ * Empty string counts as unset on purpose - a blank ADMIN_EMAIL in a deploy
+ * config must not silently promote anything.
+ */
 function isPrimarySuperAdmin(email?: string | null): boolean {
-  const protectedEmail = (env.ADMIN_EMAIL ?? "santhoshkrishna958@gmail.com").trim().toLowerCase();
+  const protectedEmail = (env.ADMIN_EMAIL ?? "").trim().toLowerCase();
+  if (!protectedEmail) return false;
   return (email ?? "").trim().toLowerCase() === protectedEmail;
 }
 

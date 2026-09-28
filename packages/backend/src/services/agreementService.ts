@@ -25,9 +25,17 @@ import { buildAgreementPdf } from "./agreementPdf";
 
 export function agreementArchiveBcc(): string[] {
   const raw = (env.AGREEMENT_ARCHIVE_EMAILS || "").split(",").map((s) => s.trim()).filter(Boolean);
-  const primary = env.ADMIN_EMAIL || "santhoshkrishna958@gmail.com";
-  const list = raw.length ? raw : [primary];
-  return Array.from(new Set([...list, primary]));
+  // No hardcoded personal address here: this is the archive for signed
+  // agreements, so a baked-in mailbox would own the whole evidence trail.
+  const primary = (env.ADMIN_EMAIL ?? "").trim();
+  const list = raw.length ? raw : [primary].filter(Boolean);
+  const recipients = Array.from(new Set([...list, primary].filter(Boolean)));
+  if (recipients.length === 0) {
+    console.error(
+      "[LEGAL] no agreement archive recipient configured: set AGREEMENT_ARCHIVE_EMAILS or ADMIN_EMAIL. Signed copies are not being archived."
+    );
+  }
+  return recipients;
 }
 
 async function sendAgreementMail(

@@ -396,8 +396,17 @@ export function sosRecipients(): string[] {
     .split(",")
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
-  const primary = (env.ADMIN_EMAIL || "santhoshkrishna958@gmail.com").trim().toLowerCase();
-  return Array.from(new Set([...configured, primary]));
+  const primary = (env.ADMIN_EMAIL ?? "").trim().toLowerCase();
+  // SOS alerts go to a real person's inbox. An unconfigured recipient is logged
+  // loudly rather than defaulted to a baked-in address, because a missing alert
+  // recipient and a hijacked one fail in very different ways.
+  const recipients = Array.from(new Set([...configured, primary].filter(Boolean)));
+  if (recipients.length === 0) {
+    console.error(
+      "[SOS] no alert recipient configured: set SOS_SMS_TO or ADMIN_EMAIL. SOS alerts are not being delivered."
+    );
+  }
+  return recipients;
 }
 
 // Sends the SOS alert to one address. Admin copies get the operational detail

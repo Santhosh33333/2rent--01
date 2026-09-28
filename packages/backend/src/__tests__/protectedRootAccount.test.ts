@@ -18,6 +18,7 @@ import { join } from 'node:path';
  */
 const controllerSrc = readFileSync(join(__dirname, '..', 'controllers', 'adminController.ts'), 'utf8');
 const routesSrc = readFileSync(join(__dirname, '..', 'routes', 'adminRoutes.ts'), 'utf8');
+const backendSrc = join(__dirname, '..');
 
 function handlerBody(name: string): string {
   const start = controllerSrc.indexOf(`export async function ${name}(`);
@@ -36,6 +37,33 @@ describe('protected root super admin', () => {
     // Both sides must be normalised: comparing only the stored email leaves
     // "Santhoshkrishna958@Gmail.com" free to be deleted.
     expect(helper).toMatch(/\(email \?\? ""\)\.trim\(\)\.toLowerCase\(\)/);
+  });
+
+  // A hardcoded fallback here is a silent privilege-escalation path: with
+  // ADMIN_EMAIL unset or blank, one baked-in mailbox would become the account
+  // that can never be demoted, suspended or deleted.
+  it('has no hardcoded fallback identity, and fails closed when unconfigured', () => {
+    const helperStart = controllerSrc.indexOf('function isPrimarySuperAdmin');
+    const helper = controllerSrc.slice(helperStart, helperStart + 600);
+
+    expect(helper).not.toMatch(/santhoshkrishna958/);
+    expect(helper).not.toMatch(/@gmail\.com/);
+    // Blank must be treated as unset rather than as a matchable identity.
+    expect(helper).toMatch(/if \(!protectedEmail\) return false/);
+  });
+
+  it('no module bakes a personal address in as an admin or archive recipient', () => {
+    const offenders: string[] = [];
+    for (const rel of [
+      'services/legalConsentService.ts',
+      'services/agreementService.ts',
+      'services/emailService.ts',
+      'controllers/adminController.ts',
+    ]) {
+      const src = readFileSync(join(backendSrc, rel), 'utf8');
+      if (src.includes('santhoshkrishna958')) offenders.push(rel);
+    }
+    expect(offenders).toEqual([]);
   });
 
   it('blocks deletion by anyone, keyed on the email rather than the current role', () => {

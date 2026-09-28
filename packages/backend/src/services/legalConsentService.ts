@@ -37,8 +37,18 @@ function sha256(input: string): string {
 
 export function adminConsentBcc(): string[] {
   const raw = (env.AGREEMENT_ARCHIVE_EMAILS || "").split(",").map((s) => s.trim()).filter(Boolean);
-  const primary = env.ADMIN_EMAIL || "santhoshkrishna958@gmail.com";
-  return Array.from(new Set([...raw, primary]));
+  // No hardcoded fallback recipient. This address receives a copy of every
+  // signed agreement, so a baked-in personal mailbox would quietly become the
+  // archive for the entire legal evidence trail. An unconfigured archive is
+  // visible; a compromised one is not recoverable.
+  const primary = (env.ADMIN_EMAIL ?? "").trim();
+  const recipients = Array.from(new Set([...raw, primary].filter(Boolean)));
+  if (recipients.length === 0) {
+    console.error(
+      "[LEGAL] no agreement archive recipient configured: set AGREEMENT_ARCHIVE_EMAILS or ADMIN_EMAIL. Signed copies are not being archived."
+    );
+  }
+  return recipients;
 }
 
 /** Publish version 1 of any document that has no current row. */
