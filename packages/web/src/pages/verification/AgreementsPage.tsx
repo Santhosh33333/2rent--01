@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { FileText, CheckCircle2, ChevronDown, ShieldCheck, Download, Loader2 } from 'lucide-react'
-import { agreementApi } from '../../lib/api'
+import { agreementApi, legalApi } from '../../lib/api'
 import { getErrorMessage } from '../../lib/error'
 import { SkeletonLoader } from '../../components/SkeletonLoader'
 import { EmptyState } from '../../components/EmptyState'
@@ -25,6 +25,84 @@ const statusBadge: Record<string, string> = {
   ACCEPTED: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
   SENT: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300',
   PENDING: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+}
+
+interface SealedAcceptance {
+  id: string
+  kind: string
+  version: number
+  title: string
+  consentType: string
+  signatureType: string
+  contentSha256: string
+  acceptedAt: string
+  withdrawnAt: string | null
+}
+
+/**
+ * The sealed consent records. These are the legally meaningful ones: each row
+ * pins a document version and a hash of the exact text signed, so a later edit
+ * to the wording cannot silently change what the person agreed to.
+ */
+function SignedRecords() {
+  const [rows, setRows] = useState<SealedAcceptance[] | null>(null)
+
+  useEffect(() => {
+    let active = true
+    legalApi
+      .myAcceptances()
+      .then((res) => {
+        if (!active) return
+        const d = res.data?.data || res.data || {}
+        setRows(d.acceptances || [])
+      })
+      .catch(() => {
+        if (active) setRows([])
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  if (!rows || rows.length === 0) return null
+
+  return (
+    <div className="rounded-2xl border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800/50 p-4">
+      <h2 className="mb-1 flex items-center gap-2 text-sm font-bold text-surface-900 dark:text-surface-100">
+        <ShieldCheck size={16} className="text-emerald-600" />
+        Signed terms on record
+      </h2>
+      <p className="mb-3 text-xs text-surface-500 dark:text-surface-400">
+        Each signature is sealed against the exact wording and version you accepted.
+      </p>
+      <ul className="space-y-2">
+        {rows.map((r) => (
+          <li
+            key={r.id}
+            className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-surface-200 px-3 py-2 text-sm dark:border-surface-700"
+          >
+            <span className="min-w-0 flex-1 truncate font-medium text-surface-800 dark:text-surface-200">
+              {r.title}{' '}
+              <span className="text-xs text-surface-500">v{r.version}</span>
+            </span>
+            <span className="text-xs text-surface-500 dark:text-surface-400">
+              {r.signatureType === 'DRAWN' ? 'Drawn' : 'Typed'} ·{' '}
+              {new Date(r.acceptedAt).toLocaleDateString('en-IN')}
+            </span>
+            <span
+              className="font-mono text-[10px] text-surface-400"
+              title="SHA-256 of the signed document text"
+            >
+              {r.contentSha256.slice(0, 12)}
+            </span>
+            {r.withdrawnAt && (
+              <span className="text-xs font-semibold text-amber-600">withdrawn</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
 }
 
 export function AgreementsPage() {
@@ -119,6 +197,8 @@ export function AgreementsPage() {
             account. A PDF copy is emailed to you and a record is kept on file.
           </p>
         </div>
+
+        <SignedRecords />
 
         {agreements.length === 0 ? (
           <EmptyState

@@ -113,6 +113,23 @@ api.interceptors.response.use(
       url.includes('/auth/google') ||
       url.includes('/auth/phone')
 
+    // Legal consent gate. The server refuses booking / partner-apply with 403 +
+    // LEGAL_CONSENT_REQUIRED and names the missing documents. Rather than
+    // surfacing a raw error, send the user to sign and return them to the page
+    // they were trying to reach, so the interrupted action is recoverable.
+    const gateError = error.response?.data?.error
+    if (status === 403 && gateError?.code === 'LEGAL_CONSENT_REQUIRED') {
+      const gate = String(gateError.gate || 'SIGNUP')
+      const currentPath = window.location.pathname + window.location.search
+      const onConsentScreen = currentPath.startsWith('/legal/consent')
+      if (!onConsentScreen && !url.includes('/legal/')) {
+        const next = encodeURIComponent(currentPath)
+        window.location.assign(`/legal/consent?gate=${encodeURIComponent(gate)}&next=${next}`)
+        // Never resolve the original call as success while navigating away.
+        return new Promise(() => {})
+      }
+    }
+
     if (status === 401 && !originalRequest._retry && !shouldSkipRefresh) {
       originalRequest._retry = true
       try {
@@ -267,6 +284,29 @@ export const agreementApi = {
   getAgreement: (id: string) => api.get(`/users/agreements/${id}`),
   accept: (id: string) => api.post(`/users/agreements/${id}/accept`),
 }
+
+// Versioned legal documents + signed consent capture.
+// `accept` records a real signature; the server seals it with the document
+// version, a content hash, the IP and the user agent, then mails copies.
+export const legalApi = {
+  documents: () => api.get('/legal/documents'),
+  document: (kind: string) => api.get(`/legal/documents/${kind}`),
+  consent: (gate: string) => api.get(`/legal/consent?gate=${encodeURIComponent(gate)}`),
+  accept: (body: {
+    kind: string
+    signatureType: 'TYPED_NAME' | 'DRAWN'
+    signatureValue: string
+    consentType: string
+  }) => api.post('/legal/accept', body),
+  myAcceptances: () => api.get('/legal/acceptances'),
+}
+
+export type LegalDocKind =
+  | 'USER_AGREEMENT'
+  | 'PARTNER_AGREEMENT'
+  | 'PRIVACY_POLICY'
+  | 'COMMUNITY_GUIDELINES'
+  | 'BOOKING_POLICY'
 
 // Account role switching (USER <-> PARTNER), backend-enforced
 export const authRoleApi = {

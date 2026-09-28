@@ -6,8 +6,10 @@ import * as legalController from "../controllers/legalController";
 
 const router = Router();
 
-// Document text must be readable before sign-in so the review step is not a
-// dead end for someone who has not accepted anything yet.
+// Document text requires auth: a member must have an account to read and sign,
+// and the review step is reached from inside the app. The endpoint is
+// deliberately readable BEFORE acceptance, so a user blocked by the consent gate
+// can always see exactly what they are being asked to sign.
 router.get("/documents", authenticateToken, legalController.listLegalDocuments);
 router.get("/documents/:kind", authenticateToken, legalController.getLegalDocument);
 

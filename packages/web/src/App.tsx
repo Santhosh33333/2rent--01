@@ -29,6 +29,7 @@ const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage').then(
 const ProfilePage = lazy(() => import('./pages/profile/ProfilePage').then(m => ({ default: m.ProfilePage })))
 const VerificationPage = lazy(() => import('./pages/verification/VerificationPage').then(m => ({ default: m.VerificationPage })))
 const AgreementsPage = lazy(() => import('./pages/verification/AgreementsPage').then(m => ({ default: m.AgreementsPage })))
+const LegalConsentPage = lazy(() => import('./pages/legal/LegalConsentPage').then(m => ({ default: m.LegalConsentPage })))
 const AdminAgreementsPage = lazy(() => import('./pages/admin/AdminAgreementsPage').then(m => ({ default: m.AdminAgreementsPage })))
 const KycStep1PersonalDetails = lazy(() => import('./pages/verification/KycStep1PersonalDetails').then(m => ({ default: m.KycStep1PersonalDetails })))
 const KycStep2GovId = lazy(() => import('./pages/verification/KycStep2GovId').then(m => ({ default: m.KycStep2GovId })))
@@ -188,6 +189,7 @@ export function App() {
               <Route path="/verification/step6" element={<KycStep6Review />} />
               <Route path="/verification/selfie" element={<VerifySelfiePage />} />
               <Route path="/agreements" element={<AgreementsPage />} />
+              <Route path="/legal/consent" element={<LegalConsentPage />} />
               <Route path="/verification/gov-id" element={<VerifyGovIdPage />} />
               <Route path="/verification/address" element={<VerifyAddressPage />} />
               <Route path="/wallet" element={<WalletPage />} />
