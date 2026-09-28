@@ -67,6 +67,19 @@ const envSchema = z.object({
   RAZORPAY_KEY_SECRET: z.string().default("razorpay_secret_placeholder"),
   RAZORPAY_WEBHOOK_SECRET: z.string().default("webhook_secret_placeholder"),
 
+  // Which gateway the payment flow uses. Kept as an explicit switch so the
+  // Cashfree migration can land without a production boot failure: the app
+  // refuses to start on missing Cashfree credentials only once Cashfree is
+  // actually selected.
+  PAYMENT_PROVIDER: z.enum(["razorpay", "cashfree"]).default("razorpay"),
+
+  // Cashfree - the active payment gateway going forward. The webhook secret is
+  // a different secret from the API secret and must never share a default,
+  // because an unset webhook secret that "passes" is a forged-payment hole.
+  CASHFREE_APP_ID: z.string().default("cashfree_app_id_placeholder"),
+  CASHFREE_SECRET_KEY: z.string().default("cashfree_secret_placeholder"),
+  CASHFREE_WEBHOOK_SECRET: z.string().default("cashfree_webhook_secret_placeholder"),
+
   // Payment settings
   PLATFORM_COMMISSION_PERCENT: z.string().default("10").transform(Number),
   MIN_BOOKING_AMOUNT: z.string().default("50").transform(Number),
@@ -257,6 +270,36 @@ if (env.isProduction) {
     throw new Error(
       "RAZORPAY_KEY_SECRET is required in production and must be the real secret (not the placeholder).",
     );
+  }
+
+  // Cashfree webhook secret: without it, inbound payment notifications cannot
+  // be authenticated, and the only way to keep accepting them would be to trust
+  // unsigned callbacks. That is the exact shape of a forged payment, so refuse
+  // to start rather than run with it unset.
+  //
+  // Only enforced once Cashfree is the selected provider, so that switching the
+  // gateway and supplying its secrets can happen in separate deploys.
+  if (env.PAYMENT_PROVIDER === "cashfree") {
+    if (
+      isPlaceholder(env.CASHFREE_WEBHOOK_SECRET) ||
+      env.CASHFREE_WEBHOOK_SECRET?.includes("placeholder")
+    ) {
+      throw new Error(
+        "CASHFREE_WEBHOOK_SECRET is required in production and must be the real webhook secret from the Cashfree dashboard (not the placeholder).",
+      );
+    }
+
+    if (isPlaceholder(env.CASHFREE_APP_ID) || env.CASHFREE_APP_ID?.includes("placeholder")) {
+      throw new Error(
+        "CASHFREE_APP_ID is required in production and must be the real app id (not the placeholder).",
+      );
+    }
+
+    if (isPlaceholder(env.CASHFREE_SECRET_KEY) || env.CASHFREE_SECRET_KEY?.includes("placeholder")) {
+      throw new Error(
+        "CASHFREE_SECRET_KEY is required in production and must be the real secret key (not the placeholder).",
+      );
+    }
   }
 
   // SMTP: OTP email + transactional notifications won't be delivered without it.

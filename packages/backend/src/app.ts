@@ -132,7 +132,20 @@ export function createApp(): http.Server {
     threshold: 1024,
   }) as unknown as RequestHandler;
   app.use(gzip);
-  app.use(express.json({ limit: "10mb" }));
+  // Capture the exact raw bytes of JSON requests before parsing.
+//
+// Payment gateways (Cashfree now, Razorpay previously) sign the raw request
+// body. Re-serialising the parsed object produces different bytes, so a
+// webhook verified against JSON.stringify(req.body) can never match. Keeping
+// the buffer here is what makes signature verification possible at all.
+app.use(
+  express.json({
+    limit: "10mb",
+    verify: (req, _res, buf) => {
+      (req as Request & { rawBody?: Buffer }).rawBody = buf;
+    },
+  }),
+);
   app.use(express.urlencoded({ extended: true, limit: "10mb" }));
   app.use(morgan(env.isProduction ? "combined" : "dev"));
   app.use(generalRateLimiter);

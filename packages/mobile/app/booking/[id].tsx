@@ -10,8 +10,10 @@ import { useBookingRealtime } from '../../src/hooks/useBookingRealtime';
 import { useCallSignaling } from '../../src/hooks/useCallSignaling';
 import { emitSos } from '../../src/lib/socket';
 import { CallModal } from '../../src/components/CallModal';
-// Real Razorpay checkout. Requires: npm i react-native-razorpay
+// Razorpay checkout, used when the backend reports Razorpay as the active
+// gateway. Requires: npm i react-native-razorpay
 import RazorpayCheckout from 'react-native-razorpay';
+import * as WebBrowser from 'expo-web-browser';
 
 export default function BookingDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -50,21 +52,36 @@ export default function BookingDetail() {
       setError(null);
       const res = await post<any>(`/bookings/${id}/pay`, {});
       const order = res.data ?? {};
-      const data = await RazorpayCheckout.open({
-        description: `RentBuddy — ${booking.serviceType ?? 'Booking'}`,
-        currency: order.currency ?? 'INR',
-        key: order.key || '',
-        amount: Math.round((order.amount ?? 0) * 100),
-        order_id: order.orderId,
-        name: 'RentBuddy',
-        prefill: { contact: user?.phone ?? '', email: user?.email ?? '' },
-        theme: { color: Colors.primary },
-      });
-      await post(`/bookings/${id}/verify-payment`, {
-        razorpay_payment_id: data.razorpay_payment_id,
-        razorpay_order_id: data.razorpay_order_id,
-        razorpay_signature: data.razorpay_signature,
-      });
+
+      // The backend decides which gateway is active, so the app follows the
+      // order shape it returns rather than assuming one provider.
+      if (order.provider === 'cashfree' && order.paymentUrl) {
+        // Cashfree hosts its own checkout, so the app just opens it. The order
+        // is settled by the webhook; nothing is trusted from the return trip.
+        const result = await WebBrowser.openBrowserAsync(order.paymentUrl);
+        if (result.type === 'cancel' || result.type === 'dismiss') {
+          setError('Payment cancelled.');
+          return;
+        }
+        // Ask the server what actually happened rather than assuming success.
+        await post(`/bookings/${id}/verify-payment`, { orderId: order.orderId });
+      } else {
+        const data = await RazorpayCheckout.open({
+          description: `Nabri — ${booking.serviceType ?? 'Booking'}`,
+          currency: order.currency ?? 'INR',
+          key: order.key || '',
+          amount: Math.round((order.amount ?? 0) * 100),
+          order_id: order.orderId,
+          name: 'Nabri',
+          prefill: { contact: user?.phone ?? '', email: user?.email ?? '' },
+          theme: { color: Colors.primary },
+        });
+        await post(`/bookings/${id}/verify-payment`, {
+          orderId: data.razorpay_order_id ?? order.orderId,
+          paymentId: data.razorpay_payment_id,
+          signature: data.razorpay_signature,
+        });
+      }
       qc.invalidateQueries({ queryKey: ['booking', id] });
     } catch (e: any) {
       if (e?.error?.description) setError(e.error.description);

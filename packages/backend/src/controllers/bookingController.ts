@@ -4,8 +4,15 @@ import { prisma } from "../config/database"
 import { sendSuccess, sendError } from "../utils/response"
 import { AuthedRequest } from "../middleware/authTypes"
 import * as bookingEngine from "../services/bookingEngine"
-import * as razorpayService from "../services/razorpayService"
 import * as partnerMatching from "../services/partnerMatchingEngine"
+import {
+  createGatewayOrder,
+  isGatewayConfigured,
+  verifyGatewayPayment,
+  buildOrderId,
+  PaymentVerificationError,
+  type Provider,
+} from "../services/paymentProvider"
 import { dispatchBooking, onBookingClaimed } from "../services/dispatchService"
 import { ensureConversation } from "./messageController"
 import { SERVICE_KEYS, getServiceDef } from "../services/serviceCatalog"
@@ -258,6 +265,25 @@ export async function getBookingDetail(req: AuthedRequest, res: Response): Promi
 // INITIATE PAYMENT
 // ============================================================================
 
+/**
+ * The gateway a booking was created with.
+ *
+ * Read from the booking rather than the environment so that switching the
+ * active provider cannot strand a booking that was already initiated on the
+ * previous one.
+ */
+function bookingProvider(booking: { paymentProvider?: string | null; cashfreeOrderId?: string | null }): Provider {
+  if (booking.paymentProvider === "cashfree" || (!booking.paymentProvider && booking.cashfreeOrderId)) {
+    return "cashfree"
+  }
+  return "razorpay"
+}
+
+/** Public web origin, used only to build a post-checkout return URL. */
+function publicWebOrigin(): string {
+  return (env.CORS_ORIGIN || "").replace(/\/+$/, "")
+}
+
 export async function initiatePayment(req: AuthedRequest, res: Response): Promise<void> {
   try {
     const { id } = req.params
@@ -281,25 +307,37 @@ export async function initiatePayment(req: AuthedRequest, res: Response): Promis
 
     const amount = booking.estimatedAmount ?? 0
 
-    // Create Razorpay order
-    const razorpayOrder = await razorpayService.createOrder(
-      amount,
-      "INR",
-      `booking_${id}_${Date.now()}`,
-      `Booking for ${booking.serviceType}`,
-      {
+    if (!isGatewayConfigured()) {
+      sendError(res, "Payments are not configured on this server.", 503, "PAYMENT_NOT_CONFIGURED")
+      return
+    }
+
+    // Create the order at whichever gateway is active. The provider is stored
+    // on the booking so verification later resolves the same one, even if the
+    // active provider is switched in between.
+    const order = await createGatewayOrder({
+      orderId: buildOrderId("booking", id),
+      amountRupees: Number(amount),
+      customerId: req.user!.userId,
+      customerEmail: req.user!.email,
+      description: `Booking for ${booking.serviceType}`,
+      metadata: {
         bookingId: id,
         userId: req.user!.userId,
         serviceType: booking.serviceType,
-      }
-    )
+      },
+      currency: "INR",
+      returnUrl: `${publicWebOrigin()}/bookings/${id}?payment=return`,
+    })
 
-    // Update booking with razorpay order ID
     await prisma.booking.update({
       where: { id },
       data: {
-        razorpayOrderId: razorpayOrder.id,
         status: "PAYMENT_INITIATED",
+        paymentProvider: order.provider,
+        ...(order.provider === "cashfree"
+          ? { cashfreeOrderId: order.gatewayOrderId }
+          : { razorpayOrderId: order.gatewayOrderId }),
       },
     })
 
@@ -309,19 +347,26 @@ export async function initiatePayment(req: AuthedRequest, res: Response): Promis
       sendError(res, "Wallet not found.", 404, "WALLET_NOT_FOUND")
       return
     }
+
+    const orderIdentity =
+      order.provider === "cashfree"
+        ? { cashfreeOrderId: order.gatewayOrderId }
+        : { razorpayOrderId: order.gatewayOrderId }
+
     await prisma.paymentOrder.upsert({
-      where: { razorpayOrderId: razorpayOrder.id },
+      where: order.provider === "cashfree" ? { cashfreeOrderId: order.gatewayOrderId } : { razorpayOrderId: order.gatewayOrderId },
       create: {
-        razorpayOrderId: razorpayOrder.id,
+        ...orderIdentity,
+        provider: order.provider,
         userId: req.user!.userId,
         walletId: wallet.id,
-        amount,
-        currency: "INR",
+        amount: order.amountRupees,
+        currency: order.currency,
         status: "CREATED",
         type: "BOOKING",
         metadata: JSON.stringify({ bookingId: id, serviceType: booking.serviceType }),
       },
-      update: { amount, metadata: JSON.stringify({ bookingId: id, serviceType: booking.serviceType }) },
+      update: { amount: order.amountRupees, metadata: JSON.stringify({ bookingId: id, serviceType: booking.serviceType }) },
     })
 
     // Log action
@@ -332,8 +377,9 @@ export async function initiatePayment(req: AuthedRequest, res: Response): Promis
         action: "PAYMENT_INITIATED",
         entityType: "Booking",
         entityId: id,
-        metadata: JSON.stringify({ 
-          razorpayOrderId: razorpayOrder.id,
+        metadata: JSON.stringify({
+          provider: order.provider,
+          gatewayOrderId: order.gatewayOrderId,
           amount,
         }),
       },
@@ -342,11 +388,15 @@ export async function initiatePayment(req: AuthedRequest, res: Response): Promis
     sendSuccess(
       res,
       {
-        orderId: razorpayOrder.id,
-        key: env.RAZORPAY_KEY_ID,
-        amount: Number(razorpayOrder.amount) / 100,
-        currency: razorpayOrder.currency,
+        provider: order.provider,
+        orderId: order.gatewayOrderId,
+        amount: order.amountRupees,
+        currency: order.currency,
         bookingId: id,
+        // Razorpay opens its modal client-side and needs the publishable key;
+        // Cashfree returns a hosted URL to redirect to instead.
+        ...(order.provider === "razorpay" ? { key: env.RAZORPAY_KEY_ID } : {}),
+        ...(order.paymentUrl ? { paymentUrl: order.paymentUrl } : {}),
       },
       "Order created. Proceed to payment."
     )
@@ -363,11 +413,18 @@ export async function initiatePayment(req: AuthedRequest, res: Response): Promis
 export async function verifyPayment(req: AuthedRequest, res: Response): Promise<void> {
   try {
     const { id } = req.params
-    const razorpayPaymentId = req.body.razorpayPaymentId ?? req.body.razorpay_payment_id
-    const razorpayOrderId = req.body.razorpayOrderId ?? req.body.razorpay_order_id
-    const razorpaySignature = req.body.razorpaySignature ?? req.body.razorpay_signature
 
-    if (!razorpayPaymentId || !razorpayOrderId || !razorpaySignature) {
+    // Accept both providers' field names so the clients can be migrated
+    // independently. The provider that matters is the one recorded on the
+    // booking, not the one implied by these fields.
+    const gatewayOrderId =
+      req.body.orderId ?? req.body.cashfreeOrderId ?? req.body.razorpayOrderId ?? req.body.razorpay_order_id
+    const gatewayPaymentId =
+      req.body.paymentId ?? req.body.cashfreePaymentId ?? req.body.razorpayPaymentId ?? req.body.razorpay_payment_id
+    const signature =
+      req.body.signature ?? req.body.cashfreeSignature ?? req.body.razorpaySignature ?? req.body.razorpay_signature
+
+    if (!gatewayOrderId) {
       sendError(res, "Missing payment details.", 400, "MISSING_PAYMENT_DETAILS")
       return
     }
@@ -384,11 +441,15 @@ export async function verifyPayment(req: AuthedRequest, res: Response): Promise<
       return
     }
 
-    if (booking.status === "PARTNER_SEARCHING" && booking.razorpayPaymentId) {
+    const provider = bookingProvider(booking)
+    const existingPaymentId =
+      provider === "cashfree" ? booking.cashfreePaymentId : booking.razorpayPaymentId
+
+    if (booking.status === "PARTNER_SEARCHING" && existingPaymentId) {
       // Idempotent replay: this booking's payment was already verified
       sendSuccess(
         res,
-        { bookingId: id, paymentId: booking.razorpayPaymentId, amount: booking.finalAmount, status: "COMPLETED" },
+        { bookingId: id, paymentId: existingPaymentId, amount: booking.finalAmount, status: "COMPLETED" },
         "Payment already verified."
       )
       return
@@ -401,15 +462,29 @@ export async function verifyPayment(req: AuthedRequest, res: Response): Promise<
 
     // Bind the payment to THIS booking's order — a captured payment for another
     // order must never confirm this booking.
-    if (!booking.razorpayOrderId || booking.razorpayOrderId !== razorpayOrderId) {
+    const storedOrderId = provider === "cashfree" ? booking.cashfreeOrderId : booking.razorpayOrderId
+    if (!storedOrderId || storedOrderId !== gatewayOrderId) {
       sendError(res, "Order does not match this booking.", 400, "ORDER_MISMATCH")
       return
     }
 
-    // Verify Razorpay signature
-    const isValid = razorpayService.verifyPayment(razorpayOrderId, razorpayPaymentId, razorpaySignature)
-    if (!isValid) {
-      // Log failed verification attempt
+    // The single source of truth. It checks the signature, re-reads the payment
+    // from the gateway, and compares status, amount and currency against the
+    // amount recorded when the order was created. Everything below is
+    // bookkeeping that depends on this having passed.
+    let verified
+    try {
+      verified = await verifyGatewayPayment({
+        provider,
+        gatewayOrderId,
+        gatewayPaymentId,
+        signature,
+        expectedAmountRupees: Number(booking.estimatedAmount),
+        expectedCurrency: "INR",
+      })
+    } catch (err: any) {
+      if (!(err instanceof PaymentVerificationError)) throw err
+
       await prisma.auditLog.create({
         data: {
           actorId: req.user!.userId,
@@ -417,27 +492,23 @@ export async function verifyPayment(req: AuthedRequest, res: Response): Promise<
           action: "PAYMENT_VERIFICATION_FAILED",
           entityType: "Booking",
           entityId: id,
-          metadata: JSON.stringify({ razorpayPaymentId, reason: "Invalid signature" }),
+          metadata: JSON.stringify({ reason: err.reason, provider, gatewayOrderId }),
         },
       })
-      sendError(res, "Payment signature verification failed.", 400, "INVALID_SIGNATURE")
+
+      // A gateway outage is retryable and must not be reported as a declined
+      // payment, otherwise a real payment looks failed to the user.
+      const retryable = err.reason === "GATEWAY_UNAVAILABLE"
+      sendError(
+        res,
+        err.message,
+        retryable ? 503 : 400,
+        retryable ? "PAYMENT_VERIFICATION_UNAVAILABLE" : err.reason
+      )
       return
     }
 
-    // Fetch actual payment details from Razorpay to double-check
-    const paymentDetails = await razorpayService.fetchPayment(razorpayPaymentId)
-    
-    if (!paymentDetails || paymentDetails.status !== "captured") {
-      sendError(res, "Payment not captured in Razorpay.", 400, "PAYMENT_NOT_CAPTURED")
-      return
-    }
-
-    const amount = Number(paymentDetails.amount) / 100 // Convert from paise
-    
-    if (amount !== booking.estimatedAmount) {
-      sendError(res, "Payment amount mismatch.", 400, "AMOUNT_MISMATCH")
-      return
-    }
+    const amount = verified.amountRupees
 
     // Payment is valid - update booking and wallet
     const user = await prisma.user.findUnique({ where: { id: req.user!.userId } })
@@ -452,18 +523,21 @@ export async function verifyPayment(req: AuthedRequest, res: Response): Promise<
       return
     }
 
+    const paymentIdField = provider === "cashfree" ? "cashfreePaymentId" : "razorpayPaymentId"
+    const orderIdField = provider === "cashfree" ? "cashfreeOrderId" : "razorpayOrderId"
+
     // Begin transaction: latch booking state, create transaction record.
     // The conditional update guarantees only ONE verification wins even under
     // parallel replays — no double ledger entries, no double matching trigger.
     const result = await moneyTransaction(async (tx) => {
       const claimed = await tx.booking.updateMany({
-        where: { id, userId: req.user!.userId, status: "PAYMENT_INITIATED", razorpayOrderId },
+        where: { id, userId: req.user!.userId, status: "PAYMENT_INITIATED", [orderIdField]: gatewayOrderId },
         data: {
           status: "PARTNER_SEARCHING",
           paymentStatus: "PAID",
           paymentVerifiedAt: new Date(),
           finalAmount: amount,
-          razorpayPaymentId,
+          [paymentIdField]: verified.gatewayPaymentId,
         },
       })
 
@@ -481,16 +555,16 @@ export async function verifyPayment(req: AuthedRequest, res: Response): Promise<
           status: "COMPLETED",
           amount,
           description: `Booking payment for ${booking.serviceType}`,
-          referenceId: razorpayPaymentId,
+          referenceId: verified.gatewayPaymentId,
           bookingId: id,
         },
       })
 
       // Settle the PaymentOrder row (latched with the same claim)
       await tx.paymentOrder.updateMany({
-        where: { razorpayOrderId, status: { notIn: ["COMPLETED", "FAILED"] } },
+        where: { [orderIdField]: gatewayOrderId, status: { notIn: ["COMPLETED", "FAILED"] } },
         data: {
-          razorpayPaymentId,
+          [paymentIdField]: verified.gatewayPaymentId,
           status: "COMPLETED",
           completedAt: new Date(),
           metadata: JSON.stringify({ bookingId: id, serviceType: booking.serviceType, paymentStatus: "SUCCESS" }),
@@ -505,7 +579,8 @@ export async function verifyPayment(req: AuthedRequest, res: Response): Promise<
           entityType: "Booking",
           entityId: id,
           metadata: JSON.stringify({
-            razorpayPaymentId,
+            provider,
+            gatewayPaymentId: verified.gatewayPaymentId,
             amount,
             status: "COMPLETED",
           }),
@@ -535,7 +610,7 @@ export async function verifyPayment(req: AuthedRequest, res: Response): Promise<
         userId: req.user!.userId,
         title: "Payment Successful",
         body: `Payment of ₹${amount} for your booking has been confirmed. We're searching for a partner.`,
-        data: JSON.stringify({ bookingId: id, paymentId: razorpayPaymentId }),
+        data: JSON.stringify({ bookingId: id, paymentId: verified.gatewayPaymentId }),
       },
     })
 
@@ -548,7 +623,7 @@ export async function verifyPayment(req: AuthedRequest, res: Response): Promise<
       startLocation: booking.startLocation,
       endLocation: booking.endLocation,
       amount,
-      paymentReference: razorpayPaymentId,
+      paymentReference: verified.gatewayPaymentId,
       paymentMethod: booking.paymentMethod || "UPI / Online",
     }).catch((err) => console.error("[EMAIL] Booking invoice email failed:", err))
 
@@ -569,7 +644,7 @@ export async function verifyPayment(req: AuthedRequest, res: Response): Promise<
       res,
       {
         bookingId: id,
-        paymentId: razorpayPaymentId,
+        paymentId: verified.gatewayPaymentId,
         amount,
         status: "COMPLETED",
       },
@@ -1658,7 +1733,11 @@ export async function getBookingReceipt(req: AuthedRequest, res: Response): Prom
           couponCode: booking.couponCode ?? null,
           discountAmount: booking.discountAmount ?? null,
           paymentStatus: booking.paymentStatus,
-          razorpayPaymentId: booking.razorpayPaymentId ?? null,
+          paymentProvider: bookingProvider(booking),
+          // Kept under the historical key so existing invoice/receipt rendering
+          // does not break, and pointed at whichever gateway actually settled it.
+          razorpayPaymentId:
+            booking.razorpayPaymentId ?? booking.cashfreePaymentId ?? null,
         },
         refund: booking.refundStatus
           ? {

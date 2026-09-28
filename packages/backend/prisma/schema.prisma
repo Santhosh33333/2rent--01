@@ -517,8 +517,14 @@ model SupportTicketEvent {
 
 model PaymentOrder {
   id               String    @id @default(uuid())
-  razorpayOrderId  String    @unique
+  razorpayOrderId  String?   @unique
   razorpayPaymentId String?   @unique
+  // Which gateway created this order. Recorded per order (rather than read from
+  // env) so that flipping PAYMENT_PROVIDER cannot strand orders that are still
+  // in flight on the previous provider.
+  provider         String    @default("razorpay") // razorpay | cashfree
+  cashfreeOrderId  String?   @unique
+  cashfreePaymentId String?  @unique
   userId           String
   walletId         String
   amount           Decimal
@@ -1833,6 +1839,9 @@ model Booking {
   razorpayOrderId   String?
   razorpayPaymentId String?
   razorpaySignature String?
+  paymentProvider   String?   // razorpay | cashfree
+  cashfreeOrderId   String?
+  cashfreePaymentId String?
   paymentStatus     String    @default("PENDING") // PENDING, INITIATED, PAID, FAILED, VERIFICATION_PENDING, REJECTED
   paymentMethod     String?   @default("ONLINE") // ONLINE, CASH, UPI_MANUAL
   paymentVerifiedAt DateTime?
