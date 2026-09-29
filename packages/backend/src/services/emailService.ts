@@ -50,6 +50,18 @@ function parseFrom(): { name: string; email: string } {
 let transporter: ReturnType<typeof createTransport> | null = null;
 let gmailTransporter: ReturnType<typeof createTransport> | null = null;
 
+// Nodemailer leaves these unset, which means TCP connect and SMTP greeting each
+// fall back to 120s. When SMTP_HOST points somewhere unroutable, that turned
+// every registration into a ~122s hang before the request finally failed: the
+// user watched a spinner for two minutes and got nothing. Fail fast instead so
+// a broken mail config is obvious immediately, and so the real fix (correct
+// credentials) is what has to happen rather than patience.
+const SMTP_TIMEOUTS = {
+  connectionTimeout: 10_000,
+  greetingTimeout: 10_000,
+  socketTimeout: 20_000,
+} as const;
+
 function getTransporter() {
   if (transporter) return transporter;
   if (!env.SMTP_HOST || !env.SMTP_USER || !env.SMTP_PASS) return null;
@@ -58,6 +70,7 @@ function getTransporter() {
     port: env.SMTP_PORT,
     secure: env.SMTP_PORT === 465,
     auth: { user: env.SMTP_USER, pass: env.SMTP_PASS },
+    ...SMTP_TIMEOUTS,
   });
   return transporter;
 }
@@ -73,6 +86,7 @@ function getGmailTransporter() {
     secure: false,
     requireTLS: true,
     auth: { user: env.GMAIL_USER, pass: env.GMAIL_APP_PASSWORD },
+    ...SMTP_TIMEOUTS,
   });
   return gmailTransporter;
 }

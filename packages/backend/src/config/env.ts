@@ -25,6 +25,12 @@ const envSchema = z.object({
   // CORS
   CORS_ORIGIN: z.string().default("http://localhost:5173"),
 
+  // Explicit public web origin, used to build post-payment return URLs. Left
+  // unset in production it falls back to the deployed origin rather than to the
+  // CORS default, so an unset CORS_ORIGIN can never point a paying customer at
+  // localhost. See config/publicOrigin.ts.
+  PUBLIC_WEB_ORIGIN: z.string().optional(),
+
   // Rate limiting
   RATE_LIMIT_WINDOW_MS: z.string().default("900000").transform(Number),
   RATE_LIMIT_MAX: z.string().default("600").transform(Number),

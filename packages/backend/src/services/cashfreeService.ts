@@ -150,6 +150,37 @@ export async function createOrder(input: CashfreeOrderRequest): Promise<Cashfree
     throw new Error(`Order amount must be greater than zero (got ${input.amount})`)
   }
 
+  // Cashfree documents customer_phone as a required member of customer_details
+  // and rejects the whole order when it is absent. Sending an order without it
+  // produced a bare 500 from /orders, so refuse locally with a precise reason
+  // instead of spending a network round trip on a guaranteed rejection.
+  if (!input.customerPhone) {
+    throw new Error(
+      "Cashfree requires customer_phone; this user has no usable phone number on file."
+    )
+  }
+  // Cashfree documents the return_url as needing an {order_id} placeholder so
+  // the payer can be matched to the order on the way back. A URL without one
+  // (or one pointing at loopback) is a silent production hazard: the order may
+  // be created but the payer is never returned to a real page afterwards.
+  if (!input.returnUrl) {
+    throw new Error("Cashfree requires order_meta.return_url; none was configured.")
+  }
+  if (!input.returnUrl.includes("{order_id}")) {
+    throw new Error("order_meta.return_url must contain the {order_id} placeholder.")
+  }
+  let returnUrlHost: string
+  try {
+    returnUrlHost = new URL(input.returnUrl.replace("{order_id}", "probe")).hostname
+  } catch {
+    throw new Error("order_meta.return_url is not a valid absolute URL.")
+  }
+  if (returnUrlHost === "localhost" || returnUrlHost === "127.0.0.1" || returnUrlHost === "::1") {
+    throw new Error(
+      `Refusing to create a live order with a loopback return_url (${returnUrlHost}).`
+    )
+  }
+
   return cashfreeFetch<CashfreeOrderResponse>("/orders", {
     method: "POST",
     body: {

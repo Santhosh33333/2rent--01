@@ -12,7 +12,13 @@
 // they just skip the entrance/glow effects. prefers-reduced-motion is
 // respected for accessibility.
 
-export const WEB_ORIGIN = "https://2rent-01.vercel.app";
+import { DEFAULT_PUBLIC_WEB_ORIGIN } from "../config/publicOrigin";
+
+// Re-exported (rather than re-declared) so every link in every transactional
+// email and the post-payment return URL resolve from one place. These were two
+// independent copies of the same origin, which is how payment code ended up
+// building localhost URLs while email correctly used production.
+export const WEB_ORIGIN = DEFAULT_PUBLIC_WEB_ORIGIN;
 
 // Base animation CSS merged into every email (plus any per-mail extras).
 const BASE_EMAIL_CSS = `

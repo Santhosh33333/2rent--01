@@ -1,6 +1,8 @@
 import { Response, Request } from "express"
+import QRCode from "qrcode"
 import { prisma } from "../config/database"
 import { env } from "../config/env"
+import { publicWebOrigin } from "../config/publicOrigin"
 import { sendSuccess, sendError } from "../utils/response"
 import { AuthedRequest } from "../middleware/authTypes"
 import {
@@ -13,12 +15,9 @@ import {
   buildOrderId,
   toMinorUnits,
   verifyInboundWebhook,
+  normalizeIndianPhone,
+  sanitizeCashfreeName,
 } from "../services/paymentProvider"
-
-/** Public web origin, used only to build a post-checkout return URL. */
-function publicWebOrigin(): string {
-  return (env.CORS_ORIGIN || "").replace(/\/+$/, "")
-}
 
 /**
  * The exact bytes of the request body, captured by the JSON parser before
@@ -54,7 +53,7 @@ export async function createOrder(req: AuthedRequest, res: Response): Promise<vo
   try {
     const { amount } = req.body
     if (!amount || Number(amount) < 10) {
-      sendError(res, "Amount must be at least ₹10.", 400, "INVALID_AMOUNT")
+      sendError(res, "Amount must be at least 10.", 400, "INVALID_AMOUNT")
       return
     }
 
@@ -74,14 +73,40 @@ export async function createOrder(req: AuthedRequest, res: Response): Promise<vo
       return
     }
 
+    // Cashfree requires customer_phone on every order. It is not on the JWT, so
+    // read it from the user row and reduce it to the bare 10-digit national
+    // number Cashfree documents; "+919000070900" and "0900070900" are both
+    // rejected, and a bad phone is a whole-order rejection rather than a
+    // downgrade to a lesser payment method.
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { phone: true, fullName: true },
+    })
+    const customerPhone = normalizeIndianPhone(user?.phone)
+    if (!customerPhone) {
+      sendError(
+        res,
+        "Add a valid 10-digit phone number to your profile before paying. " +
+          "The payment provider requires it to accept an order.",
+        422,
+        "PHONE_REQUIRED_FOR_PAYMENT"
+      )
+      return
+    }
+
     const order = await createGatewayOrder({
       orderId: buildOrderId("topup", userId),
       amountRupees: Number(amount),
       customerId: userId,
       customerEmail: req.user!.email,
+      customerPhone,
+      customerName: sanitizeCashfreeName(user?.fullName),
       description: "Wallet Top-Up",
       metadata: { userId, type: "TOPUP" },
-      returnUrl: `${publicWebOrigin()}/wallet?payment=return`,
+      // The {order_id} placeholder is required by Cashfree so the payer can be
+      // matched to the order on the way back; without it the redirect carries
+      // no order context at all.
+      returnUrl: `${publicWebOrigin()}/wallet?payment=return&order_id={order_id}`,
       currency: "INR",
     })
 
@@ -554,6 +579,59 @@ async function settleCashfreeOrder(input: {
 // GET PAYMENT HISTORY
 // ============================================================================
 
+/** Built-in QR image, used when UPI_QR_URL has not been configured. */
+export const BUILTIN_UPI_QR_PATH = "/api/payments/upi-qr.png";
+
+/**
+ * Renders the platform UPI QR as a PNG from the configured UPI_ID.
+ *
+ * The manual top-up page already renders whatever UPI_QR_URL contains, and the
+ * web client resolves a root-relative path against the API host, so serving
+ * this here means scan-to-pay works with no frontend change and no third-party
+ * image host. Returns 404 when no UPI ID is configured, so a client never shows
+ * a QR that encodes nothing.
+ */
+export async function getUpiQrImage(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const [upiId, upiName] = await Promise.all([
+      prisma.pricingConfig.findUnique({ where: { key: "UPI_ID" } }),
+      prisma.pricingConfig.findUnique({ where: { key: "UPI_ACCOUNT_NAME" } }),
+    ]);
+    const payeeVpa = String(upiId?.value || "").trim();
+    if (!payeeVpa || !payeeVpa.includes("@")) {
+      res.status(404).json({ success: false, message: "No UPI ID configured.", error: "NOT_CONFIGURED" });
+      return;
+    }
+
+    const params = new URLSearchParams({
+      pa: payeeVpa,
+      pn: String(upiName?.value || "Nabri").trim() || "Nabri",
+      cu: "INR",
+    });
+    const amount = Number(req.query.amount);
+    if (Number.isFinite(amount) && amount > 0) {
+      params.set("am", amount.toFixed(2));
+    }
+    const note = String(req.query.note || "").trim();
+    if (note) params.set("tn", note.slice(0, 50));
+
+    const png = await QRCode.toBuffer(`upi://pay?${params.toString()}`, {
+      type: "png",
+      errorCorrectionLevel: "M",
+      margin: 2,
+      width: 512,
+      color: { dark: "#000000ff", light: "#ffffffff" },
+    });
+
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "public, max-age=300");
+    res.status(200).send(png);
+  } catch (err: any) {
+    console.error("getUpiQrImage error:", err);
+    sendError(res, "Failed to generate UPI QR code.", 500, "INTERNAL_ERROR");
+  }
+}
+
 // Public capability flags so clients only offer payment methods that can
 // actually work, rather than a button that fails at checkout.
 export async function getPaymentConfig(_req: AuthedRequest, res: Response): Promise<void> {
@@ -573,7 +651,10 @@ export async function getPaymentConfig(_req: AuthedRequest, res: Response): Prom
         upiManual: Boolean(upiId?.value || upiQr?.value),
         upiId: upiId?.value ?? null,
         upiAccountName: upiName?.value ?? null,
-        upiQrUrl: upiQr?.value ?? null,
+        // Fall back to the QR rendered by this service when no image has been
+        // configured, so scan-to-pay is available out of the box rather than
+        // degrading to a copy-paste VPA.
+        upiQrUrl: upiQr?.value || (upiId?.value ? BUILTIN_UPI_QR_PATH : null),
         cash: true,
       },
       "Payment configuration."

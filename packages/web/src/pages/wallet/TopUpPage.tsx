@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Wallet, IndianRupee, CheckCircle, ArrowLeft, Zap, AlertCircle, Loader2, ImagePlus, X, QrCode, Clock, FileCheck2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { api, assetUrl, walletApi } from '../../lib/api'
+import { api, walletApi } from '../../lib/api'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
 import toast from 'react-hot-toast'
@@ -39,6 +39,7 @@ export function TopUpPage() {
   const [balance, setBalance] = useState<number | null>(null)
   const [upi, setUpi] = useState<UpiSetup | null>(null)
   const [upiConfigLoading, setUpiConfigLoading] = useState(true)
+  const [qrObjectUrl, setQrObjectUrl] = useState<string | null>(null)
   const [ref, setRef] = useState('')
   const [proofFile, setProofFile] = useState<File | null>(null)
   const [proofPreview, setProofPreview] = useState<string | null>(null)
@@ -79,12 +80,37 @@ export function TopUpPage() {
       try {
         const configRes = await api.get('/payments/config', { signal: ctrl.signal })
         const d = configRes.data?.data || configRes.data
-        setUpi({
+        const next = {
           upiManual: Boolean(d?.upiManual),
           upiId: d?.upiId ?? null,
           upiAccountName: d?.upiAccountName ?? null,
           upiQrUrl: d?.upiQrUrl ?? null,
-        })
+        }
+        setUpi(next)
+        // The QR endpoint is behind auth, and an <img> cannot send an
+        // Authorization header, so a plain src would 401. Fetch it with the
+        // token and swap in an object URL. The VPA is the only thing encoded:
+        // the payer types the amount into their own UPI app, which avoids
+        // shipping a QR for a stale amount if the form is edited later.
+        if (next.upiQrUrl) {
+          try {
+            const qrRes = await api.get(next.upiQrUrl, {
+              signal: ctrl.signal,
+              responseType: 'blob',
+              params: { note: 'Wallet top-up' },
+            })
+            if (qrRes.data instanceof Blob) {
+              setQrObjectUrl((prev) => {
+                if (prev) URL.revokeObjectURL(prev)
+                return URL.createObjectURL(qrRes.data as Blob)
+              })
+            }
+          } catch {
+            // No QR is a degraded but usable state: the VPA is still shown in
+            // full and can be typed into any UPI app.
+            setQrObjectUrl(null)
+          }
+        }
       } catch {
         setUpi(null)
       } finally {
@@ -94,6 +120,17 @@ export function TopUpPage() {
     })()
     return () => ctrl.abort()
   }, [fetchBalance, fetchHistory])
+
+  // Object URLs are not garbage collected, so the last one has to be released or
+  // the PNG stays resident for the life of the tab.
+  useEffect(() => {
+    return () => {
+      setQrObjectUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev)
+        return null
+      })
+    }
+  }, [])
 
   const handleAmountSelect = (value: number) => {
     setAmount(value)
@@ -300,7 +337,13 @@ export function TopUpPage() {
                 </div>
               )}
               {platformUpi.upiQrUrl && (
-                <img src={assetUrl(platformUpi.upiQrUrl)} alt="UPI QR code" className="w-48 h-48 mx-auto rounded-xl bg-white p-2" />
+                qrObjectUrl ? (
+                  <img src={qrObjectUrl} alt="UPI QR code" className="w-48 h-48 mx-auto rounded-xl bg-white p-2" />
+                ) : (
+                  <div className="w-48 h-48 mx-auto rounded-xl bg-white/60 dark:bg-surface-800/60 flex items-center justify-center">
+                    <Loader2 className="w-6 h-6 animate-spin text-surface-500" aria-label="Loading UPI QR code" />
+                  </div>
+                )
               )}
               <p className="text-xs text-surface-500">
                 Pay the selected amount externally via any UPI app, then enter the UTR / reference number below. An admin verifies the payment against the bank statement before your wallet is credited — no money is added automatically.

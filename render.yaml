@@ -43,6 +43,13 @@ services:
         generateValue: true
       - key: PORT
         value: 5000
+      # Public web origin. Doubles as the post-payment return origin, so it must
+      # be the real deployed web origin. A loopback value makes live payment
+      # order creation refuse rather than redirect a payer to localhost after
+      # they pay. Set this in the dashboard; sync: false so Render does not
+      # overwrite a hand-set value.
+      - key: CORS_ORIGIN
+        sync: false
       # Shared cache + cross-instance state. Set this in the dashboard.
       # sync: false keeps Render from overwriting a value you set by hand.
       #

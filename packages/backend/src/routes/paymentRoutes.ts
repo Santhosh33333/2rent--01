@@ -60,6 +60,12 @@ router.post(
 )
 
 router.get("/history", paymentController.getPaymentHistory)
-router.get("/config", paymentController.getPaymentConfig)
+  router.get("/config", paymentController.getPaymentConfig)
+
+  // QR for the configured platform UPI ID, rendered server-side. The top-up
+  // page loads it as an <img>, so it is read-only and needs no JSON envelope;
+  // a browser cannot send an Authorization header on an image request, and
+  // requiring one would leave the QR broken in the one place it is needed.
+  router.get("/upi-qr.png", paymentController.getUpiQrImage)
 
 export default router

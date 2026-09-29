@@ -9,11 +9,13 @@ import {
     createGatewayOrder,
     isGatewayConfigured,
     verifyGatewayPayment,
-    buildOrderId,
-    PaymentVerificationError,
-    ACTIVE_PROVIDER,
-    type Provider,
-  } from "../services/paymentProvider"
+  buildOrderId,
+  PaymentVerificationError,
+  ACTIVE_PROVIDER,
+  normalizeIndianPhone,
+  sanitizeCashfreeName,
+  type Provider,
+} from "../services/paymentProvider"
 import { dispatchBooking, onBookingClaimed } from "../services/dispatchService"
 import { ensureConversation } from "./messageController"
 import { SERVICE_KEYS, getServiceDef } from "../services/serviceCatalog"
@@ -39,7 +41,7 @@ import { checkAcceptStorm, checkInstantCompletion, checkOtpAbuse } from "../serv
 import { calculateDistance } from "../utils/location"
 import { getConfig } from "../services/pricingEngine"
 import { buildReferralRewardService } from "./referralController"
-import { env } from "../config/env"
+import { publicWebOrigin } from "../config/publicOrigin"
 import { CancellationCutoffError, getBookingCancellationState } from "../services/bookingCancellationPolicy"
 import { bookingStatusFor, paymentStatusFor, resolvePaymentMethod } from "../services/paymentMethodPolicy"
 import { buildHourlyQr } from "../services/upiQr"
@@ -277,11 +279,6 @@ function bookingProvider(_booking: { paymentProvider?: string | null; cashfreeOr
   return ACTIVE_PROVIDER
 }
 
-/** Public web origin, used only to build a post-checkout return URL. */
-function publicWebOrigin(): string {
-  return (env.CORS_ORIGIN || "").replace(/\/+$/, "")
-}
-
 export async function initiatePayment(req: AuthedRequest, res: Response): Promise<void> {
   try {
     const { id } = req.params
@@ -310,6 +307,25 @@ export async function initiatePayment(req: AuthedRequest, res: Response): Promis
       return
     }
 
+    // Cashfree rejects an order that has no customer_phone, and it requires the
+    // return_url to carry the {order_id} placeholder. Both were missing here, so
+    // the payer was refused at the gateway with an opaque 500.
+    const payer = await prisma.user.findUnique({
+      where: { id: req.user!.userId },
+      select: { phone: true, fullName: true },
+    })
+    const customerPhone = normalizeIndianPhone(payer?.phone)
+    if (!customerPhone) {
+      sendError(
+        res,
+        "Add a valid 10-digit phone number to your profile before paying. " +
+          "The payment provider requires it to accept an order.",
+        422,
+        "PHONE_REQUIRED_FOR_PAYMENT"
+      )
+      return
+    }
+
     // Create the order at whichever gateway is active. The provider is stored
     // on the booking so verification later resolves the same one, even if the
     // active provider is switched in between.
@@ -318,6 +334,8 @@ export async function initiatePayment(req: AuthedRequest, res: Response): Promis
       amountRupees: Number(amount),
       customerId: req.user!.userId,
       customerEmail: req.user!.email,
+      customerPhone,
+      customerName: sanitizeCashfreeName(payer?.fullName),
       description: `Booking for ${booking.serviceType}`,
       metadata: {
         bookingId: id,
@@ -325,7 +343,7 @@ export async function initiatePayment(req: AuthedRequest, res: Response): Promis
         serviceType: booking.serviceType,
       },
       currency: "INR",
-      returnUrl: `${publicWebOrigin()}/bookings/${id}?payment=return`,
+      returnUrl: `${publicWebOrigin()}/bookings/${id}?payment=return&order_id={order_id}`,
     })
 
     await prisma.booking.update({

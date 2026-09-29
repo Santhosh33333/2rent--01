@@ -51,6 +51,7 @@ export interface CreateOrderInput {
   customerId: string;
   customerEmail?: string;
   customerPhone?: string;
+  customerName?: string;
   description: string;
   metadata?: Record<string, unknown>;
   currency?: string;
@@ -108,14 +109,15 @@ export async function createGatewayOrder(input: CreateOrderInput): Promise<Creat
     throw new Error("Order amount must be greater than zero.");
   }
 
-  const order = await cashfreeService.createOrder({
-    orderId: input.orderId,
-    amount: amountRupees,
-    customerId: input.customerId,
-    customerEmail: input.customerEmail,
-    customerPhone: input.customerPhone,
-    returnUrl: input.returnUrl,
-  });
+    const order = await cashfreeService.createOrder({
+      orderId: input.orderId,
+      amount: amountRupees,
+      customerId: input.customerId,
+      customerEmail: input.customerEmail,
+      customerPhone: input.customerPhone,
+      customerName: input.customerName,
+      returnUrl: input.returnUrl,
+    });
 
   return {
     provider: "cashfree",
@@ -258,4 +260,29 @@ function firstHeader(value: string | string[] | undefined): string | undefined {
 /** Random suffix so two orders created in the same second cannot collide. */
 export function buildOrderId(prefix: string, seed: string): string {
   return `${prefix}_${crypto.randomBytes(6).toString("hex")}`;
+}
+
+/**
+ * Reduce a stored phone number to the bare 10-digit national form payment
+ * gateways document. Returns null when there is no usable 10-digit number so
+ * callers can refuse up front rather than send a request the gateway rejects
+ * wholesale, which is how a simple top-up used to surface as an opaque 500.
+ */
+export function normalizeIndianPhone(raw?: string | null): string | null {
+  if (!raw) return null;
+  const digits = String(raw).replace(/\D/g, "");
+  // Strip a leading country code so +91 / 91 prefixes land on the same 10 digits.
+  const national = digits.length > 10 && digits.startsWith("91") ? digits.slice(2) : digits;
+  return /^[6-9]\d{9}$/.test(national) ? national : null;
+}
+
+/**
+ * Customer names go to the gateway as a no-special-characters field, so reduce
+ * punctuation rather than letting a decorative apostrophe or ampersand cause a
+ * whole-order rejection.
+ */
+export function sanitizeCashfreeName(raw?: string | null): string | undefined {
+  if (!raw) return undefined;
+  const cleaned = String(raw).replace(/[^A-Za-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
+  return cleaned ? cleaned.slice(0, 60) : undefined;
 }
