@@ -13,12 +13,16 @@
  */
 import crypto from "crypto";
 import { env } from "../config/env";
-import * as razorpayService from "./razorpayService";
 import * as cashfreeService from "./cashfreeService";
 
-export type Provider = "razorpay" | "cashfree";
+/**
+ * Cashfree is the only gateway. The previous Razorpay integration was removed
+ * rather than left dormant: a disabled second path still gets edited by mistake
+ * and still has to hold credentials it no longer needs.
+ */
+export type Provider = "cashfree";
 
-export const ACTIVE_PROVIDER: Provider = env.PAYMENT_PROVIDER === "cashfree" ? "cashfree" : "razorpay";
+export const ACTIVE_PROVIDER: Provider = "cashfree";
 
 /** Why a verification attempt was refused. Mapped to an API error code. */
 export type VerifyFailure =
@@ -59,7 +63,7 @@ export interface CreatedOrder {
   gatewayOrderId: string;
   amountRupees: number;
   currency: string;
-  /** Cashfree returns a hosted checkout URL; Razorpay builds its own client-side. */
+  /** Cashfree returns a hosted checkout URL the browser is sent to. */
   paymentUrl?: string;
   sessionId?: string;
 }
@@ -87,12 +91,10 @@ export interface VerifiedPayment {
  * "success" when this is false.
  */
 export function isGatewayConfigured(provider: Provider = ACTIVE_PROVIDER): boolean {
-  if (provider === "cashfree") {
-    const appId = (env.CASHFREE_APP_ID || "").trim();
-    const secret = (env.CASHFREE_SECRET_KEY || "").trim();
-    return Boolean(appId && secret) && !appId.includes("placeholder") && !secret.includes("placeholder");
-  }
-  return !(env.RAZORPAY_KEY_ID || "").includes("placeholder");
+  if (provider !== "cashfree") return false;
+  const appId = (env.CASHFREE_APP_ID || "").trim();
+  const secret = (env.CASHFREE_SECRET_KEY || "").trim();
+  return Boolean(appId && secret) && !appId.includes("placeholder") && !secret.includes("placeholder");
 }
 
 // ============================================================================
@@ -106,39 +108,21 @@ export async function createGatewayOrder(input: CreateOrderInput): Promise<Creat
     throw new Error("Order amount must be greater than zero.");
   }
 
-  if (ACTIVE_PROVIDER === "cashfree") {
-    const order = await cashfreeService.createOrder({
-      orderId: input.orderId,
-      amount: amountRupees,
-      customerId: input.customerId,
-      customerEmail: input.customerEmail,
-      customerPhone: input.customerPhone,
-      returnUrl: input.returnUrl,
-    });
-
-    return {
-      provider: "cashfree",
-      gatewayOrderId: order.order_id,
-      amountRupees: order.order_amount,
-      currency: order.order_currency,
-      paymentUrl: order.payment_url,
-    };
-  }
-
-  const order = await razorpayService.createOrder(
-    // Razorpay's API takes the smallest currency unit.
-    Math.round(amountRupees * 100),
-    input.currency ?? "INR",
-    input.orderId,
-    input.description,
-    input.metadata ?? {}
-  );
+  const order = await cashfreeService.createOrder({
+    orderId: input.orderId,
+    amount: amountRupees,
+    customerId: input.customerId,
+    customerEmail: input.customerEmail,
+    customerPhone: input.customerPhone,
+    returnUrl: input.returnUrl,
+  });
 
   return {
-    provider: "razorpay",
-    gatewayOrderId: order.id,
-    amountRupees: Number(order.amount) / 100,
-    currency: order.currency,
+    provider: "cashfree",
+    gatewayOrderId: order.order_id,
+    amountRupees: order.order_amount,
+    currency: order.order_currency,
+    paymentUrl: order.payment_url,
   };
 }
 
@@ -155,50 +139,7 @@ export async function createGatewayOrder(input: CreateOrderInput): Promise<Creat
  * getting that decision wrong is how wallets get over-credited.
  */
 export async function verifyGatewayPayment(input: VerifyInput): Promise<VerifiedPayment> {
-  return input.provider === "cashfree"
-    ? verifyCashfree(input)
-    : verifyRazorpay(input);
-}
-
-async function verifyRazorpay(input: VerifyInput): Promise<VerifiedPayment> {
-  if (!input.gatewayOrderId || !input.gatewayPaymentId || !input.signature) {
-    throw new PaymentVerificationError("MISSING_PARAMS", "Missing payment verification details.");
-  }
-
-  // Step 1: the callback is authentic (it came from a real Razorpay checkout).
-  if (!razorpayService.verifyPayment(input.gatewayOrderId, input.gatewayPaymentId, input.signature)) {
-    throw new PaymentVerificationError("INVALID_SIGNATURE", "Payment verification failed.");
-  }
-
-  // Step 2: the payment really exists and was captured. A valid signature only
-  // proves the browser is describing an order we made; it does not prove money
-  // moved, so this round trip is mandatory.
-  const details = await razorpayService
-    .fetchPayment(input.gatewayPaymentId)
-    .then((v) => v as { status: string; amount: number | string } | null)
-    .catch(() => null);
-
-  // Distinguish "the gateway is down" from "this payment was not captured".
-  // Collapsing the two would either lose a real payment or accept a fake one.
-  if (!details) {
-    throw new PaymentVerificationError(
-      "GATEWAY_UNAVAILABLE",
-      "Payment verification is temporarily unavailable. Please retry."
-    );
-  }
-  if (details.status !== "captured") {
-    throw new PaymentVerificationError("NOT_CAPTURED", "Payment not captured.");
-  }
-
-  const amountRupees = Number(details.amount) / 100;
-  assertAmountAndCurrency(amountRupees, input.expectedAmountRupees, "INR", input.expectedCurrency);
-
-  return {
-    provider: "razorpay",
-    gatewayPaymentId: input.gatewayPaymentId,
-    amountRupees,
-    currency: "INR",
-  };
+  return verifyCashfree(input);
 }
 
 async function verifyCashfree(input: VerifyInput): Promise<VerifiedPayment> {
@@ -302,14 +243,11 @@ export function verifyInboundWebhook(
   rawBody: string | Buffer,
   headers: Record<string, string | string[] | undefined>
 ): boolean {
-  if (provider === "cashfree") {
-    const signature = firstHeader(headers["x-webhook-signature"]);
-    // The timestamp is part of Cashfree's signed payload, not just metadata.
-    const timestamp = firstHeader(headers["x-webhook-timestamp"]);
-    return cashfreeService.verifyWebhookSignature(rawBody, signature, timestamp);
-  }
-  const signature = firstHeader(headers["x-razorpay-signature"]);
-  return razorpayService.verifyWebhookSignature(String(rawBody), signature ?? "");
+  if (provider !== "cashfree") return false;
+  const signature = firstHeader(headers["x-webhook-signature"]);
+  // The timestamp is part of Cashfree's signed payload, not just metadata.
+  const timestamp = firstHeader(headers["x-webhook-timestamp"]);
+  return cashfreeService.verifyWebhookSignature(rawBody, signature, timestamp);
 }
 
 function firstHeader(value: string | string[] | undefined): string | undefined {

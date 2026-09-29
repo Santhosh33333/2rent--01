@@ -517,12 +517,9 @@ model SupportTicketEvent {
 
 model PaymentOrder {
   id               String    @id @default(uuid())
-  razorpayOrderId  String?   @unique
-  razorpayPaymentId String?   @unique
-  // Which gateway created this order. Recorded per order (rather than read from
-  // env) so that flipping PAYMENT_PROVIDER cannot strand orders that are still
-  // in flight on the previous provider.
-  provider         String    @default("razorpay") // razorpay | cashfree
+  // Which gateway created this order. Cashfree is the only supported gateway;
+  // the column is kept so a row records what actually settled it.
+  provider         String    @default("cashfree") // cashfree
   cashfreeOrderId  String?   @unique
   cashfreePaymentId String?  @unique
   userId           String
@@ -1836,10 +1833,7 @@ model Booking {
   offerCode         String?
 
   // Payment
-  razorpayOrderId   String?
-  razorpayPaymentId String?
-  razorpaySignature String?
-  paymentProvider   String?   // razorpay | cashfree
+  paymentProvider   String?   // cashfree
   cashfreeOrderId   String?
   cashfreePaymentId String?
   paymentStatus     String    @default("PENDING") // PENDING, INITIATED, PAID, FAILED, VERIFICATION_PENDING, REJECTED
@@ -1920,7 +1914,7 @@ model RefundLog {
   amount           Float
   reason           String
   type             String   // FULL, PARTIAL, AUTO_TIMEOUT
-  razorpayRefundId String?
+  cashfreeRefundId String?
   status           String   @default("INITIATED") // INITIATED, PROCESSING, COMPLETED, FAILED
   initiatedBy      String   // SYSTEM, USER, PARTNER, ADMIN
   completedAt      DateTime?

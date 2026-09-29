@@ -849,7 +849,7 @@ export async function sendBookingCompletionEmails(bookingId: string): Promise<{ 
       select: {
         id: true, userId: true, partnerId: true, serviceType: true, scheduledAt: true, completedAt: true,
         startLocation: true, endLocation: true, finalAmount: true, estimatedAmount: true,
-        platformFee: true, partnerEarning: true, paymentMethod: true, razorpayPaymentId: true, durationMinutes: true,
+        platformFee: true, partnerEarning: true, paymentMethod: true, cashfreePaymentId: true, durationMinutes: true,
       },
     });
     if (!booking) return { userEmail: false, partnerEmail: false };
@@ -864,7 +864,7 @@ export async function sendBookingCompletionEmails(bookingId: string): Promise<{ 
       platformFee: booking.platformFee ?? 0,
       partnerEarning: booking.partnerEarning ?? 0,
       paymentMethod: booking.paymentMethod || "ONLINE",
-      paymentReference: booking.razorpayPaymentId || undefined,
+      paymentReference: booking.cashfreePaymentId || undefined,
       durationMinutes: booking.durationMinutes || 0,
     };
     const customer = await prisma.user.findUnique({

@@ -117,7 +117,7 @@ export async function downloadInvoicePdf(receipt: any): Promise<void> {
   y = labelRow(doc, y, 'Partner earning', inr(ch.partnerEarning), L, R - L)
   if (ch.couponCode) y = labelRow(doc, y, `Coupon (${ch.couponCode})`, `- ${inr(ch.discountAmount)}`, L, R - L)
   y = labelRow(doc, y, 'Payment status', ch.paymentStatus || '-', L, R - L)
-  if (ch.razorpayPaymentId) y = labelRow(doc, y, 'Payment ID', ch.razorpayPaymentId, L, R - L)
+  if (ch.paymentReference) y = labelRow(doc, y, 'Payment ID', ch.paymentReference, L, R - L)
 
   // Final total banner
   doc.setFillColor(216, 61, 39)

@@ -24,8 +24,8 @@ interface PaymentStats {
 
 interface PaymentRow {
   id: string
-  razorpayOrderId: string
-  razorpayPaymentId?: string | null
+  cashfreeOrderId: string
+  cashfreePaymentId?: string | null
   amount: number
   currency: string
   status: string
@@ -109,11 +109,11 @@ export function AdminPaymentsPage() {
         if (all.length >= (Number(d?.total) || 0) || items.length === 0) break
       }
 
-      const header = ['Payment ID', 'Order ID', 'Razorpay Payment ID', 'Type', 'Status', 'Amount', 'Currency', 'Payer Name', 'Payer Email', 'Payer Phone', 'User ID', 'Booking Service', 'Booking Status', 'Created At', 'Completed At']
+      const header = ['Payment ID', 'Order ID', 'Cashfree Payment ID', 'Type', 'Status', 'Amount', 'Currency', 'Payer Name', 'Payer Email', 'Payer Phone', 'User ID', 'Booking Service', 'Booking Status', 'Created At', 'Completed At']
       const lines = [header.join(',')]
       for (const r of all) {
         lines.push([
-          r.id, r.razorpayOrderId, r.razorpayPaymentId || '', r.type, r.status,
+          r.id, r.cashfreeOrderId, r.cashfreePaymentId || '', r.type, r.status,
           Number(r.amount).toFixed(2), r.currency,
           r.user?.fullName || '', r.user?.email || '', r.user?.phone || '', r.user?.id || '',
           r.booking?.serviceType || '', r.booking?.status || '',
@@ -160,7 +160,7 @@ export function AdminPaymentsPage() {
           </Link>
           <div>
             <h1 className="text-2xl font-bold font-display text-white">Payment Center</h1>
-            <p className="text-gray-400 text-sm mt-1">Real Razorpay orders and payments</p>
+            <p className="text-gray-400 text-sm mt-1">Real Cashfree orders and payments</p>
           </div>
         </div>
 
@@ -253,7 +253,7 @@ export function AdminPaymentsPage() {
           <div className="py-16 text-center">
             <CreditCard className="w-12 h-12 mx-auto text-gray-700 mb-3" />
             <p className="text-gray-400">No payments yet.</p>
-            <p className="text-gray-600 text-sm mt-1">Records appear here the moment a real Razorpay order is created.</p>
+            <p className="text-gray-600 text-sm mt-1">Records appear here the moment a real Cashfree order is created.</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -269,11 +269,11 @@ export function AdminPaymentsPage() {
                   <div className="flex-1 min-w-0 grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-1 text-sm">
                     <div>
                       <p className="text-gray-500 text-[11px] uppercase tracking-wide">Order ID</p>
-                      <p className="font-mono text-gray-200 truncate">{r.razorpayOrderId}</p>
+                      <p className="font-mono text-gray-200 truncate">{r.cashfreeOrderId}</p>
                     </div>
                     <div>
                       <p className="text-gray-500 text-[11px] uppercase tracking-wide">Payment ID</p>
-                      <p className="font-mono text-gray-200 truncate">{r.razorpayPaymentId || '—'}</p>
+                      <p className="font-mono text-gray-200 truncate">{r.cashfreePaymentId || '—'}</p>
                     </div>
                     <div>
                       <p className="text-gray-500 text-[11px] uppercase tracking-wide">Paid By</p>

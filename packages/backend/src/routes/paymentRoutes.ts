@@ -8,9 +8,8 @@ import { lookupUpiPayee } from "../controllers/upiLookupController"
 const router = Router()
 
 // Webhooks - no authentication. Authenticity comes from the signature over the
-// raw body, which is checked inside each handler. Each provider gets its own
-// path so an unauthenticated request never has to be routed by guessing.
-router.post("/webhook", paymentController.webhookPayment)
+// raw body, which is checked inside the handler. The path is explicit so an
+// unauthenticated request never has to be routed by guessing.
 router.post("/webhook/cashfree", paymentController.cashfreeWebhook)
 
 // Reachability probe for the provider dashboard's "test endpoint" button.
@@ -41,16 +40,14 @@ router.post(
   paymentController.createOrder
 )
 
-// Accept either provider's field names so the web and mobile clients can move
-// over independently. Only the order id is structurally required; the payment
-// id and signature are checked by the controller, which knows which provider
-// created the order.
+// Accept the generic and Cashfree field names so web and mobile clients can move
+// over independently. Only the order id is structurally required; the payment id
+// and signature are checked by the controller.
 router.post(
   "/verify",
   [
     body().custom((value: Record<string, unknown>) => {
-      const orderId =
-        value?.orderId ?? value?.cashfreeOrderId ?? value?.razorpayOrderId ?? value?.razorpay_order_id
+      const orderId = value?.orderId ?? value?.cashfreeOrderId
       if (typeof orderId !== "string" || !orderId.trim()) {
         throw new Error("An order ID is required")
       }

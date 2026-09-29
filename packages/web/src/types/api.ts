@@ -21,24 +21,19 @@ export interface BookingCreateInput {
 }
 
 /**
- * Payment verification payload.
- *
- * The provider-neutral fields are what the backend prefers; the Razorpay keys
- * remain optional so an older cached bundle keeps working during rollout.
+ * Payment verification payload. Cashfree is the only gateway, so the order id is
+ * all the client can meaningfully contribute: settlement is decided server-side
+ * from Cashfree's own response, never from what this payload claims.
  */
 export interface BookingVerifyPayment {
   orderId: string
   paymentId?: string
   signature?: string
-  razorpay_payment_id?: string
-  razorpay_order_id?: string
-  razorpay_signature?: string
 }
 
 /** What the backend reports about each gateway. */
 export interface PaymentProviderConfig {
-  provider: "razorpay" | "cashfree"
-  razorpay: boolean
+  provider: "cashfree"
   cashfree: boolean
   upiManual: boolean
   upiId: string | null
@@ -47,15 +42,13 @@ export interface PaymentProviderConfig {
   cash: boolean
 }
 
-/** A created payment order, in whichever gateway shape was used. */
+/** A created payment order. Cashfree hosts checkout at `paymentUrl`. */
 export interface CreatedPaymentOrder {
-  provider: "razorpay" | "cashfree"
+  provider: "cashfree"
   orderId: string
   amount: number
   currency: string
-  /** Cashfree hosts checkout; Razorpay is opened client-side with `key`. */
   paymentUrl?: string
-  key?: string
   bookingId?: string
 }
 

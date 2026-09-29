@@ -5,21 +5,18 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Screen, Title, Card, Button, Alert } from '../../src/lib/ui';
 import { Colors } from '../../src/design-system/tokens/colors';
 import { get, post, errorMessage } from '../../src/lib/api';
-import { useAuthStore } from '../../src/shared/store/authStore';
 import { useBookingRealtime } from '../../src/hooks/useBookingRealtime';
 import { useCallSignaling } from '../../src/hooks/useCallSignaling';
 import { emitSos } from '../../src/lib/socket';
 import { CallModal } from '../../src/components/CallModal';
-// Razorpay checkout, used when the backend reports Razorpay as the active
-// gateway. Requires: npm i react-native-razorpay
-import RazorpayCheckout from 'react-native-razorpay';
+// Cashfree hosts its own checkout, so the app opens a browser session against
+// the payment URL the backend returns rather than embedding a payment SDK.
 import * as WebBrowser from 'expo-web-browser';
 
 export default function BookingDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const qc = useQueryClient();
-  const user = useAuthStore((s) => s.user);
   const [error, setError] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
   const [liveStatus, setLiveStatus] = useState<string | null>(null);
@@ -53,35 +50,19 @@ export default function BookingDetail() {
       const res = await post<any>(`/bookings/${id}/pay`, {});
       const order = res.data ?? {};
 
-      // The backend decides which gateway is active, so the app follows the
-      // order shape it returns rather than assuming one provider.
-      if (order.provider === 'cashfree' && order.paymentUrl) {
-        // Cashfree hosts its own checkout, so the app just opens it. The order
-        // is settled by the webhook; nothing is trusted from the return trip.
-        const result = await WebBrowser.openBrowserAsync(order.paymentUrl);
-        if (result.type === 'cancel' || result.type === 'dismiss') {
-          setError('Payment cancelled.');
-          return;
-        }
-        // Ask the server what actually happened rather than assuming success.
-        await post(`/bookings/${id}/verify-payment`, { orderId: order.orderId });
-      } else {
-        const data = await RazorpayCheckout.open({
-          description: `Nabri — ${booking.serviceType ?? 'Booking'}`,
-          currency: order.currency ?? 'INR',
-          key: order.key || '',
-          amount: Math.round((order.amount ?? 0) * 100),
-          order_id: order.orderId,
-          name: 'Nabri',
-          prefill: { contact: user?.phone ?? '', email: user?.email ?? '' },
-          theme: { color: Colors.primary },
-        });
-        await post(`/bookings/${id}/verify-payment`, {
-          orderId: data.razorpay_order_id ?? order.orderId,
-          paymentId: data.razorpay_payment_id,
-          signature: data.razorpay_signature,
-        });
+      // Cashfree hosts checkout, so the app opens it and then asks the server
+      // what actually happened. Nothing about the return trip is treated as
+      // proof of payment: settlement is decided from Cashfree's own response.
+      if (!order.paymentUrl) {
+        setError('Payment could not be started. Please try again.');
+        return;
       }
+      const result = await WebBrowser.openBrowserAsync(order.paymentUrl);
+      if (result.type === 'cancel' || result.type === 'dismiss') {
+        setError('Payment cancelled.');
+        return;
+      }
+      await post(`/bookings/${id}/verify-payment`, { orderId: order.orderId });
       qc.invalidateQueries({ queryKey: ['booking', id] });
     } catch (e: any) {
       if (e?.error?.description) setError(e.error.description);
@@ -147,7 +128,7 @@ export default function BookingDetail() {
           booking.paymentMethod === 'UPI_MANUAL' ? (
             <Button label="Pay via UPI QR" onPress={() => router.push(`/upi/${id}`)} />
           ) : (
-            <Button label="Pay (Razorpay/Wallet)" onPress={startPay} loading={paying} />
+            <Button label="Pay now" onPress={startPay} loading={paying} />
           )
         ) : null}
         {status === 'COMPLETED' ? (

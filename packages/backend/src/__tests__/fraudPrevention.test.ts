@@ -89,7 +89,7 @@ describe('preventDuplicatePayment', () => {
 
   it('rejects duplicate payment', async () => {
     mockFindFirst.mockResolvedValue({ id: 'pay-1', status: 'SUCCESS' });
-    const req = makeReq({ bookingId: 'booking-1', razorpayPaymentId: 'pay_123' });
+    const req = makeReq({ bookingId: 'booking-1', cashfreePaymentId: 'pay_123' });
     const res = makeRes();
     const next = vi.fn();
     await preventDuplicatePayment(req, res, next);

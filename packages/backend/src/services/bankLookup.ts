@@ -1,8 +1,6 @@
 // Payout-destination lookups: IFSC -> bank name, UPI ID -> account holder name.
-// Purely offline/deterministic (no third-party call required) so the withdrawal
-// form can auto-fill instantly; Razorpay VPA validation is used as a bonus when
-// real credentials are configured.
-import { env } from "../config/env";
+// Purely offline/deterministic, with no third-party call, so the withdrawal form
+// can auto-fill instantly and never blocks a payout on someone else's uptime.
 
 // IFSC = 4-char bank code + '0' + branch code. The first four characters are
 // assigned by the RBI to the bank, so a prefix table resolves the bank name.
@@ -164,37 +162,18 @@ export function parseUpiId(upiId: string): { handle: string; bank: string | null
   return { handle, bank, suggestedName: nameToken ? titleCase(nameToken) : null };
 }
 
-// Optional: Razorpay can validate the VPA and return the true payee name at the
-// bank. Silently skipped when credentials are placeholders or the call fails.
-async function verifiedVpaName(upiId: string): Promise<string | null> {
-  const keyId = env.RAZORPAY_KEY_ID || "";
-  const keySecret = env.RAZORPAY_KEY_SECRET || "";
-  if (!keyId || !keySecret || keyId.includes("placeholder") || keySecret.includes("placeholder")) return null;
-  try {
-    // Imported lazily so the module loads even when Razorpay isn't installed.
-    const { default: Razorpay } = (await import("razorpay")) as unknown as {
-      default: new (opts: { key_id: string; key_secret: string }) => any;
-    };
-    const rzp = new Razorpay({ key_id: keyId, key_secret: keySecret });
-    const res = await rzp.customers.validateVpa(upiId.trim().toLowerCase());
-    const name = res?.customer?.vpa?.name || res?.name || null;
-    return typeof name === "string" && name.trim() ? name.trim() : null;
-  } catch {
-    return null;
-  }
-}
-
 export async function lookupUpi(upiId: string): Promise<UpiLookup> {
   const parsed = parseUpiId(upiId);
   if (!parsed.handle) {
     return { valid: false, handle: "", bank: null, suggestedName: null, verified: false, reason: "INVALID_FORMAT" };
   }
-  const verified = await verifiedVpaName(upiId);
+  // The name is a convenience for the payer, never a verification: nothing about
+  // who a UPA handle belongs to is decided from a string we guessed at.
   return {
     valid: true,
     handle: parsed.handle,
     bank: parsed.bank,
-    suggestedName: verified || parsed.suggestedName,
-    verified: !!verified,
+    suggestedName: parsed.suggestedName,
+    verified: false,
   };
 }

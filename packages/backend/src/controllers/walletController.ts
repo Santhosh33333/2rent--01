@@ -76,7 +76,7 @@ export async function getWallet(req: AuthedRequest, res: Response): Promise<void
 }
 
 // ============================================================================
-// MANUAL-UPI TOP-UP REQUESTS (no Razorpay involved)
+// MANUAL-UPI TOP-UP REQUESTS (no payment gateway involved)
 // User pays the platform QR externally, submits UTR + screenshot; an admin
 // verifies against the bank statement and the wallet is credited.
 // ============================================================================
@@ -340,8 +340,7 @@ export async function getBankInfo(req: AuthedRequest, res: Response): Promise<vo
   }
 }
 
-// UPI ID -> account holder name + bank/app. Uses Razorpay VPA validation when
-// real credentials exist, otherwise derives the name from the handle.
+// UPI ID -> account holder name + bank/app, derived from the handle offline.
 export async function getUpiInfo(req: AuthedRequest, res: Response): Promise<void> {
   try {
     const upiId = String(req.query.upiId || "").trim().toLowerCase();

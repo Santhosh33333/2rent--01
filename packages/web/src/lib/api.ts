@@ -244,7 +244,7 @@ export const adminApi = {
     api.post('/admin/email/broadcast', { ...data, audience: data.audience || 'ALL' }),
   getEmailStatus: () => api.get('/admin/email/status'),
   sendTestEmail: (to: string) => api.post('/admin/email/test', { to }),
-  // Payment Center (real Razorpay order/payment ledger)
+  // Payment Center (real Cashfree order/payment ledger)
   getPayments: (params?: PaginationParams) => api.get('/admin/payments', { params }),
   getPaymentStats: () => api.get('/admin/payments/stats'),
   // Manual UPI verification (temporary flow for personal UPI accounts)
@@ -314,7 +314,7 @@ export const authRoleApi = {
   switchRole: (role: string) => api.post('/auth/switch-role', { role }),
 }
 
-// Manual-UPI wallet top-ups (no Razorpay — pay the platform QR, then UTR)
+// Manual-UPI wallet top-ups (no gateway — pay the platform QR, then UTR)
 export const walletApi = {
   get: () => api.get('/wallet'),
   getConfig: () => api.get('/wallet/config'),

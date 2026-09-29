@@ -47,12 +47,12 @@ export async function preventDuplicateBooking(req: Request, res: Response, next:
 }
 
 /**
- * Detects duplicate payment verification: same booking + same amount within
- * 2 minutes. Prevents Razorpay webhook + manual verify double-processing.
+ * Detects duplicate payment verification: same booking within 2 minutes.
+ * Prevents the webhook and a manual verify double-processing one booking.
  */
 export async function preventDuplicatePayment(req: Request, res: Response, next: NextFunction) {
   try {
-    const { razorpayPaymentId } = req.body ?? {};
+    const { cashfreePaymentId } = req.body ?? {};
     const bookingId = (req.params ? req.params.id : undefined) || (req.body ? req.body.bookingId : undefined);
 
     if (!bookingId) {
@@ -60,8 +60,8 @@ export async function preventDuplicatePayment(req: Request, res: Response, next:
     }
 
     const where: any = { bookingId };
-    if (razorpayPaymentId) {
-      where.razorpayPaymentId = razorpayPaymentId;
+    if (cashfreePaymentId) {
+      where.cashfreePaymentId = cashfreePaymentId;
     }
 
     const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000);

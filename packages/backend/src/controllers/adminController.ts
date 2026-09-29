@@ -2126,7 +2126,7 @@ export async function getPartnerLevels(_req: AuthedRequest, res: Response): Prom
 }
 
 // ============================================================================
-// ADMIN PAYMENT CENTER — real Razorpay orders/payments (PaymentOrder ledger)
+// ADMIN PAYMENT CENTER — real Cashfree orders/payments (PaymentOrder ledger)
 // ============================================================================
 
 export async function getPayments(req: AuthedRequest, res: Response): Promise<void> {
@@ -2138,8 +2138,8 @@ export async function getPayments(req: AuthedRequest, res: Response): Promise<vo
     if (req.query.type) where.type = req.query.type;
     if (req.query.search) {
       where.OR = [
-        { razorpayOrderId: { contains: String(req.query.search) } },
-        { razorpayPaymentId: { contains: String(req.query.search) } },
+        { cashfreeOrderId: { contains: String(req.query.search) } },
+        { cashfreePaymentId: { contains: String(req.query.search) } },
       ];
     }
     const [items, total] = await Promise.all([
@@ -2338,7 +2338,7 @@ export async function verifyUpiPayment(req: AuthedRequest, res: Response): Promi
           data: JSON.stringify({ bookingId: booking.id }),
         },
       });
-      // Trigger partner matching (same as the Razorpay verified path).
+      // Trigger partner matching (same as the verified path).
       partnerMatching
         .assignPartnerToBooking(booking.id, {
           serviceType: booking.serviceType,

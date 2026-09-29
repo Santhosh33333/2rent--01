@@ -28,7 +28,7 @@ export async function initiateRefund(bookingId: string, amount: number, reason: 
   return refundLog;
 }
 
-export async function completeRefund(bookingId: string, razorpayRefundId?: string) {
+export async function completeRefund(bookingId: string, cashfreeRefundId?: string) {
   const refundLog = await prisma.refundLog.findFirst({
     where: { bookingId, status: "INITIATED" },
   });
@@ -38,7 +38,7 @@ export async function completeRefund(bookingId: string, razorpayRefundId?: strin
     where: { id: refundLog.id },
     data: {
       status: "COMPLETED",
-      razorpayRefundId: razorpayRefundId || null,
+      cashfreeRefundId: cashfreeRefundId || null,
       completedAt: new Date(),
     },
   });

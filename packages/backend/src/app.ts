@@ -134,11 +134,11 @@ export function createApp(): http.Server {
   }) as unknown as RequestHandler;
   app.use(gzip);
   // Capture the exact raw bytes of JSON requests before parsing.
-// Payment gateways (Cashfree now, Razorpay previously) sign the exact bytes they
-// send, so those bytes have to survive parsing intact. Mounted on the webhook
-// prefix only; every other /api/payments route (create-order, verify, config)
-// keeps the normal express.json parser below. See middleware/webhookRawBody.ts
-// for why the parser is bypassed rather than reconfigured.
+  // Cashfree signs the exact bytes it sends, so those bytes have to survive
+  // parsing intact. Mounted on the webhook prefix only; every other
+  // /api/payments route (create-order, verify, config) keeps the normal
+  // express.json parser below. See middleware/webhookRawBody.ts for why the
+  // parser is bypassed rather than reconfigured.
 app.use(
   "/api/payments/webhook",
   webhookRawBody(),
@@ -252,7 +252,7 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
       <li><strong>Profile details:</strong> city, bio, profile photo, and optional verification documents needed to become a partner (e.g. government ID, address proof).</li>
       <li><strong>Location:</strong> your device location is used to match you with nearby partners and to allow partners to provide services. You can disable location at any time through your device settings.</li>
       <li><strong>Usage data:</strong> booking and chat history, wallet transactions, service requests, and app interaction data used to operate and improve the service.</li>
-      <li><strong>Payment data:</strong> payments are processed by our payment provider (Razorpay). We do not store full card numbers.</li>
+      <li><strong>Payment data:</strong> payments are processed by our payment provider (Cashfree). We do not store full card numbers.</li>
       <li><strong>Authentication data:</strong> sign-in providers (e.g. Google) may share a profile identifier so we can recognise you across logins.</li>
     </ul>
   </section>

@@ -51,17 +51,17 @@ async function main() {
   // ---- Initiate payment ----
   r = await api('POST', '/bookings/' + bk.id + '/pay', null, userTok)
   const order = r.json?.data
-  assert(r.status === 200 && !!order?.orderId, 'initiate payment (Razorpay order)', order)
+  assert(r.status === 200 && !!order?.orderId, 'initiate payment (Cashfree order)', order)
 
   // ---- Simulate gateway capture (browser checkout is the only real path in test mode).
   // Mirror EXACTLY what verifyPayment's transaction writes ----
   const payId = 'pay_SIM_' + crypto.randomBytes(6).toString('hex')
   const walletU = await p.wallet.findUnique({ where: { userId } })
   const claimed = await p.$transaction(async (tx) => {
-    const c = await tx.booking.updateMany({ where: { id: bk.id, status: 'PAYMENT_INITIATED' }, data: { status: 'PARTNER_SEARCHING', paymentVerifiedAt: new Date(), finalAmount: bk.estimatedAmount, razorpayPaymentId: payId } })
+    const c = await tx.booking.updateMany({ where: { id: bk.id, status: 'PAYMENT_INITIATED' }, data: { status: 'PARTNER_SEARCHING', paymentVerifiedAt: new Date(), finalAmount: bk.estimatedAmount, cashfreePaymentId: payId } })
     if (c.count !== 1) return false
     await tx.transaction.create({ data: { walletId: walletU.id, userId, type: 'DEBIT', status: 'COMPLETED', amount: bk.estimatedAmount, description: 'Booking payment for WALKING', referenceId: payId, bookingId: bk.id } })
-    await tx.paymentOrder.updateMany({ where: { razorpayOrderId: order.orderId }, data: { razorpayPaymentId: payId, status: 'COMPLETED', completedAt: new Date() } })
+    await tx.paymentOrder.updateMany({ where: { cashfreeOrderId: order.orderId }, data: { cashfreePaymentId: payId, status: 'COMPLETED', completedAt: new Date() } })
     return true
   })
   assert(claimed, 'simulate captured payment -> PARTNER_SEARCHING')
@@ -108,14 +108,14 @@ async function main() {
   console.log('NOTE: admin check via separate token')
 
   // ---- Admin sees booking + real PaymentOrder ----
-  const adm = await api('POST', '/auth/login', { email: 'santhoshkrishna958@gmail.com', password: '300703S#s' })
+  const adm = await api('POST', '/auth/login', { email: process.env.E2E_ADMIN_EMAIL, password: process.env.E2E_ADMIN_PASSWORD })
   const admTok = adm.json?.data?.accessToken
   assert(!!admTok, 'admin login')
   r = await api('GET', '/admin/bookings?page=1', null, admTok)
   console.log('ADMIN BOOKINGS RESPONSE:', r.status, JSON.stringify(r.json).slice(0, 400))
   assert(JSON.stringify(r.json || {}).includes(bk.id), 'admin bookings list contains booking')
-  const po = await p.paymentOrder.findUnique({ where: { razorpayOrderId: order.orderId } })
-  assert(po && po.type === 'BOOKING' && po.status === 'COMPLETED' && po.razorpayPaymentId === payId, 'PaymentOrder record settled', { type: po?.type, status: po?.status })
+  const po = await p.paymentOrder.findUnique({ where: { cashfreeOrderId: order.orderId } })
+  assert(po && po.type === 'BOOKING' && po.status === 'COMPLETED' && po.cashfreePaymentId === payId, 'PaymentOrder record settled', { type: po?.type, status: po?.status })
 
   // ---- Switch-role probes ----
   r = await api('POST', '/auth/switch-role', { role: 'USER' }, partTok)

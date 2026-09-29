@@ -36,32 +36,13 @@ function headerValue(value: string | string[] | undefined): string {
 }
 
 // ============================================================================
-// PROVIDER COLUMN HELPERS
-//
-// The gateway is recorded per order, not read from the environment, so that
-// flipping PAYMENT_PROVIDER cannot strand orders that are still in flight on
-// the previous provider. These helpers keep that branching in one place.
+// ORDER LOOKUP
 // ============================================================================
 
-type OrderRow = { provider?: string | null; cashfreeOrderId?: string | null; razorpayOrderId?: string | null }
-
-function providerOf(row: OrderRow | null | undefined): Provider {
-  if (row?.provider === "cashfree" || (!row?.provider && row?.cashfreeOrderId)) return "cashfree"
-  return "razorpay"
-}
-
-function orderIdColumn(provider: Provider) {
-  return provider === "cashfree" ? "cashfreeOrderId" : "razorpayOrderId"
-}
-
-function paymentIdColumn(provider: Provider) {
-  return provider === "cashfree" ? "cashfreePaymentId" : "razorpayPaymentId"
-}
-
-/** Finds a PaymentOrder by whichever gateway actually created it. */
+/** Cashfree owns every column now, so a stored order resolves the same way. */
 function findPaymentOrder(gatewayOrderId: string) {
   return prisma.paymentOrder.findFirst({
-    where: { OR: [{ cashfreeOrderId: gatewayOrderId }, { razorpayOrderId: gatewayOrderId }] },
+    where: { cashfreeOrderId: gatewayOrderId },
   })
 }
 
@@ -108,9 +89,7 @@ export async function createOrder(req: AuthedRequest, res: Response): Promise<vo
     // resolves the order through the same provider that created it.
     await prisma.paymentOrder.create({
       data: {
-        ...(order.provider === "cashfree"
-          ? { cashfreeOrderId: order.gatewayOrderId }
-          : { razorpayOrderId: order.gatewayOrderId }),
+        cashfreeOrderId: order.gatewayOrderId,
         provider: order.provider,
         userId,
         walletId: wallet.id,
@@ -129,8 +108,7 @@ export async function createOrder(req: AuthedRequest, res: Response): Promise<vo
         orderId: order.gatewayOrderId,
         amount: order.amountRupees,
         currency: order.currency,
-        // Cashfree hosts checkout and hands back a URL; Razorpay is opened
-        // client-side from the order id.
+        // Cashfree hosts checkout and hands back a URL for the browser to open.
         ...(order.paymentUrl ? { paymentUrl: order.paymentUrl } : {}),
       },
       "Order created."
@@ -147,14 +125,11 @@ export async function createOrder(req: AuthedRequest, res: Response): Promise<vo
 
 export async function verifyPayment(req: AuthedRequest, res: Response): Promise<void> {
   try {
-    // Accept both providers' field names so the client can be migrated without
-    // a coordinated deploy, but the provider that matters is the one recorded
-    // against the order, not the one implied by these fields.
-    const gatewayOrderId =
-      req.body.orderId ?? req.body.cashfreeOrderId ?? req.body.razorpayOrderId ?? req.body.razorpay_order_id
-    const gatewayPaymentId =
-      req.body.paymentId ?? req.body.cashfreePaymentId ?? req.body.razorpayPaymentId ?? req.body.razorpay_payment_id
-    const signature = req.body.signature ?? req.body.cashfreeSignature ?? req.body.razorpaySignature ?? req.body.razorpay_signature
+    // Accept the generic and Cashfree field names so an older client build can
+    // still be upgraded without a coordinated deploy.
+    const gatewayOrderId = req.body.orderId ?? req.body.cashfreeOrderId
+    const gatewayPaymentId = req.body.paymentId ?? req.body.cashfreePaymentId
+    const signature = req.body.signature ?? req.body.cashfreeSignature
     const claimedAmount = req.body.amount
 
     const userId = req.user!.userId
@@ -170,7 +145,7 @@ export async function verifyPayment(req: AuthedRequest, res: Response): Promise<
     }
 
     const paymentOrder = await findPaymentOrder(gatewayOrderId)
-    const provider = providerOf(paymentOrder)
+    const provider = ACTIVE_PROVIDER
 
     // Ownership is checked before any gateway call, and reported as 404 rather
     // than 403 so this cannot be used to probe which order ids exist.
@@ -199,7 +174,7 @@ export async function verifyPayment(req: AuthedRequest, res: Response): Promise<
         res,
         {
           balance: wallet?.balance ?? null,
-          paymentId: paymentOrder[paymentIdColumn(provider)],
+          paymentId: paymentOrder.cashfreePaymentId,
           transactionId: null,
         },
         "Payment already verified."
@@ -250,13 +225,16 @@ export async function verifyPayment(req: AuthedRequest, res: Response): Promise<
     const result = await prisma.$transaction(async (tx) => {
       const claimed = await tx.paymentOrder.updateMany({
         where: {
-          [orderIdColumn(provider)]: gatewayOrderId,
+          cashfreeOrderId: gatewayOrderId,
           userId,
-          status: { in: ["CREATED", "AUTHORIZED"] },
+          // FAILED is claimable because Cashfree can fail one attempt and then
+          // succeed on a later one for the same order, and the money really is
+          // ours. COMPLETED stays excluded, which is what prevents a double credit.
+          status: { in: ["CREATED", "AUTHORIZED", "FAILED"] },
         },
         data: {
           status: "COMPLETED",
-          [paymentIdColumn(provider)]: verified.gatewayPaymentId,
+          cashfreePaymentId: verified.gatewayPaymentId,
           completedAt: new Date(),
         },
       })
@@ -337,185 +315,6 @@ export async function verifyPayment(req: AuthedRequest, res: Response): Promise<
   }
 }
 
-// ============================================================================
-// PAYMENT WEBHOOK (Razorpay)
-// ============================================================================
-
-export async function webhookPayment(req: Request, res: Response): Promise<void> {
-  try {
-    // Sign the bytes that actually arrived, not a re-serialised copy. The
-    // parser in app.ts stashed them in req.rawBody before JSON.parse ran,
-    // because HMAC(JSON.stringify(req.body)) can never match a body that
-    // contained whitespace or a different key order.
-    const rawBody = rawBodyOf(req)
-    if (!rawBody) {
-      res.status(400).json({ received: false, reason: "Raw body unavailable" })
-      return
-    }
-
-    const signature = headerValue(req.headers["x-razorpay-signature"])
-    if (!verifyInboundWebhook("razorpay", rawBody, req.headers)) {
-      console.warn("Invalid Razorpay webhook signature — ignoring")
-      // Acknowledge and discard. A 5xx would make Razorpay retry a payload we
-      // already know is forged, so 200 with a refusal is the correct answer.
-      res.status(200).json({ received: false, reason: "Invalid signature" })
-      return
-    }
-
-    const event = req.body
-
-    if (event.event === "payment.authorized") {
-      // Payment authorized - record it without clobbering terminal states
-      const paymentId = event.payload.payment.entity.id
-      const orderId = event.payload.payment.entity.order_id
-
-      await prisma.paymentOrder.updateMany({
-        where: { razorpayOrderId: orderId, status: "CREATED" },
-        data: {
-          status: "AUTHORIZED",
-          razorpayPaymentId: paymentId,
-        },
-      })
-    } else if (event.event === "payment.captured") {
-      // Payment captured successfully
-      const paymentId = event.payload.payment.entity.id
-      const orderId = event.payload.payment.entity.order_id
-      const amount = Number(event.payload.payment.entity.amount) / 100
-
-      // Status latch INSIDE the tx: only one of (webhook, client verify) can win
-      await prisma.$transaction(async (tx) => {
-        const claimed = await tx.paymentOrder.updateMany({
-          where: { razorpayOrderId: orderId, status: { in: ["CREATED", "AUTHORIZED"] } },
-          data: {
-            status: "COMPLETED",
-            razorpayPaymentId: paymentId,
-            completedAt: new Date(),
-          },
-        })
-
-        if (claimed.count !== 1) {
-          return
-        }
-
-        const paymentOrder = await tx.paymentOrder.findUnique({
-          where: { razorpayOrderId: orderId },
-        })
-
-        if (!paymentOrder || Number(paymentOrder.amount) !== amount) {
-          throw new Error("WEBHOOK_AMOUNT_MISMATCH")
-        }
-
-        await tx.wallet.update({
-          where: { id: paymentOrder.walletId },
-          data: { balance: { increment: amount } },
-        })
-
-        await tx.transaction.create({
-          data: {
-            walletId: paymentOrder.walletId,
-            userId: paymentOrder.userId,
-            type: "CREDIT",
-            status: "COMPLETED",
-            amount,
-            description: `Wallet top-up via Razorpay webhook`,
-            referenceId: paymentId,
-          },
-        })
-
-        await tx.notification.create({
-          data: {
-            userId: paymentOrder.userId,
-            title: "Payment Confirmed",
-            body: `₹${amount} has been added to your wallet.`,
-            data: JSON.stringify({ paymentId, amount }),
-          },
-        })
-      }).catch((err) => {
-        if (err?.message !== "WEBHOOK_AMOUNT_MISMATCH") throw err
-        console.error(`Webhook captured-amount mismatch for order ${orderId}`)
-      })
-    } else if (event.event === "payment.failed") {
-      // Payment failed
-      const paymentId = event.payload.payment.entity.id
-      const orderId = event.payload.payment.entity.order_id
-
-      const paymentOrder = await prisma.paymentOrder.findUnique({
-        where: { razorpayOrderId: orderId },
-      })
-
-      if (paymentOrder) {
-        await prisma.$transaction([
-          prisma.paymentOrder.update({
-            where: { razorpayOrderId: orderId },
-            data: {
-              status: "FAILED",
-              razorpayPaymentId: paymentId,
-            },
-          }),
-          prisma.notification.create({
-            data: {
-              userId: paymentOrder.userId,
-              title: "Payment Failed",
-              body: `Your payment of ₹${paymentOrder.amount} failed. Please try again.`,
-              data: JSON.stringify({ paymentId }),
-            },
-          }),
-        ])
-      }
-    } else if (event.event === "refund.created") {
-      // Refund initiated
-      const paymentId = event.payload.refund.entity.payment_id
-      const refundId = event.payload.refund.entity.id
-      const amount = Number(event.payload.refund.entity.amount) / 100
-
-      // Idempotency: skip if this refund was already credited
-      const existing = await prisma.transaction.findFirst({
-        where: { referenceId: refundId, type: "CREDIT" },
-      })
-
-      if (!existing) {
-        const transaction = await prisma.transaction.findFirst({
-          where: { referenceId: paymentId, type: "CREDIT", status: "COMPLETED" },
-        })
-
-        if (transaction) {
-          await prisma.$transaction([
-            prisma.wallet.update({
-              where: { id: transaction.walletId },
-              data: { balance: { increment: amount } },
-            }),
-            prisma.transaction.create({
-              data: {
-                walletId: transaction.walletId,
-                userId: transaction.userId,
-                type: "CREDIT",
-                status: "COMPLETED",
-                amount,
-                description: `Refund for booking cancellation`,
-                referenceId: refundId,
-              },
-            }),
-            prisma.notification.create({
-              data: {
-                userId: transaction.userId,
-                title: "Refund Processed",
-                body: `₹${amount} refunded to your wallet.`,
-                data: JSON.stringify({ refundId, amount }),
-              },
-            }),
-          ])
-        }
-      }
-    }
-
-    res.json({ success: true })
-  } catch (err: any) {
-    console.error("Webhook error:", err)
-    // Return 200 to prevent Razorpay infinite retry loop.
-    // The error is logged; idempotent processing handles duplicates.
-    res.status(200).json({ success: true, error: "Webhook processing failed" })
-  }
-}
 
 // ============================================================================
 // PAYMENT WEBHOOK (Cashfree)
@@ -756,7 +555,7 @@ async function settleCashfreeOrder(input: {
 // ============================================================================
 
 // Public capability flags so clients only offer payment methods that can
-// actually work (no dead auto-pay buttons when Razorpay is unconfigured).
+// actually work, rather than a button that fails at checkout.
 export async function getPaymentConfig(_req: AuthedRequest, res: Response): Promise<void> {
   try {
     const [upiId, upiName, upiQr] = await Promise.all([
@@ -768,9 +567,8 @@ export async function getPaymentConfig(_req: AuthedRequest, res: Response): Prom
       res,
       {
         provider: ACTIVE_PROVIDER,
-        // Reported under the historical key so existing clients keep working
-        // while they move to the explicit provider key.
-        razorpay: isGatewayConfigured("razorpay"),
+        // Also reported under the historical key so clients built before the
+        // switch keep working until they are updated.
         cashfree: isGatewayConfigured("cashfree"),
         upiManual: Boolean(upiId?.value || upiQr?.value),
         upiId: upiId?.value ?? null,

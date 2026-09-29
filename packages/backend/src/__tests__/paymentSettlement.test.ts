@@ -86,7 +86,6 @@ function storedOrder(overrides: Record<string, unknown> = {}) {
     provider: "cashfree",
     cashfreeOrderId: GATEWAY_ORDER_ID,
     cashfreePaymentId: null,
-    razorpayOrderId: null,
     userId: USER_ID,
     walletId: WALLET_ID,
     amount: ORDER_AMOUNT,
