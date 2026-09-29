@@ -138,10 +138,33 @@ export async function createOrder(req: AuthedRequest, res: Response): Promise<vo
       },
       "Order created."
     )
-  } catch (err: any) {
-    console.error("Payment order creation failed:", err)
-    sendError(res, "Failed to create payment order.", 500, "PAYMENT_ORDER_FAILED")
-  }
+    } catch (err: any) {
+      console.error("Payment order creation failed:", err)
+      // Every failure collapsed into one opaque 500, so neither the customer
+      // nor support could tell "your phone is unusable" from "the gateway
+      // rejected the order" from "the database write failed", and the only
+      // place the answer existed was a log nobody could reach.
+      //
+      // Local validation refusals are ours and safe to state plainly. Anything
+      // else is reported by category, with the upstream reason truncated and
+      // passed through only as the gateway's own message: no credentials, no
+      // headers, no request body.
+      const reason = String(err?.message || "").trim()
+      if (/requires customer_phone|loopback return_url|{order_id}|absolute URL|greater than zero|must contain the/i.test(reason)) {
+        sendError(res, reason.replace(/^Error:\s*/, ""), 422, "PAYMENT_ORDER_REJECTED")
+        return
+      }
+      if (/Cashfree .* failed \(\d+\)/.test(reason)) {
+        const upstream = reason.replace(/^Error:\s*/, "").slice(0, 200)
+        sendError(res, `Payment provider rejected the order: ${upstream}`, 502, "GATEWAY_REJECTED")
+        return
+      }
+      if (/not configured|placeholder/i.test(reason)) {
+        sendError(res, "Payments are not configured correctly on this server.", 503, "PAYMENT_NOT_CONFIGURED")
+        return
+      }
+      sendError(res, "Failed to create payment order.", 500, "PAYMENT_ORDER_FAILED")
+    }
 }
 
 // ============================================================================
