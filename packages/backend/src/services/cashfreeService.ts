@@ -127,15 +127,26 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 
 async function cashfreeFetch<T>(
   path: string,
-  init: { method: string; body?: unknown },
-  timeoutMs = 12000
+  init: { method: string; body?: unknown; extraHeaders?: Record<string, string> },
+  timeoutMs = 12000,
+  /**
+   * Order Pay is declared `security: []` in Cashfree's spec: it is authorised by
+   * the session id alone. Sending the merchant secret to an endpoint that does
+   * not need it would widen the blast radius of a mistake here for no gain, so
+   * it can be called unauthenticated.
+   */
+  withAuth = true
 ): Promise<T> {
-  const { appId, secret } = requireCredentials()
+  const { appId, secret } = withAuth ? requireCredentials() : { appId: "", secret: "" }
 
   const response = await withTimeout(
     fetch(`${CASHFREE_API_BASE}${path}`, {
       method: init.method,
-      headers: headers(appId, secret),
+      headers: {
+        ...(withAuth ? headers(appId, secret) : { "x-api-version": CASHFREE_API_VERSION }),
+        "Content-Type": "application/json",
+        ...(init.extraHeaders || {}),
+      },
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
     }),
     timeoutMs,
@@ -338,6 +349,73 @@ export async function refund(
       refund_note: `refund for ${paymentId}`,
     },
   })
+}
+
+export interface CashfreeSessionResponse {
+  payment_method?: string
+  channel?: string
+  action?: string
+  cf_payment_id?: string
+  payment_amount?: number
+  data?: { url?: string; content_type?: string; method?: string }
+}
+
+/**
+ * Ask Cashfree for a hosted UPI page and return its URL.
+ *
+ * Create Order only yields a `payment_session_id`; on current API versions
+ * that session is not itself a link, so an order created on its own leaves the
+ * customer with nothing to open. Order Pay with `upi.channel: "link"` turns the
+ * session into a hosted checkout the customer can pay by UPI (intent/collect
+ * handled by Cashfree) and answers with `action: "link"` plus `data.url`.
+ *
+ * `link` is the channel that suits an unknown VPA. `collect` would need the
+ * customer to already have typed their UPI id into our form, which is the
+ * manual flow this replaces.
+ *
+ * Returns undefined instead of throwing when no link is produced: the session
+ * id remains a valid handle for a client-side checkout, so the order itself is
+ * still usable and only the convenience link is missing.
+ */
+export async function createHostedUpiCheckout(
+  paymentSessionId: string,
+  orderId: string
+): Promise<string | undefined> {
+  if (!paymentSessionId) return undefined
+
+  let session: CashfreeSessionResponse
+  try {
+    session = await cashfreeFetch<CashfreeSessionResponse>(
+      "/orders/sessions",
+      {
+        method: "POST",
+        body: {
+          payment_session_id: paymentSessionId,
+          payment_method: { upi: { channel: "link" } },
+        },
+        // Keyed by order id so a retried create-order cannot open a second
+        // payment attempt against the same order.
+        extraHeaders: { "x-idempotency-key": `${orderId}` },
+      },
+      12000,
+      false
+    )
+  } catch (err) {
+    console.warn(
+      `[CASHFREE] Hosted UPI link unavailable for order ${orderId}:`,
+      err instanceof Error ? err.message : err
+    )
+    return undefined
+  }
+
+  const url = session?.data?.url
+  if (session?.action === "link" && url) return url
+
+  console.warn(
+    `[CASHFREE] Order Pay for ${orderId} returned action=${session?.action} ` +
+      `with no usable link; falling back to session checkout.`
+  )
+  return undefined
 }
 
 /** Terminal-success states reported by Cashfree. */

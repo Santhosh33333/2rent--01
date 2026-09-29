@@ -38,6 +38,7 @@ import {
   isValidWebhookSignature,
   isSuccessfulStatus,
   createOrder,
+  createHostedUpiCheckout,
   fetchPayments,
 } from "../services/cashfreeService";
 import {
@@ -301,6 +302,91 @@ describe("authoritative status check", () => {
 
       const [url] = fetchMock.mock.calls[0] as [string];
       expect(url).toBe("https://api.cashfree.com/pg/orders");
+    });
+  });
+
+  describe("hosted UPI checkout link", () => {
+    // Create Order returns a payment_session_id, not a link. Every client that
+    // redirects the customer to a hosted page therefore had nothing to open,
+    // and because the order itself succeeded the failure was invisible.
+    it("turns a session into a hosted UPI link and returns it", async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            payment_method: "upi",
+            channel: "link",
+            action: "link",
+            data: { url: "https://api.cashfree.com/pg/view/gateway/abc" },
+          }),
+      });
+
+      const link = await createHostedUpiCheckout("sess_1", "o1");
+
+      expect(link).toBe("https://api.cashfree.com/pg/view/gateway/abc");
+      const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe("https://api.cashfree.com/pg/orders/sessions");
+      const body = JSON.parse(String(init.body));
+      // `link` needs no VPA; `collect` would have re-imposed manual entry.
+      expect(body.payment_method.upi.channel).toBe("link");
+      expect(body.payment_session_id).toBe("sess_1");
+    });
+
+    it("does not leak merchant credentials to an endpoint that needs none", async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ action: "link", data: { url: "https://x/y" } }),
+      });
+
+      await createHostedUpiCheckout("sess_1", "o1");
+
+      const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      const headers = init.headers as Record<string, string>;
+      expect(headers["x-client-id"]).toBeUndefined();
+      expect(headers["x-client-secret"]).toBeUndefined();
+      expect(headers["x-api-version"]).toBe("2025-01-01");
+    });
+
+    it("keys the session call by order id so a retry cannot open a second attempt", async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ action: "link", data: { url: "https://x/y" } }),
+      });
+
+      await createHostedUpiCheckout("sess_1", "o1");
+
+      const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect((init.headers as Record<string, string>)["x-idempotency-key"]).toBe("o1");
+    });
+
+    it("degrades to no link instead of failing an order that already exists", async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        statusText: "Forbidden",
+        text: async () => JSON.stringify({ message: "S2S flag not enabled" }),
+      });
+
+      // The order is real and the session still works, so failing here would
+      // throw away a good order and leave it dangling.
+      await expect(createHostedUpiCheckout("sess_1", "o1")).resolves.toBeUndefined();
+    });
+
+    it("returns undefined when Cashfree answers without a link", async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ action: "collect", data: { url: "" } }),
+      });
+      await expect(createHostedUpiCheckout("sess_1", "o1")).resolves.toBeUndefined();
+    });
+
+    it("skips the call entirely when there is no session", async () => {
+      await expect(createHostedUpiCheckout("", "o1")).resolves.toBeUndefined();
+      expect(fetchMock).not.toHaveBeenCalled();
     });
   });
 

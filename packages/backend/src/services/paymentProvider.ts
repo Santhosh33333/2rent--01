@@ -119,12 +119,21 @@ export async function createGatewayOrder(input: CreateOrderInput): Promise<Creat
       returnUrl: input.returnUrl,
     });
 
+    // Create Order hands back a session, not a link. Without this the order
+    // exists but the customer has nothing to open, so every client that
+    // redirects to a hosted page (web and the mobile browser) is dead on
+    // arrival. Best-effort: a missing link still leaves a usable session.
+    const hostedLink = await cashfreeService.createHostedUpiCheckout(
+      order.payment_session_id || "",
+      order.order_id
+    );
+
     return {
       provider: "cashfree",
       gatewayOrderId: order.order_id,
       amountRupees: order.order_amount,
       currency: order.order_currency,
-      paymentUrl: order.payment_url || order.payment_links?.web || undefined,
+      paymentUrl: hostedLink || order.payment_url || order.payment_links?.web || undefined,
       sessionId: order.payment_session_id || undefined,
     };
 }
