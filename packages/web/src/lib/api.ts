@@ -337,6 +337,37 @@ export const walletApi = {
   cancelWithdrawal: (id: string) => api.delete(`/wallet/withdraw/${id}`),
 }
 
+export interface CreatedPaymentOrder {
+  provider: string
+  orderId: string
+  amount: number
+  currency: string
+  /**
+   * A hosted link when the server could build one. Current Cashfree API
+   * versions answer Create Order with a session rather than a link, so
+   * `paymentSessionId` is the handle the checkout SDK needs and is the field
+   * the top-up page actually depends on.
+   */
+  paymentUrl?: string
+  paymentSessionId?: string
+}
+
+export const paymentsApi = {
+  /**
+   * Create a Cashfree order. The response carries no way to pay by itself: the
+   * caller must open checkout with `paymentSessionId` (or follow
+   * `paymentUrl` when the server managed to build one).
+   */
+  createOrder: (amount: number) =>
+    api.post('/payments/create-order', { amount }, { timeout: 90000 }),
+  /**
+   * Ask the server to settle an order. This reads the authoritative state from
+   * Cashfree; the browser's return from checkout is never treated as proof.
+   */
+  verify: (orderId: string) =>
+    api.post('/payments/verify', { orderId }, { timeout: 60000 }),
+}
+
 export type SupportTicketStatus = 'OPEN' | 'IN_PROGRESS' | 'WAITING_ON_USER' | 'RESOLVED' | 'CLOSED'
 export type SupportPriority = 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT'
 export const SUPPORT_CATEGORIES = [
