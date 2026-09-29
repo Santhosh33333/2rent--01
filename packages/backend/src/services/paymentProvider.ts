@@ -119,13 +119,14 @@ export async function createGatewayOrder(input: CreateOrderInput): Promise<Creat
       returnUrl: input.returnUrl,
     });
 
-  return {
-    provider: "cashfree",
-    gatewayOrderId: order.order_id,
-    amountRupees: order.order_amount,
-    currency: order.order_currency,
-    paymentUrl: order.payment_url,
-  };
+    return {
+      provider: "cashfree",
+      gatewayOrderId: order.order_id,
+      amountRupees: order.order_amount,
+      currency: order.order_currency,
+      paymentUrl: order.payment_url || order.payment_links?.web || undefined,
+      sessionId: order.payment_session_id || undefined,
+    };
 }
 
 // ============================================================================

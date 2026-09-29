@@ -47,7 +47,21 @@ export interface CashfreeOrderResponse {
   order_status: string
   order_amount: number
   order_currency: string
+  /**
+   * Cashfree does not return one single checkout field across API versions.
+   * Older versions answer with `payment_url`; from 2023-08-01 the supported
+   * checkout link is `payment_links.web`, and current versions also return a
+   * `payment_session_id` for the hosted SDK. Reading only `payment_url` (as
+   * this did) produced orders that succeeded server-side and then handed the
+   * client no way to pay, which is indistinguishable from the order having
+   * failed at all.
+   */
   payment_url?: string
+  payment_links?: { web?: string; android?: string; ios?: string }
+  payment_session_id?: string
+  order_token?: string
+  cf_order_id?: string
+  order_expiry_time?: string
 }
 
 export interface CashfreePayment {

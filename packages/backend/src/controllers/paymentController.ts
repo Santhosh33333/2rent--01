@@ -126,18 +126,40 @@ export async function createOrder(req: AuthedRequest, res: Response): Promise<vo
       },
     })
 
-    sendSuccess(
-      res,
-      {
-        provider: order.provider,
-        orderId: order.gatewayOrderId,
-        amount: order.amountRupees,
-        currency: order.currency,
-        // Cashfree hosts checkout and hands back a URL for the browser to open.
-        ...(order.paymentUrl ? { paymentUrl: order.paymentUrl } : {}),
-      },
-      "Order created."
-    )
+      // An order that cannot be paid is not a usable order. Returning 201 with
+      // no checkout target left the client with a dead end that looked like
+      // success, so an order with neither a checkout URL nor a session is
+      // refused here rather than handed back.
+      if (!order.paymentUrl && !order.sessionId) {
+        console.error(
+          `Cashfree order ${order.gatewayOrderId} was created with no checkout target ` +
+            "(no payment_url, payment_links.web, or payment_session_id)."
+        );
+        sendError(
+          res,
+          "The payment provider accepted the order but returned no way to pay it. " +
+            "No money was taken; please try again.",
+          502,
+          "GATEWAY_NO_CHECKOUT_TARGET"
+        );
+        return
+      }
+
+      sendSuccess(
+        res,
+        {
+          provider: order.provider,
+          orderId: order.gatewayOrderId,
+          amount: order.amountRupees,
+          currency: order.currency,
+          // Cashfree hosts checkout and hands back a URL for the browser to open.
+          ...(order.paymentUrl ? { paymentUrl: order.paymentUrl } : {}),
+          // Current API versions hand back a session for the hosted checkout
+          // SDK instead of a redirect URL.
+          ...(order.sessionId ? { paymentSessionId: order.sessionId } : {}),
+        },
+        "Order created."
+      )
     } catch (err: any) {
       console.error("Payment order creation failed:", err)
       // Every failure collapsed into one opaque 500, so neither the customer
