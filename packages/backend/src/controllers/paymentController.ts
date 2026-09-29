@@ -680,7 +680,12 @@ async function settleCashfreeOrder(input: {
     const claimed = await tx.paymentOrder.updateMany({
       where: {
         cashfreeOrderId: input.gatewayOrderId,
-        status: { in: ["CREATED", "AUTHORIZED"] },
+        // FAILED is claimable on purpose. Cashfree can report a failure for one
+        // attempt and then a success for a later attempt on the same order, and
+        // the money really is ours in that case. Refusing a success because an
+        // earlier attempt failed would take a genuine payment and drop it.
+        // COMPLETED is excluded, which is what actually prevents a double credit.
+        status: { in: ["CREATED", "AUTHORIZED", "FAILED"] },
       },
       data: {
         status: "COMPLETED",
