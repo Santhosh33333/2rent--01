@@ -260,24 +260,30 @@ if (env.isProduction) {
   const placeholders = ["", "placeholder", "changeme", "dev", "test"];
   const isPlaceholder = (v: string | undefined) => !v || placeholders.includes(v.trim().toLowerCase());
 
-  // Razorpay webhook signature verification is only as strong as this secret.
-  // A placeholder here lets anyone forge payment callbacks.
-  if (isPlaceholder(env.RAZORPAY_WEBHOOK_SECRET) || env.RAZORPAY_WEBHOOK_SECRET === "webhook_secret_placeholder") {
-    throw new Error(
-      "RAZORPAY_WEBHOOK_SECRET is required in production and must be the real webhook secret (not the placeholder).",
-    );
-  }
+  // Razorpay credentials are only required when Razorpay is the selected
+  // provider. These checks used to run unconditionally, so a Cashfree-only
+  // deployment could not boot without holding Razorpay secrets it never uses,
+  // and every deploy failed on a gateway that was not even active.
+  if (env.PAYMENT_PROVIDER === "razorpay") {
+    // Razorpay webhook signature verification is only as strong as this secret.
+    // A placeholder here lets anyone forge payment callbacks.
+    if (isPlaceholder(env.RAZORPAY_WEBHOOK_SECRET) || env.RAZORPAY_WEBHOOK_SECRET === "webhook_secret_placeholder") {
+      throw new Error(
+        "RAZORPAY_WEBHOOK_SECRET is required in production and must be the real webhook secret (not the placeholder).",
+      );
+    }
 
-  // Razorpay API keys — payments will silently fail with placeholder keys.
-  if (isPlaceholder(env.RAZORPAY_KEY_ID) || env.RAZORPAY_KEY_ID?.includes("placeholder")) {
-    throw new Error(
-      "RAZORPAY_KEY_ID is required in production and must be the real key (not the placeholder).",
-    );
-  }
-  if (isPlaceholder(env.RAZORPAY_KEY_SECRET) || env.RAZORPAY_KEY_SECRET?.includes("placeholder")) {
-    throw new Error(
-      "RAZORPAY_KEY_SECRET is required in production and must be the real secret (not the placeholder).",
-    );
+    // Razorpay API keys - payments will silently fail with placeholder keys.
+    if (isPlaceholder(env.RAZORPAY_KEY_ID) || env.RAZORPAY_KEY_ID?.includes("placeholder")) {
+      throw new Error(
+        "RAZORPAY_KEY_ID is required in production and must be the real key (not the placeholder).",
+      );
+    }
+    if (isPlaceholder(env.RAZORPAY_KEY_SECRET) || env.RAZORPAY_KEY_SECRET?.includes("placeholder")) {
+      throw new Error(
+        "RAZORPAY_KEY_SECRET is required in production and must be the real secret key (not the placeholder).",
+      );
+    }
   }
 
   // The Cashfree secret key is also what authenticates inbound webhooks, so
