@@ -311,7 +311,7 @@ if (env.isProduction) {
       // on the first order, long after deploy.
       const expectsSandbox = env.CASHFREE_API_ENV === "test";
       const looksLikeTestKey = /^(test|sandbox)/i.test(env.CASHFREE_APP_ID || "");
-      if (expectsSandbox === looksLikeTestKey) {
+      if (expectsSandbox !== looksLikeTestKey) {
         throw new Error(
           `CASHFREE_API_ENV is "${env.CASHFREE_API_ENV}" but CASHFREE_APP_ID looks like a ` +
             `${looksLikeTestKey ? "test" : "production"} key. Cashfree rejects credentials on the ` +
