@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 import { parseAllowedOrigins, isOriginAllowed } from '../config/corsOrigins';
 
 /**
@@ -12,9 +12,9 @@ import { parseAllowedOrigins, isOriginAllowed } from '../config/corsOrigins';
  * malformed or stale origin list fails a test instead of production.
  */
 function blueprintValue(key: string): string | undefined {
-  // render.yaml lives at the repo root, four levels above this test file
-  // (src/__tests__ -> src -> backend -> packages -> root).
-  const yaml = readFileSync(fileURLToPath(new URL('../../../../render.yaml', import.meta.url)), 'utf8');
+  // render.yaml is at the repo root. Resolved from the package root rather than
+  // via import.meta, which this package's CommonJS build rejects.
+  const yaml = readFileSync(resolve(process.cwd(), '..', '..', 'render.yaml'), 'utf8');
   const lines = yaml.split('\n');
   const at = lines.findIndex((l) => l.trim() === `- key: ${key}`);
   if (at === -1) return undefined;

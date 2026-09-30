@@ -36,6 +36,19 @@ describe("parseAllowedOrigins", () => {
 describe("isOriginAllowed", () => {
   const allowed = ["https://yuvers.in", "https://www.yuvers.in"];
 
+  it("allows the project domains even when the env list is empty", () => {
+    // The outage this prevents: CORS_ORIGIN lived only in the Render dashboard
+    // and went stale, so an empty or wrong list must not lock out the real site.
+    expect(isOriginAllowed("https://yuvers.in", [])).toBe(true);
+    expect(isOriginAllowed("https://www.yuvers.in", [])).toBe(true);
+  });
+
+  it("does not let a lookalike inherit the project domain allowance", () => {
+    expect(isOriginAllowed("https://typo-yuvers.in", [])).toBe(false);
+    expect(isOriginAllowed("https://yuvers.in.evil.com", [])).toBe(false);
+    expect(isOriginAllowed("http://yuvers.in", [])).toBe(false);
+  });
+
   it("allows an explicitly configured custom domain", () => {
     expect(isOriginAllowed("https://yuvers.in", allowed)).toBe(true);
   });

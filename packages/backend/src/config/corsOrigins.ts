@@ -14,6 +14,26 @@
  *   - *.vercel.app, because Vercel mints a fresh web-<hash> subdomain per push
  */
 
+/**
+ * The project's own production web origins, allowed unconditionally.
+ *
+ * These are not secrets. Hardcoding them removes a failure mode that cost a
+ * real outage: CORS_ORIGIN had to be typed into the Render dashboard, and when
+ * the site moved to a custom domain the old value kept being served, so every
+ * request from the real domain was refused with 403 and the browser reported it
+ * only as "Network Error". Declaring the domains next to the code that has to
+ * honour them means a domain change is a reviewed commit.
+ *
+ * CORS_ORIGIN still works and is still additive, for any additional origin such
+ * as a staging host. It is no longer load-bearing for the main domains.
+ *
+ * Apex and www are both listed because they are separate origins to a browser.
+ */
+export const PROJECT_WEB_ORIGINS: readonly string[] = [
+  "https://yuvers.in",
+  "https://www.yuvers.in",
+];
+
 /** Dev server and the Capacitor Android WebView. */
 export function isLoopbackOrigin(origin: string): boolean {
   try {
@@ -42,6 +62,7 @@ export function isVercelOrigin(origin: string): boolean {
  */
 export function isOriginAllowed(origin: string | undefined, allowedOrigins: string[]): boolean {
   if (!origin) return true;
+  if (PROJECT_WEB_ORIGINS.includes(origin)) return true;
   return allowedOrigins.includes(origin) || isLoopbackOrigin(origin) || isVercelOrigin(origin);
 }
 
