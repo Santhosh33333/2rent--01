@@ -9,6 +9,7 @@ import * as adminController from "../controllers/adminController";
 import * as communityController from "../controllers/communityController";
 import * as eventController from "../controllers/eventController";
 import * as otpController from "../controllers/otpController";
+import * as kycTrialController from "../controllers/kycTrialController";
 
 const router = Router();
 
@@ -104,6 +105,13 @@ router.delete("/communities/:id", requireSuperAdmin, communityController.adminDe
 router.get("/kyc-queue", kycReview, adminController.getKycQueue);
 router.post("/kyc/:id/approve", requireSectionAction("KYC", "APPROVE"), adminController.approveKyc);
 router.post("/kyc/:id/reject", requireSectionAction("KYC", "REJECT"), [body("reason").optional().isString()], sanitizeInput, validateRequest, adminController.rejectKyc);
+// Bounded KYC trial: lets an admin admit one named user without completed KYC
+// for a limited window. Gated on KYC MANAGE rather than SUPER_ADMIN because KYC
+// staff are the people who know which applicants are legitimate testers, but
+// still audited per grant since it deliberately relaxes an identity gate.
+router.get("/kyc-trials", requireSectionAction("KYC", "APPROVE"), kycTrialController.listTrialCandidates);
+router.post("/kyc-trials/:id/grant", requireSectionAction("KYC", "APPROVE"), [body("days").optional().isInt({ min: 1, max: 30 })], sanitizeInput, validateRequest, kycTrialController.grantKycTrial);
+router.post("/kyc-trials/:id/revoke", requireSectionAction("KYC", "APPROVE"), kycTrialController.revokeKycTrial);
 router.get("/walking-partners", partnersManage, adminController.getWalkingPartners);
 router.post("/walking-partners/:id/approve", requireSectionAction("PARTNERS", "APPROVE"), adminController.approveWalkingPartner);
 router.post("/walking-partners/:id/reject", requireSectionAction("PARTNERS", "REJECT"), [body("reason").optional().isString()], sanitizeInput, validateRequest, adminController.rejectWalkingPartner);

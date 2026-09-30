@@ -118,6 +118,12 @@ model User {
 model Verification {
   id                       String    @id @default(uuid())
   userId                   String    @unique
+  // Admin-granted trial: the user may use the app without completing KYC until
+  // this instant, then the normal KYC gate applies again. Null (the default)
+  // means no trial, so the gate behaves exactly as it did before this existed.
+  // Stored on Verification rather than User because it is a property of the
+  // KYC record, and requireKycVerified already reads that row.
+  trialEndsAt              DateTime?
   personalDetails          Json?
   selfieUrl                String?
   govIdUrl                 String?

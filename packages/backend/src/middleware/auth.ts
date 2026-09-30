@@ -4,6 +4,7 @@ import { prisma } from "../config/database";
 import { sendError } from "../utils/response";
 import { AuthedRequest, AuthenticatedUser, UserRole } from "./authTypes";
 import { resolveActiveRole, isAdminTierRole } from "../rbac/activeRole";
+import { evaluateKycGate } from "../services/kycTrialService";
 import { guardRole } from "../rbac/permissions";
 
 const ADMIN_TIER_ROLES = ["SUPER_ADMIN", "ADMIN", "MODERATOR", "SUPPORT", "FINANCE", "SUPPORT_ADMIN", "FINANCE_ADMIN", "KYC_ADMIN", "MARKETING_ADMIN", "PARTNER_ADMIN"];
@@ -200,7 +201,7 @@ export async function requireKycVerified(req: AuthedRequest, res: Response, next
     }
     const verification = await prisma.verification.findUnique({
       where: { userId: req.user.userId },
-      select: { status: true },
+      select: { status: true, trialEndsAt: true },
     });
     // Admin KYC approval sets status=VERIFIED (see adminController.reviewKyc).
     // APPROVED is also honoured: userController.isVerified, dispatchService and
@@ -209,7 +210,22 @@ export async function requireKycVerified(req: AuthedRequest, res: Response, next
     // approved. Both are terminal admin-approved states; anything else
     // (NOT_STARTED, DRAFT, SUBMITTED, PENDING_REVIEW, UNDER_VERIFICATION,
     // REJECTED, RESUBMIT_REQUIRED) stays locked.
-    if (!verification || !["VERIFIED", "APPROVED"].includes(verification.status)) {
+    //
+    // A Verification row may also carry an admin-granted trial window, which
+    // admits the user until it expires. Kept here rather than in the client so
+    // the gate cannot be bypassed by editing local state, and bounded at
+    // MAX_TRIAL_DAYS so it cannot become a permanent hole in KYC.
+    const decision = evaluateKycGate(verification);
+    if (!decision.allowed) {
+      if (decision.reason === "trial_expired") {
+        sendError(
+          res,
+          "Your trial access has ended. Complete KYC verification to keep using app features.",
+          403,
+          "KYC_TRIAL_EXPIRED"
+        );
+        return;
+      }
       sendError(
         res,
         !verification
