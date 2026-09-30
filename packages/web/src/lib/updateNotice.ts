@@ -1,10 +1,14 @@
 /**
- * "The app was updated" notice.
+ * "The app was updated" notice. Native (APK) builds only.
  *
  * Requirement: tell a user their app was updated, then never bring it up again
  * for that same version. The "never again" part is the whole difficulty - a
  * notice that reappears on every page load becomes something users learn to
  * dismiss without reading, which is worse than not showing it.
+ *
+ * This module is pure storage logic and deliberately knows nothing about
+ * platforms; the caller decides whether to show anything at all. The website
+ * must not show it - only the installed app does.
  *
  * Pure functions over an injected last-seen value rather than reading
  * localStorage directly, so the decision table can be asserted. Storage is

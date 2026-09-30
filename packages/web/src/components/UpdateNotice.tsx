@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Sparkles, X } from 'lucide-react'
+import { Capacitor } from '@capacitor/core'
 import {
   shouldShowUpdateNotice,
   markBuildSeen,
@@ -8,17 +9,21 @@ import {
 } from '../lib/updateNotice'
 
 /**
- * One-time "the app was updated" notice.
+ * One-time "the app was updated" notice. Native builds only.
  *
- * Shows once per deployed build, then never again for that build. Dismissal is
- * recorded immediately rather than on click, so the notice cannot reappear
- * because the user navigated away or the component remounted - which is the
- * failure mode that makes people learn to ignore these.
+ * Deliberately not shown on the website: there, the browser already reloads new
+ * assets on the next navigation and the user did not ask to be told, so the
+ * notice was noise. In the installed APK the old bundle persists until the user
+ * updates from the store, so they need to be told when a newer build exists.
+ *
+ * Shows once per deployed build, then never again for that build. Recorded when
+ * shown rather than when dismissed, so a stray navigation cannot bring it back.
  */
 export function UpdateNotice() {
   const [visible, setVisible] = useState(false)
 
   useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return
     if (shouldShowUpdateNotice(readLastSeenBuild())) {
       setVisible(true)
       // Record as seen on show, not on dismiss: the user has been told, and a
@@ -40,7 +45,7 @@ export function UpdateNotice() {
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold">App updated</p>
           <p className="text-xs opacity-90">
-            You&apos;re on the latest version. Reload to get any fixes.
+            You&apos;re using the latest version. All new features are ready.
           </p>
           <p className="mt-1 text-[10px] opacity-70">
             build {runningBuildId()}
