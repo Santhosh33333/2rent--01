@@ -43,13 +43,31 @@ services:
         generateValue: true
       - key: PORT
         value: 5000
-      # Public web origin. Doubles as the post-payment return origin, so it must
-      # be the real deployed web origin. A loopback value makes live payment
-      # order creation refuse rather than redirect a payer to localhost after
-      # they pay. Set this in the dashboard; sync: false so Render does not
-      # overwrite a hand-set value.
+      # Allowed web origins for the API. This is a *committed* value rather than
+      # sync: false, which is what the custom-domain outage was: with sync:
+      # false Render never applies anything from this file, so the only value
+      # was whatever had been typed into the dashboard by hand. When the site
+      # moved to yuvers.in the dashboard still held the old vercel.app URL, every
+      # request from the real domain was rejected with 403, and the browser
+      # reported it only as "Network Error" because the CORS failure strips the
+      # response body.
+      #
+      # Syncing it means a new domain is a one-line change here plus a push,
+      # instead of an outage that can only be fixed by someone with dashboard
+      # access. The trade-off, accepted deliberately: adding an origin in the
+      # dashboard will be reverted by the next deploy. Origins are not secrets,
+      # so committing them is fine; anything sensitive in this file would not be.
+      #
+      # Both the apex and www are listed deliberately - they are separate
+      # origins to a browser, so allowing one does not allow the other.
       - key: CORS_ORIGIN
-        sync: false
+        value: "https://yuvers.in,https://www.yuvers.in,https://2rent-01.vercel.app"
+      # The canonical public web origin. Used for the post-payment return, so it
+      # must be the origin a payer should land on. A loopback or missing value
+      # makes live payment order creation refuse instead of redirecting someone
+      # to localhost after they have paid.
+      - key: PUBLIC_WEB_ORIGIN
+        value: "https://yuvers.in"
       # Shared cache + cross-instance state. Set this in the dashboard.
       # sync: false keeps Render from overwriting a value you set by hand.
       #
