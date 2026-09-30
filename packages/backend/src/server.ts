@@ -2,6 +2,7 @@ import "dotenv/config";
 import { createApp } from "./app";
 import { env } from "./config/env";
 import { prisma, testConnection, disconnect, databaseHost } from "./config/database";
+import { ensurePrimarySuperAdminActive } from "./rbac/primarySuperAdmin";
 import { initializeFirebase } from "./services/notificationService";
 import { sendPushNotification } from "./services/notificationService";
 import { initializeFirebaseAuth } from "./services/firebaseAuthService";
@@ -123,10 +124,21 @@ if (!dbAvailable) {
        WHERE migration_name = '20260906_uploaded_files'
          AND finished_at IS NULL`
     );
-    console.log("Schema reconciliation: UploadedFile ensured.");
-  } catch (err) {
-    console.warn("Schema reconciliation warning:", (err as Error)?.message);
-  }
+      console.log("Schema reconciliation: UploadedFile ensured.");
+    } catch (err) {
+      console.warn("Schema reconciliation warning:", (err as Error)?.message);
+    }
+
+    // The break-glass super admin exists so an admin-gated production database
+    // is always reachable. It was found SUSPENDED in production, which made
+    // every login return 403 "Account is not active." -- and since lifting a
+    // suspension requires an authenticated admin, the account could not rescue
+    // itself. Repaired at boot so it can never stay locked out.
+    try {
+      await ensurePrimarySuperAdminActive();
+    } catch (err) {
+      console.warn("Primary super admin repair warning:", (err as Error)?.message);
+    }
 
   // Runtime reconciliation for the event discovery rebuild (migration
   // 20260921_event_cover_category). Same pattern as above: Render builds do
@@ -356,7 +368,7 @@ if (!dbAvailable) {
 
   // Realtime + push fan-out for EVERY in-app notification row (spec: OTP and
   // arrival alerts must reach the user live, not sit silently in the DB).
-  // Installed once on the shared singleton — covers all creators, so no
+  // Installed once on the shared singleton â€” covers all creators, so no
   // call site can forget to emit. Never throws into the write path.
   prisma.$use(async (params, next) => {
     const result = await next(params);

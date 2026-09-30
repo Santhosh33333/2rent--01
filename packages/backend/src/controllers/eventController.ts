@@ -1,6 +1,7 @@
 import { Response } from "express";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../config/database";
+import { NOT_PRIVILEGED } from "../rbac/privilegedUsers";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
 import {
@@ -13,7 +14,7 @@ class EventFullError extends Error {}
 
 // Fallback category list, used ONLY when the EventCategory table is empty
 // (fresh DB / migration not yet applied) so the filter bar is never blank.
-// It mirrors the seeded migration exactly — including Astrology — because a
+// It mirrors the seeded migration exactly â€” including Astrology â€” because a
 // fallback that quietly omits a category would make that category
 // unfilterable and uncreatable on an un-migrated database.
 export const EVENT_CATEGORIES = [
@@ -128,52 +129,52 @@ const DEFAULT_CATEGORY_LABELS: Record<string, string> = {
 };
 
 const DEFAULT_CATEGORY_ICONS: Record<string, string> = {
-  walking: "🚶",
-  running: "🏃",
-  cycling: "🚴",
-  football: "⚽",
-  cricket: "🏏",
-  badminton: "🏸",
-  tennis: "🎾",
-  basketball: "🏀",
-  volleyball: "🏐",
-  "gym-fitness": "🏋️",
-  yoga: "🧘",
-  travel: "✈️",
-  movies: "🎬",
-  music: "🎵",
-  concerts: "🎤",
-  photography: "📷",
-  gaming: "🎮",
-  esports: "🕹️",
-  chess: "♟️",
-  food: "🍽️",
-  coffee: "☕",
-  cooking: "🍳",
-  shopping: "🛍️",
-  technology: "💻",
-  coding: "👨‍💻",
-  business: "📈",
-  startups: "🚀",
-  study: "📚",
-  books: "📖",
-  education: "🎓",
-  art: "🎨",
-  dance: "💃",
-  nature: "🌿",
-  beach: "🏖️",
-  hiking: "🥾",
-  volunteering: "🤝",
-  pets: "🐾",
-  cars: "🚗",
-  bikes: "🏍️",
-  fashion: "👗",
-  networking: "🤝",
-  "local-events": "📍",
-  community: "🏘️",
-  workshops: "🛠️",
-  astrology: "🔮",
-  other: "📦",
+  walking: "ðŸš¶",
+  running: "ðŸƒ",
+  cycling: "ðŸš´",
+  football: "âš½",
+  cricket: "ðŸ",
+  badminton: "ðŸ¸",
+  tennis: "ðŸŽ¾",
+  basketball: "ðŸ€",
+  volleyball: "ðŸ",
+  "gym-fitness": "ðŸ‹ï¸",
+  yoga: "ðŸ§˜",
+  travel: "âœˆï¸",
+  movies: "ðŸŽ¬",
+  music: "ðŸŽµ",
+  concerts: "ðŸŽ¤",
+  photography: "ðŸ“·",
+  gaming: "ðŸŽ®",
+  esports: "ðŸ•¹ï¸",
+  chess: "â™Ÿï¸",
+  food: "ðŸ½ï¸",
+  coffee: "â˜•",
+  cooking: "ðŸ³",
+  shopping: "ðŸ›ï¸",
+  technology: "ðŸ’»",
+  coding: "ðŸ‘¨â€ðŸ’»",
+  business: "ðŸ“ˆ",
+  startups: "ðŸš€",
+  study: "ðŸ“š",
+  books: "ðŸ“–",
+  education: "ðŸŽ“",
+  art: "ðŸŽ¨",
+  dance: "ðŸ’ƒ",
+  nature: "ðŸŒ¿",
+  beach: "ðŸ–ï¸",
+  hiking: "ðŸ¥¾",
+  volunteering: "ðŸ¤",
+  pets: "ðŸ¾",
+  cars: "ðŸš—",
+  bikes: "ðŸï¸",
+  fashion: "ðŸ‘—",
+  networking: "ðŸ¤",
+  "local-events": "ðŸ“",
+  community: "ðŸ˜ï¸",
+  workshops: "ðŸ› ï¸",
+  astrology: "ðŸ”®",
+  other: "ðŸ“¦",
 };
 
 async function getDisabledCategories(): Promise<Set<string>> {
@@ -221,13 +222,13 @@ export async function loadEventCategories(): Promise<EventCategoryRow[]> {
       }));
     }
   } catch {
-    // Table missing (migration not applied yet) — fall through to defaults.
+    // Table missing (migration not applied yet) â€” fall through to defaults.
   }
   return EVENT_CATEGORIES.map((key, i) => ({
     key,
     label: DEFAULT_CATEGORY_LABELS[key] || key.charAt(0).toUpperCase() + key.slice(1),
     description: null,
-    icon: DEFAULT_CATEGORY_ICONS[key] || "📅",
+    icon: DEFAULT_CATEGORY_ICONS[key] || "ðŸ“…",
     coverImageUrl: null,
     sortOrder: (i + 1) * 10,
     enabled: true,
@@ -243,7 +244,7 @@ export async function getEventCategories(req: AuthedRequest, res: Response): Pro
       key: "all",
       label: "All Events",
       description: "Every live and upcoming event",
-      icon: "🌐",
+      icon: "ðŸŒ",
       coverImageUrl: null,
       sortOrder: 0,
       enabled: true,
@@ -361,7 +362,7 @@ const TIME_WINDOWS: Record<string, [number, number]> = {
  *
  * The local-time constructor resolves against the *server's* zone, so the same
  * filter produced 17:00 local == 11:30Z on this box and would shift again on a
- * host in another region — the filter would silently mean different hours in
+ * host in another region â€” the filter would silently mean different hours in
  * different deployments. Hours are therefore evaluated in UTC.
  *
  * Known limitation: this buckets by UTC hour, not by each event's own
@@ -573,7 +574,7 @@ export function eventOrderBy(sort: string, lat?: number, lon?: number): Prisma.E
 
 export async function createEvent(req: AuthedRequest, res: Response): Promise<void> {
   try {
-    const { title, description, communityId, location, startTime, endTime, capacity, coverImageUrl, category, subcategory, privacy, price, latitude, longitude, onlineUrl, isOnline, currency, timezone, womenOnly } = req.body;
+      const { title, description, communityId, location, startTime, endTime, capacity, coverImageUrl, category, subcategory, privacy, price, latitude, longitude, onlineUrl, isOnline, currency, timezone, womenOnly, theatreName, bookingUrl, isMovie, coordinatorName, coordinatorPhone } = req.body;
 
     if (!title || !startTime) {
       sendError(res, "Title and startTime are required.", 400, "VALIDATION_ERROR");
@@ -592,8 +593,68 @@ export async function createEvent(req: AuthedRequest, res: Response): Promise<vo
       sendError(res, "Price must be a non-negative number.", 400, "VALIDATION_ERROR");
       return;
     }
-    const subcategoryValue =
-      subcategory === undefined || subcategory === null ? undefined : String(subcategory).toLowerCase().trim().slice(0, 32) || null;
+      const subcategoryValue =
+        subcategory === undefined || subcategory === null ? undefined : String(subcategory).toLowerCase().trim().slice(0, 32) || null;
+
+      // --- Movie outings -------------------------------------------------
+      // The movie name is `title` and the showtime is `startTime`; only the
+      // venue and an optional external checkout need their own columns.
+      const isMovieFlag = isMovie === true || isMovie === "true";
+      const theatreValue =
+        theatreName === undefined || theatreName === null || theatreName === ""
+          ? null
+          : String(theatreName).trim().slice(0, 160) || null;
+
+      // bookingUrl is rendered as an outbound link, so a `javascript:` or
+      // `data:` payload here would be stored XSS. Only real http(s) survives.
+      let bookingValue: string | null = null;
+      if (bookingUrl !== undefined && bookingUrl !== null && String(bookingUrl).trim() !== "") {
+        const raw = String(bookingUrl).trim();
+        if (raw.length > 1000) {
+          sendError(res, "bookingUrl is too long.", 400, "VALIDATION_ERROR");
+          return;
+        }
+        let parsed: URL | null = null;
+        try {
+          parsed = new URL(raw);
+        } catch {
+          parsed = null;
+        }
+        if (!parsed || (parsed.protocol !== "http:" && parsed.protocol !== "https:")) {
+          sendError(res, "bookingUrl must be a full http(s) URL.", 400, "VALIDATION_ERROR");
+          return;
+        }
+        bookingValue = parsed.toString();
+      }
+
+      // A movie event with a cinema but no address is unusable, and one with an
+      // address but no cinema is just an event. Require the pair.
+      if (isMovieFlag && !theatreValue && !location) {
+        sendError(res, "A movie event needs the theatre name and where to meet.", 400, "VALIDATION_ERROR");
+        return;
+      }
+
+      // The coordinator is the one person added to the event who does NOT buy a
+      // seat - they confirm the group's booking. Name + phone only, never tied
+      // to an account, so the person can be anyone the organizer trusts.
+      const coordinatorNameValue =
+        coordinatorName === undefined || coordinatorName === null || String(coordinatorName).trim() === ""
+          ? null
+          : String(coordinatorName).trim().slice(0, 100) || null;
+      const coordinatorPhoneRaw =
+        coordinatorPhone === undefined || coordinatorPhone === null || String(coordinatorPhone).trim() === ""
+          ? ""
+          : String(coordinatorPhone).trim().slice(0, 20);
+      if (coordinatorPhoneRaw && !/^\+?[0-9\s\-()]{6,20}$/.test(coordinatorPhoneRaw)) {
+        sendError(res, "Coordinator phone does not look like a phone number.", 400, "VALIDATION_ERROR");
+        return;
+      }
+      if (coordinatorPhoneRaw && !coordinatorNameValue) {
+        sendError(res, "Add the coordinator's name with their phone number.", 400, "VALIDATION_ERROR");
+        return;
+      }
+      const coordinatorPhoneValue = coordinatorPhoneRaw || null;
+
 
     // Coordinates are optional, but a radius search is meaningless without
     // them, so they must be a valid pair rather than a half-set pin.
@@ -644,7 +705,12 @@ export async function createEvent(req: AuthedRequest, res: Response): Promise<vo
         price: priceValue,
         currency: currency || "INR",
         timezone: timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
-        womenOnly: womenOnly === true,
+          womenOnly: womenOnly === true,
+          isMovie: isMovieFlag,
+          theatreName: theatreValue,
+          bookingUrl: bookingValue,
+          coordinatorName: coordinatorNameValue,
+          coordinatorPhone: coordinatorPhoneValue,
         // Only a user can self-declare themselves a verified organizer; a
         // partner/community event is marked verified by an admin, so a client
         // can never set this itself.
@@ -1189,16 +1255,29 @@ export async function getEventAttendees(req: AuthedRequest, res: Response): Prom
     const where: any = { eventId: id };
     if (status) where.status = status;
 
-    const [items, total] = await Promise.all([
-      prisma.eventAttendee.findMany({
-        where,
-        orderBy: { createdAt: "desc" },
-        skip: (page - 1) * limit,
-        take: limit,
-        include: { user: { select: { id: true, fullName: true, avatarUrl: true, email: true } } },
-      }),
-      prisma.eventAttendee.count({ where }),
-    ]);
+      // An attendee roster is reachable by any KYC-verified member, so it must
+      // not be an email directory, and a staff account that registered for an
+      // event must not appear in it at all. The filter goes on the query
+      // because Prisma does not accept a filter inside a to-one select.
+      const attendeeWhere: any = { ...where, user: { is: NOT_PRIVILEGED } };
+
+      const [items, total] = await Promise.all([
+        prisma.eventAttendee.findMany({
+          where: attendeeWhere,
+          orderBy: { createdAt: "desc" },
+          skip: (page - 1) * limit,
+          take: limit,
+          select: {
+            id: true,
+            eventId: true,
+            status: true,
+            createdAt: true,
+            // email was exposed here to every member who could read the roster.
+            user: { select: { id: true, fullName: true, avatarUrl: true } },
+          },
+        }),
+        prisma.eventAttendee.count({ where: attendeeWhere }),
+      ]);
 
     sendSuccess(res, { items, page, limit, total });
   } catch (err: any) {

@@ -298,10 +298,17 @@ export async function unblockUser(req: AuthedRequest, res: Response): Promise<vo
 
 export async function getBlockedUsers(req: AuthedRequest, res: Response): Promise<void> {
   try {
-    const blocks = await prisma.userBlock.findMany({
-      where: { blockerId: req.user!.userId },
-      include: { blocked: { select: { id: true, fullName: true, avatarUrl: true, email: true } } },
-    });
+      // This list exposed every blocked user's email. The privacy block list
+      // (privacyController) already returns only id/fullName/avatarUrl; this
+      // duplicate copy is the leak, so it now matches that.
+      const blocks = await prisma.userBlock.findMany({
+        where: { blockerId: req.user!.userId },
+        select: {
+          id: true,
+          createdAt: true,
+          blocked: { select: { id: true, fullName: true, avatarUrl: true } },
+        },
+      });
     sendSuccess(res, blocks, "Blocked users retrieved.");
   } catch (err) {
     sendError(res, "Failed to retrieve blocked users.", 500, "INTERNAL_ERROR");

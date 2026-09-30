@@ -268,6 +268,10 @@ export const adminApi = {
     api.post(`/admin/users/${userId}/block`, data),
   unblockUser: (userId: string) => api.post(`/admin/users/${userId}/unblock`),
   deleteUser: (userId: string) => api.delete(`/admin/users/${userId}`),
+  // Bulk selection for the user table. One request, one audit trail, and the
+  // server reports per-account outcomes instead of failing the whole batch.
+  bulkUserAction: (action: 'suspend' | 'delete', userIds: string[]) =>
+    api.post('/admin/users/bulk-action', { action, userIds }),
   // Admin account provisioning (SUPER_ADMIN only)
   getAdminAccounts: () => api.get('/admin/admins'),
   createAdminAccount: (data: AdminAccountInput) => api.post('/admin/admins', data),

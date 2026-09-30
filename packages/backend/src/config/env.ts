@@ -104,11 +104,20 @@ const envSchema = z.object({
   // choice for production/Render. `gmail` sends via smtp.gmail.com using a
   // Google App Password (GMAIL_APP_PASSWORD) — the sender address must be the
   // Gmail address itself. `none` (default) reports EMAIL_NOT_CONFIGURED.
-  EMAIL_PROVIDER: z.string().default("none"),
-  RESEND_API_KEY: z.string().optional(),
-  EMAIL_FROM: z.string().default("Nabri <noreply@nabri.app>"),
-  SUPPORT_EMAIL: z.string().default("nabri.support@gmail.com"),
-  BREVO_API_KEY: z.string().optional(),
+    EMAIL_PROVIDER: z.string().default("none"),
+    RESEND_API_KEY: z.string().optional(),
+    EMAIL_FROM: z.string().default("Nabri <noreply@nabri.app>"),
+    SUPPORT_EMAIL: z.string().default("nabri.support@gmail.com"),
+    BREVO_API_KEY: z.string().optional(),
+    // Zoho transactional API, OAuth access token. Use this instead of Zoho SMTP
+    // on a cloud host: Zoho's relay refuses any source IP that has not been
+    // authorised in the admin console, which fails with "525 5.7.1 Unauthorized
+    // IP address" on PaaS egress addresses that are not fixed in advance.
+    ZOHO_ACCESS_TOKEN: z.string().optional(),
+    ZOHO_API_TOKEN: z.string().optional(),
+    // Zoho accounts are region-scoped: zoho.com, zoho.eu, zoho.in, zoho.com.au.
+    // Wrong region returns an opaque 401, so it is explicit.
+    ZOHO_API_REGION: z.string().optional(),
 
   // Agreement archive: every issued agreement is blind-copied to these
   // recipients (comma-separated). Defaults to the primary super admin so legal

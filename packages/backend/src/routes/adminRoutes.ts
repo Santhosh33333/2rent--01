@@ -96,6 +96,10 @@ router.get("/topup-requests", paymentsView, adminController.listTopupRequests);
 router.post("/topup-requests/:id/verify", paymentsView, adminController.verifyTopupRequest);
 router.post("/wallets/credit", requireSuperAdmin, adminController.creditUserWallet);
 router.delete("/users/:id", requireSuperAdmin, adminController.deleteUser);
+// Bulk selection for the admin user list. Separate route (not DELETE
+// /users/:id repeated client-side) so one audit trail covers the batch and the
+// server can refuse protected ids without N round trips.
+router.post("/users/bulk-action", requireSuperAdmin, adminController.bulkUserAction);
 router.delete("/communities/:id", requireSuperAdmin, communityController.adminDeleteCommunity);
 router.get("/kyc-queue", kycReview, adminController.getKycQueue);
 router.post("/kyc/:id/approve", requireSectionAction("KYC", "APPROVE"), adminController.approveKyc);

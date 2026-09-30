@@ -59,11 +59,11 @@ export function LocationInput({ label, value, onChange, placeholder, required, o
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const [open, setOpen] = useState(false)
   const [searching, setSearching] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
   const [locating, setLocating] = useState(false)
   const [activeIndex, setActiveIndex] = useState(-1)
   const containerRef = useRef<HTMLDivElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout>>()
-  const skipNextSearch = useRef(false)
   const autoDoneRef = useRef(false)
   // Set when the next GPS fix should fill this field (auto-mount or the
   // crosshair button). Manual typing always wins and clears the intent.
@@ -89,10 +89,6 @@ export function LocationInput({ label, value, onChange, placeholder, required, o
   }, [])
 
   const search = async (q: string) => {
-    if (skipNextSearch.current) {
-      skipNextSearch.current = false
-      return
-    }
     if (q.trim().length < 3) {
       setSuggestions([])
       setOpen(false)
@@ -105,8 +101,14 @@ export function LocationInput({ label, value, onChange, placeholder, required, o
       setSuggestions(results)
       setOpen(results.length > 0)
       setActiveIndex(-1)
-    } catch {
-      // Autocomplete is best-effort; keep manual entry usable.
+    } catch (err) {
+      // Autocomplete is best-effort, so manual entry has to keep working. The
+      // failure is still surfaced (a spinner that stops with no dropdown used
+      // to be indistinguishable from "no matches"), and the old suggestions are
+      // cleared so a stale list is never offered against a new query.
+      setSuggestions([])
+      setOpen(false)
+      setSearchError(err instanceof Error ? err.message : 'Location lookup unavailable')
     } finally {
       setSearching(false)
     }
@@ -114,15 +116,24 @@ export function LocationInput({ label, value, onChange, placeholder, required, o
 
   const handleChange = (next: string) => {
     onChange(next)
+    // Any keystroke supersedes a previous failure, so the message cannot sit
+    // under a field the user has already changed.
+    setSearchError(null)
     clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => search(next), 400)
   }
 
   const pick = (s: Suggestion) => {
-    skipNextSearch.current = true
+    // Programmatic fills (pick, reverse-geocode, the cached location) call
+    // onChange directly and deliberately bypass handleChange, so they never
+    // schedule a search. An earlier skipNextSearch flag was meant to suppress
+    // that non-existent search, but it simply stayed set and swallowed the
+    // user's NEXT real query - which is why typing a location after the field
+    // auto-filled produced no suggestions at all.
     onChange(s.displayName)
     setSuggestions([])
     setOpen(false)
+    setSearchError(null)
   }
 
   const resolveAndFill = async (lat: number, lon: number, silent: boolean) => {
@@ -136,7 +147,7 @@ export function LocationInput({ label, value, onChange, placeholder, required, o
         result?.displayName && !String(result.displayName).startsWith(String(lat).slice(0, 5))
           ? (result.displayName as string)
           : (result?.displayName as string) || `${lat.toFixed(4)}, ${lon.toFixed(4)}`
-      skipNextSearch.current = true
+      setSearchError(null)
       onChangeRef.current(name)
       writeCachedLocation(lat, lon, name)
       if (!silent) toast.success('Current location detected')
@@ -149,7 +160,6 @@ export function LocationInput({ label, value, onChange, placeholder, required, o
       setLocating(false)
     }
   }
-
   // GPS fix arrived: fill only when this field asked for it and is empty.
   useEffect(() => {
     if (!geo.fix || !wantFillRef.current || valueRef.current) return
@@ -173,7 +183,6 @@ export function LocationInput({ label, value, onChange, placeholder, required, o
     if (valueRef.current) return
     const cached = readCachedLocation()
     if (cached) {
-      skipNextSearch.current = true
       onChangeRef.current(cached.displayName)
       return
     }
@@ -233,6 +242,11 @@ export function LocationInput({ label, value, onChange, placeholder, required, o
         if (!msg || locating || geo.status === 'locating') return null
         return <p className="mt-1.5 text-xs text-surface-500 dark:text-surface-400">{msg}</p>
       })()}
+      {searchError && (
+        <p className="mt-1.5 text-xs text-amber-600 dark:text-amber-400">
+          {searchError} — you can still type the location yourself.
+        </p>
+      )}
       {open && suggestions.length > 0 && (
         <ul className="absolute z-20 left-0 right-0 mt-1 glass-card overflow-hidden shadow-lg">
           {suggestions.map((s, i) => (

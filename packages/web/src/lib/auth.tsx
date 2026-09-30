@@ -550,3 +550,25 @@ export function useAuth() {
   }
   return context
 }
+
+/**
+ * Client-side "is there a session?" check.
+ *
+ * A UX hint only, never an authorisation check: the server is the only thing
+ * that can decide whether a user may do something. This exists solely to answer
+ * "should this page request personalised data, or render the anonymous view?".
+ *
+ * It is a standalone function rather than part of useAuth because the public
+ * pages that need it - event list, event detail, support - sit outside
+ * AuthProvider, so useAuth() would throw there. The bearer token in
+ * localStorage is the only signal available to them.
+ */
+export function isSignedIn(): boolean {
+  try {
+    return !!localStorage.getItem('token')
+  } catch {
+    // Private mode or storage disabled: treat as anonymous rather than throw,
+    // so a public page still renders.
+    return false
+  }
+}

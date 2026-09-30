@@ -25,6 +25,8 @@ import walletRoutes from "./routes/walletRoutes";
 import walkingRequestRoutes from "./routes/walkingRequestRoutes";
 import communityRoutes from "./routes/communityRoutes";
 import eventRoutes from "./routes/eventRoutes";
+import publicEventRoutes from "./routes/publicEventRoutes";
+import publicMovieRoutes from "./routes/publicMovieRoutes";
 import messageRoutes from "./routes/messageRoutes";
 import adminRoutes from "./routes/adminRoutes";
 import adminRbacRoutes from "./routes/adminRbacRoutes";
@@ -321,6 +323,15 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
   app.use("/api/walking-requests", walkingRequestRoutes);
   app.use("/api/communities", communityRoutes);
   app.use("/api/events", eventRoutes);
+  // Anonymous read-only event feed for the public website. Mounted separately
+  // from /api/events because that router is behind auth + KYC, which made every
+  // event on the landing page unreachable without an account.
+  app.use("/api/public/events", publicEventRoutes);
+  // Movie catalogue for the landing page and the movie-event picker. Mounted
+  // under /api/public rather than nested inside /events, because these are films
+  // and not events - and a movie only becomes an event once an organizer creates
+  // one, at which point it is served by the routes above.
+  app.use("/api/public/movies", publicMovieRoutes);
   app.use("/api/messages", messageRoutes);
   app.use("/api/admin", adminRoutes);
   app.use("/api/admin", adminRbacRoutes);

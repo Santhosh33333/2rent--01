@@ -6,6 +6,7 @@ import { SERVICE_CATALOG, isServiceEnabled } from "../services/serviceCatalog";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
 import { createImpersonationSession } from "./authController";
+import { isPrimarySuperAdmin as isPrimarySuperAdminAccount } from "../rbac/primarySuperAdmin";
 import { env } from "../config/env";
 import * as bookingEngine from "../services/bookingEngine";
 import { PRICING_VERSION_KEY } from "../services/bookingEngine";
@@ -52,10 +53,12 @@ function isPrivilegedTarget(role?: string | null): boolean {
  * config must not silently promote anything.
  */
 function isPrimarySuperAdmin(email?: string | null): boolean {
-  const protectedEmail = (env.ADMIN_EMAIL ?? "").trim().toLowerCase();
-  if (!protectedEmail) return false;
-  return (email ?? "").trim().toLowerCase() === protectedEmail;
-}
+  // Delegates to the shared helper so the suspend guard, the role-change guard
+  // and the boot repair all agree on which account is break-glass. The old local
+  // copy returned false whenever ADMIN_EMAIL was unset, which silently disabled
+  // every one of those guards.
+  return isPrimarySuperAdminAccount(email);
+  }
 
 async function assertCanMutateTarget(
   actor: { userId: string; activeRole?: string | null; role?: string | null },
@@ -501,6 +504,125 @@ export async function resolveSosAlert(req: AuthedRequest, res: Response): Promis
     sendSuccess(res, updated, "SOS alert resolved.");
   } catch (err) {
     sendError(res, "Failed to resolve SOS alert.", 500, "INTERNAL_ERROR");
+  }
+}
+
+/**
+ * Bulk account action for the admin user list. SUPER_ADMIN only.
+ *
+ * Two rules shaped this endpoint:
+ *
+ *  1. Deletion must never be a side effect of an edit. `action` is explicit and
+ *     "suspend" is the reversible option, so an admin tidying up a list has a
+ *     safe action available and does not reach for the destructive one.
+ *  2. One bad id must not roll back or abort the batch. Accounts with bookings,
+ *     wallets or KYC rows will fail FK constraints, and the admin needs to know
+ *     exactly which ones those are rather than seeing a single opaque 409.
+ *     So each account is handled independently and every outcome is reported.
+ *
+ * The primary super admin and the acting admin are refused per-id and reported
+ * as skipped, never silently dropped, so the summary always adds up.
+ */
+export async function bulkUserAction(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const { action, userIds } = req.body ?? {};
+    const ids: unknown[] = Array.isArray(userIds) ? userIds : [];
+
+    if (action !== "suspend" && action !== "delete") {
+      sendError(res, "Action must be 'suspend' or 'delete'.", 400, "INVALID_ACTION");
+      return;
+    }
+    const unique = Array.from(new Set(ids.filter((v): v is string => typeof v === "string" && v.length > 0)));
+    if (unique.length === 0) {
+      sendError(res, "Select at least one account.", 400, "NO_SELECTION");
+      return;
+    }
+    // A cap keeps a single request from holding a transaction-shaped workload
+    // open long enough to time out, and gives the UI a clear error instead of a
+    // partial result nobody can interpret.
+    const MAX = 200;
+    if (unique.length > MAX) {
+      sendError(res, `Select at most ${MAX} accounts at a time.`, 400, "SELECTION_TOO_LARGE");
+      return;
+    }
+
+    const targets = await prisma.user.findMany({
+      where: { id: { in: unique } },
+      select: { id: true, email: true, fullName: true },
+    });
+    const byId = new Map(targets.map((t) => [t.id, t]));
+
+    const succeeded: Array<{ id: string; email: string }> = [];
+    const failed: Array<{ id: string; email: string; reason: string }> = [];
+    const skipped: Array<{ id: string; email: string; reason: string }> = [];
+
+    for (const id of unique) {
+      const target = byId.get(id);
+      if (!target) {
+        failed.push({ id, email: id, reason: "Account not found." });
+        continue;
+      }
+      const label = target.fullName || target.email || id;
+      // Refuse in the loop, not only in the UI, so the protection holds however
+      // the request was constructed.
+      if (id === req.user!.userId) {
+        skipped.push({ id, email: target.email, reason: "Your own account." });
+        continue;
+      }
+      if (isPrimarySuperAdmin(target.email)) {
+        skipped.push({ id, email: target.email, reason: "Primary super admin is protected." });
+        continue;
+      }
+
+      try {
+        if (action === "suspend") {
+          await prisma.user.update({
+            where: { id },
+            data: { status: "SUSPENDED", suspendedUntil: null, suspensionReason: "Removed in bulk by administrator" },
+          });
+        } else {
+          await prisma.user.delete({ where: { id } });
+        }
+        // Audit after the write so the log cannot claim success for a delete
+        // that then failed on a constraint.
+        await prisma.auditLog.create({
+          data: {
+            actorId: req.user!.userId,
+            actorType: "ADMIN",
+            action: action === "suspend" ? "BULK_SUSPEND_USER" : "BULK_DELETE_USER",
+            entityType: "User",
+            entityId: id,
+            metadata: JSON.stringify({ email: target.email, name: label, batchSize: unique.length }),
+          },
+        });
+        succeeded.push({ id, email: target.email });
+      } catch (err: any) {
+        failed.push({
+          id,
+          email: target.email,
+          reason:
+            err?.code === "P2003"
+              ? "Has related records (bookings, wallet, KYC) and cannot be removed."
+              : err?.code === "P2025"
+                ? "Account not found."
+                : "Update failed.",
+        });
+      }
+    }
+
+    sendSuccess(res, {
+      action,
+      requested: unique.length,
+      succeededCount: succeeded.length,
+      failedCount: failed.length,
+      skippedCount: skipped.length,
+      succeeded,
+      failed,
+      skipped,
+    });
+  } catch (err: any) {
+    console.error("bulkUserAction error:", err);
+    sendError(res, "Failed to run the bulk action.", 500, "INTERNAL_ERROR");
   }
 }
 

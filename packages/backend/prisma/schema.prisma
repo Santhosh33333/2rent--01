@@ -280,6 +280,12 @@ model Wallet {
   userId            String   @unique
   balance           Decimal  @default(0) @db.Decimal(10, 2)
   promotionalBalance Decimal @default(0) @db.Decimal(10, 2)
+  // Money reserved for something in progress (a metered call). NOT spendable:
+  // available = balance - heldBalance. Introduced for prepaid call billing,
+  // where the caller's balance must be committed up front so a call can never
+  // outrun the funds behind it. Held funds are not a second balance and are not
+  // counted as spendable anywhere else in the codebase.
+  heldBalance       Decimal  @default(0) @db.Decimal(10, 2)
   currency          String   @default("INR")
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -288,6 +294,9 @@ model Wallet {
   transactions  Transaction[]
   withdrawals   WithdrawalRequest[]
   paymentOrders PaymentOrder[]
+  callCharges   CallCharge[]
+  // No @@index([userId]) here: `userId` is already @unique, so it carries a
+  // unique index. A second index on the same column is pure write overhead.
 }
 
 model Transaction {
@@ -746,8 +755,31 @@ model Event {
   // events are online-only or listed without a map pin.
   latitude      Float?
   longitude     Float?
-  isOnline      Boolean   @default(false)
-  onlineUrl     String?
+    isOnline         Boolean   @default(false)
+    onlineUrl        String?
+    // --- Movie outings -----------------------------------------------------
+    // A cinema trip is an event like any other, but it needs three things the
+    // generic fields cannot express. Deliberately minimal: the movie name IS
+    // `title` and the showtime IS `startTime`, so adding a second copy of either
+    // would create two sources of truth that can silently disagree.
+    // isMovie drives the distinct creation flow and card treatment; the `movies`
+    // category alone is not enough, because a category can be re-pointed or
+    // typo'd and the movie layout would silently stop applying.
+    isMovie          Boolean   @default(false)
+    // The chosen cinema. Kept separate from `location` because the two answer
+    // different questions: "where do I meet" is an address, "which screen" is a
+    // venue, and a map pin cannot distinguish two branches of the same mall.
+    theatreName      String?
+    // Optional external checkout (a ticketing site, or a provider's ticket URL).
+    // The event page offers in-app wallet purchase AND this link, so an organizer
+    // is never forced to take payment through the platform.
+    bookingUrl       String?
+    // The one person added to the event who does NOT buy a seat: the point of
+    // contact who confirms the group's ticket booking. Name + phone only, not a
+    // User FK - the coordinator may not have a Nabri account, and forcing a
+    // register+attendee row would contradict "added but not booking".
+    coordinatorName  String?
+    coordinatorPhone String?
   coverImageUrl String?
   category      String?
   subcategory   String?
@@ -876,8 +908,59 @@ model CallLog {
   caller   User @relation("CallCaller", fields: [callerId], references: [id], onDelete: Cascade)
   receiver User @relation("CallReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
 
+  // 1:1 billing record for this call. Absent on calls that were never
+  // connected, or connected while billing was disabled.
+  charge CallCharge?
+
   @@index([callerId])
   @@index([receiverId])
+  @@index([status, startedAt])
+}
+
+/// Money record for one connected call. One row per call, created when the
+/// call is answered and settled exactly once when it ends.
+///
+/// The money model is a hold/capture pair, not a post-hoc debit:
+///   - hold     = rate x maxBillableMinutes, taken from Wallet.heldBalance at
+///                answer time, so a call can never outrun the caller's funds
+///   - charged  = rate x actual billable minutes, taken from balance on end
+///   - heldAmount - charged is returned to the available balance
+///
+/// `status` guards settlement: only a HELD row may be captured or released,
+/// and the transition is a guarded updateMany, so a duplicate end event (hangup
+/// racing a disconnect) cannot double-charge or double-refund.
+model CallCharge {
+  id          String   @id @default(uuid())
+  callId      String   @unique
+  callerId    String
+  receiverId  String
+  walletId    String
+
+  ratePerMinute Decimal @db.Decimal(10, 2)
+  heldAmount    Decimal @db.Decimal(10, 2)
+  chargedAmount Decimal @default(0) @db.Decimal(10, 2)
+  refundedAmount Decimal @default(0) @db.Decimal(10, 2)
+
+  // HELD -> CHARGED (funds captured) or RELEASED (call ended, nothing captured).
+  status String @default("HELD")
+
+  /// Server-computed seconds actually billed. Derived from server timestamps
+  /// only, never from anything the client reports.
+  billableSeconds Int      @default(0)
+  startedAt        DateTime
+  endedAt          DateTime?
+  /// Why settlement stopped early, when it was not a clean hangup: CLIENT_END,
+  /// PEER_END, MAX_DURATION, INSUFFICIENT_FUNDS, ADMIN_REVERSAL, ABANDONED.
+  endReason        String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  call    CallLog @relation(fields: [callId], references: [id], onDelete: Cascade)
+  wallet  Wallet  @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([callerId, createdAt])
+  @@index([status])
+  @@index([walletId])
 }
 
 // ============================================================

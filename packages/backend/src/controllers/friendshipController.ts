@@ -1,5 +1,6 @@
 import { Response } from "express";
 import { prisma } from "../config/database";
+import { NOT_PRIVILEGED } from "../rbac/privilegedUsers";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
 import { createNotification } from "./notificationController";
@@ -185,10 +186,12 @@ export async function getSuggestedFriends(req: AuthedRequest, res: Response): Pr
       excludeIds.add(f.addresseeId);
     });
     const suggestions = await prisma.user.findMany({
-      where: {
-        id: { notIn: Array.from(excludeIds) },
-        status: "ACTIVE",
-      },
+        where: {
+          id: { notIn: Array.from(excludeIds) },
+          status: "ACTIVE",
+          // Staff accounts must not be offered as people to befriend.
+          ...NOT_PRIVILEGED,
+        },
       select: { id: true, fullName: true, avatarUrl: true, city: true, bio: true },
       take: 20,
       orderBy: { createdAt: "desc" },

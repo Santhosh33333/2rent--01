@@ -1,7 +1,7 @@
 ﻿import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Search, ChevronLeft, ChevronRight, Ban, Unlock, Trash2, Loader2, X, FileDown, Crown, UserMinus, Eye, Phone, PencilLine } from 'lucide-react'
+import { ArrowLeft, Search, ChevronLeft, ChevronRight, Ban, Unlock, Trash2, Loader2, X, FileDown, Crown, UserMinus, Eye, Phone, PencilLine, CheckSquare, Square, ShieldAlert } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { adminApi } from '../../lib/api'
 import { exportTableToPdf } from '../../lib/pdfExport'
@@ -42,6 +42,34 @@ export function AdminUsersPage() {
   const [phoneTarget, setPhoneTarget] = useState<User | null>(null)
   const [newPhone, setNewPhone] = useState('')
   const [phoneBusy, setPhoneBusy] = useState(false)
+  // Bulk selection. Cleared whenever the visible page changes, because a
+  // selection the admin can no longer see is how accounts get removed by
+  // accident.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [confirmStep, setConfirmStep] = useState<'none' | 'choose' | 'delete'>('none')
+  const [confirmPhrase, setConfirmPhrase] = useState('')
+
+  // The acting admin can never be bulk selected, so the count shown always
+  // matches what the server will act on. The protected primary account is
+  // deliberately NOT hardcoded here: the server owns that rule via
+  // ADMIN_EMAIL, and it reports any such account back as "skipped" rather than
+  // letting a client-side list silently drift out of date.
+  const selectableUsers = users.filter((u) => u.id !== currentAdmin?.id)
+  const allSelected = selectableUsers.length > 0 && selectableUsers.every((u) => selectedIds.has(u.id))
+  const someSelected = selectedIds.size > 0 && !allSelected
+
+  const toggleOne = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const selectAll = () => setSelectedIds(new Set(selectableUsers.map((u) => u.id)))
+  const clearSelection = () => setSelectedIds(new Set())
 
   const fetchUsers = async () => {
     setLoading(true)
@@ -68,6 +96,13 @@ export function AdminUsersPage() {
   useEffect(() => {
     fetchUsers()
   }, [page, statusFilter])
+
+  // A selection is only ever meant for rows the admin can currently see. When
+  // the page, filter or result set changes, the old ids refer to rows that are
+  // no longer on screen, so they are dropped rather than carried forward.
+  useEffect(() => {
+    setSelectedIds(new Set())
+  }, [page, statusFilter, search, users])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -137,6 +172,44 @@ export function AdminUsersPage() {
       toast.error(getErrorMessage(err, 'Failed to delete user'))
     } finally {
       setBusy(false)
+    }
+  }
+
+  /**
+   * Runs the selected bulk action and reports the full breakdown. An account
+   * with bookings, a wallet or KYC rows cannot be hard-deleted, and the server
+   * returns those individually, so "12 selected, 9 removed, 3 kept" is shown
+   * rather than a misleading blanket success or failure.
+   */
+  const runBulk = async (action: 'suspend' | 'delete') => {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    setBulkBusy(true)
+    try {
+      const res = await adminApi.bulkUserAction(action, ids)
+      const d = res.data?.data || res.data
+      const done = Number(d?.succeededCount ?? 0)
+      const failed = Number(d?.failedCount ?? 0)
+      const skipped = Number(d?.skippedCount ?? 0)
+      const verb = action === 'delete' ? 'removed' : 'suspended'
+
+      if (failed === 0 && skipped === 0) {
+        toast.success(`${done} account${done === 1 ? '' : 's'} ${verb}`)
+      } else {
+        toast.success(
+          `${done} account${done === 1 ? '' : 's'} ${verb}` +
+            (failed ? `, ${failed} kept (has data)` : '') +
+            (skipped ? `, ${skipped} protected` : '')
+        )
+      }
+      setSelectedIds(new Set())
+      setConfirmStep('none')
+      setConfirmPhrase('')
+      fetchUsers()
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Bulk action failed'))
+    } finally {
+      setBulkBusy(false)
     }
   }
 
@@ -285,6 +358,51 @@ export function AdminUsersPage() {
           </div>
         )}
 
+        {/* Bulk bar. Only rendered once something is selected, and it always
+            states the count, so it is impossible to act on a selection you
+            cannot see. Editing a user never touches this: selection is
+            explicit, per-account, and cleared on navigation. */}
+        {selectedIds.size > 0 && confirmStep === 'none' && (
+          <div className="sticky top-2 z-20 mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-blue-700/50 bg-gray-900/95 px-4 py-3 shadow-lg shadow-black/40 backdrop-blur">
+            <span className="text-sm text-white font-medium">
+              {selectedIds.size} selected
+            </span>
+            <button
+              type="button"
+              onClick={selectAll}
+              className="text-xs font-semibold text-blue-300 hover:text-blue-200 transition"
+            >
+              Select all ({selectableUsers.length})
+            </button>
+            <button
+              type="button"
+              onClick={clearSelection}
+              className="text-xs font-semibold text-gray-300 hover:text-white transition"
+            >
+              Select none
+            </button>
+            <div className="flex-1" />
+            <button
+              type="button"
+              onClick={() => runBulk('suspend')}
+              disabled={bulkBusy}
+              className="flex items-center gap-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 disabled:opacity-50 px-3 py-2 text-xs font-semibold text-white transition"
+            >
+              {bulkBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Ban className="w-3.5 h-3.5" />}
+              Suspend
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmStep('choose')}
+              disabled={bulkBusy}
+              className="flex items-center gap-1.5 rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-50 px-3 py-2 text-xs font-semibold text-white transition"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Remove accounts
+            </button>
+          </div>
+        )}
+
         {loading ? (
           <div className="text-center py-20">
             <div className="w-8 h-8 rounded-full border-2 border-gray-700 border-t-blue-500 animate-spin mx-auto" />
@@ -301,6 +419,23 @@ export function AdminUsersPage() {
                 <table className="w-full text-left">
                   <thead>
                     <tr className="border-b border-gray-700">
+                      <th className="w-10 px-3 py-3">
+                        <button
+                          type="button"
+                          onClick={() => (allSelected ? clearSelection() : selectAll())}
+                          title={allSelected ? 'Clear selection' : 'Select all on this page'}
+                          aria-label={allSelected ? 'Clear selection' : 'Select all on this page'}
+                          className="text-gray-400 hover:text-white transition-colors"
+                        >
+                          {allSelected ? (
+                            <CheckSquare className="w-4 h-4 text-blue-400" />
+                          ) : someSelected ? (
+                            <Square className="w-4 h-4 text-blue-400" />
+                          ) : (
+                            <Square className="w-4 h-4" />
+                          )}
+                        </button>
+                      </th>
                       <th className="px-4 py-3 text-gray-400 text-xs font-medium uppercase">Name</th>
                       <th className="px-4 py-3 text-gray-400 text-xs font-medium uppercase">Email</th>
                       <th className="px-4 py-3 text-gray-400 text-xs font-medium uppercase">Phone</th>
@@ -312,9 +447,24 @@ export function AdminUsersPage() {
                   <tbody>
                     {users.map((user) => (
                       <tr key={user.id} className="border-b border-gray-700/50 last:border-0">
-                        <td colSpan={5}>
+                        <td colSpan={6}>
+                          <div className="flex items-stretch">
+                            <label
+                              className="flex items-center pl-4 pr-1 cursor-pointer"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedIds.has(user.id)}
+                                disabled={user.id === currentAdmin?.id}
+                                onChange={() => toggleOne(user.id)}
+                                title={user.id === currentAdmin?.id ? 'You cannot select your own account' : 'Select account'}
+                                aria-label={`Select ${user.name || user.email}`}
+                                className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-blue-500 focus:ring-blue-500 disabled:opacity-40"
+                              />
+                            </label>
                           <div
-                            className="px-4 py-3 hover:bg-gray-700/30 cursor-pointer transition"
+                            className="px-4 py-3 hover:bg-gray-700/30 cursor-pointer transition flex-1"
                             onClick={() => setExpandedId(expandedId === user.id ? null : user.id)}
                           >
                             <div className="flex items-center justify-between">
@@ -340,6 +490,7 @@ export function AdminUsersPage() {
                                 </span>
                               </div>
                             </div>
+                          </div>
                           </div>
                           {expandedId === user.id && (
                             <div className="px-4 pb-3 pt-1 border-t border-gray-700/50">
@@ -570,6 +721,88 @@ export function AdminUsersPage() {
                   Cancel
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+        {/* Bulk remove confirmation. Two deliberate steps, and the second
+            requires typing the count. A single "Are you sure?" is not enough
+            for an irreversible batch delete: the count typed here is the last
+            moment an admin can notice they selected the wrong page. */}
+        {confirmStep !== 'none' && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75" onClick={() => !bulkBusy && setConfirmStep('none')}>
+            <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-md border border-red-800/60" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-white font-semibold flex items-center gap-2">
+                  <ShieldAlert className="w-4 h-4 text-red-400" />
+                  {confirmStep === 'choose' ? 'Remove accounts' : 'Confirm permanent removal'}
+                </h3>
+                <button onClick={() => { setConfirmStep('none'); setConfirmPhrase('') }} className="p-1 rounded-lg hover:bg-gray-700 text-gray-400">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {confirmStep === 'choose' ? (
+                <>
+                  <p className="text-sm text-gray-300 mb-3">
+                    You selected <span className="font-semibold text-white">{selectedIds.size}</span> account{selectedIds.size === 1 ? '' : 's'}.
+                  </p>
+                  <button
+                    onClick={() => setConfirmStep('delete')}
+                    className="w-full flex items-center justify-center gap-2 py-3 mb-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg transition"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete permanently — cannot be undone
+                  </button>
+                  <button
+                    onClick={() => runBulk('suspend')}
+                    disabled={bulkBusy}
+                    className="w-full flex items-center justify-center gap-2 py-3 mb-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition"
+                  >
+                    {bulkBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Ban className="w-4 h-4" />}
+                    Suspend instead — reversible
+                  </button>
+                  <button
+                    onClick={() => setConfirmStep('none')}
+                    className="w-full py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm font-medium rounded-lg transition"
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-gray-300 mb-3">
+                    Accounts with bookings, wallet or KYC records cannot be deleted and will be
+                    kept. Your own account and the protected primary super admin are always kept.
+                  </p>
+                  <label className="block text-xs text-gray-400 mb-2">
+                    Type <span className="font-mono text-white font-semibold">{selectedIds.size}</span> to confirm
+                  </label>
+                  <input
+                    value={confirmPhrase}
+                    onChange={(e) => setConfirmPhrase(e.target.value)}
+                    placeholder={String(selectedIds.size)}
+                    inputMode="numeric"
+                    className="w-full px-3 py-2.5 mb-4 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-red-500"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => runBulk('delete')}
+                      disabled={bulkBusy || confirmPhrase.trim() !== String(selectedIds.size)}
+                      className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition"
+                    >
+                      {bulkBusy && <Loader2 className="w-4 h-4 animate-spin" />}
+                      Delete {selectedIds.size}
+                    </button>
+                    <button
+                      onClick={() => { setConfirmStep('none'); setConfirmPhrase('') }}
+                      disabled={bulkBusy}
+                      className="px-4 py-2.5 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-gray-300 text-sm font-medium rounded-lg transition"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}

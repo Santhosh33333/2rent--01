@@ -21,6 +21,7 @@ const VerifyMobilePage = lazy(() => import('./pages/auth/VerifyMobilePage').then
 
 // Splash & Onboarding
 const SplashPage = lazy(() => import('./pages/splash/SplashPage').then(m => ({ default: m.SplashPage })))
+const LandingPage = lazy(() => import('./pages/LandingPage').then(m => ({ default: m.LandingPage })))
 const OnboardingPage = lazy(() => import('./pages/onboarding/OnboardingPage').then(m => ({ default: m.OnboardingPage })))
 const ProfileCompletionPage = lazy(() => import('./pages/profile/ProfileCompletionPage').then(m => ({ default: m.ProfileCompletionPage })))
 
@@ -29,7 +30,10 @@ const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage').then(
 const ProfilePage = lazy(() => import('./pages/profile/ProfilePage').then(m => ({ default: m.ProfilePage })))
 const VerificationPage = lazy(() => import('./pages/verification/VerificationPage').then(m => ({ default: m.VerificationPage })))
 const AgreementsPage = lazy(() => import('./pages/verification/AgreementsPage').then(m => ({ default: m.AgreementsPage })))
-const LegalConsentPage = lazy(() => import('./pages/legal/LegalConsentPage').then(m => ({ default: m.LegalConsentPage })))
+  const LegalConsentPage = lazy(() => import('./pages/legal/LegalConsentPage').then(m => ({ default: m.LegalConsentPage })))
+  // Public, no auth: states the business legal name and contact details. A store
+  // reviewer or crawler must reach this without logging in.
+  const LegalPage = lazy(() => import('./pages/legal/LegalPage'))
 const AdminAgreementsPage = lazy(() => import('./pages/admin/AdminAgreementsPage').then(m => ({ default: m.AdminAgreementsPage })))
 const KycStep1PersonalDetails = lazy(() => import('./pages/verification/KycStep1PersonalDetails').then(m => ({ default: m.KycStep1PersonalDetails })))
 const KycStep2GovId = lazy(() => import('./pages/verification/KycStep2GovId').then(m => ({ default: m.KycStep2GovId })))
@@ -162,7 +166,10 @@ export function App() {
         <Suspense fallback={<LoadingSpinner />}>
           <AppLockProvider>
             <Routes>
-          <Route path="/" element={<SplashPage />} />
+          {/* Public marketing site. */}
+        <Route path="/" element={<LandingPage />} />
+        {/* The in-app splash remains available for the native shell. */}
+        <Route path="/splash" element={<SplashPage />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
           <Route path="/account-type" element={<AccountTypePage />} />
           <Route path="/admin/login" element={<AdminLoginPage />} />
@@ -172,10 +179,28 @@ export function App() {
           <Route path="/verify-email" element={<VerifyEmailPage />} />
           <Route path="/verify-mobile" element={<VerifyMobilePage />} />
           <Route path="/download" element={<DownloadPage />} />
-          {/* Public legal pages (also reachable in-settings when logged in) */}
-          <Route path="/terms" element={<TermsOfServicePage />} />
-          <Route path="/privacy" element={<PrivacyPolicyPage />} />
+  {/* Public legal pages (also reachable in-settings when logged in) */}
+  <Route path="/terms" element={<TermsOfServicePage />} />
+  <Route path="/privacy" element={<PrivacyPolicyPage />} />
+  {/* Business legal name + support/grievance contact. Public by design. */}
+  <Route path="/legal" element={<LegalPage />} />
+  <Route path="/about" element={<LegalPage />} />
+  <Route path="/safety" element={<LegalPage />} />
 
+  {/* Public event browsing. These two sat inside the USER-only ProtectedRoute
+      block below, so a shared event link on the landing page landed an
+      anonymous visitor on the login screen. A public event poster should be
+      openable by anyone; joining still requires an account, which
+      EventDetailPage handles by asking app-or-web before the RSVP write. */}
+  <Route path="/events" element={<EventsPage />} />
+  <Route path="/events/:id" element={<EventDetailPage />} />
+
+  {/* Support desk. Public so "talk to a human" from the landing page or the
+      footer resolves to a real form instead of a login wall or a store link.
+      The page already handles an anonymous request; the authenticated ticket
+      flow is unchanged. */}
+  <Route path="/support" element={<SupportPage />} />
+  
           <Route element={<ProtectedRoute allowedRoles={['USER']} />}>
             <Route element={<Layout />}>
               <Route path="/profile/complete" element={<ProfileCompletionPage />} />
@@ -216,8 +241,6 @@ export function App() {
               <Route path="/walking-requests/:id" element={<WalkingRequestDetailPage />} />
               <Route path="/communities" element={<CommunitiesPage />} />
               <Route path="/communities/:id" element={<CommunityDetailPage />} />
-              <Route path="/events" element={<EventsPage />} />
-              <Route path="/events/:id" element={<EventDetailPage />} />
               <Route path="/notifications" element={<NotificationsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/settings/privacy" element={<PrivacyPage />} />
@@ -242,9 +265,6 @@ export function App() {
               <Route path="/wallet/withdraw" element={<WithdrawalPage />} />
               <Route path="/wallet/transactions" element={<TransactionHistoryPage />} />
               <Route path="/wallet/history" element={<TransactionHistoryPage />} />
-              {/* Support desk. Available to partners too: they are members with
-                  the same billing and booking problems as anyone else. */}
-              <Route path="/support" element={<SupportPage />} />
             </Route>
           </Route>
 

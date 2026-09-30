@@ -20,10 +20,11 @@ import { env } from "../config/env"
 // credentials, and a test key is rejected by the production host. Hardcoding the
 // production URL meant there was no way to exercise the flow without real money,
 // so the base is selectable: CASHFREE_API_ENV=test points at the sandbox.
-const CASHFREE_API_BASE =
+const CASHFREE_API_IS_SANDBOX =
   (env.CASHFREE_API_ENV || "").trim().toLowerCase() === "test"
-    ? "https://sandbox.cashfree.com/pg"
-    : "https://api.cashfree.com/pg"
+const CASHFREE_API_BASE = CASHFREE_API_IS_SANDBOX
+  ? "https://sandbox.cashfree.com/pg"
+  : "https://api.cashfree.com/pg"
 // The header is `x-api-version`. An earlier `x-cf-version` was silently ignored
 // by Cashfree, which would have left every order call on a default API version.
 // Pinning the version explicitly keeps order, fetch and refund calls on the same
@@ -164,6 +165,21 @@ async function cashfreeFetch<T>(
   if (!response.ok) {
     const detail =
       (parsed as { message?: string } | null)?.message || text.slice(0, 200) || response.statusText
+
+    // A 401/403 on a signed request almost always means the credentials are
+    // wrong, not that the order was malformed. Say so explicitly, because the
+    // generic "authentication Failed" from Cashfree is identical whether the
+    // secret is truncated, belongs to another account, or is still a dashboard
+    // placeholder -- and the operator needs to know it is a credentials problem
+    // before hunting for a code bug.
+    if ((response.status === 401 || response.status === 403) && withAuth) {
+      console.error(
+        `[CASHFREE] ${init.method} ${path} -> ${response.status} ${detail}. ` +
+          "Credentials rejected: check CASHFREE_APP_ID and CASHFREE_SECRET_KEY match each " +
+          "other, are not placeholders, and belong to this Cashfree account."
+      )
+    }
+
     throw new Error(`Cashfree ${init.method} ${path} failed (${response.status}): ${detail}`)
   }
 
@@ -194,16 +210,25 @@ export async function createOrder(input: CashfreeOrderRequest): Promise<Cashfree
   if (!input.returnUrl.includes("{order_id}")) {
     throw new Error("order_meta.return_url must contain the {order_id} placeholder.")
   }
-  let returnUrlHost: string
-  try {
-    returnUrlHost = new URL(input.returnUrl.replace("{order_id}", "probe")).hostname
-  } catch {
-    throw new Error("order_meta.return_url is not a valid absolute URL.")
-  }
-  if (returnUrlHost === "localhost" || returnUrlHost === "127.0.0.1" || returnUrlHost === "::1") {
-    throw new Error(
-      `Refusing to create a live order with a loopback return_url (${returnUrlHost}).`
-    )
+  // Loopback is only a hazard when real money is involved. A sandbox order
+  // created with a localhost return_url is exactly how the flow is meant to be
+  // tested on a developer machine, and refusing it made the sandbox untestable
+  // from local without also standing up a public origin. So the refusal is
+  // scoped to the live host, where a payer would be stranded on 127.0.0.1 after
+  // paying.
+  if (!CASHFREE_API_IS_SANDBOX) {
+    let returnUrlHost: string
+    try {
+      returnUrlHost = new URL(input.returnUrl.replace("{order_id}", "probe")).hostname
+    } catch {
+      throw new Error("order_meta.return_url is not a valid absolute URL.")
+    }
+    if (returnUrlHost === "localhost" || returnUrlHost === "127.0.0.1" || returnUrlHost === "::1") {
+      throw new Error(
+        `Refusing to create a live order with a loopback return_url (${returnUrlHost}). ` +
+          "Set PUBLIC_ORIGIN to the public https site, or use CASHFREE_API_ENV=test to test on the sandbox."
+      )
+    }
   }
 
   return cashfreeFetch<CashfreeOrderResponse>("/orders", {

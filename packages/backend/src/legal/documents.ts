@@ -10,9 +10,9 @@
 // refunds, the partner relationship, dispute resolution, age requirements, KYC
 // and data-retention terms must be reviewed by an Indian lawyer before launch.
 //
-// Placeholders are intentionally loud ([LEGAL ENTITY NAME], [REGISTERED
-// ADDRESS], [GRIEVANCE EMAIL], [JURISDICTION]) so a missing detail is obvious
-// in review rather than shipping as a blank in a binding document.
+// [JURISDICTION] is intentionally loud so a missing detail is obvious in review
+// rather than shipping as a blank in a binding document. The entity, support
+// and grievance contacts are resolved values, not placeholders.
 // ============================================================================
 
 export type LegalDocKind =
@@ -30,12 +30,14 @@ export interface LegalDocSeed {
   plainText: string;
 }
 
+// Per product decision: the legal entity is the app name itself, and there is no
+// separate registered address or grievance mailbox. Two addresses are published:
+// the support desk handles all queries, complaints and privacy requests, and the
+// founder mailbox is the direct contact. Jurisdiction still needs counsel.
 const P = {
-  entity: "[LEGAL ENTITY NAME]",
-  address: "[REGISTERED ADDRESS]",
-  support: "[SUPPORT EMAIL]",
-  grievance: "[GRIEVANCE EMAIL]",
-  privacy: "[PRIVACY CONTACT EMAIL]",
+  entity: "Nabri",
+  support: "nabri.support@gmail.com",
+  founder: "founder_nabri@zohomail.in",
   jurisdiction: "[JURISDICTION - TO BE CONFIRMED BY COUNSEL]",
 } as const;
 
@@ -98,12 +100,12 @@ const USER_ROWS: Array<[string, string, string | string[]]> = [
   ])],
   ["15", "Account suspension", "Nabri may restrict, suspend or terminate an account where there is a serious rule violation, fraud, abuse, a security risk, unlawful activity, repeated harmful conduct or payment abuse. Where appropriate, users should receive an explanation and an available review or appeal mechanism."],
   ["16", "User content", "You retain applicable rights in content you upload. You grant Nabri the permissions reasonably necessary to host, process, display and distribute that content as required to operate the service. Nabri should not use your private content for unrelated purposes without an appropriate legal basis or consent."],
-  ["17", "Privacy", "Nabri's processing of personal data is described separately in the Privacy Policy, including the data collected, purpose, sharing, retention, security, user rights, consent and withdrawal mechanisms, and grievance contact information."],
+  ["17", "Privacy", `Nabri's processing of personal data is described separately in the Privacy Policy, including the data collected, purpose, sharing, retention, security, user rights, consent and withdrawal mechanisms, and grievance contact information. Contact ${P.support} for any privacy question or request.`],
   ["18", "AI features", "Nabri may use AI for features such as recommendations, matching, translations, support, moderation assistance and event suggestions. AI output must not be treated as guaranteed fact. AI must not be permitted to bypass authentication, payment verification, KYC, privacy controls, admin permissions or safety controls."],
   ["19", "Platform availability", "Nabri will attempt to keep the service available but does not guarantee uninterrupted operation. Temporary interruption may occur due to maintenance, infrastructure failure, network problems, third-party provider failures, security incidents or events outside reasonable control."],
   ["20", "Changes", "Nabri may update this Agreement as the service evolves. Material changes should be communicated through appropriate channels, and where the change is material you may be required to re-accept the new version."],
   ["21", "Governing law", `This Agreement should specify the applicable law and dispute-resolution mechanism after legal review. Proposed jurisdiction: ${P.jurisdiction}.`],
-  ["22", "Contact", `Nabri Support: ${P.support}<br/>Grievance Contact: ${P.grievance}<br/>Privacy Contact: ${P.privacy}<br/>Registered Entity: ${P.entity}<br/>Address: ${P.address}`],
+  ["22", "Contact", `Nabri Support: ${P.support}<br/>Grievances and privacy requests: ${P.support}<br/>Founder contact: ${P.founder}<br/>Entity: ${P.entity}`],
 ];
 
 // ---------------------------------------------------------------------------
@@ -160,9 +162,9 @@ const PRIVACY_ROWS: Array<[string, string, string | string[]]> = [
   ["4", "Sharing", "We do not sell your personal data. We may share data with service providers who host the platform, deliver payments, send messages, or provide KYC verification, strictly to operate the service. We share the minimum necessary with a Partner for the duration of an active booking, such as your name, pickup location and contact number. We may share data where required by law, a court order, or to protect the safety of users."],
   ["5", "Retention", "Personal data is retained only for as long as needed for the purposes described, including legal, tax, dispute and safety record-keeping obligations. Where data is no longer required it is deleted or anonymised."],
   ["6", "Security", "Reasonable technical and organisational safeguards are used, including encryption in transit, access control, audit logging and restricted KYC storage. No system is completely secure, and users should also protect their own credentials."],
-  ["7", "Your rights", "Subject to applicable law you may request access to your personal data, correction of inaccurate data, deletion, restriction or portability, and you may withdraw consent. Requests should be sent to the privacy contact below and will be handled within the period required by law."],
+  ["7", "Your rights", `Subject to applicable law you may request access to your personal data, correction of inaccurate data, deletion, restriction or portability, and you may withdraw consent. Requests should be sent to ${P.support} and will be handled within the period required by law.`],
   ["8", "Automated decision-making", "Nabri may use automated systems for matching, recommendations, fraud detection and moderation assistance. Significant decisions affecting you are subject to human review, and you may contact us to contest an automated outcome."],
-  ["9", "Grievance", `Grievances relating to this policy may be sent to ${P.grievance} and will be acknowledged and resolved within the period required by applicable law. Registered Entity: ${P.entity}, ${P.address}.`],
+  ["9", "Grievance", `Grievances relating to this policy, including any request to access, correct or delete your personal data, may be sent to ${P.support} and will be acknowledged and resolved within the period required by applicable law. Entity: ${P.entity}.`],
   ["10", "Children", "Nabri is not intended for use by persons below the applicable minimum age, and we do not knowingly collect data from them."],
   ["11", "Changes", "This policy may be updated as the service or law changes. Material changes will be communicated, and where required you will be asked to re-accept the updated version."],
 ];
@@ -205,7 +207,7 @@ function doc(
   summary: string,
   rows: Array<[string, string, string | string[]]>
 ): LegalDocSeed {
-  const contentHtml = `<p style="margin:0 0 16px">${summary}</p>${sections(rows)}<p style="margin:18px 0 0;font-size:12px;color:#57534E">Entity: ${P.entity} &middot; Address: ${P.address} &middot; Support: ${P.support} &middot; Grievance: ${P.grievance}</p>${DISCLAIMER}`;
+  const contentHtml = `<p style="margin:0 0 16px">${summary}</p>${sections(rows)}<p style="margin:18px 0 0;font-size:12px;color:#57534E">Nabri &middot; Support: ${P.support} &middot; Founder contact: ${P.founder}</p>${DISCLAIMER}`;
   return { kind, title, summary, contentHtml, plainText: toPlainText(title, rows) };
 }
 

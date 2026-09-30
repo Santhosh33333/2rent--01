@@ -1,0 +1,775 @@
+/**
+ * Nabri marketing site design layer.
+ *
+ * Deliberately scoped to the landing page rather than merged into the product
+ * tokens in globals.css. The app UI is working and signed-off; a full
+ * re-token would restyle every screen for no user-visible gain. Everything here
+ * is namespaced under .nb so the two systems cannot bleed into each other.
+ *
+ * Brief: warm white ground, deep navy text, Nabri blue/cyan/violet/pink accents.
+ * No red anywhere.
+ */
+
+.nb {
+  /* Ground */
+  --nb-bg: #fbfaf8;
+  --nb-bg-soft: #f4f2ef;
+  --nb-surface: #ffffff;
+  --nb-line: #e8e4de;
+
+  /* Ink */
+  --nb-ink: #16233c;
+  --nb-ink-soft: #5b6779;
+  --nb-ink-faint: #8b94a3;
+
+  /* Accents */
+  --nb-blue: #2b4fd8;
+  --nb-blue-deep: #16233c;
+  --nb-cyan: #22b8cf;
+  --nb-violet: #7c5cf0;
+  --nb-purple: #a78bfa;
+  --nb-pink: #ec6a9c;
+
+  --nb-grad-brand: linear-gradient(135deg, #2b4fd8 0%, #22b8cf 52%, #a78bfa 100%);
+  --nb-grad-warm: linear-gradient(135deg, #2b4fd8 0%, #7c5cf0 60%, #ec6a9c 100%);
+
+  --nb-radius: 20px;
+  --nb-radius-sm: 12px;
+  --nb-radius-lg: 28px;
+
+  /* Soft, low-contrast depth. No heavy black shadows. */
+  --nb-shadow-sm: 0 1px 2px rgba(22, 35, 60, 0.05), 0 2px 8px rgba(22, 35, 60, 0.04);
+  --nb-shadow: 0 2px 6px rgba(22, 35, 60, 0.05), 0 12px 32px -12px rgba(22, 35, 60, 0.14);
+  --nb-shadow-lg: 0 4px 12px rgba(22, 35, 60, 0.06), 0 32px 64px -24px rgba(22, 35, 60, 0.2);
+
+  --nb-ease: cubic-bezier(0.22, 0.68, 0.36, 1);
+  --nb-container: 1200px;
+
+  background: var(--nb-bg);
+  color: var(--nb-ink);
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+.nb *,
+.nb *::before,
+.nb *::after {
+  box-sizing: border-box;
+}
+
+.nb-container {
+  width: 100%;
+  max-width: var(--nb-container);
+  margin-inline: auto;
+  padding-inline: 20px;
+}
+
+.nb-section {
+  padding-block: clamp(64px, 9vw, 128px);
+}
+
+.nb-section--tight {
+  padding-block: clamp(48px, 6vw, 88px);
+}
+
+/* ---------------------------------------------------------------- type */
+
+.nb-display {
+  font-family: 'Plus Jakarta Sans', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 0.98;
+  /* Guarantees the brief's "never allow text to overflow": long words break
+     rather than pushing the layout wide on a 320px screen. */
+  overflow-wrap: break-word;
+}
+
+.nb-h1 {
+  font-size: clamp(2.5rem, 7.2vw, 5.25rem);
+}
+
+.nb-h2 {
+  font-size: clamp(1.875rem, 4.4vw, 3.25rem);
+  line-height: 1.04;
+}
+
+.nb-h3 {
+  font-size: clamp(1.25rem, 2.2vw, 1.625rem);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.nb-lead {
+  font-size: clamp(1rem, 1.9vw, 1.3125rem);
+  line-height: 1.6;
+  color: var(--nb-ink-soft);
+}
+
+.nb-body {
+  font-size: 1rem;
+  line-height: 1.65;
+  color: var(--nb-ink-soft);
+}
+
+.nb-eyebrow {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--nb-blue);
+}
+
+.nb-muted {
+  color: var(--nb-ink-faint);
+}
+
+.nb-gradient-text {
+  background: var(--nb-grad-brand);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* -------------------------------------------------------------- buttons */
+
+.nb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 48px;
+  padding: 0.75rem 1.5rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 0.9375rem;
+  font-weight: 650;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: transform 0.22s var(--nb-ease), box-shadow 0.22s var(--nb-ease),
+    background-color 0.22s var(--nb-ease), border-color 0.22s var(--nb-ease);
+  /* Comfortably past the 44px minimum touch target. */
+}
+
+.nb-btn:focus-visible {
+  outline: 3px solid var(--nb-cyan);
+  outline-offset: 2px;
+}
+
+.nb-btn--primary {
+  background: var(--nb-grad-brand);
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(43, 79, 216, 0.22), 0 14px 30px -12px rgba(43, 79, 216, 0.4);
+}
+
+.nb-btn--primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(43, 79, 216, 0.24), 0 22px 44px -14px rgba(43, 79, 216, 0.46);
+}
+
+.nb-btn--secondary {
+  background: var(--nb-surface);
+  color: var(--nb-ink);
+  border-color: var(--nb-line);
+  box-shadow: var(--nb-shadow-sm);
+}
+
+.nb-btn--secondary:hover {
+  transform: translateY(-2px);
+  border-color: #d6d0c7;
+  box-shadow: var(--nb-shadow);
+}
+
+.nb-btn--ghost {
+  background: transparent;
+  color: var(--nb-ink-soft);
+  min-height: 44px;
+  padding: 0.5rem 1rem;
+}
+
+.nb-btn--ghost:hover {
+  color: var(--nb-ink);
+  background: rgba(22, 35, 60, 0.04);
+}
+
+.nb-btn--sm {
+  min-height: 40px;
+  padding: 0.5rem 1.125rem;
+  font-size: 0.875rem;
+}
+
+.nb-btn--lg {
+  min-height: 56px;
+  padding: 0.875rem 1.875rem;
+  font-size: 1rem;
+}
+
+.nb-btn--block {
+  width: 100%;
+}
+
+.nb-btn[disabled],
+.nb-btn[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* ---------------------------------------------------------------- cards */
+
+.nb-card {
+  background: var(--nb-surface);
+  border: 1px solid var(--nb-line);
+  border-radius: var(--nb-radius);
+  box-shadow: var(--nb-shadow-sm);
+}
+
+.nb-card--pad {
+  padding: 24px;
+}
+
+.nb-card--hover {
+  transition: transform 0.28s var(--nb-ease), box-shadow 0.28s var(--nb-ease),
+    border-color 0.28s var(--nb-ease);
+}
+
+.nb-card--hover:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--nb-shadow);
+  border-color: #dcd6cd;
+}
+
+/* Reserved for the few places the brief allows depth. Not a default. */
+.nb-card--depth {
+  box-shadow: var(--nb-shadow-lg);
+}
+
+/* ----------------------------------------------------------------- grid */
+
+.nb-grid {
+  display: grid;
+  gap: 20px;
+}
+
+.nb-grid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.nb-grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.nb-grid--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+@media (max-width: 1024px) {
+  .nb-grid--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .nb-grid--3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  .nb-grid--2,
+  .nb-grid--3,
+  .nb-grid--4 { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* --------------------------------------------------------------- badges */
+
+.nb-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.3125rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 650;
+  background: var(--nb-bg-soft);
+  color: var(--nb-ink-soft);
+  border: 1px solid var(--nb-line);
+}
+
+.nb-pill--live {
+  background: rgba(236, 106, 156, 0.1);
+  border-color: rgba(236, 106, 156, 0.32);
+  color: #b8386b;
+}
+
+.nb-pill--free {
+  background: rgba(34, 184, 207, 0.12);
+  border-color: rgba(34, 184, 207, 0.3);
+  color: #0d7a8c;
+}
+
+.nb-pill--paid {
+  background: rgba(124, 92, 240, 0.1);
+  border-color: rgba(124, 92, 240, 0.28);
+  color: #5636c4;
+}
+
+/* ------------------------------------------------------- empty / notice */
+
+.nb-empty {
+  border: 1px dashed var(--nb-line);
+  border-radius: var(--nb-radius);
+  padding: clamp(28px, 5vw, 48px);
+  text-align: center;
+  background: var(--nb-surface);
+  color: var(--nb-ink-soft);
+}
+
+.nb-empty__title {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: var(--nb-ink);
+  margin-bottom: 6px;
+}
+
+.nb-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--nb-bg-soft) 25%,
+    #eceae6 37%,
+    var(--nb-bg-soft) 63%
+  );
+  background-size: 400% 100%;
+  animation: nb-shimmer 1.4s ease-in-out infinite;
+  border-radius: var(--nb-radius-sm);
+}
+
+@keyframes nb-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
+}
+
+/* ------------------------------------------------------------ animation */
+
+@keyframes nb-float {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(0, -10px, 0); }
+}
+
+@keyframes nb-fade-up {
+  from { opacity: 0; transform: translate3d(0, 18px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+/* Scroll reveal. The observer sets --nb-reveal to 1 when in view; the
+   fallback above keeps content visible if JS never runs. */
+.nb-reveal {
+  opacity: 0;
+  transform: translate3d(0, 18px, 0);
+  transition: opacity 0.7s var(--nb-ease), transform 0.7s var(--nb-ease);
+  will-change: opacity, transform;
+}
+
+.nb-reveal.is-visible {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+
+/* -------------------------------------------------------- reduced motion */
+
+@media (prefers-reduced-motion: reduce) {
+  .nb *,
+  .nb *::before,
+  .nb *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .nb-reveal {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+/* ----------------------------------------------------------------- hero */
+
+.nb-hero {
+  position: relative;
+  padding-top: clamp(40px, 6vw, 72px);
+  padding-bottom: clamp(56px, 8vw, 104px);
+  isolation: isolate;
+}
+
+.nb-hero__glow {
+  position: absolute;
+  inset: -20% -10% auto;
+  height: 520px;
+  z-index: -1;
+  background:
+    radial-gradient(38% 46% at 22% 26%, rgba(43, 79, 216, 0.16), transparent 68%),
+    radial-gradient(32% 40% at 78% 18%, rgba(167, 139, 250, 0.16), transparent 66%),
+    radial-gradient(30% 38% at 52% 44%, rgba(34, 184, 207, 0.13), transparent 70%);
+  filter: blur(6px);
+  pointer-events: none;
+}
+
+/* ----------------------------------------------------------- phone mock */
+
+.nb-phone {
+  position: relative;
+  width: 100%;
+  max-width: 268px;
+  aspect-ratio: 268 / 546;
+  border-radius: 38px;
+  padding: 9px;
+  background: linear-gradient(160deg, #2b3448, #121826);
+  box-shadow: var(--nb-shadow-lg);
+  flex-shrink: 0;
+}
+
+.nb-phone__screen {
+  width: 100%;
+  height: 100%;
+  border-radius: 30px;
+  background: var(--nb-bg);
+  overflow: hidden;
+  position: relative;
+}
+
+.nb-phone__notch {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 74px;
+  height: 20px;
+  border-radius: 999px;
+  background: #121826;
+  z-index: 3;
+}
+
+/* ------------------------------------------------------------------ nav */
+
+.nb-nav {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  background: rgba(251, 250, 248, 0.86);
+  backdrop-filter: saturate(180%) blur(14px);
+  -webkit-backdrop-filter: saturate(180%) blur(14px);
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.3s var(--nb-ease), box-shadow 0.3s var(--nb-ease);
+}
+
+/* Shadow only once scrolled, per the brief. */
+.nb-nav.is-scrolled {
+  border-bottom-color: var(--nb-line);
+  box-shadow: 0 1px 20px -6px rgba(22, 35, 60, 0.12);
+}
+
+.nb-nav__link {
+  position: relative;
+  padding: 6px 2px;
+  font-size: 0.9375rem;
+  font-weight: 550;
+  color: var(--nb-ink-soft);
+  text-decoration: none;
+  transition: color 0.2s var(--nb-ease);
+}
+
+.nb-nav__link::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--nb-grad-brand);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.28s var(--nb-ease);
+}
+
+.nb-nav__link:hover,
+.nb-nav__link:focus-visible {
+  color: var(--nb-ink);
+}
+
+.nb-nav__link:hover::after,
+.nb-nav__link:focus-visible::after {
+  transform: scaleX(1);
+}
+
+.nb-nav__link:focus-visible {
+  outline: none;
+  border-radius: 4px;
+  box-shadow: 0 0 0 3px rgba(34, 184, 207, 0.45);
+}
+
+/* --------------------------------------------------------------- footer */
+
+.nb-footer {
+  background: var(--nb-bg-soft);
+  border-top: 1px solid var(--nb-line);
+  padding-block: clamp(40px, 6vw, 72px) 28px;
+}
+
+.nb-footer__link {
+  display: block;
+  padding: 5px 0;
+  font-size: 0.9375rem;
+  color: var(--nb-ink-soft);
+  text-decoration: none;
+  transition: color 0.2s var(--nb-ease);
+}
+
+.nb-footer__link:hover,
+.nb-footer__link:focus-visible {
+  color: var(--nb-blue);
+}
+
+.nb-footer__link:focus-visible {
+  outline: 2px solid var(--nb-cyan);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* -------------------------------------------------------- cookie consent */
+
+.nb-cookie {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 90;
+  background: var(--nb-surface);
+  border-top: 1px solid var(--nb-line);
+  box-shadow: 0 -8px 40px -12px rgba(22, 35, 60, 0.22);
+  padding: 18px 20px calc(18px + env(safe-area-inset-bottom, 0px));
+  animation: nb-fade-up 0.5s var(--nb-ease) both;
+}
+
+.nb-cookie__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+@media (max-width: 720px) {
+  .nb-cookie__actions .nb-btn {
+    flex: 1 1 132px;
+  }
+}
+
+/* --------------------------------------------------------------- modal */
+
+.nb-modal__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(22, 35, 60, 0.42);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 20px;
+  animation: nb-fade-up 0.3s var(--nb-ease) both;
+}
+
+@media (min-width: 721px) {
+  .nb-modal__backdrop { align-items: center; }
+}
+
+.nb-modal {
+  background: var(--nb-surface);
+  border-radius: var(--nb-radius-lg) var(--nb-radius-lg) 0 0;
+  width: 100%;
+  max-width: 560px;
+  max-height: min(86vh, 760px);
+  overflow-y: auto;
+  box-shadow: var(--nb-shadow-lg);
+}
+
+@media (min-width: 721px) {
+  .nb-modal { border-radius: var(--nb-radius-lg); }
+}
+
+.nb-switch {
+  position: relative;
+  width: 46px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid var(--nb-line);
+  background: var(--nb-bg-soft);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 0.24s var(--nb-ease), border-color 0.24s var(--nb-ease);
+}
+
+.nb-switch[aria-checked='true'] {
+  background: var(--nb-blue);
+  border-color: var(--nb-blue);
+}
+
+.nb-switch:focus-visible {
+  outline: 3px solid var(--nb-cyan);
+  outline-offset: 2px;
+}
+
+.nb-switch[disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.nb-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(22, 35, 60, 0.3);
+  transition: transform 0.24s var(--nb-ease);
+}
+
+.nb-switch[aria-checked='true']::after {
+  transform: translateX(20px);
+}
+
+/* --------------------------------------------------- desktop vs mobile */
+
+/* One breakpoint for the whole header. The centre nav plus three right-hand
+   controls stop fitting well before 1080px, and squeezing them produces the
+   overlapping text the brief rules out. */
+@media (max-width: 1080px) {
+  .nb-nav-desktop {
+    display: none !important;
+  }
+  .nb-nav-mobile {
+    display: flex !important;
+  }
+}
+
+@media (min-width: 1081px) {
+  .nb-nav-mobile {
+    display: none !important;
+  }
+}
+
+/* ------------------------------------------------------------ utilities */
+
+.nb-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.nb-skip-link {
+  position: absolute;
+  left: 12px;
+  top: -60px;
+  z-index: 200;
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: var(--nb-ink);
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+  transition: top 0.2s var(--nb-ease);
+}
+
+.nb-skip-link:focus {
+  top: 12px;
+}
+
+.nb-divider {
+  height: 1px;
+  background: var(--nb-line);
+  border: 0;
+  margin: 0;
+}
+
+/* ------------------------------------------------------------ dark mode */
+
+/*
+ * The landing layer is namespaced under `.nb`, so it does not get Tailwind's
+ * `dark:` utilities and previously stayed light even when the app UI flipped.
+ * `.dark` lives on <html> (ThemeProvider toggles it), so qualifying every rule
+ * with `.dark .nb` overrides the same tokens The daytime values are light.
+ *
+ * The palette inverts the light brief: the deep navy ink becomes the ground,
+ * ink-soft tints become text, and only the accent that carries the gradient
+ * (nb-blue) is lightened enough to stay contrasty on a very dark surface.
+ */
+.dark .nb {
+  --nb-bg: #0d1220;
+  --nb-bg-soft: #141a2c;
+  --nb-surface: #1a2136;
+  --nb-line: #273049;
+
+  --nb-ink: #edf1fb;
+  --nb-ink-soft: #a7b1cc;
+  --nb-ink-faint: #6e7a9a;
+
+  --nb-blue: #7b96ff;
+  --nb-blue-deep: #c9d5ff;
+  --nb-cyan: #3ec9de;
+  --nb-violet: #a28cff;
+  --nb-purple: #b78ffb;
+  --nb-pink: #f278a8;
+
+  --nb-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.42), 0 2px 8px rgba(0, 0, 0, 0.3);
+  --nb-shadow: 0 2px 6px rgba(0, 0, 0, 0.46), 0 12px 32px -12px rgba(0, 0, 0, 0.56);
+  --nb-shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.52), 0 32px 64px -24px rgba(0, 0, 0, 0.7);
+}
+
+.dark .nb-nav {
+  background: rgba(13, 18, 32, 0.86);
+}
+
+.dark .nb-nav.is-scrolled {
+  box-shadow: 0 1px 20px -6px rgba(0, 0, 0, 0.55);
+}
+
+.dark .nb-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--nb-bg-soft) 25%,
+    #1d2540 37%,
+    var(--nb-bg-soft) 63%
+  );
+  background-size: 400% 100%;
+}
+
+.dark .nb-btn--secondary:hover {
+  border-color: #354068;
+}
+
+.dark .nb-btn--ghost:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.dark .nb-card--hover:hover {
+  border-color: #354068;
+}
+
+/* Pill accents gain HSL lightness so their text stays readable on a dark card. */
+.dark .nb-pill--live {
+  color: #f68cb4;
+}
+
+.dark .nb-pill--free {
+  color: #54d3e5;
+}
+
+.dark .nb-pill--paid {
+  color: #c2b0ff;
+}
+
+.dark .nb-cookie {
+  box-shadow: 0 -8px 40px -12px rgba(0, 0, 0, 0.6);
+}
+
+.dark .nb-modal__backdrop {
+  background: rgba(0, 0, 0, 0.62);
+}

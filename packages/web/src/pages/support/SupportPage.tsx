@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, LifeBuoy, Plus, MessageSquare, Send, X } from 'lucide-react'
 import { getErrorMessage } from '../../lib/error'
+import { isSignedIn } from '../../lib/auth'
 import { supportApi, SUPPORT_CATEGORIES } from '../../lib/api'
 import { supportTicketStatusLabel, supportStatusClass, supportPriorityClass } from '../../lib/supportFormat'
 
@@ -77,6 +78,17 @@ export function SupportPage() {
   const [sending, setSending] = useState(false)
 
   const load = useCallback(async () => {
+    // "My requests" is an authenticated list. On this now-public route an
+    // anonymous visitor must not trigger it: a 401 is intercepted in lib/api.ts,
+    // which refreshes the session and then calls window.location.replace('/login'),
+    // so a visitor who only wanted to send a message was navigated away. With no
+    // account there is no ticket list to show, which is what the redirect would
+    // have achieved anyway, minus the surprise navigation.
+    if (!isSignedIn()) {
+      setTickets([])
+      setLoading(false)
+      return
+    }
     setLoading(true)
     setError('')
     try {

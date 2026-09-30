@@ -54,14 +54,27 @@ export async function acceptCall(req: AuthedRequest, res: Response): Promise<voi
       sendError(res, "Only the receiver can accept a call.", 403, "FORBIDDEN");
       return;
     }
-    if (call.status !== "MISSED") {
-      sendError(res, "Call already has a status.", 400, "INVALID_STATUS");
+    // Only a RINGING call can be accepted. This used to check for "MISSED",
+    // which is unreachable: createCall writes "RINGING" and only the 30s ring
+    // timeout (callService) ever moves a call to "MISSED". So this endpoint
+    // could never accept a live call - the one call in the database that
+    // satisfies "status === MISSED" is one that already timed out unanswered.
+    if (call.status !== "RINGING") {
+      sendError(res, "Call is no longer ringing.", 400, "INVALID_STATUS");
       return;
     }
-    const updated = await prisma.callLog.update({
-      where: { id },
+    // Guarded update rather than a plain update: the ring timeout and this
+    // request race, and without the status in the where-clause both can win and
+    // a call that already timed out gets resurrected with a fresh startedAt.
+    const claimed = await prisma.callLog.updateMany({
+      where: { id, status: "RINGING" },
       data: { status: "ACCEPTED", startedAt: new Date() },
     });
+    if (claimed.count !== 1) {
+      sendError(res, "Call is no longer ringing.", 409, "INVALID_STATUS");
+      return;
+    }
+    const updated = await prisma.callLog.findUnique({ where: { id } });
     sendSuccess(res, updated, "Call accepted.");
   } catch (err) {
     sendError(res, "Failed to accept call.", 500, "INTERNAL_ERROR");

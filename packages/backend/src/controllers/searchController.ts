@@ -1,6 +1,7 @@
 import { Request, Response } from 'express'
 import { prisma } from '../config/database'
 import { AuthedRequest } from '../middleware/authTypes'
+import { NOT_PRIVILEGED } from '../rbac/privilegedUsers'
 
 interface SearchResult {
   type: 'user' | 'event' | 'community' | 'booking'
@@ -38,10 +39,13 @@ export async function search(req: AuthedRequest, res: Response) {
 
     // Search users (name-only matching; ACTIVE accounts only; NO PII in results)
     if (filter === 'all' || filter === 'users') {
-      const userWhere = {
-        status: 'ACTIVE',
-        fullName: { contains: query },
-      }
+        const userWhere = {
+          status: 'ACTIVE',
+          fullName: { contains: query },
+          // Global search is a name-enumeration oracle, so it must not be able
+          // to confirm that a staff account exists.
+          ...NOT_PRIVILEGED,
+        }
 
       const [userResults, userCount] = await Promise.all([
         prisma.user.findMany({
@@ -268,7 +272,7 @@ export async function getSuggestions(req: Request, res: Response) {
 
     // Get user name suggestions (ACTIVE accounts only)
     const users = await prisma.user.findMany({
-      where: { fullName: { contains: query }, status: 'ACTIVE' },
+        where: { fullName: { contains: query }, status: 'ACTIVE', ...NOT_PRIVILEGED },
       select: { fullName: true },
       take: 3,
     })

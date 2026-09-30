@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { prisma } from "../config/database";
+import { NOT_PRIVILEGED } from "../rbac/privilegedUsers";
 import { AuthedRequest } from "../middleware/authTypes";
 import { sendSuccess, sendError } from "../utils/response";
 import { isDemoEmail, DEMO_EMAILS } from "../utils/demo";
@@ -13,10 +14,13 @@ export async function getPeople(req: AuthedRequest, res: Response): Promise<void
     const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
     const selfId = req.user!.userId;
 
-    const where: any = {
-      id: { not: selfId },
-      role: { notIn: ["ADMIN", "SUPER_ADMIN"] },
-      status: "ACTIVE",
+      const where: any = {
+        id: { not: selfId },
+        status: "ACTIVE",
+        // Was `role: { notIn: ["ADMIN", "SUPER_ADMIN"] }`, which ignored the
+        // eight delegated tiers (SUPPORT, KYC_ADMIN, PARTNER_ADMIN, ...), so
+        // those staff accounts were listed as ordinary members.
+        ...NOT_PRIVILEGED,
       // Demo sandbox fence: demos only ever see demos, real users never do.
       ...(isDemoEmail(req.user!.email)
         ? { email: { in: DEMO_EMAILS } }
@@ -69,7 +73,7 @@ function haversineKm(aLat: number, aLon: number, bLat: number, bLon: number): nu
 
 /**
  * Nearby available partners. Privacy-first: callers learn a rounded
- * distance ("2.4 km away") and the partner's city — NEVER the partner's
+ * distance ("2.4 km away") and the partner's city â€” NEVER the partner's
  * exact coordinates. Distances use the partner's declared service-area
  * position, not live GPS.
  *

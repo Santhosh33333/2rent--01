@@ -236,6 +236,42 @@ describe("authoritative status check", () => {
       expect(fetchMock).not.toHaveBeenCalled();
     });
 
+    // The live-only scoping above is the point of this test: the same loopback
+    // URL must be accepted on the sandbox, because a developer testing the
+    // hosted checkout on their own machine has no public origin to point at.
+    // The base URL is resolved once at module load, so this needs a fresh
+    // module instance rather than a process.env change on the imported copy.
+    it("allows a loopback return_url on the sandbox", async () => {
+      const previous = process.env.CASHFREE_API_ENV;
+      process.env.CASHFREE_API_ENV = "test";
+      vi.resetModules();
+      try {
+        const sandboxModule = await import("../services/cashfreeService.js");
+        const sandboxFetch = vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ order_id: "o1", order_status: "ACTIVE" }),
+        });
+        vi.stubGlobal("fetch", sandboxFetch);
+
+        await sandboxModule.createOrder({
+          ...VALID_ORDER,
+          returnUrl: "http://localhost:5173/wallet?order_id={order_id}",
+        });
+
+        const [url, init] = sandboxFetch.mock.calls[0] as [string, RequestInit];
+        expect(String(url)).toContain("sandbox.cashfree.com");
+        // The placeholder check is not a live-only concern: the order still
+        // has to be matchable on the way back.
+        expect(JSON.parse(String(init.body)).order_meta.return_url).toContain("{order_id}");
+      } finally {
+        vi.unstubAllGlobals();
+        if (previous === undefined) delete process.env.CASHFREE_API_ENV;
+        else process.env.CASHFREE_API_ENV = previous;
+        vi.resetModules();
+      }
+    });
+
     it("refuses a return_url that is not an absolute URL", async () => {
       await expect(createOrder({ ...VALID_ORDER, returnUrl: "/wallet?order_id={order_id}" })).rejects.toThrow(
         /absolute URL/i

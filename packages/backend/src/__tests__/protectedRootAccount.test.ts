@@ -29,27 +29,38 @@ function handlerBody(name: string): string {
 
 describe('protected root super admin', () => {
   it('normalises the email comparison so casing cannot bypass the lock', () => {
-    const helperStart = controllerSrc.indexOf('function isPrimarySuperAdmin');
-    expect(helperStart).toBeGreaterThan(-1);
-    const helper = controllerSrc.slice(helperStart, helperStart + 600);
-
-    expect(helper).toContain('.trim().toLowerCase()');
+    // The guard now lives in rbac/primarySuperAdmin so the controller, the boot
+    // repair and the tests all agree on one identity. The behaviour it asserted
+    // is covered by primarySuperAdmin.test.ts, which exercises the real helper
+    // with ADMIN_EMAIL set, unset and blank instead of reading source text.
+    const helperSrc = readFileSync(join(backendSrc, 'rbac', 'primarySuperAdmin.ts'), 'utf8');
+    expect(helperSrc).toContain('.trim().toLowerCase()');
     // Both sides must be normalised: comparing only the stored email leaves
     // "Santhoshkrishna958@Gmail.com" free to be deleted.
-    expect(helper).toMatch(/\(email \?\? ""\)\.trim\(\)\.toLowerCase\(\)/);
+    expect(helperSrc).toMatch(/\(email \?\? ['"]['"]\)\.trim\(\)\.toLowerCase\(\)/);
   });
 
   // A hardcoded fallback here is a silent privilege-escalation path: with
   // ADMIN_EMAIL unset or blank, one baked-in mailbox would become the account
   // that can never be demoted, suspended or deleted.
   it('has no hardcoded fallback identity, and fails closed when unconfigured', () => {
+    const helperSrc = readFileSync(join(backendSrc, 'rbac', 'primarySuperAdmin.ts'), 'utf8');
+
+    expect(helperSrc).not.toMatch(/santhoshkrishna958/);
+    expect(helperSrc).not.toMatch(/@gmail\.com/);
+    // Blank must be treated as unset rather than as a matchable identity.
+    expect(helperSrc).toMatch(/if \(!primary\) return false/);
+  });
+
+  // The controller's local wrapper must delegate, not re-derive: a second copy
+  // is exactly what let ADMIN_EMAIL-unset silently disable every guard.
+  it('routes the controller guard through the shared helper', () => {
     const helperStart = controllerSrc.indexOf('function isPrimarySuperAdmin');
+    expect(helperStart).toBeGreaterThan(-1);
     const helper = controllerSrc.slice(helperStart, helperStart + 600);
 
-    expect(helper).not.toMatch(/santhoshkrishna958/);
-    expect(helper).not.toMatch(/@gmail\.com/);
-    // Blank must be treated as unset rather than as a matchable identity.
-    expect(helper).toMatch(/if \(!protectedEmail\) return false/);
+    expect(helper).toContain('isPrimarySuperAdminAccount(email)');
+    expect(helper).not.toContain('env.ADMIN_EMAIL');
   });
 
   it('no module bakes a personal address in as an admin or archive recipient', () => {

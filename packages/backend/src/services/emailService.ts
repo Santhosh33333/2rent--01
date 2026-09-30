@@ -3,7 +3,7 @@ import { env } from "../config/env";
 import { prisma } from "../config/database";
 import { renderEmail, escHtml, paragraphHtml, WEB_ORIGIN } from "./emailTemplate";
 
-export type EmailProviderName = "none" | "smtp" | "gmail" | "brevo" | "resend";
+export type EmailProviderName = "none" | "smtp" | "gmail" | "brevo" | "resend" | "zoho";
 
 export function emailProvider(): EmailProviderName {
   const p = (env.EMAIL_PROVIDER || "none").toLowerCase();
@@ -11,6 +11,12 @@ export function emailProvider(): EmailProviderName {
   // bound to sender IP and breaks on cloud hosts with 525 Unauthorized IP).
   if (p === "brevo" && env.BREVO_API_KEY) return "brevo";
   if (p === "gmail" && env.GMAIL_USER && env.GMAIL_APP_PASSWORD) return "gmail";
+  // Zoho transactional API, OAuth bearer token. Preferred over Zoho SMTP on a
+  // cloud host: Zoho's SMTP relay rejects any source IP that is not explicitly
+  // authorised ("525 5.7.1 Unauthorized IP address"), and a PaaS provider's
+  // egress IP is not a fixed value you can authorise ahead of time. The API
+  // authenticates with a token instead of the source address.
+  if (p === "zoho" && (env.ZOHO_ACCESS_TOKEN || env.ZOHO_API_TOKEN)) return "zoho";
   if (p === "smtp" && env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS) return "smtp";
   if (p === "resend" && env.RESEND_API_KEY) return "resend";
   // Explicit provider request without credentials, or unknown name, degrades
@@ -25,7 +31,7 @@ export function emailStatus(): {
   from: string;
 } {
   const provider = emailProvider();
-  if (provider === "brevo" || provider === "smtp" || provider === "gmail" || provider === "resend") {
+  if (provider === "brevo" || provider === "smtp" || provider === "gmail" || provider === "resend" || provider === "zoho") {
     return { provider, configured: true, requiredEnv: [], from: env.EMAIL_FROM };
   }
   const want = (env.EMAIL_PROVIDER || "none").toLowerCase();
@@ -34,9 +40,11 @@ export function emailStatus(): {
       ? ["RESEND_API_KEY", "EMAIL_FROM"]
       : want === "brevo"
         ? ["BREVO_API_KEY", "EMAIL_FROM"]
-        : want === "gmail"
-          ? ["GMAIL_USER", "GMAIL_APP_PASSWORD", "EMAIL_FROM"]
-          : ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "EMAIL_FROM"];
+        : want === "zoho"
+          ? ["ZOHO_ACCESS_TOKEN", "EMAIL_FROM"]
+          : want === "gmail"
+            ? ["GMAIL_USER", "GMAIL_APP_PASSWORD", "EMAIL_FROM"]
+            : ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "EMAIL_FROM"];
   return { provider: "none", configured: false, requiredEnv: required, from: env.EMAIL_FROM };
 }
 
@@ -175,6 +183,74 @@ async function sendViaResend(
   }
 }
 
+/**
+ * Zoho transactional send API.
+ *
+ * Uses the OAuth bearer token rather than SMTP on purpose. Zoho's SMTP relay
+ * authorises by source IP as well as credentials, so on a PaaS host every send
+ * fails with "525 5.7.1 Unauthorized IP address" until each egress address is
+ * manually added in the Zoho admin console. The API authenticates with the token
+ * only, so it is independent of where the code runs.
+ */
+async function sendViaZoho(
+  to: string,
+  subject: string,
+  html: string,
+  text: string,
+  opts?: SendEmailOptions
+): Promise<{ ok: boolean; messageId?: string; error?: string; detail?: string }> {
+  const token = env.ZOHO_ACCESS_TOKEN || env.ZOHO_API_TOKEN;
+  if (!token) return { ok: false, error: "EMAIL_NOT_CONFIGURED", detail: "ZOHO_ACCESS_TOKEN is not set" };
+  // Accounts are region-scoped (zoho.com / zoho.eu / zoho.in / ...). Guessing
+  // wrong returns an opaque 401, so this is overridable and defaults to the
+  // standard global region.
+  const region = (env.ZOHO_API_REGION || "zoho.com").trim();
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 15000);
+    try {
+      const from = parseFrom();
+      const res = await fetch(`https://sendmail.${region}/zohomail/email`, {
+        method: "POST",
+        signal: ctrl.signal,
+        headers: {
+          "Content-Type": "application/json",
+          // Zoho expects the raw token in Authorization, without "Bearer".
+          Authorization: token,
+          "Accept": "application/json",
+        },
+        body: JSON.stringify({
+          from: { address: from.email, display_name: from.name },
+          to: [{ address: to }],
+          subject,
+          html_content: html,
+          text_content: text,
+          ...(opts?.bcc?.length ? { cc: [], bcc: opts.bcc.map((a) => ({ address: a })) } : {}),
+        }),
+      });
+      const data: any = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const detail = `${res.status} ${data?.code || ""} ${data?.message || data?.description || "rejected"}`.trim();
+        // A 401 here is almost always an expired OAuth token, which is a
+        // different fix from a bad recipient, so name it.
+        if (res.status === 401 || res.status === 403) {
+          console.error("[EMAIL] Zoho rejected the access token. Generate a fresh OAuth token and set ZOHO_ACCESS_TOKEN.");
+        }
+        return { ok: false, error: "EMAIL_DELIVERY_FAILED", detail };
+      }
+      return { ok: true, messageId: data?.message_id || data?.request_id };
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch (err: any) {
+    return {
+      ok: false,
+      error: "EMAIL_DELIVERY_FAILED",
+      detail: err?.name === "AbortError" ? "timed out" : (err?.message || "request failed"),
+    };
+  }
+}
+
 export interface EmailResult {
   ok: boolean;
   provider: EmailProviderName;
@@ -210,6 +286,11 @@ export async function sendEmail(to: string, subject: string, html: string, text?
   if (provider === "resend") {
     const r = await sendViaResend(to, subject, html, plain, opts);
     if (!r.ok) console.error("[EMAIL] Resend failed:", r.error);
+    return { ok: r.ok, provider, messageId: r.messageId, error: r.error, detail: r.detail };
+  }
+  if (provider === "zoho") {
+    const r = await sendViaZoho(to, subject, html, plain, opts);
+    if (!r.ok) console.error("[EMAIL] Zoho API failed:", r.detail || r.error);
     return { ok: r.ok, provider, messageId: r.messageId, error: r.error, detail: r.detail };
   }
   if (provider === "gmail") {
