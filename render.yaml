@@ -75,6 +75,17 @@ services:
       # default cannot disagree.
       - key: ADMIN_EMAIL
         value: "santhoshkrishna958@gmail.com"
+      # TMDB supplies which Indian films are playing and when. Without it
+      # /public/movies/now-playing answers {"configured":false,"movies":[]} and
+      # the Movies section on the landing page renders empty in production
+      # while working locally - which is exactly the local/live split this
+      # variable caused.
+      #
+      # A secret, so it is never committed: set it in the dashboard. Declared so
+      # a new service provisioned from this file knows it is required instead of
+      # silently booting without a movie feed.
+      - key: TMDB_API_KEY
+        sync: false
       # Shared cache + cross-instance state. Set this in the dashboard.
       # sync: false keeps Render from overwriting a value you set by hand.
       #
