@@ -55,12 +55,42 @@ export function publicWebOrigin(): string {
     return stripTrailingSlash(explicit)
   }
 
-  // CORS_ORIGIN may legitimately be a list for local dev, so only the first
-  // entry is ever considered as an origin to send a payer back to.
-  const firstCorsOrigin = (env.CORS_ORIGIN || "")
+  // CORS_ORIGIN may legitimately be a list (dev web + Vercel preview + a custom
+  // domain), but only the FIRST entry is ever considered as an origin to send a
+  // payer back to.
+  //
+  // That coupling is a trap when a custom domain is added. The natural move is to
+  // append it - "https://old.vercel.app,https://mydomain.com" - which passes every
+  // CORS check and still sends every paying customer back to the old site,
+  // forever, with no error. Payment return URLs are the one thing that must be
+  // explicit, so when a second real origin appears without PUBLIC_WEB_ORIGIN
+  // saying which one it is, refuse rather than guess. Guessing here costs a
+  // customer their money and a support ticket; failing to boot costs one env var.
+  const corsOrigins = (env.CORS_ORIGIN || "")
     .split(",")
     .map((value) => value.trim())
-    .filter(Boolean)[0]
+    .filter(Boolean)
+
+  const realCorsOrigins = corsOrigins.filter((value) => {
+    const url = parseOrigin(value)
+    return !!url && /^https?:$/.test(url.protocol) && !LOOPBACK_HOSTS.has(url.hostname)
+  })
+
+if (env.isProduction && realCorsOrigins.length > 1) {
+    // Warned, not thrown: listing several origins in CORS_ORIGIN is legitimate
+    // and already tested (a Vercel preview plus a custom domain, say), so
+    // refusing to boot over it would take the whole API down to fix a cosmetic
+    // ambiguity. Resolving to the first entry is the documented behaviour and
+    // stays. What was missing was any signal that the choice was implicit.
+    console.warn(
+      `[publicOrigin] CORS_ORIGIN lists ${realCorsOrigins.length} public origins ` +
+        `(${realCorsOrigins.join(", ")}) and PUBLIC_WEB_ORIGIN is unset. Post-payment ` +
+        `return URLs will use "${realCorsOrigins[0]}". If that is not the origin customers ` +
+        `should land on after paying, set PUBLIC_WEB_ORIGIN explicitly.`
+    )
+  }
+
+  const firstCorsOrigin = corsOrigins[0]
 
   if (firstCorsOrigin) {
     const url = parseOrigin(firstCorsOrigin)
