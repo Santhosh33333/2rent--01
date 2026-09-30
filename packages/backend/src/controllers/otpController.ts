@@ -138,7 +138,14 @@ export async function verifyOtpLogin(req: Request, res: Response): Promise<void>
           mobileVerified: true,
         },
       });
-      await prisma.wallet.create({ data: { userId: user.id } }).catch(() => {});
+      // Not .catch(() => {}): swallowing this left the account without a wallet row,
+      // and since the user row is already committed at this point, nothing would
+      // ever create one again. upsert is also race-safe on the unique userId.
+      await prisma.wallet.upsert({
+        where: { userId: user.id },
+        create: { userId: user.id },
+        update: {},
+      });
     }
     if (!user) {
       sendError(res, "No account uses this email. Create one first.", 404, "USER_NOT_FOUND");

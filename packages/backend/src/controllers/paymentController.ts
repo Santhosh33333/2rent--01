@@ -67,11 +67,21 @@ export async function createOrder(req: AuthedRequest, res: Response): Promise<vo
       return;
     }
 
-    const wallet = await prisma.wallet.findUnique({ where: { userId } })
-    if (!wallet) {
-      sendError(res, "Wallet not found.", 404, "WALLET_NOT_FOUND")
-      return
-    }
+    // Self-heal, matching the ten other wallet call sites in this codebase.
+    // A missing wallet is a recoverable state, not a reason to refuse payment:
+    // otpController creates the wallet on SMS signup but swallows failures with
+    // .catch(() => {}), so one transient DB error there used to strand the user
+    // permanently. They could add money in-app (walletController self-heals) and
+    // then get a bare 404 "Wallet not found" when they tried to actually pay for
+    // it, which reads as "this app is broken" rather than "retry".
+    //
+    // upsert rather than find-then-create: a user tapping "top up" twice must not
+    // race two inserts into a unique-constrained userId and surface a 500.
+    const wallet = await prisma.wallet.upsert({
+      where: { userId },
+      create: { userId },
+      update: {},
+    })
 
     // Cashfree requires customer_phone on every order. It is not on the JWT, so
     // read it from the user row and reduce it to the bare 10-digit national

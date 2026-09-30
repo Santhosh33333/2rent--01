@@ -44,11 +44,12 @@ const signPayment = (orderId: string, paymentId: string) =>
 // top-level declarations, and referencing them directly throws at import time.
 const { db, gateway } = vi.hoisted(() => ({
   db: {
-    paymentOrder: { findFirst: vi.fn(), findUnique: vi.fn(), updateMany: vi.fn() },
-    wallet: { findUnique: vi.fn(), update: vi.fn() },
+    paymentOrder: { findFirst: vi.fn(), findUnique: vi.fn(), create: vi.fn(), updateMany: vi.fn() },
+    wallet: { findUnique: vi.fn(), upsert: vi.fn(), update: vi.fn() },
     transaction: { create: vi.fn() },
     notification: { create: vi.fn() },
     auditLog: { create: vi.fn() },
+    user: { findUnique: vi.fn() },
     $transaction: vi.fn(),
   },
   gateway: {
@@ -619,5 +620,48 @@ describe("cashfree webhook", () => {
       in: ["CREATED", "AUTHORIZED"],
     });
     expect(db.wallet.update).not.toHaveBeenCalled();
+  });
+});
+
+// --- wallet self-heal on order creation -------------------------------------
+//
+// Regression: createOrder used to 404 "Wallet not found" when the user had no
+// wallet row. A phone signup could end up in that state permanently, because
+// otpController swallowed its wallet.create failure with .catch(() => {}). The
+// user could still add money through walletController (which self-heals) and
+// then be refused at the moment of paying for it.
+
+describe("createOrder and a user with no wallet row", () => {
+  const TOPUP = { amount: 500 };
+
+  function arrangeWalletless() {
+    db.wallet.upsert.mockResolvedValue({ id: WALLET_ID, userId: USER_ID, balance: 0 });
+    db.user.findUnique.mockResolvedValue({ phone: "+919876500321", fullName: "Smoke Tester" });
+    db.paymentOrder.create.mockResolvedValue({ id: "po-new" });
+  }
+
+  it("creates the wallet instead of refusing to take money", async () => {
+    arrangeWalletless();
+    const { res, state } = fakeRes();
+
+    await paymentController.createOrder(fakeReq(TOPUP), res);
+
+    expect(db.wallet.upsert).toHaveBeenCalledWith({
+      where: { userId: USER_ID },
+      create: { userId: USER_ID },
+      update: {},
+    });
+    expect(state.statusCode).not.toBe(404);
+  });
+
+  it("uses upsert rather than find-then-create, so a double tap cannot race", async () => {
+    // Two taps on "top up" must not both miss on findUnique and then collide on
+    // the unique userId, which would surface as a 500 to the customer.
+    arrangeWalletless();
+    const { res } = fakeRes();
+
+    await paymentController.createOrder(fakeReq(TOPUP), res);
+
+    expect(db.wallet.findUnique).not.toHaveBeenCalled();
   });
 });
