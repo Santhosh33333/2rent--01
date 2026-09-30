@@ -62,6 +62,7 @@ model User {
   eventAttendances               EventAttendee[]      @relation("EventAttendeeUser")
   sentMessages                   Message[]            @relation("MessageSender")
   receivedMessages               Message[]            @relation("MessageReceiver")
+  eventGroupMessages             EventGroupMessage[]  @relation("EventGroupSender")
   reportsFiled                   Report[]             @relation("ReportFiledBy")
   reportsAgainst                 Report[]             @relation("ReportAgainst")
   ratingsGiven                   Rating[]             @relation("RatingGivenBy")
@@ -800,6 +801,7 @@ model Event {
 
     organizer User            @relation("EventOrganizer", fields: [organizerId], references: [id], onDelete: Cascade)
     attendees EventAttendee[]
+    groupMessages EventGroupMessage[]
 
     @@index([organizerId])
     @@index([status, startTime])
@@ -880,6 +882,30 @@ model Conversation {
   @@unique([participant1Id, participant2Id])
   @@index([participant1Id])
   @@index([participant2Id])
+}
+
+// An event's group thread: everyone RSVP'd to the event talking to each other.
+//
+// Deliberately NOT a Conversation. That model is strictly two-party
+// (participant1/participant2 with a unique pair), and retrofitting group chat
+// onto it would mean auditing every 1:1 query, unread count and socket fan-out
+// in the messenger. An event thread has a different membership rule too:
+// access comes from the event's attendee list, not from an invitation.
+model EventGroupMessage {
+  id        String   @id @default(uuid())
+  eventId   String
+  senderId  String
+  content   String
+  messageType String @default("TEXT") // TEXT | IMAGE
+  mediaUrl  String?
+  status    String   @default("SENT")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  event  Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  sender User  @relation("EventGroupSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, createdAt])
 }
 
 model TypingStatus {

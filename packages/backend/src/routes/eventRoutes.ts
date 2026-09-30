@@ -4,6 +4,8 @@ import { authenticateToken, requireKycVerified } from "../middleware/auth";
 import { sanitizeInput, validateRequest } from "../middleware/validation";
 import { upload } from "../middleware/upload";
 import * as eventController from "../controllers/eventController";
+import * as eventChatController from "../controllers/eventChatController";
+import { requireReConsent } from "../middleware/legalConsent";
 
 const router = Router();
 
@@ -95,6 +97,39 @@ router.post("/:id/checkin", eventController.checkInEvent);
 
 // Get event attendees
 router.get("/:id/attendees", eventController.getEventAttendees);
+
+// --- Event group thread -------------------------------------------------------
+// Restricted to the organizer and the event's attendees; the controller enforces
+// membership, not just authentication, so these cannot be read app-wide.
+router.get(
+  "/:id/messages",
+  authenticateToken,
+  requireKycVerified,
+  requireReConsent(),
+  eventChatController.getEventMessages
+);
+
+router.post(
+  "/:id/messages",
+  authenticateToken,
+  requireKycVerified,
+  [
+    body("content").optional().isString().trim().isLength({ max: 2000 }),
+    body("messageType").optional().isIn(["TEXT", "IMAGE"]),
+    body("mediaUrl").optional().isString().trim().isLength({ max: 500 }),
+  ],
+  sanitizeInput,
+  validateRequest,
+  requireReConsent(),
+  eventChatController.sendEventMessage
+);
+
+router.delete(
+  "/:id/messages/:messageId",
+  authenticateToken,
+  requireKycVerified,
+  eventChatController.deleteEventMessage
+);
 
 export default router;
 

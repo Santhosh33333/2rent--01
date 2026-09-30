@@ -13,6 +13,7 @@ import { getErrorMessage } from '../../lib/error'
 import { isSignedIn } from '../../lib/auth'
 import { directionsUrl } from '../../lib/maps'
 import { openExternalUrl } from '../../lib/externalLink'
+import { EventChat } from '../../components/events/EventChat'
 
 interface EventDetail {
   id: string
@@ -604,6 +605,12 @@ export function EventDetailPage() {
                 )}
               </div>
             </div>
+          )}
+
+          {/* Group thread. The server decides who may read or post, so the
+              component only needs to know whether to offer the composer. */}
+          {signedIn && (
+            <EventChat eventId={event.id} canPost={event.rsvp || event.isOrganizer === true} />
           )}
         </div>
       </div>
