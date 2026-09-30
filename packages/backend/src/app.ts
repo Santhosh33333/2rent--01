@@ -55,6 +55,7 @@ import legalRoutes from "./routes/legalRoutes";
 import supportRoutes from "./routes/supportRoutes";
 import referralRoutes from "./routes/referralRoutes";
 import otpApiRoutes from "./routes/otpApiRoutes";
+import { isOriginAllowed, parseAllowedOrigins } from "./config/corsOrigins";
 
 export function createApp(): http.Server {
   const app = express();
@@ -62,33 +63,7 @@ export function createApp(): http.Server {
   // as coming from the single proxy IP, so per-IP rate limits apply to ALL users
   // at once. Trusting the nearest proxy lets req.ip resolve the real client.
   app.set("trust proxy", 1);
-  const allowedOrigins = (env.CORS_ORIGIN || "http://localhost:5173")
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
-
-  // Dev server (http://localhost:5173) and Capacitor Android (https://localhost
-  // inside its WebView named after androidScheme) both use loopback origins.
-  const isLocalDevOrigin = (origin: string): boolean => {
-    try {
-      const url = new URL(origin);
-      return url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "::1";
-    } catch {
-      return false;
-    }
-  };
-
-  // Vercel deploys get fresh subdomains on every push (web-<hash>.*.vercel.app);
-  // allow any *.vercel.app origin so the app keeps working across redeploys
-  // without editing CORS_ORIGIN, while env.CORS_ORIGIN still gates custom domains.
-  const isVercelOrigin = (origin: string): boolean => {
-    try {
-      const url = new URL(origin);
-      return url.hostname === "vercel.app" || url.hostname.endsWith(".vercel.app");
-    } catch {
-      return false;
-    }
-  };
+  const allowedOrigins = parseAllowedOrigins(env.CORS_ORIGIN || "http://localhost:5173");
 
   app.use(helmet({
     contentSecurityPolicy: {
@@ -109,11 +84,18 @@ export function createApp(): http.Server {
   }));
   app.use(cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin) || isLocalDevOrigin(origin) || isVercelOrigin(origin)) {
+      if (isOriginAllowed(origin, allowedOrigins)) {
         callback(null, true);
         return;
       }
-      callback(new Error(`Origin ${origin} not allowed by CORS`));
+      // Tagged so the error handler can answer 403 with the offending origin
+      // instead of a generic 500. A bare Error here reached the catch-all as
+      // "Internal server error", which is how a plain CORS misconfiguration
+      // presents to a user as an unexplained Network Error with nothing in the
+      // response to act on.
+      const err = new Error(`Origin ${origin} not allowed by CORS`) as Error & { code?: string };
+      err.code = "CORS_ORIGIN_DENIED";
+      callback(err);
     },
     credentials: true,
   }));
@@ -377,6 +359,15 @@ app.use("/api/movies", moviesRoutes);
   });
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+    // Handled and expected, not a crash. This fires on every request from an
+    // origin that is not in CORS_ORIGIN, so it is logged at warn rather than
+    // error, and answered with the origin that was rejected so whoever is
+    // deploying can see which value is missing from the environment.
+    if (err.code === "CORS_ORIGIN_DENIED") {
+      console.warn(`[CORS] ${err.message}. Add it to CORS_ORIGIN on this service.`);
+      sendError(res, err.message, 403, "CORS_ORIGIN_DENIED");
+      return;
+    }
     console.error("Unhandled error:", err);
     if (err.code === "LIMIT_FILE_SIZE") {
       const maxMb = Math.round(env.MAX_FILE_SIZE / 1048576);
