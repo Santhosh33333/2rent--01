@@ -53,20 +53,33 @@ export function assertNotPrimarySuperAdmin(email: string | null | undefined, act
  */
 export async function ensurePrimarySuperAdminActive(): Promise<void> {
   const email = primarySuperAdminEmail();
-  if (!email) {
-    console.warn(
-      '[primary-super-admin] ADMIN_EMAIL is not set; cannot verify the break-glass account is active.',
-    );
-    return;
-  }
 
-  const user = await prisma.user.findUnique({
-    where: { email },
-    select: { id: true, status: true, activeRole: true, role: true, suspendedUntil: true },
-  });
+  const select = { id: true, status: true, activeRole: true, role: true, suspendedUntil: true } as const;
+
+  // With ADMIN_EMAIL unset, fall back to whoever the database already says is
+  // the super admin rather than doing nothing.
+  //
+  // The repair used to be a no-op in that case, which is how a SUSPENDED
+  // super admin survived every deploy: ADMIN_EMAIL is optional in the env
+  // schema and was not set in production, so the one guaranteed way back into an
+  // admin-gated database stayed locked out. Reading the role from the database
+  // hardcodes no identity, which is the constraint that matters - the
+  // protectedRootAccount tests forbid baking a mailbox into this module because
+  // that mailbox would become the account nobody can suspend.
+  const user = email
+    ? await prisma.user.findUnique({ where: { email }, select })
+    : ((await prisma.user.findFirst({
+        where: { role: 'SUPER_ADMIN' },
+        select,
+        orderBy: { createdAt: 'asc' },
+      })) ?? null);
 
   if (!user) {
-    console.warn(`[primary-super-admin] ${email} does not exist yet; run the admin seed.`);
+    console.warn(
+      email
+        ? `[primary-super-admin] ${email} does not exist yet; run the admin seed.`
+        : '[primary-super-admin] ADMIN_EMAIL is unset and no SUPER_ADMIN account exists yet; run the admin seed.',
+    );
     return;
   }
 
