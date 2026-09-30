@@ -45,6 +45,10 @@ import { publicWebOrigin } from "../config/publicOrigin"
 import { CancellationCutoffError, getBookingCancellationState } from "../services/bookingCancellationPolicy"
 import { bookingStatusFor, paymentStatusFor, resolvePaymentMethod } from "../services/paymentMethodPolicy"
 import { buildHourlyQr } from "../services/upiQr"
+import {
+  assertBookingStartWithinHours,
+  BookingWindowError,
+} from "../services/bookingSchedulingWindow"
 
 const settleReferralReward = buildReferralRewardService()
 
@@ -87,7 +91,7 @@ export async function createBooking(req: AuthedRequest, res: Response): Promise<
       sendError(res, "Unsupported service type.", 400, "INVALID_SERVICE");
       return;
     }
-    const { startLocation, endLocation, scheduledAt, durationMinutes, itemType, itemDescription, notes, startLatitude, startLongitude, endLatitude, endLongitude, couponCode, distanceKm, sameGenderOnly } = req.body;
+    const { startLocation, endLocation, scheduledAt, durationMinutes, itemType, itemDescription, notes, timezone, startLatitude, startLongitude, endLatitude, endLongitude, couponCode, distanceKm, sameGenderOnly } = req.body;
 
     // Per-type process: pickup-to-drop services must have a destination;
     // companion-style services (walking, pet, study…) default it to pickup.
@@ -115,6 +119,18 @@ export async function createBooking(req: AuthedRequest, res: Response): Promise<
     if (scheduledDate.getTime() > Date.now() + BOOKING_WINDOW_MS) {
       sendError(res, "Bookings can only be made from today up to 2 months in advance.", 400, "BOOKING_WINDOW_EXCEEDED");
       return;
+    }
+    // Partner jobs run between 4:00 AM and 10:00 PM in the booker's timezone.
+    // Checked before the booking is written so an impossible slot never
+    // reaches dispatch and burns a partner's notification.
+    try {
+      assertBookingStartWithinHours(scheduledDate, timezone);
+    } catch (e) {
+      if (e instanceof BookingWindowError) {
+        sendError(res, e.message, 400, e.code);
+        return;
+      }
+      throw e;
     }
 
     const booking = await bookingEngine.createBooking(userId, {

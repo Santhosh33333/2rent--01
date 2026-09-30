@@ -12,6 +12,7 @@ import { api, assetUrl } from '../../lib/api'
 import { getErrorMessage } from '../../lib/error'
 import { isSignedIn } from '../../lib/auth'
 import { directionsUrl } from '../../lib/maps'
+import { openExternalUrl } from '../../lib/externalLink'
 
 interface EventDetail {
   id: string
@@ -113,6 +114,11 @@ export function EventDetailPage() {
           const res = await api.get(`/events/${id}`, { signal: controller.signal })
           const raw = res.data?.data || res.data
           setEvent(mapEvent(raw))
+          // These two paths return before the public request below, whose
+          // `finally` owns setLoading(false). Without clearing it here a
+          // signed-in visitor - which is exactly the organizer who just created
+          // the event - sat on the skeleton forever instead of the event.
+          setLoading(false)
           return
         } catch (err: any) {
           if (err?.code === 'ERR_CANCELED') return
@@ -124,6 +130,7 @@ export function EventDetailPage() {
             setSignedIn(false)
           } else {
             setError(getErrorMessage(err, 'Failed to load event details'))
+            setLoading(false)
             return
           }
         }
@@ -365,7 +372,11 @@ export function EventDetailPage() {
                   href={detailMapUrl}
                   target="_blank"
                   rel="noreferrer noopener"
-                  onClick={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    openExternalUrl(detailMapUrl)
+                  }}
                   title={`Open directions to ${event.location}`}
                   className="text-xs font-medium text-primary-600 dark:text-primary-400 hover:underline underline-offset-2 inline-flex items-center gap-1"
                 >
@@ -404,6 +415,10 @@ export function EventDetailPage() {
                 href={event.bookingUrl}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={(e) => {
+                  e.preventDefault()
+                  openExternalUrl(event.bookingUrl)
+                }}
                 className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold bg-primary-600 text-white hover:bg-primary-700 transition-colors"
               >
                 <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
@@ -572,6 +587,10 @@ export function EventDetailPage() {
                       href={event.bookingUrl}
                       target="_blank"
                       rel="noopener noreferrer"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        openExternalUrl(event.bookingUrl)
+                      }}
                       className="inline-flex items-center gap-1 mt-1 font-bold text-primary-700 dark:text-primary-300 hover:underline"
                     >
                       <Ticket className="w-3.5 h-3.5" aria-hidden="true" /> Book seats

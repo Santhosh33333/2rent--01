@@ -19,7 +19,7 @@ import {
 } from "../services/otpService";
 import { emailStatus } from "../services/emailService";
 import { smsStatus } from "../services/smsService";
-import { createUserSession, recordLogin } from "./authController";
+import { createUserSession, recordLogin, kycFieldsForSession } from "./authController";
 
 const PUBLIC_PURPOSES: OtpPurpose[] = ["LOGIN", "PASSWORD_RESET"];
 
@@ -181,6 +181,10 @@ export async function verifyOtpLogin(req: Request, res: Response): Promise<void>
           country: user.country,
           role: user.role,
           activeRole: resolveSessionActiveRole(user.role, (user as any).activeRole),
+          // Same reason as the password login payload: a client that builds its
+          // auth user from this response treats a missing KYC signal as
+          // "unverified" and routes an approved user back to /verification.
+          ...(await kycFieldsForSession(user.id)),
         },
       },
       "Login successful."

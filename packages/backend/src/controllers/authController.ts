@@ -23,9 +23,30 @@ import {
   recordFailedLogin, resetFailedLogin, createAdminSession, enforceAdminSessionLimit, flagNewDevice,
 } from "../rbac/adminSecurity";
 import { resolveSessionActiveRole } from "../rbac/activeRole";
+import { kycSessionFields } from "../services/kycStatus";
 
 function maskPhone(phone: string): string {
   return maskIdentifier("SMS", phone);
+}
+
+/**
+ * KYC state for a session payload.
+ *
+ * The web client builds its auth user from the login response alone, so a
+ * payload without `kycStatus` / `isVerified` makes an admin-approved user look
+ * unverified and bounces them to /verification — which silently takes chat,
+ * events and bookings away from them for the rest of the session.
+ */
+export async function kycFieldsForSession(userId: string): Promise<{
+  kycStatus: string;
+  kycRejectionReason: string | null;
+  isVerified: boolean;
+}> {
+  const verification = await prisma.verification.findUnique({
+    where: { userId },
+    select: { status: true },
+  });
+  return kycSessionFields(verification);
 }
 
 // Session life cycle: an idle session is dropped after 7 days of no activity
@@ -540,6 +561,7 @@ export async function login(req: Request, res: Response): Promise<void> {
       accountType: effectiveActiveRole || "USER",
       emailVerified: user.emailVerified,
       mobileVerified: user.mobileVerified,
+      ...(await kycFieldsForSession(user.id)),
     };
 
     sendSuccess(
@@ -640,7 +662,7 @@ export async function verifyPhoneOTP(req: Request, res: Response): Promise<void>
     const { accessToken, refreshToken } = await createUserSession(user.id, req);
     await recordLogin(user.id, req);
 
-    sendSuccess(res, { accessToken, refreshToken, user: { id: user.id, email: user.email, fullName: user.fullName, phone: user.phone, dateOfBirth: user.dateOfBirth, gender: user.gender, avatarUrl: user.avatarUrl, bio: user.bio, city: user.city, country: user.country, role: user.role, activeRole: resolveSessionActiveRole(user.role, user.activeRole) } }, proofOfControl ? "Logged in with your phone number." : "Logged in. Your number is unverified.");
+    sendSuccess(res, { accessToken, refreshToken, user: { id: user.id, email: user.email, fullName: user.fullName, phone: user.phone, dateOfBirth: user.dateOfBirth, gender: user.gender, avatarUrl: user.avatarUrl, bio: user.bio, city: user.city, country: user.country, role: user.role, activeRole: resolveSessionActiveRole(user.role, user.activeRole), ...(await kycFieldsForSession(user.id)) } }, proofOfControl ? "Logged in with your phone number." : "Logged in. Your number is unverified.");
   } catch (err) {
     console.error("verifyPhoneOTP error:", err);
     sendError(res, "Phone verification failed.", 500, "INTERNAL_ERROR");
@@ -744,7 +766,7 @@ export async function googleSignIn(req: Request, res: Response): Promise<void> {
     const { accessToken, refreshToken } = await createUserSession(user.id, req);
     await recordLogin(user.id, req);
 
-    sendSuccess(res, { accessToken, refreshToken, user: { id: user.id, email: user.email, fullName: user.fullName, phone: user.phone, dateOfBirth: user.dateOfBirth, gender: user.gender, avatarUrl: user.avatarUrl, bio: user.bio, city: user.city, country: user.country, role: user.role, activeRole: resolveSessionActiveRole(user.role, user.activeRole) } }, "Google sign-in successful.");
+    sendSuccess(res, { accessToken, refreshToken, user: { id: user.id, email: user.email, fullName: user.fullName, phone: user.phone, dateOfBirth: user.dateOfBirth, gender: user.gender, avatarUrl: user.avatarUrl, bio: user.bio, city: user.city, country: user.country, role: user.role, activeRole: resolveSessionActiveRole(user.role, user.activeRole), ...(await kycFieldsForSession(user.id)) } }, "Google sign-in successful.");
   } catch (err) {
     console.error("googleSignIn error:", err);
     sendError(res, "Google sign-in failed.", 500, "INTERNAL_ERROR");
@@ -1077,7 +1099,7 @@ export async function verifyPassword(req: Request, res: Response): Promise<void>
     }
     const accessToken = generateAccessToken({ userId: user.id, email: user.email });
     const refreshToken = generateRefreshToken(user.id);
-    sendSuccess(res, { accessToken, refreshToken, user: { id: user.id, email: user.email, fullName: user.fullName, phone: user.phone, dateOfBirth: user.dateOfBirth, gender: user.gender, avatarUrl: user.avatarUrl, bio: user.bio, city: user.city, country: user.country, role: user.role, activeRole: resolveSessionActiveRole(user.role, user.activeRole) } }, "Password verified.");
+    sendSuccess(res, { accessToken, refreshToken, user: { id: user.id, email: user.email, fullName: user.fullName, phone: user.phone, dateOfBirth: user.dateOfBirth, gender: user.gender, avatarUrl: user.avatarUrl, bio: user.bio, city: user.city, country: user.country, role: user.role, activeRole: resolveSessionActiveRole(user.role, user.activeRole), ...(await kycFieldsForSession(user.id)) } }, "Password verified.");
   } catch (err) {
     sendError(res, "Password verification failed.", 500, "INTERNAL_ERROR");
   }

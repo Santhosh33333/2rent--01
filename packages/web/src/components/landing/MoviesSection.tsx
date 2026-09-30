@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Film, Ticket, ExternalLink, CalendarPlus } from 'lucide-react';
 import { api } from '../../lib/api';
+import { openExternalUrl } from '../../lib/externalLink';
 
 /**
  * "Now playing / upcoming" strip on the landing page.
@@ -41,6 +42,20 @@ type State =
   | { status: 'loading' }
   | { status: 'ready'; feed: Feed; configured: boolean }
   | { status: 'error' };
+
+/**
+ * Milliseconds until the next local midnight, capped at 12 hours.
+ *
+ * The cap matters: an interval above ~2^31-1 ms overflows into an immediate
+ * timeout, and a laptop that was asleep across midnight needs a short retry
+ * rather than a timer parked a week out.
+ */
+function msUntilNextMidnight(): number {
+  const now = new Date();
+  const next = new Date(now);
+  next.setHours(24, 0, 0, 0);
+  return Math.min(next.getTime() - now.getTime(), 12 * 60 * 60 * 1000);
+}
 
 function formatRelease(value: string | null): string {
   if (!value) return '';
@@ -147,6 +162,12 @@ function MovieCard({ movie, upcoming }: { movie: LandingMovie; upcoming: boolean
               href={movie.bookingUrl}
               target="_blank"
               rel="noopener noreferrer"
+              // A bare target="_blank" is dropped by the Android WebView, so the
+              // booking link has to be handed to the system browser by hand.
+              onClick={(e) => {
+                e.preventDefault()
+                openExternalUrl(movie.bookingUrl)
+              }}
               style={{ fontSize: '0.8125rem' }}
             >
               <Ticket size={14} aria-hidden="true" />
@@ -204,6 +225,54 @@ export function MoviesSection() {
     return () => {
       window.clearTimeout(timer);
       controller.abort();
+    };
+  }, []);
+
+  // A landing tab left open overnight was frozen on yesterday's films, because
+  // the fetch above runs once on mount. The cinema day changes at midnight, so
+  // re-fetch then, and also whenever the tab comes back to the foreground after
+  // the day rolled over while it was in the background.
+  useEffect(() => {
+    const today = () => new Date().toDateString();
+    let currentDay = today();
+
+    const refreshIfDayChanged = () => {
+      if (today() === currentDay) return;
+      currentDay = today();
+      api
+        .get('/public/movies/now-playing', { timeout: 8000 })
+        .then((res) => {
+          const payload = res.data?.data;
+          setState({
+            status: 'ready',
+            configured: payload?.configured !== false,
+            feed: {
+              nowPlaying: Array.isArray(payload?.nowPlaying) ? payload.nowPlaying : [],
+              upcoming: Array.isArray(payload?.upcoming) ? payload.upcoming : [],
+            },
+          });
+        })
+        .catch(() => {
+          /* keep showing the previous day rather than blanking the section */
+        });
+    };
+
+    // setTimeout caps out at ~24.8 days, and midnight is < 24h away, but a
+    // re-checked timer handles a laptop that slept through the boundary.
+    let timer = window.setTimeout(refreshIfDayChanged, msUntilNextMidnight() + 1000);
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      refreshIfDayChanged();
+      window.clearTimeout(timer);
+      timer = window.setTimeout(refreshIfDayChanged, msUntilNextMidnight() + 1000);
+    };
+
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
     };
   }, []);
 

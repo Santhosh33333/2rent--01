@@ -99,20 +99,43 @@ export function EventsPage() {
   }, [])
 
   useEffect(() => {
-    if (!form.isMovie || movieCatalog.length > 0) return
-    api.get('/public/movies/now-playing', { timeout: 15000 })
-      .then((r) => {
-        const d = r.data?.data
-        const now = Array.isArray(d?.nowPlaying) ? d.nowPlaying : []
-        const up = Array.isArray(d?.upcoming) ? d.upcoming : []
-        const rows: MoviePick[] = [
-          ...now.map((m: any) => ({ id: m.id, title: m.title, posterUrl: m.posterUrl, releaseDate: m.releaseDate, originalLanguage: m.originalLanguage, bookingUrl: m.bookingUrl, group: 'now' as const })),
-          ...up.map((m: any) => ({ id: m.id, title: m.title, posterUrl: m.posterUrl, releaseDate: m.releaseDate, originalLanguage: m.originalLanguage, bookingUrl: m.bookingUrl, group: 'up' as const })),
-        ]
-        if (rows.length) setMovieCatalog(rows)
-      })
-      .catch(() => {})
-  }, [form.isMovie, movieCatalog.length])
+    if (!form.isMovie) return
+
+    // The picker used to load once and then never again, so an organiser who
+    // left the create-event form open overnight picked yesterday's releases.
+    // Re-fetch whenever the cinema day rolls over, capped so a long-lived tab
+    // re-checks on visibility instead of trusting a stale timer.
+    const today = () => new Date().toDateString()
+    let currentDay = today()
+
+    const load = () => {
+      api.get('/public/movies/now-playing', { timeout: 15000 })
+        .then((r) => {
+          const d = r.data?.data
+          const now = Array.isArray(d?.nowPlaying) ? d.nowPlaying : []
+          const up = Array.isArray(d?.upcoming) ? d.upcoming : []
+          const rows: MoviePick[] = [
+            ...now.map((m: any) => ({ id: m.id, title: m.title, posterUrl: m.posterUrl, releaseDate: m.releaseDate, originalLanguage: m.originalLanguage, bookingUrl: m.bookingUrl, group: 'now' as const })),
+            ...up.map((m: any) => ({ id: m.id, title: m.title, posterUrl: m.posterUrl, releaseDate: m.releaseDate, originalLanguage: m.originalLanguage, bookingUrl: m.bookingUrl, group: 'up' as const })),
+          ]
+          if (rows.length) setMovieCatalog(rows)
+        })
+        .catch(() => {})
+    }
+
+    load()
+    const refreshIfDayChanged = () => {
+      if (today() === currentDay) return
+      currentDay = today()
+      load()
+    }
+    const timer = window.setInterval(refreshIfDayChanged, 10 * 60 * 1000)
+    document.addEventListener('visibilitychange', refreshIfDayChanged)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', refreshIfDayChanged)
+    }
+  }, [form.isMovie])
 
   const chooseMovie = (m: MoviePick) => {
     setForm((f) => ({
@@ -165,6 +188,24 @@ export function EventsPage() {
     if (!form.startTime || Number.isNaN(new Date(form.startTime).getTime())) {
       toast.error('Pick a valid start date and time')
       return
+    }
+    // Same 6 AM - 10 PM local day the server enforces, checked here so the
+    // organizer gets an instant message instead of a round-trip rejection.
+    const startHour = new Date(form.startTime).getHours()
+    if (startHour < 6 || startHour >= 22) {
+      toast.error('Events run between 6:00 AM and 10:00 PM')
+      return
+    }
+    if (form.endTime) {
+      const endHour = new Date(form.endTime).getHours()
+      if (endHour > 22 || (endHour === 0 && new Date(form.endTime).getDate() !== new Date(form.startTime).getDate())) {
+        toast.error('Events have to finish by 10:00 PM the same day')
+        return
+      }
+      if (new Date(form.endTime) <= new Date(form.startTime)) {
+        toast.error('End time must be after the start time')
+        return
+      }
     }
     createLock.current = true
     setCreating(true)

@@ -29,7 +29,12 @@ import { env } from "../config/env";
  * client so the UI can render it.
  */
 
+import { localDayKey } from "./localTime";
+
 const TMDB_BASE = "https://api.themoviedb.org/3";
+
+/** Cinemas are an Indian-local concept; all day boundaries follow IST. */
+const MOVIE_TIMEZONE = "Asia/Kolkata";
 
 /** How far ahead "upcoming" reaches. Beyond ~4 months the dates are guesswork. */
 const UPCOMING_HORIZON_DAYS = 120;
@@ -55,8 +60,24 @@ export function moviesConfigured(): boolean {
   return Boolean(env.TMDB_API_KEY);
 }
 
+/**
+ * "Today" for a cinema audience, as an IST calendar day.
+ *
+ * This used to be UTC, which quietly shifted the whole schedule: a film
+ * released "today" only entered now-playing after 5:30 AM IST (the moment the
+ * UTC date rolls over), and yesterday's releases stayed on for the morning
+ * after they stopped playing. A cinema day starts at midnight local, so the
+ * date filters have to be built from the local day, not the UTC one.
+ */
+function istDayKey(when: Date = new Date()): string {
+  return localDayKey(when, MOVIE_TIMEZONE);
+}
+
+/** Calendar day in IST, `offsetDays` from today. */
 function isoDay(offsetDays: number): string {
-  return new Date(Date.now() + offsetDays * 864e5).toISOString().slice(0, 10);
+  if (offsetDays === 0) return istDayKey();
+  const shifted = new Date(Date.now() + offsetDays * 864e5);
+  return istDayKey(shifted);
 }
 
 function poster(path: string | null | undefined): string | null {
@@ -134,8 +155,39 @@ async function fetchDiscover(
 
 /** Release dates change rarely and this is a landing-page read, so cache hard. */
 const CACHE_TTL_MS = 30 * 60 * 1000;
-let cache: { at: number; feed: MovieFeed } | null = null;
+let cache: { at: number; feed: MovieFeed; day: string } | null = null;
 let inflight: Promise<MovieFeed> | null = null;
+
+/**
+ * Minutes from now until midnight IST.
+ *
+ * A 30 minute TTL alone does not roll the feed over at midnight: a cache
+ * filled at 11:45 PM survives until 12:15 AM, so the landing page would show
+ * "now playing" titles that stopped playing two hours earlier. The cache is
+ * therefore also capped at the day boundary.
+ */
+function msUntilIstMidnight(): number {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: MOVIE_TIMEZONE,
+    hour12: false,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(now);
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? 0);
+  const elapsed =
+    ((get("hour") % 24) * 60 + get("minute")) * 60 * 1000 + get("second") * 1000;
+  const untilMidnight = 864e5 - elapsed;
+  return Math.min(CACHE_TTL_MS, untilMidnight);
+}
+
+/** True when a cached feed is still the feed for the current cinema day. */
+function cacheIsFresh(): boolean {
+  if (!cache) return false;
+  if (cache.day !== istDayKey()) return false; // midnight IST rolled over
+  return Date.now() - cache.at < CACHE_TTL_MS;
+}
 
 /**
  * Shared base: Indian origin only.
@@ -157,7 +209,7 @@ function indiaBase(): Record<string, string> {
 
 export async function fetchIndianMovies(limit = 12): Promise<MovieFeed> {
   if (!env.TMDB_API_KEY) return { nowPlaying: [], upcoming: [] };
-  if (cache && Date.now() - cache.at < CACHE_TTL_MS) return slice(cache.feed, limit);
+  if (cacheIsFresh() && cache) return slice(cache.feed, limit);
   // Collapse concurrent landing renders onto one pair of upstream requests.
   if (inflight) return slice(await inflight, limit);
 
@@ -195,7 +247,7 @@ export async function fetchIndianMovies(limit = 12): Promise<MovieFeed> {
     // outage. Only a clean fetch of both lists is worth pinning downstream.
     const feed: MovieFeed = { nowPlaying: released ?? [], upcoming: soon ?? [] };
     if (released !== null && soon !== null) {
-      cache = { at: Date.now(), feed };
+      cache = { at: Date.now(), feed, day: istDayKey() };
     }
     return feed;
   })();
