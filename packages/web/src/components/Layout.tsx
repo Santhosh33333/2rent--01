@@ -181,7 +181,13 @@ export function Layout() {
               <span className="brand-badge h-8 w-8">
                 <img src="/logo-glyph-white.svg" alt="" className="h-5 w-5" />
               </span>
-              <span className="hidden sm:block text-lg font-black font-display tracking-tight text-surface-900 dark:text-surface-50">
+              {/* Was `hidden sm:block`, which hid the wordmark below 640px in BOTH
+                  themes. That read as "the app name disappears in dark mode",
+                  because dark mode is mostly checked on a phone - but the color
+                  was always correct (light in dark mode, verified in a browser).
+                  Now it shrinks to a smaller size on narrow screens instead of
+                  vanishing, since the header row genuinely has room for it. */}
+              <span className="block text-base sm:text-lg font-black font-display tracking-tight text-surface-900 dark:text-surface-50">
                 Nabri<span className="text-primary-500">.</span>
               </span>
             </Link>
