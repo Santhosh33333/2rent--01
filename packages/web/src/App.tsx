@@ -8,6 +8,7 @@ import { ThemeProvider } from './lib/themeContext'
 import { AppLockProvider, useAppLock } from './lib/appLock'
 import { LockScreen } from './components/LockScreen'
 import CallOverlay from './components/CallOverlay'
+import { UpdateNotice } from './components/UpdateNotice'
 
 // Lazy-loaded auth pages
 const LoginPage = lazy(() => import('./pages/auth/LoginPage').then(m => ({ default: m.LoginPage })))
@@ -163,6 +164,7 @@ export function App() {
         </div>
       )}>
         <Toaster position="top-center" toastOptions={{ duration: 3000, style: { background: '#18181b', color: '#fafafa', borderRadius: '16px' } }} />
+        <UpdateNotice />
         <Suspense fallback={<LoadingSpinner />}>
           <AppLockProvider>
             <Routes>
