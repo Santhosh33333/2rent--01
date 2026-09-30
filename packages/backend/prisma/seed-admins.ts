@@ -28,9 +28,30 @@ const prisma = new PrismaClient();
  *  - in development a strong random password is generated and printed (so it is
  *    never a guessable baked-in value, but dev seeding still works).
  */
-function resolveAdminPassword(envVar: string, email: string): string {
+/**
+ * Resolve an admin password, or null when an *optional* delegated admin has none
+ * configured.
+ *
+ * The five delegated admins (support/finance/kyc/marketing/partner) are
+ * optional: they are provisioned later through the admin console. Previously a
+ * missing ADMIN_PASSWORD_* threw, so recovering the break-glass super admin in
+ * production required inventing six passwords at once - and the seed failed
+ * before it provisioned anything. Requiring only the account that actually
+ * unlocks the system, and skipping the rest with a visible warning, is what
+ * makes recovery a one-command operation.
+ *
+ * The primary super admin stays mandatory: without it there is no way back into
+ * a production database, so failing loudly is correct there.
+ */
+function resolveAdminPassword(envVar: string, email: string, optional = false): string | null {
   const v = process.env[envVar];
   if (v && v.length >= 8) return v;
+  if (optional) {
+    console.warn(
+      `[seed-admins] Skipping optional account ${email}: ${envVar} is not set (>=8 chars).`,
+    );
+    return null;
+  }
   if (env.isProduction) {
     throw new Error(`[seed-admins] ${envVar} must be set (>=8 chars) in production for ${email}.`);
   }
@@ -48,7 +69,7 @@ type Spec = {
   email: string;
   phone: string;
   fullName: string;
-  password: string;
+  password: string | null; // null => optional account with no password set; skipped
   role: string; // activeRole
   permissions: string[]; // effective permission tokens
 };
@@ -73,7 +94,7 @@ const SPECS: Spec[] = [
     email: "support@rentbuddy.app",
     phone: "+919876543211",
     fullName: "Support Admin",
-    password: resolveAdminPassword("ADMIN_PASSWORD_SUPPORT", "support@rentbuddy.app"),
+    password: resolveAdminPassword("ADMIN_PASSWORD_SUPPORT", "support@rentbuddy.app", true),
     role: "SUPPORT_ADMIN",
     permissions: permsFor("SUPPORT_ADMIN"),
   },
@@ -81,7 +102,7 @@ const SPECS: Spec[] = [
     email: "finance@rentbuddy.app",
     phone: "+919876543212",
     fullName: "Finance Admin",
-    password: resolveAdminPassword("ADMIN_PASSWORD_FINANCE", "finance@rentbuddy.app"),
+    password: resolveAdminPassword("ADMIN_PASSWORD_FINANCE", "finance@rentbuddy.app", true),
     role: "FINANCE_ADMIN",
     permissions: permsFor("FINANCE_ADMIN"),
   },
@@ -89,7 +110,7 @@ const SPECS: Spec[] = [
     email: "kyc@rentbuddy.app",
     phone: "+919876543213",
     fullName: "KYC Admin",
-    password: resolveAdminPassword("ADMIN_PASSWORD_KYC", "kyc@rentbuddy.app"),
+    password: resolveAdminPassword("ADMIN_PASSWORD_KYC", "kyc@rentbuddy.app", true),
     role: "KYC_ADMIN",
     permissions: permsFor("KYC_ADMIN"),
   },
@@ -97,7 +118,7 @@ const SPECS: Spec[] = [
     email: "marketing@rentbuddy.app",
     phone: "+919876543214",
     fullName: "Marketing Admin",
-    password: resolveAdminPassword("ADMIN_PASSWORD_MARKETING", "marketing@rentbuddy.app"),
+    password: resolveAdminPassword("ADMIN_PASSWORD_MARKETING", "marketing@rentbuddy.app", true),
     role: "MARKETING_ADMIN",
     permissions: permsFor("MARKETING_ADMIN"),
   },
@@ -105,7 +126,7 @@ const SPECS: Spec[] = [
     email: "partner@rentbuddy.app",
     phone: "+919876543215",
     fullName: "Partner Admin",
-    password: resolveAdminPassword("ADMIN_PASSWORD_PARTNER", "partner@rentbuddy.app"),
+    password: resolveAdminPassword("ADMIN_PASSWORD_PARTNER", "partner@rentbuddy.app", true),
     role: "PARTNER_ADMIN",
     permissions: permsFor("PARTNER_ADMIN"),
   },
@@ -121,7 +142,11 @@ async function ensureAdminRole(name: string, permissions: string[]) {
 }
 
 async function main(): Promise<void> {
-  for (const s of SPECS) {
+  // Optional delegated admins with no configured password are dropped here
+  // rather than created with an unusable one.
+  const specs = SPECS.filter((s): s is Spec & { password: string } => s.password !== null);
+
+  for (const s of specs) {
     const passwordHash = await bcrypt.hash(s.password, env.BCRYPT_SALT_ROUNDS);
     const existing = await prisma.user.findFirst({ where: { OR: [{ email: s.email }, { phone: s.phone }] } });
 
@@ -154,7 +179,15 @@ async function main(): Promise<void> {
 
     console.log(`✓ ${s.role.padEnd(16)} ${user.email}  (${s.permissions.length} permissions)`);
   }
-  console.log("\nAdmin seed complete. 6 accounts provisioned.");
+  const skipped = SPECS.length - specs.length;
+  // Reports the real number. A hardcoded "6" here was actively misleading: a
+  // recovery run that provisioned only the super admin still claimed all six,
+  // which would let an operator believe the delegated admins exist when they
+  // do not.
+  console.log(
+    `\nAdmin seed complete. ${specs.length} account(s) provisioned` +
+      (skipped > 0 ? `, ${skipped} optional account(s) skipped (set their ADMIN_PASSWORD_* to create them).` : "."),
+  );
 }
 
 main()
