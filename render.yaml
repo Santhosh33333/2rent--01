@@ -68,6 +68,13 @@ services:
       # to localhost after they have paid.
       - key: PUBLIC_WEB_ORIGIN
         value: "https://yuvers.in"
+      # The break-glass super admin. Its address also defaults in code
+      # (DEFAULT_PRIMARY_SUPER_ADMIN_EMAIL) because the boot-time repair that
+      # un-suspends the account needs it, and that repair silently did nothing
+      # while this was unset. Declared so the deployed value and the code
+      # default cannot disagree.
+      - key: ADMIN_EMAIL
+        value: "santhoshkrishna958@gmail.com"
       # Shared cache + cross-instance state. Set this in the dashboard.
       # sync: false keeps Render from overwriting a value you set by hand.
       #
