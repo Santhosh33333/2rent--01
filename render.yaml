@@ -86,6 +86,25 @@ services:
       # silently booting without a movie feed.
       - key: TMDB_API_KEY
         sync: false
+      # Email delivery.
+      #
+      # EMAIL_PROVIDER is the switch that actually matters: it defaults to
+      # "none", and every send then fails with EMAIL_NOT_CONFIGURED. Setting
+      # BREVO_API_KEY on its own changes nothing, which is why adding the key
+      # appeared to do nothing.
+      #
+      # Use EMAIL_PROVIDER=brevo (HTTP API), not smtp: Brevo's SMTP relay binds
+      # to the sender IP and fails with 525 "Unauthorized IP" from a cloud host
+      # with rotating egress, which is what Render has. The HTTP API has no such
+      # binding. This is recorded in env.ts too.
+      - key: EMAIL_PROVIDER
+        value: brevo
+      - key: BREVO_API_KEY
+        sync: false
+      # Must be an address verified as a sender inside the Brevo account, or
+      # Brevo rejects every send regardless of the key being valid.
+      - key: EMAIL_FROM
+        sync: false
       # Shared cache + cross-instance state. Set this in the dashboard.
       # sync: false keeps Render from overwriting a value you set by hand.
       #
