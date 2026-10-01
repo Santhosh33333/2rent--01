@@ -10,6 +10,7 @@ import * as communityController from "../controllers/communityController";
 import * as eventController from "../controllers/eventController";
 import * as otpController from "../controllers/otpController";
 import * as kycTrialController from "../controllers/kycTrialController";
+import * as adminSubscriptionController from "../controllers/adminSubscriptionController";
 
 const router = Router();
 
@@ -226,6 +227,17 @@ router.get("/payments", paymentsView, adminController.getPayments);
 router.get("/payments/stats", paymentsView, adminController.getPaymentStats);
 router.get("/revenue", revenueView, adminController.getRevenueAnalytics);
 router.get("/partner-levels", revenueView, adminController.getPartnerLevels);
+
+// Subscriptions & pricing. Prices are the source of truth for the paywall,
+// so PRICING.EDIT is required to change anything a customer would see.
+const subPlansView = requireSectionAction("PRICING", "VIEW");
+const subPlansCreate = requireSectionAction("PRICING", "CREATE");
+
+router.get("/subscriptions/summary", subPlansView, adminSubscriptionController.subscriptionSummary);
+router.get("/subscriptions/plans", subPlansView, adminSubscriptionController.listPlans);
+router.post("/subscriptions/plans", subPlansCreate, adminSubscriptionController.createPlan);
+router.post("/subscriptions/plans/:code", pricingEdit, adminSubscriptionController.updatePlan);
+router.post("/subscriptions/plans/:code/toggle", pricingEdit, adminSubscriptionController.togglePlan);
 
 export default router;
 

@@ -29,7 +29,7 @@ const CASHFREE_API_BASE = CASHFREE_API_IS_SANDBOX
 // by Cashfree, which would have left every order call on a default API version.
 // Pinning the version explicitly keeps order, fetch and refund calls on the same
 // contract.
-const CASHFREE_API_VERSION = "2025-01-01"
+export const CASHFREE_API_VERSION = "2025-01-01"
 
 export interface CashfreeOrderRequest {
   orderId: string

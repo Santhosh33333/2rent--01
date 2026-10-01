@@ -28,6 +28,8 @@ import eventRoutes from "./routes/eventRoutes";
 import publicEventRoutes from "./routes/publicEventRoutes";
 import publicMovieRoutes from "./routes/publicMovieRoutes";
 import messageRoutes from "./routes/messageRoutes";
+import datingRoutes from "./routes/datingRoutes";
+import subscriptionRoutes from "./routes/subscriptionRoutes";
 import adminRoutes from "./routes/adminRoutes";
 import adminRbacRoutes from "./routes/adminRbacRoutes";
 import pricingRoutes from "./routes/pricingRoutes";
@@ -315,6 +317,8 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
   // one, at which point it is served by the routes above.
   app.use("/api/public/movies", publicMovieRoutes);
   app.use("/api/messages", messageRoutes);
+app.use("/api/dating", datingRoutes);
+app.use("/api/subscriptions", subscriptionRoutes);
   app.use("/api/admin", adminRoutes);
   app.use("/api/admin", adminRbacRoutes);
   app.use("/api/pricing", pricingRoutes);

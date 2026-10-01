@@ -112,6 +112,8 @@ const WithdrawalPage = lazy(() => import('./pages/wallet/WithdrawalPage').then(m
 // New pages
 const HomePage = lazy(() => import('./pages/home/HomePage').then(m => ({ default: m.HomePage })))
 const DiscoverPage = lazy(() => import('./pages/discovery/DiscoveryHubPage').then(m => ({ default: m.DiscoveryHubPage })))
+const DatingDiscoverPage = lazy(() => import('./pages/dating/DiscoverPage').then(m => ({ default: m.DiscoverPage })))
+const SubscriptionPage = lazy(() => import('./pages/subscription/SubscriptionPage').then(m => ({ default: m.SubscriptionPage })))
 const DiscoveryCategoryPage = lazy(() => import('./components/DiscoveryCategoryPage').then(m => ({ default: m.DiscoveryCategoryPage })))
 const BookingsListPage = lazy(() => import('./pages/bookings/BookingsListPage').then(m => ({ default: m.BookingsListPage })))
 const CreateBookingPage = lazy(() => import('./pages/bookings/CreateBookingPage').then(m => ({ default: m.CreateBookingPage })))
@@ -225,6 +227,8 @@ export function App() {
               {/* New Home & Discovery */}
               <Route path="/home" element={<HomePage />} />
               <Route path="/discover" element={<DiscoverPage />} />
+        <Route path="/dating" element={<DatingDiscoverPage />} />
+        <Route path="/subscription" element={<SubscriptionPage />} />
               <Route path="/discover/:categoryKey" element={<DiscoveryCategoryRoute />} />
               <Route path="/sports" element={<SportsPage />} />
               <Route path="/movies" element={<MoviesPage />} />

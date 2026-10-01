@@ -33,9 +33,11 @@ model User {
   appleId                        String?   @unique
   emailVerified                  Boolean   @default(false)
   mobileVerified                 Boolean   @default(false)
-  language                       String    @default("en")
-  lastLoginAt                    DateTime?
-  createdAt                      DateTime  @default(now())
+language                      String    @default("en")
+  lastLoginAt                   DateTime?
+  onboardingCompletedAt         DateTime?
+  newUserUntil                  DateTime?
+  createdAt                     DateTime  @default(now())
   updatedAt                      DateTime  @updatedAt
 
   verification                    Verification?
@@ -103,7 +105,15 @@ model User {
   movieWatchlist                 MovieWatchlist[]
   supportTickets                 SupportTicket[]        @relation("SupportRequester")
   supportTicketsAssigned         SupportTicket[]        @relation("SupportAssignee")
-  supportMessages                SupportMessage[]
+supportMessages                SupportMessage[]
+
+  likesGiven                     Like[]               @relation("LikeGiven")
+  likesReceived                  Like[]               @relation("LikeReceived")
+  passesGiven                    Pass[]               @relation("PassGiven")
+  passesReceived                 Pass[]               @relation("PassReceived")
+  matchesAsA                     Match[]              @relation("MatchUserA")
+  matchesAsB                     Match[]              @relation("MatchUserB")
+  subscriptions                  Subscription[]
 
   @@index([status])
   @@index([role])
@@ -2217,5 +2227,105 @@ model UploadedFile {
   createdAt DateTime @default(now())
 
   @@index([createdAt])
+}
+
+// ============================================================
+// DATING CORE
+// Greenfield. Independent of the legacy Booking/Partner flow.
+// ============================================================
+
+model Like {
+  id         String   @id @default(uuid())
+  fromUserId String
+  toUserId   String
+  type       String   @default("LIKE")
+  createdAt  DateTime @default(now())
+
+  fromUser User @relation("LikeGiven", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser   User @relation("LikeReceived", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  @@unique([fromUserId, toUserId])
+  @@index([toUserId, createdAt])
+}
+
+model Pass {
+  id         String   @id @default(uuid())
+  fromUserId String
+  toUserId   String
+  createdAt  DateTime @default(now())
+
+  fromUser User @relation("PassGiven", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser   User @relation("PassReceived", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  @@unique([fromUserId, toUserId])
+  @@index([toUserId])
+}
+
+model Match {
+  id            String    @id @default(uuid())
+  userAId       String
+  userBId       String
+  matchedAt     DateTime  @default(now())
+  lastMessageAt DateTime?
+  isActive      Boolean   @default(true)
+
+  userA User @relation("MatchUserA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB User @relation("MatchUserB", fields: [userBId], references: [id], onDelete: Cascade)
+
+  @@unique([userAId, userBId])
+  @@index([userAId, lastMessageAt])
+  @@index([userBId, lastMessageAt])
+}
+
+// ============================================================
+// SUBSCRIPTIONS
+// Prices are admin-configurable here, never hardcoded in the
+// frontend. Replaces the legacy one-off booking payment model.
+// ============================================================
+
+model SubscriptionPlan {
+  id            String   @id @default(uuid())
+  code          String   @unique
+  name          String
+  description   String?
+  price         Float
+  currency      String   @default("INR")
+  durationDays  Int
+  trialDays     Int      @default(0)
+  isActive      Boolean  @default(true)
+  displayOrder  Int      @default(0)
+  // Cashfree plan_id once mirrored to the gateway; null until then.
+  gatewayPlanId String?  @unique
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  subscriptions Subscription[]
+
+  @@index([isActive, displayOrder])
+}
+
+model Subscription {
+  id                   String    @id @default(uuid())
+  subscriptionId       String    @unique
+  userId               String
+  planId               String
+  // INITIALIZED | PENDING | ACTIVE | ON_HOLD | PAUSED | CUSTOMER_PAUSED
+  // | COMPLETED | CUSTOMER_CANCELLED | EXPIRED | CANCELLED
+  status               String    @default("INITIALIZED")
+  // INITIALIZED | PENDING | SUCCESS | FAILED
+  authorizationStatus  String    @default("PENDING")
+  trialEndsAt          DateTime?
+  nextBillingAt        DateTime?
+  startedAt            DateTime?
+  cancelledAt          DateTime?
+  cancelReason         String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  user User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan SubscriptionPlan @relation(fields: [planId], references: [id])
+
+  @@index([userId, status])
+  @@index([status, nextBillingAt])
 }
 

@@ -103,3 +103,4 @@ gcp-*.json
 # Dev server stderr redirects (*.log is already covered above; the harness
 # writes .err alongside .log when a process is backgrounded).
 *.err
+.opencode/skills/cashfree-skills/
