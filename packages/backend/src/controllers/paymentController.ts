@@ -5,6 +5,7 @@ import { env } from "../config/env"
 import { publicWebOrigin } from "../config/publicOrigin"
 import { sendSuccess, sendError } from "../utils/response"
 import { AuthedRequest } from "../middleware/authTypes"
+import { applyRefund, ACCESS_DAYS, hasAccess, accessRemainingMs } from "../services/refundService"
 import {
   ACTIVE_PROVIDER,
   createGatewayOrder,
@@ -460,6 +461,40 @@ export async function cashfreeWebhook(req: Request, res: Response): Promise<void
       return
     }
 
+    // Refunds. These were previously unhandled, so a refund issued from the
+    // Cashfree dashboard left our order COMPLETED and the wallet credited --
+    // the books drifted from the gateway with nothing logged. applyRefund is
+    // idempotent on cashfreeRefundId, so a redelivery moves no money.
+    const refundId = event?.data?.refund?.refund_id
+    const refundStatus = String(event?.data?.refund?.status ?? "").toUpperCase()
+    const refundAmount = event?.data?.refund?.refund_amount
+    const isRefundEvent =
+      event?.type === "REFUNDS" || event?.type === "REFUND" || event?.type === "AUTO_REFUND"
+
+    if (isRefundEvent) {
+      const outcome = await applyRefund({
+        gatewayRefundId: refundId,
+        gatewayPaymentId: paymentId,
+        payloadAmount: refundAmount,
+      })
+      if (outcome.applied) {
+        console.log(
+          `[cashfree-webhook] REFUND APPLIED ${outcome.refundId} amount=${outcome.amount} accessRevoked=${outcome.accessRevoked}`,
+        )
+      } else {
+        // Logged loudly rather than swallowed: a refund that did not apply is
+        // money we hold but the user does not, which needs reconciliation.
+        console.warn(`[cashfree-webhook] refund not applied: ${outcome.reason}`)
+      }
+      res.status(200).json({
+        received: true,
+        applied: outcome.applied,
+        refundStatus,
+        reason: outcome.applied ? undefined : outcome.reason,
+      })
+      return
+    }
+
     // Abandonment and outright failure are handled differently on purpose.
     //
     // "User dropped payment" means the user walked away mid-checkout. They may
@@ -548,6 +583,19 @@ export async function cashfreeWebhookHealth(_req: Request, res: Response): Promi
  * Returns true only for the caller that actually performed the credit, so a
  * duplicate delivery can be told apart from the first one.
  */
+/**
+ * Days of access a settled top-up grants.
+ *
+ * Read from env so the window is an operational decision rather than a code
+ * change, with the seed default of 30 days. A malformed or absent value falls
+ * back to 30 rather than granting zero access or an unbounded window.
+ */
+function readAccessDays(): number {
+  const raw = Number((env as unknown as Record<string, unknown>).ACCESS_WINDOW_DAYS)
+  if (!Number.isFinite(raw) || raw <= 0) return ACCESS_DAYS
+  return Math.min(Math.floor(raw), 3650)
+}
+
 async function settleCashfreeOrder(input: {
   gatewayOrderId: string
   gatewayPaymentId?: string
@@ -617,6 +665,30 @@ async function settleCashfreeOrder(input: {
         data: JSON.stringify({ paymentId: input.gatewayPaymentId ?? order.id, amount: Number(order.amount) }),
       },
     })
+
+    // Grant the local access window in the same transaction as the credit, so
+    // access can never exist without the payment that paid for it, and a
+    // redelivery cannot extend it twice (only the claiming delivery reaches
+    // here). Extended from the current expiry rather than from now, so paying
+    // early does not waste paid days.
+    //
+    // This is what makes paid users get access at all while Cashfree
+    // Subscriptions is unavailable: hasActiveSubscription() can only ever see
+    // an ACTIVE row, and only the gateway creates those.
+    const accessDays = readAccessDays();
+    const buyer = await tx.user.findUnique({
+      where: { id: order.userId },
+      select: { accessUntil: true },
+    })
+    if (buyer) {
+      const now = new Date()
+      const base = buyer.accessUntil && buyer.accessUntil > now ? buyer.accessUntil : now
+      const accessUntil = new Date(base.getTime() + accessDays * 24 * 60 * 60 * 1000)
+      await tx.user.update({
+        where: { id: order.userId },
+        data: { accessUntil, accessSource: "TOPUP" },
+      })
+    }
 
     return true
   }).catch((err) => {
@@ -716,6 +788,52 @@ export async function getPaymentConfig(_req: AuthedRequest, res: Response): Prom
     );
   } catch (err: any) {
     sendError(res, "Failed to load payment configuration.", 500, "INTERNAL_ERROR");
+  }
+}
+
+/**
+ * GET /payments/access
+ *
+ * The single source of truth for "does this user have paid access, and until
+ * when". Deliberately reads the local accessUntil timestamp rather than counting
+ * ACTIVE Subscription rows: that check can only be satisfied by a Cashfree
+ * subscription webhook, which cannot be registered while Subscriptions is
+ * inactive, so it would report false for every paying user.
+ *
+ * Clients should gate on this rather than inferring access from a plan list.
+ */
+export async function getMyAccess(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      sendError(res, "Unauthorized.", 401, "UNAUTHORIZED");
+      return;
+    }
+
+    const [active, remainingMs, user] = await Promise.all([
+      hasAccess(userId),
+      accessRemainingMs(userId),
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { accessUntil: true, accessSource: true },
+      }),
+    ]);
+
+    const refundPolicy =
+      "A settled payment grants access for the configured window. A full refund " +
+      "revokes access and returns the amount to your wallet.";
+
+    sendSuccess(res, {
+      hasAccess: active,
+      accessUntil: user?.accessUntil ?? null,
+      accessSource: user?.accessSource ?? null,
+      daysRemaining:
+        remainingMs === null ? 0 : Math.ceil(remainingMs / (24 * 60 * 60 * 1000)),
+      accessWindowDays: readAccessDays(),
+      refundPolicy,
+    });
+  } catch {
+    sendError(res, "Could not load access status.", 500, "ACCESS_FETCH_FAILED");
   }
 }
 

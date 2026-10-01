@@ -62,6 +62,10 @@ router.post(
 router.get("/history", paymentController.getPaymentHistory)
   router.get("/config", paymentController.getPaymentConfig)
 
+  // Single source of truth for paid access and the day count remaining. Clients
+  // gate on this instead of inferring access from a plan list.
+  router.get("/access", paymentController.getMyAccess)
+
   // QR for the configured platform UPI ID, rendered server-side. The top-up
   // page loads it as an <img>, so it is read-only and needs no JSON envelope;
   // a browser cannot send an Authorization header on an image request, and

@@ -34,11 +34,18 @@ model User {
   emailVerified                  Boolean   @default(false)
   mobileVerified                 Boolean   @default(false)
 language                      String    @default("en")
-  lastLoginAt                   DateTime?
+lastLoginAt                   DateTime?
   onboardingCompletedAt         DateTime?
   newUserUntil                  DateTime?
+  // Local access window granted by a settled wallet top-up. Access is simply
+  // "now < accessUntil", so it needs no provider round-trip and survives
+  // Subscriptions being unavailable. accessSource records how it was granted
+  // (TOPUP | SUBSCRIPTION | ADMIN) so an admin grant is distinguishable from
+  // a payment. Null means no access.
+  accessUntil                   DateTime?
+  accessSource                  String?
   createdAt                     DateTime  @default(now())
-  updatedAt                      DateTime  @updatedAt
+  updatedAt                     DateTime  @updatedAt
 
   verification                    Verification?
   walkingPartner                 WalkingPartner?
@@ -556,6 +563,10 @@ model PaymentOrder {
   type             String    @default("TOPUP") // TOPUP, BOOKING
   metadata         String?
   completedAt      DateTime?
+  // Refund bookkeeping. refundedAmount accumulates so partial refunds are
+  // tracked without a second table; a full refund sets status to REFUNDED.
+  refundedAmount   Decimal?
+  refundedAt       DateTime?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -2034,12 +2045,16 @@ model BookingTimeout {
 
 model RefundLog {
   id               String   @id @default(uuid())
-  bookingId        String
+  bookingId        String?
   userId           String
   amount           Float
   reason           String
   type             String   // FULL, PARTIAL, AUTO_TIMEOUT
   cashfreeRefundId String?
+  // Set for a wallet top-up refund. Null for the legacy booking refunds.
+  // cashfreeRefundId is the idempotency key: Cashfree redelivers, and only the
+  // first delivery may move money.
+  paymentOrderId   String?
   status           String   @default("INITIATED") // INITIATED, PROCESSING, COMPLETED, FAILED
   initiatedBy      String   // SYSTEM, USER, PARTNER, ADMIN
   completedAt      DateTime?
@@ -2048,6 +2063,8 @@ model RefundLog {
   @@index([bookingId])
   @@index([userId])
   @@index([status])
+  @@index([paymentOrderId])
+  @@index([cashfreeRefundId])
 }
 
 model PartnerLocation {
