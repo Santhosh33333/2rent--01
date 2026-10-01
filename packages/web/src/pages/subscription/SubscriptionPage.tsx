@@ -8,12 +8,14 @@ import {
   formatDate,
   type SubscriptionPlan,
   type MySubscription,
+  type AccessStatus,
 } from "../../lib/subscriptions";
 import { getCashfree, isSandbox } from "../../lib/cashfree";
 
 export function SubscriptionPage() {
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [mine, setMine] = useState<MySubscription | null>(null);
+  const [access, setAccess] = useState<AccessStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -28,8 +30,18 @@ export function SubscriptionPage() {
       const plansRes = await subscriptionsApi.getPlans();
       setPlans(plansRes.data.data.plans);
       if (loggedIn) {
-        const meRes = await subscriptionsApi.getMe();
-        setMine(meRes.data.data);
+        // Access is loaded independently of the subscription record, because it
+        // can be true (a settled payment) even when no mandate exists, and the
+        // reverse. One failing must not blank the other.
+        const [meRes, accessRes] = await Promise.allSettled([
+          subscriptionsApi.getMe(),
+          subscriptionsApi.getAccess(),
+        ]);
+        if (meRes.status === "fulfilled") setMine(meRes.value.data.data);
+        if (accessRes.status === "fulfilled") setAccess(accessRes.value.data.data);
+      } else {
+        setMine(null);
+        setAccess(null);
       }
     } catch {
       setError("Could not load plans. Please try again.");
@@ -118,8 +130,48 @@ export function SubscriptionPage() {
           </div>
         )}
 
+        {access && (
+          <section
+            className={`mt-8 rounded-2xl border p-6 ${
+              access.hasAccess
+                ? "border-emerald-500/40 bg-emerald-500/10"
+                : "border-slate-800 bg-slate-900/60"
+            }`}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-sm font-medium text-slate-300">Your access</h2>
+              <span
+                className={`rounded-full px-3 py-1 text-sm ${
+                  access.hasAccess
+                    ? "bg-emerald-500/20 text-emerald-300"
+                    : "bg-slate-700 text-slate-300"
+                }`}
+              >
+                {access.hasAccess
+                  ? `${access.daysRemaining} ${access.daysRemaining === 1 ? "day" : "days"} left`
+                  : "No active access"}
+              </span>
+            </div>
+
+            {access.hasAccess ? (
+              <p className="mt-3 text-sm text-slate-300">
+                Full access until {formatDate(access.accessUntil)}
+              </p>
+            ) : (
+              <p className="mt-3 text-sm text-slate-400">
+                Pay once and you get {access.accessWindowDays} days of full access.
+                Renew any time to add more days on top.
+              </p>
+            )}
+
+            <p className="mt-3 text-xs leading-relaxed text-slate-500">
+              {access.refundPolicy}
+            </p>
+          </section>
+        )}
+
         {mine && (
-          <section className="mt-8 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+          <section className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
             <h2 className="text-sm font-medium text-slate-400">Your subscription</h2>
             <div className="mt-3 flex flex-wrap items-center gap-3">
               <span className="rounded-full bg-white/10 px-3 py-1 text-sm">

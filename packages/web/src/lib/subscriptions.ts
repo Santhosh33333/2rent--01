@@ -34,6 +34,24 @@ export interface SubscribeResult {
   plan: { code: string; name: string; price: number; currency: string };
 }
 
+/**
+ * Paid access, as reported by GET /payments/access.
+ *
+ * This is the state to gate on, not `isActive` from /subscriptions/me. That
+ * field reflects a Cashfree subscription mandate, which can only become ACTIVE
+ * via a gateway webhook, so it reads false even for a user who has paid. A
+ * settled payment grants a local window instead, which is why access is tracked
+ * here.
+ */
+export interface AccessStatus {
+  hasAccess: boolean;
+  accessUntil: string | null;
+  accessSource: string | null;
+  daysRemaining: number;
+  accessWindowDays: number;
+  refundPolicy: string;
+}
+
 /** States that mean the user has paid and is entitled to premium. */
 export const ENTITLED_STATES = new Set(["ACTIVE"]);
 export const TRIAL_STATES = new Set(["INITIALIZED", "PENDING"]);
@@ -45,6 +63,13 @@ export const subscriptionsApi = {
 
   /** Requires a session. */
   getMe: () => api.get<{ data: MySubscription }>("/subscriptions/me"),
+
+  /**
+   * Requires a session. The authoritative paid-access check: reads the local
+   * access window rather than a subscription mandate, so it is correct whether
+   * or not Cashfree Subscriptions is active.
+   */
+  getAccess: () => api.get<{ data: AccessStatus }>("/payments/access"),
 
   /**
    * Starts a subscription. Returns a mandate session for the hosted checkout
