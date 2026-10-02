@@ -130,6 +130,21 @@ api.interceptors.response.use(
       }
     }
 
+    // Paid access gate. The server refuses the paid surface with 403 +
+    // PAID_ACCESS_REQUIRED once the 30-day window lapses. Same reasoning as the
+    // consent gate: send them to renew and bring them back to the page they were
+    // trying to reach, so the interrupted action survives the interruption.
+    if (status === 403 && gateError?.code === 'PAID_ACCESS_REQUIRED') {
+      const currentPath = window.location.pathname + window.location.search
+      const onPaywall = currentPath.startsWith('/subscription')
+      if (!onPaywall) {
+        const next = encodeURIComponent(currentPath)
+        window.location.assign(`/subscription?next=${next}`)
+        // Never resolve the original call as success while navigating away.
+        return new Promise(() => {})
+      }
+    }
+
     if (status === 401 && !originalRequest._retry && !shouldSkipRefresh) {
       originalRequest._retry = true
       try {

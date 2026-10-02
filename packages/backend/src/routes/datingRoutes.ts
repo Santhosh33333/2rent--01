@@ -2,11 +2,15 @@ import { Router } from "express";
 import { body, query } from "express-validator";
 import { authenticateToken, requireKycVerified } from "../middleware/auth";
 import { validateRequest } from "../middleware/validation";
+import { requirePaidAccess } from "../middleware/requirePaidAccess";
 import * as datingController from "../controllers/datingController";
 
 const router = Router();
 
-router.use(authenticateToken, requireKycVerified);
+// Dating is the paid product: one settlement buys 30 days of it, and the window
+// closes by itself. Ordered after auth because the gate reads the caller's id,
+// and after KYC so an unverified user is told to verify rather than to pay.
+router.use(authenticateToken, requireKycVerified, requirePaidAccess);
 
 // GET /dating/discover
 router.get(
