@@ -2065,6 +2065,12 @@ model RefundLog {
   @@index([status])
   @@index([paymentOrderId])
   @@index([cashfreeRefundId])
+  // UNIQUE, not just indexed. This column is the idempotency latch for gateway
+  // refunds, and idempotency only holds if the database rejects a second claim.
+  // With a plain index, two concurrent deliveries both pass the existence check
+  // and both proceed to move money; only the unique constraint makes one lose.
+  // Nullable, so legacy rows without a gateway id are not collapsed together.
+  @@unique([cashfreeRefundId])
 }
 
 model PartnerLocation {

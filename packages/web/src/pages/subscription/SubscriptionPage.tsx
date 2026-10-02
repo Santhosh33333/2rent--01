@@ -148,14 +148,18 @@ export function SubscriptionPage() {
                 }`}
               >
                 {access.hasAccess
-                  ? `${access.daysRemaining} ${access.daysRemaining === 1 ? "day" : "days"} left`
+                  ? access.daysRemaining === null
+                    ? "Unlimited access"
+                    : `${access.daysRemaining} ${access.daysRemaining === 1 ? "day" : "days"} left`
                   : "No active access"}
               </span>
             </div>
 
             {access.hasAccess ? (
               <p className="mt-3 text-sm text-slate-300">
-                Full access until {formatDate(access.accessUntil)}
+                {access.accessUntil
+                  ? `Full access until ${formatDate(access.accessUntil)}`
+                  : "Full access, no expiry"}
               </p>
             ) : (
               <p className="mt-3 text-sm text-slate-400">

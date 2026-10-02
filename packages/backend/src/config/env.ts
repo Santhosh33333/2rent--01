@@ -90,6 +90,18 @@ const envSchema = z.object({
   MIN_BOOKING_AMOUNT: z.string().default("50").transform(Number),
   MAX_BOOKING_AMOUNT: z.string().default("10000").transform(Number),
 
+  // Days of paid access one settled payment grants. Declared here because the
+  // zod object strips unknown keys: reading process.env directly worked only by
+  // accident and any value set in the environment was silently ignored, leaving
+  // the hardcoded 30 in charge. A string so a typo fails validation instead of
+  // coercing to NaN, and clamped so it cannot grant a nonsensical window.
+  ACCESS_WINDOW_DAYS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(3650)
+    .default(30),
+
   // Email (SMTP) — optional in dev, required for real OTP delivery
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.string().default("587").transform(Number),

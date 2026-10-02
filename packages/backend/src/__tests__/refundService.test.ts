@@ -1,9 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+﻿import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const { prismaMock } = vi.hoisted(() => ({
   prismaMock: {
     user: { findUnique: vi.fn(), update: vi.fn(), create: vi.fn() },
-    wallet: { findUnique: vi.fn(), update: vi.fn() },
+    wallet: { findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
     paymentOrder: { findFirst: vi.fn(), update: vi.fn() },
     refundLog: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), upsert: vi.fn() },
     transaction: { create: vi.fn() },
@@ -17,7 +17,8 @@ vi.mock("../config/database", () => ({ prisma: prismaMock }));
 import {
   applyRefund,
   grantAccessWindow,
-  hasAccess,
+hasAccess,
+  accessRemainingMs,
   revokeAccessWindow,
 } from "../services/refundService";
 
@@ -40,6 +41,8 @@ beforeEach(() => {
   prismaMock.refundLog.create.mockResolvedValue({ id: "rl_1" });
   prismaMock.paymentOrder.findFirst.mockResolvedValue(ORDER);
   prismaMock.wallet.findUnique.mockResolvedValue({ id: "w_1", balance: 500 });
+  // A matched conditional update reports one affected row.
+  prismaMock.wallet.updateMany.mockResolvedValue({ count: 1 });
   prismaMock.$transaction.mockImplementation((fn: (t: unknown) => Promise<unknown>) => fn(prismaMock));
 });
 
@@ -64,14 +67,19 @@ describe("applyRefund", () => {
     });
     const r = await applyRefund({ gatewayRefundId: "rf_1", gatewayPaymentId: "pay_1" });
     expect(r.applied).toBe(false);
-    expect(prismaMock.wallet.update).not.toHaveBeenCalled();
+    expect(prismaMock.wallet.updateMany).not.toHaveBeenCalled();
   });
 
   it("debits the wallet, records the log and revokes access on a full refund", async () => {
     const r = await applyRefund({ gatewayRefundId: "rf_1", gatewayPaymentId: "pay_1" });
     expect(r.applied).toBe(true);
-    expect(prismaMock.wallet.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { balance: { decrement: 100 } } }),
+    // Conditional update: the balance >= amount predicate is what makes the
+    // non-negative guarantee atomic rather than a racy read-then-write.
+    expect(prismaMock.wallet.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: "w_1", balance: { gte: 100 } }),
+        data: { balance: { decrement: 100 } },
+      }),
     );
     expect(prismaMock.transaction.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -101,7 +109,7 @@ describe("applyRefund", () => {
     });
     expect(r.applied).toBe(false);
     expect(r.applied === false && r.reason).toMatch(/mismatch/i);
-    expect(prismaMock.wallet.update).not.toHaveBeenCalled();
+    expect(prismaMock.wallet.updateMany).not.toHaveBeenCalled();
   });
 
   it("refuses to drive the wallet negative and records why", async () => {
@@ -109,7 +117,23 @@ describe("applyRefund", () => {
     const r = await applyRefund({ gatewayRefundId: "rf_1", gatewayPaymentId: "pay_1" });
     expect(r.applied).toBe(false);
     expect(r.applied === false && r.reason).toMatch(/insufficient/i);
-    expect(prismaMock.wallet.update).not.toHaveBeenCalled();
+    expect(prismaMock.wallet.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("does not debit when the conditional update matches no row", async () => {
+    // The read said the balance was sufficient, but a sibling transaction
+    // committed a debit before ours landed. Zero rows matched, so the money
+    // must stay put rather than go negative.
+    prismaMock.wallet.updateMany.mockResolvedValue({ count: 0 });
+    const r = await applyRefund({ gatewayRefundId: "rf_1", gatewayPaymentId: "pay_1" });
+    expect(r.applied).toBe(false);
+    expect(prismaMock.transaction.create).not.toHaveBeenCalled();
+    expect(prismaMock.paymentOrder.update).not.toHaveBeenCalled();
+    const logUpdate = prismaMock.refundLog.update.mock.calls.at(-1)![0] as {
+      data: { status: string; reason: string };
+    };
+    expect(logUpdate.data.status).toBe("FAILED");
+    expect(logUpdate.data.reason).toMatch(/concurrent/i);
   });
 
   it("treats a P2002 race as already-applied rather than double-debiting", async () => {
@@ -118,7 +142,7 @@ describe("applyRefund", () => {
     );
     const r = await applyRefund({ gatewayRefundId: "rf_1", gatewayPaymentId: "pay_1" });
     expect(r.applied).toBe(false);
-    expect(prismaMock.wallet.update).not.toHaveBeenCalled();
+    expect(prismaMock.wallet.updateMany).not.toHaveBeenCalled();
   });
 });
 
@@ -150,9 +174,10 @@ describe("access window", () => {
     expect(until!.toISOString()).toBe("2026-10-18T00:00:00.000Z");
   });
 
-  it("reports access as false once the window has passed", async () => {
+it("reports access as false once the window has passed", async () => {
     prismaMock.user.findUnique.mockResolvedValue({
       accessUntil: new Date("2026-09-01T00:00:00Z"),
+      role: "USER",
     });
     await expect(hasAccess("u_1")).resolves.toBe(false);
   });
@@ -160,13 +185,36 @@ describe("access window", () => {
   it("reports access as true while the window is open", async () => {
     prismaMock.user.findUnique.mockResolvedValue({
       accessUntil: new Date("2026-11-01T00:00:00Z"),
+      role: "USER",
     });
     await expect(hasAccess("u_1")).resolves.toBe(true);
   });
 
-  it("treats a revoked window (epoch) as no access", async () => {
-    prismaMock.user.findUnique.mockResolvedValue({ accessUntil: new Date(0) });
+it("treats a revoked window (epoch) as no access", async () => {
+    prismaMock.user.findUnique.mockResolvedValue({
+      accessUntil: new Date(0),
+      role: "USER",
+    });
     await expect(hasAccess("u_1")).resolves.toBe(false);
+  });
+
+  it.each(["SUPER_ADMIN", "SUPPORT_ADMIN", "FINANCE_ADMIN", "MODERATOR"])(
+    "keeps %s entitled with no window, so staff are never paywalled out",
+    async (role) => {
+      prismaMock.user.findUnique.mockResolvedValue({ accessUntil: null, role });
+      await expect(hasAccess("u_1")).resolves.toBe(true);
+      // Unlimited rather than null, so the API cannot report hasAccess true
+      // alongside "no window" and read as a contradiction.
+      await expect(accessRemainingMs("u_1")).resolves.toBe(Number.POSITIVE_INFINITY);
+    },
+  );
+
+  it("keeps an expired admin entitled but still expires a non-admin", async () => {
+    prismaMock.user.findUnique.mockResolvedValue({
+      accessUntil: new Date("2026-01-01T00:00:00Z"),
+      role: "SUPPORT_ADMIN",
+    });
+    await expect(hasAccess("u_1")).resolves.toBe(true);
   });
 
   it("revokes access immediately", async () => {

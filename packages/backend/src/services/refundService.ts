@@ -1,4 +1,5 @@
 import { prisma } from "../config/database";
+import { ADMIN_ROLES, type AdminRoleName } from "../rbac/sections";
 
 /**
  * Refunds for settled wallet top-ups, and the local access window they control.
@@ -75,17 +76,28 @@ export async function revokeAccessWindow(userId: string): Promise<void> {
 export async function hasAccess(userId: string): Promise<boolean> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { accessUntil: true },
+    select: { accessUntil: true, role: true },
   });
-  return Boolean(user?.accessUntil && user.accessUntil > new Date());
+  if (!user) return false;
+  // Admins are never paywalled. Staff need the gated features to do their job,
+  // and making the platform charge its own administrators to test it is the kind
+  // of lockout that gets discovered in production, not in review. Checked on
+  // role rather than a grant timestamp so it cannot expire.
+  if (ADMIN_ROLES.includes(user.role as AdminRoleName)) return true;
+  return Boolean(user.accessUntil && user.accessUntil > new Date());
 }
 
 /** Milliseconds until access lapses, or null when there is no window. */
 export async function accessRemainingMs(userId: string): Promise<number | null> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { accessUntil: true },
+    select: { accessUntil: true, role: true },
   });
+  if (user && ADMIN_ROLES.includes(user.role as AdminRoleName)) {
+    // Matches hasAccess: admins are entitled without a window. A null here
+    // alongside hasAccess === true would read as "no access" in the UI.
+    return Number.POSITIVE_INFINITY;
+  }
   if (!user?.accessUntil) return null;
   return Math.max(0, user.accessUntil.getTime() - Date.now());
 }
@@ -197,9 +209,7 @@ export async function applyRefund(input: {
 
     const balanceMinor = toMinor(wallet.balance);
     if (balanceMinor < orderMinor) {
-      // Debiting here would drive the balance negative and corrupt every
-      // later payout and withdrawal. Recorded so it is visible for manual
-      // handling rather than applied.
+      // Recorded so it is visible for manual handling rather than applied.
       await tx.refundLog.update({
         where: { id: claimed.id },
         data: {
@@ -210,10 +220,26 @@ export async function applyRefund(input: {
       return null;
     }
 
-    await tx.wallet.update({
-      where: { id: order.walletId },
-      data: { balance: { decrement: Number(order.amount) } },
+    // Conditional update, not a read-then-write. The check above happens in the
+    // same transaction, but a sibling transaction can still commit a debit
+    // between it and this write, so a plain update would drive the balance
+    // negative and corrupt every later payout. Re-asserting balance >= amount as
+    // a WHERE predicate makes the guard atomic in the database. Zero rows matched
+    // means it lost that race.
+    const debited = await tx.wallet.updateMany({
+      where: { id: order.walletId, balance: { gte: order.amount } },
+      data: { balance: { decrement: order.amount } },
     });
+    if (debited.count !== 1) {
+      await tx.refundLog.update({
+        where: { id: claimed.id },
+        data: {
+          status: "FAILED",
+          reason: "Wallet balance changed concurrently; refund not debited",
+        },
+      });
+      return null;
+    }
 
     await tx.transaction.create({
       data: {
@@ -246,7 +272,10 @@ export async function applyRefund(input: {
       data: {
         userId: order.userId,
         title: "Payment Refunded",
-        body: `₹${Number(order.amount)} has been refunded to your wallet.`,
+        // The gateway returns the money to the card, and the wallet credit that
+        // this payment created is reversed. Saying it was refunded *to* the
+        // wallet would describe the opposite of what happened.
+        body: `₹${Number(order.amount)} has been refunded to your payment method and the matching wallet credit has been reversed.`,
         data: JSON.stringify({ refundId: gatewayRefundId, amount: Number(order.amount) }),
       },
     });

@@ -47,7 +47,8 @@ export interface AccessStatus {
   hasAccess: boolean;
   accessUntil: string | null;
   accessSource: string | null;
-  daysRemaining: number;
+  /** Null when access is unlimited by role (admin), so there is no window to count. */
+  daysRemaining: number | null;
   accessWindowDays: number;
   refundPolicy: string;
 }

@@ -591,7 +591,10 @@ export async function cashfreeWebhookHealth(_req: Request, res: Response): Promi
  * back to 30 rather than granting zero access or an unbounded window.
  */
 function readAccessDays(): number {
-  const raw = Number((env as unknown as Record<string, unknown>).ACCESS_WINDOW_DAYS)
+  // env.ACCESS_WINDOW_DAYS is declared in config/env and validated on boot, so
+  // it is already a positive integer within range. ACCESS_DAYS stays as the
+  // floor in case the value is absent outside a validated boot.
+  const raw = Number(env.ACCESS_WINDOW_DAYS)
   if (!Number.isFinite(raw) || raw <= 0) return ACCESS_DAYS
   return Math.min(Math.floor(raw), 3650)
 }
@@ -821,14 +824,21 @@ export async function getMyAccess(req: AuthedRequest, res: Response): Promise<vo
 
     const refundPolicy =
       "A settled payment grants access for the configured window. A full refund " +
-      "revokes access and returns the amount to your wallet.";
+      "revokes access and reverses the wallet credit that payment created.";
+
+    // Admins are entitled by role with no window, so Infinity must not be
+    // rendered as an absurd day count.
+    const isAdminBypass = active && !Number.isFinite(remainingMs ?? 0);
 
     sendSuccess(res, {
       hasAccess: active,
-      accessUntil: user?.accessUntil ?? null,
-      accessSource: user?.accessSource ?? null,
-      daysRemaining:
-        remainingMs === null ? 0 : Math.ceil(remainingMs / (24 * 60 * 60 * 1000)),
+      accessUntil: isAdminBypass ? null : user?.accessUntil ?? null,
+      accessSource: isAdminBypass ? "ADMIN" : user?.accessSource ?? null,
+      daysRemaining: isAdminBypass
+        ? null
+        : remainingMs === null
+          ? 0
+          : Math.ceil(remainingMs / (24 * 60 * 60 * 1000)),
       accessWindowDays: readAccessDays(),
       refundPolicy,
     });
