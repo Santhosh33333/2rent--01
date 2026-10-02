@@ -440,34 +440,19 @@ export async function cashfreeWebhook(req: Request, res: Response): Promise<void
 
     const event = req.body ?? {}
     const payment = event?.data?.payment
-    const orderId = payment?.order_id
-    const paymentId = payment?.payment_id
+    const refund = event?.data?.refund
+    const orderId = payment?.order_id ?? refund?.order_id
+    const paymentId = payment?.payment_id ?? refund?.payment_id
     const status = String(payment?.payment_status ?? event?.type ?? "").toUpperCase()
 
-    if (!orderId) {
-      res.status(200).json({ received: true, applied: false, reason: "No order in payload" })
-      return
-    }
-
-    if (status === "PAID" || status === "CAPTURED" || event?.type === "ORDER_PAID") {
-      const claimed = await settleCashfreeOrder({
-        gatewayOrderId: orderId,
-        gatewayPaymentId: paymentId,
-        // Only a hint. The authoritative comparison happens against our row
-        // inside the transaction, so a tampered payload cannot raise a credit.
-        payloadAmount: payment?.payment_amount,
-      })
-      res.status(200).json({ received: true, applied: claimed })
-      return
-    }
-
-    // Refunds. These were previously unhandled, so a refund issued from the
-    // Cashfree dashboard left our order COMPLETED and the wallet credited --
-    // the books drifted from the gateway with nothing logged. applyRefund is
-    // idempotent on cashfreeRefundId, so a redelivery moves no money.
-    const refundId = event?.data?.refund?.refund_id
-    const refundStatus = String(event?.data?.refund?.status ?? "").toUpperCase()
-    const refundAmount = event?.data?.refund?.refund_amount
+    // Refunds are matched BEFORE the order-id guard below. A refund payload
+    // carries data.refund rather than data.payment, so requiring an order first
+    // rejected every real refund with "No order in payload" and never reached
+    // the handler. applyRefund resolves the order itself from paymentId, so it
+    // does not need an order id from the payload.
+    const refundId = refund?.refund_id
+    const refundStatus = String(refund?.status ?? "").toUpperCase()
+    const refundAmount = refund?.refund_amount
     const isRefundEvent =
       event?.type === "REFUNDS" || event?.type === "REFUND" || event?.type === "AUTO_REFUND"
 
@@ -492,6 +477,23 @@ export async function cashfreeWebhook(req: Request, res: Response): Promise<void
         refundStatus,
         reason: outcome.applied ? undefined : outcome.reason,
       })
+      return
+    }
+
+    if (!orderId) {
+      res.status(200).json({ received: true, applied: false, reason: "No order in payload" })
+      return
+    }
+
+    if (status === "PAID" || status === "CAPTURED" || event?.type === "ORDER_PAID") {
+      const claimed = await settleCashfreeOrder({
+        gatewayOrderId: orderId,
+        gatewayPaymentId: paymentId,
+        // Only a hint. The authoritative comparison happens against our row
+        // inside the transaction, so a tampered payload cannot raise a credit.
+        payloadAmount: payment?.payment_amount,
+      })
+      res.status(200).json({ received: true, applied: claimed })
       return
     }
 

@@ -9,7 +9,10 @@ process.env.ADMIN_EMAIL = 'test@test.com';
 process.env.ADMIN_PASSWORD = 'TestPass123!';
 process.env.CASHFREE_APP_ID = 'test_cashfree_app_id';
 process.env.CASHFREE_SECRET_KEY = 'test_cashfree_secret_key';
-process.env.CASHFREE_API_ENV = 'test';
+// CASHFREE_API_ENV is deliberately NOT set here. It defaults to production, and
+// cashfreeVerification asserts the live orders endpoint is the one called; forcing
+// 'test' globally made it resolve the sandbox host and fail. A test that needs
+// the sandbox sets it in its own hoisted block, which runs later and wins.
 process.env.GOOGLE_CLIENT_ID = 'test.apps.googleusercontent.com';
 process.env.SMTP_HOST = 'smtp.test.com';
 process.env.SMTP_USER = 'test@test.com';
