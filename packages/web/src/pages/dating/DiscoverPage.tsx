@@ -16,6 +16,7 @@ import {
   type SwipeType,
 } from './datingApi'
 import { Tilt } from '../../components/motion/Tilt'
+import { assetUrl } from '../../lib/api'
 
 /**
  * Swipe discovery.
@@ -397,10 +398,18 @@ export function DiscoverPage() {
             >
               {current.avatarUrl ? (
                 <img
-                  src={current.avatarUrl}
+                  src={assetUrl(current.avatarUrl) || ''}
                   alt={current.fullName}
                   className="h-full w-full object-cover"
                   draggable={false}
+                  // An uploaded avatar is a relative "/uploads/..." path. In dev a
+                  // Vite proxy hides that, but in production the SPA catch-all
+                  // answers with index.html and a 200, so the browser is handed HTML
+                  // where it expects an image and paints a broken-image glyph. Fall
+                  // back to the initials block below rather than showing nothing.
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none'
+                  }}
                 />
               ) : (
                 <div className="flex h-full items-center justify-center bg-gradient-to-br from-violet-900 to-slate-900">
@@ -535,9 +544,12 @@ export function DiscoverPage() {
                 transition={{ type: 'spring', stiffness: 240, damping: 18 }}
               >
                 <img
-                  src={match.avatarUrl}
+                  src={assetUrl(match.avatarUrl) || ''}
                   alt={match.fullName}
                   className="prism-ring h-28 w-28 rounded-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none'
+                  }}
                 />
               </motion.div>
             ) : null}
