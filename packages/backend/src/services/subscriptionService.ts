@@ -1,5 +1,6 @@
 import { prisma } from "../config/database";
 import { createSubscription, createPlan, cancelSubscription, changePlan } from "./cashfreeSubscriptionGateway";
+import { getTrialSettings } from "./trialAccessService";
 
 /**
  * Subscription pricing is admin-configurable, never hardcoded in the frontend.
@@ -49,24 +50,49 @@ export async function syncPlanToGateway(input: PlanInput) {
   });
 }
 
-/** Active plan for a given interval, for the pricing screen. */
+/**
+ * Active plans for the pricing screen and the landing pages.
+ *
+ * `trialDays` is returned as the *effective* global trial length, not the plan's
+ * own stored column. That is the whole reason this is a function and not a bare
+ * findMany.
+ *
+ * The landing pages take max(plan.trialDays) and print it as "N days free", while
+ * access is decided by User.accessUntil written from the global setting. So the
+ * plan column was decoration: an admin editing it changed the advert and not the
+ * product, and the two could disagree silently. Overriding it here means the
+ * number the marketing copy shows is the number a new account actually receives,
+ * with no frontend change.
+ *
+ * The plan's own value is still returned as planTrialDays, so an admin can see
+ * that the column exists and is no longer what is being advertised.
+ */
 export async function getActivePlans() {
-  return prisma.subscriptionPlan.findMany({
-    where: { isActive: true },
-    orderBy: { displayOrder: "asc" },
-    select: {
-      id: true,
-      code: true,
-      name: true,
-      durationDays: true,
-      price: true,
-      currency: true,
-      trialDays: true,
-      isActive: true,
-      displayOrder: true,
-      gatewayPlanId: true,
-    },
-  });
+  const [plans, trial] = await Promise.all([
+    prisma.subscriptionPlan.findMany({
+      where: { isActive: true },
+      orderBy: { displayOrder: "asc" },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        durationDays: true,
+        price: true,
+        currency: true,
+        trialDays: true,
+        isActive: true,
+        displayOrder: true,
+        gatewayPlanId: true,
+      },
+    }),
+    getTrialSettings(),
+  ]);
+
+  return plans.map((plan) => ({
+    ...plan,
+    planTrialDays: plan.trialDays,
+    trialDays: trial.days,
+  }));
 }
 
 export async function getPlanByCode(code: string) {

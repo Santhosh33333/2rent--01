@@ -17,6 +17,7 @@ import {
   type OtpChannel,
   type OtpPurpose,
 } from "../services/otpService";
+import { grantSignupTrial } from "../services/trialAccessService";
 import { emailStatus } from "../services/emailService";
 import { smsStatus } from "../services/smsService";
 import { createUserSession, recordLogin, kycFieldsForSession } from "./authController";
@@ -146,6 +147,10 @@ export async function verifyOtpLogin(req: Request, res: Response): Promise<void>
         create: { userId: user.id },
         update: {},
       });
+      // New account starts with a trial, the same as every other signup route.
+      // Only on creation: reaching this line again for an existing user would
+      // reset a lapsed trial on each OTP login.
+      await grantSignupTrial(user.id);
     }
     if (!user) {
       sendError(res, "No account uses this email. Create one first.", 404, "USER_NOT_FOUND");

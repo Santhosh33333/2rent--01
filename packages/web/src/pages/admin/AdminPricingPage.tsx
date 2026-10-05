@@ -1,7 +1,7 @@
 import { getErrorMessage } from '../../lib/error'
 import { useEffect, useMemo, useState } from 'react'
 import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
-import { Beaker, Loader2, Percent, Plus, Save, ShieldCheck } from 'lucide-react'
+import { Beaker, Clock, Loader2, Percent, Plus, Save, ShieldCheck, Users } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { adminApi } from '../../lib/api'
 
@@ -12,6 +12,16 @@ interface PricingConfig {
   description?: string | null
   category: string
   isActive: boolean
+}
+
+/** Mirrors the server's TrialSettings plus the counts the panel shows. */
+interface TrialConfig {
+  days: number
+  maxDays: number
+  fromConfig: boolean
+  usersWithAccess: number
+  usersWithoutAccess: number
+  bulkGrantNote?: string
 }
 
 const CATEGORY_LABELS: Record<string, { title: string; blurb: string }> = {
@@ -36,6 +46,33 @@ export function AdminPricingPage() {
   const [simBusy, setSimBusy] = useState(false)
   const [simResult, setSimResult] = useState<any>(null)
 
+  // Free trial. Held separately from the config table above because it is not a
+  // rate: it is a length of access granted at signup, with a bulk action that
+  // reaches real accounts, so it needs its own confirm and its own reason field.
+  const [trial, setTrial] = useState<TrialConfig | null>(null)
+  const [trialDays, setTrialDays] = useState('')
+  const [trialSaving, setTrialSaving] = useState(false)
+  const [trialLoadError, setTrialLoadError] = useState<string | null>(null)
+  const [bulkDays, setBulkDays] = useState('')
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [bulkReason, setBulkReason] = useState('')
+
+  // Separate from load() on purpose. The trial read is independent of the config
+  // table, and folding it in would mean a failure on either hides the other - a
+  // pricing row failing to load should not blank the trial control, and vice
+  // versa.
+  const loadTrial = async () => {
+    setTrialLoadError(null)
+    try {
+      const res = await adminApi.getTrialConfig()
+      const d = res.data?.data || res.data
+      setTrial(d)
+      setTrialDays(String(d?.days ?? ''))
+    } catch (err: unknown) {
+      setTrialLoadError(getErrorMessage(err, 'Failed to load trial settings'))
+    }
+  }
+
   const load = async () => {
     setLoading(true)
     try {
@@ -52,8 +89,62 @@ export function AdminPricingPage() {
     }
   }
 
+  const saveTrial = async () => {
+    const days = Number(trialDays)
+    // Checked here as well as on the server. The server refuses an out-of-range
+    // value, and a 400 round-trip to tell an admin "7 is not between 1 and 365"
+    // is a worse experience than saying so here.
+    if (!Number.isInteger(days) || days < 1 || days > (trial?.maxDays ?? 365)) {
+      toast.error(`Enter a whole number of days between 1 and ${trial?.maxDays ?? 365}.`)
+      return
+    }
+    setTrialSaving(true)
+    try {
+      const res = await adminApi.setTrialDays(days)
+      const d = res.data?.data || res.data
+      if (d) setTrial((prev) => ({ ...(prev as TrialConfig), ...d }))
+      toast.success(`New accounts now get ${days} days.`)
+      await loadTrial()
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not save the trial length'))
+    } finally {
+      setTrialSaving(false)
+    }
+  }
+
+  const grantToAll = async () => {
+    const days = bulkDays.trim() === '' ? undefined : Number(bulkDays)
+    if (days !== undefined && (!Number.isInteger(days) || days < 1 || days > (trial?.maxDays ?? 365))) {
+      toast.error(`Enter a whole number of days between 1 and ${trial?.maxDays ?? 365}, or leave it empty to use ${trial?.days ?? 7}.`)
+      return
+    }
+    // Named in the prompt because this rewrites access for every account that
+    // does not currently have it, and unlike saving the length it cannot be
+    // undone from this screen.
+    const affected = trial?.usersWithoutAccess ?? 0
+    if (!window.confirm(
+      `Give ${affected} account(s) ${days ?? trial?.days ?? 7} days of access now?\n\n` +
+      'Accounts that already have access are left untouched, so nobody who paid loses days.',
+    )) return
+
+    setBulkBusy(true)
+    try {
+      const res = await adminApi.grantTrialToAll(days, bulkReason.trim() || undefined)
+      const d = res.data?.data || res.data
+      toast.success(`${d?.granted ?? 0} account(s) given ${d?.days ?? days} days.`)
+      setBulkDays('')
+      setBulkReason('')
+      await loadTrial()
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not apply the trial'))
+    } finally {
+      setBulkBusy(false)
+    }
+  }
+
   useEffect(() => {
     load()
+    loadTrial()
   }, [])
 
   const grouped = useMemo(() => {
@@ -209,6 +300,130 @@ export function AdminPricingPage() {
                 </section>
               )
             })}
+
+            <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+              <header className="px-5 py-4 border-b border-slate-100 flex items-center gap-3">
+                <Clock className="w-5 h-5 text-amber-600" aria-hidden />
+                <div>
+                  <h2 className="font-semibold text-slate-900">Free Trial</h2>
+                  <p className="text-xs text-slate-500">
+                    Days of paid access a new account starts with. This is the number the landing pages advertise
+                    and the number signup actually grants, so changing it updates both.
+                  </p>
+                </div>
+              </header>
+
+              {trialLoadError ? (
+                <div className="p-5">
+                  <p className="text-sm text-rose-700">{trialLoadError}</p>
+                  <button
+                    type="button"
+                    onClick={loadTrial}
+                    className="mt-3 inline-flex items-center gap-2 rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : !trial ? (
+                <div className="flex items-center justify-center gap-2 p-10 text-sm text-slate-400">
+                  <Loader2 className="w-4 h-4 animate-spin" /> Loading trial settings
+                </div>
+              ) : (
+                <div className="p-5 space-y-6">
+                  <div className="flex flex-wrap items-end gap-3">
+                    <div>
+                      <label htmlFor="trial-days" className="block text-xs font-medium text-slate-600 mb-1">
+                        Days for new accounts
+                      </label>
+                      <input
+                        id="trial-days"
+                        type="number"
+                        min={1}
+                        max={trial.maxDays}
+                        value={trialDays}
+                        onChange={(e) => setTrialDays(e.target.value)}
+                        className="w-32 rounded-md border border-slate-300 px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={saveTrial}
+                      disabled={trialSaving}
+                      className="inline-flex items-center gap-2 rounded-md bg-amber-600 px-3 py-2 text-white hover:bg-amber-700 disabled:opacity-50"
+                    >
+                      {trialSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      Save
+                    </button>
+                    <p className="text-xs text-slate-500">
+                      {trial.fromConfig
+                        ? 'Currently set to this value.'
+                        : 'Nothing saved yet, so new accounts get the built-in default.'}{' '}
+                      Maximum {trial.maxDays}.
+                    </p>
+                  </div>
+
+                  <dl className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="rounded-lg border border-slate-200 px-3 py-2">
+                      <dt className="text-xs text-slate-500">Accounts with access now</dt>
+                      <dd className="text-lg font-semibold text-slate-900">{trial.usersWithAccess}</dd>
+                    </div>
+                    <div className="rounded-lg border border-slate-200 px-3 py-2">
+                      <dt className="text-xs text-slate-500">Accounts without access</dt>
+                      <dd className="text-lg font-semibold text-slate-900">{trial.usersWithoutAccess}</dd>
+                    </div>
+                  </dl>
+
+                  <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-4 space-y-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-900">Give existing accounts a trial</h3>
+                      <p className="text-xs text-slate-600 mt-1">
+                        {trial.bulkGrantNote ??
+                          'Only affects accounts without current access. Accounts that paid are left untouched.'}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-end gap-3">
+                      <div>
+                        <label htmlFor="bulk-trial-days" className="block text-xs font-medium text-slate-600 mb-1">
+                          Days (blank uses {trial.days})
+                        </label>
+                        <input
+                          id="bulk-trial-days"
+                          type="number"
+                          min={1}
+                          max={trial.maxDays}
+                          placeholder={String(trial.days)}
+                          value={bulkDays}
+                          onChange={(e) => setBulkDays(e.target.value)}
+                          className="w-32 rounded-md border border-slate-300 px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div className="grow min-w-[200px]">
+                        <label htmlFor="bulk-trial-reason" className="block text-xs font-medium text-slate-600 mb-1">
+                          Reason (recorded in the audit log)
+                        </label>
+                        <input
+                          id="bulk-trial-reason"
+                          type="text"
+                          value={bulkReason}
+                          onChange={(e) => setBulkReason(e.target.value)}
+                          placeholder="e.g. launch promotion"
+                          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={grantToAll}
+                        disabled={bulkBusy}
+                        className="inline-flex items-center gap-2 rounded-md bg-amber-600 px-3 py-2 text-white hover:bg-amber-700 disabled:opacity-50"
+                      >
+                        {bulkBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
+                        Apply to all
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </section>
 
             <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               <header className="px-5 py-4 border-b border-slate-100 flex items-center gap-3">

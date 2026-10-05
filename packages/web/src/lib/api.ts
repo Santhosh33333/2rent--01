@@ -330,6 +330,15 @@ export const adminApi = {
   updatePricingConfig: (id: string, data: PricingConfigInput) => api.put(`/admin/pricing/${id}`, data),
   deletePricingConfig: (id: string) => api.delete(`/admin/pricing/${id}`),
   simulatePricing: (data: PriceEstimateParams) => api.post('/admin/pricing/simulate', data),
+  // Free trial. One length, read by the landing pages and enforced at signup.
+  // `days: null` on setUserTrial revokes access for that account.
+  getTrialConfig: () => api.get('/admin/subscriptions/trial'),
+  setTrialDays: (days: number, reason?: string) =>
+    api.post('/admin/subscriptions/trial', { days, reason }),
+  grantTrialToAll: (days?: number, reason?: string) =>
+    api.post('/admin/subscriptions/trial/grant-all', { days, reason }),
+  setUserTrial: (userId: string, days: number | null, reason?: string) =>
+    api.post(`/admin/subscriptions/trial/users/${userId}`, { days, reason }),
   // User / partner account blocking with duration + deletion
   blockUser: (userId: string, data: { durationDays?: number; durationYears?: number; permanent?: boolean; reason?: string }) =>
     api.post(`/admin/users/${userId}/block`, data),

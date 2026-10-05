@@ -12,6 +12,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../config/database";
 import { moneyTransaction } from "../utils/db";
+import { ACCESS_DAYS } from "./refundService";
 
 /**
  * Who asked for the credit. Recorded on the ledger entry and the audit log so a
@@ -104,6 +105,38 @@ export async function settleTopupRequest(
       },
     });
 
+    // Extend the access window in the same transaction as the credit.
+    //
+    // It used to happen only in the Cashfree settlement path, which is now
+    // unreachable. So with the gateway retired a customer could pay by UPI, be
+    // credited correctly, and still be refused by requirePaidAccess forever -
+    // money taken, nothing received. The window has to be part of what settling
+    // means, not a side effect of one provider's webhook.
+    //
+    // Additive from the later of now and the current expiry, so paying early does
+    // not waste days the customer already paid for.
+    //
+    // Uses tx rather than grantAccessWindow: that helper reads through the shared
+    // client, and calling it inside this transaction would be a second connection
+    // reading a user row this transaction is writing - it would extend from a
+    // stale accessUntil and silently overwrite it on commit.
+    const existing = await tx.user.findUnique({
+      where: { id: row.userId },
+      select: { accessUntil: true },
+    });
+    if (!existing) throw new Error("USER_NOT_FOUND");
+
+    const now = new Date();
+    const base =
+      existing.accessUntil && existing.accessUntil > now ? existing.accessUntil : now;
+    await tx.user.update({
+      where: { id: row.userId },
+      data: {
+        accessUntil: new Date(base.getTime() + ACCESS_DAYS * 24 * 60 * 60 * 1000),
+        accessSource: "TOPUP",
+      },
+    });
+
     await tx.auditLog.create({
       data: {
         actorId,
@@ -115,6 +148,7 @@ export async function settleTopupRequest(
           amount,
           referenceNumber: row.referenceNumber,
           source,
+          accessDaysGranted: ACCESS_DAYS,
         }),
       },
     });

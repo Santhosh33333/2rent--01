@@ -3,6 +3,16 @@ import { prisma } from "../config/database";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
 import { auditAdminAction } from "../rbac/audit";
+import { ADMIN_ROLES } from "../rbac/sections";
+import {
+  getTrialSettings,
+  setTrialDays,
+  grantTrialToAllUsers,
+  setUserAccess,
+  normaliseTrialDays,
+  TRIAL_DAYS_KEY,
+  MAX_TRIAL_DAYS,
+} from "../services/trialAccessService";
 
 /**
  * Admin pricing control.
@@ -272,8 +282,160 @@ export async function subscriptionSummary(_req: AuthedRequest, res: Response): P
       active,
       byStatus: byStatus.map((b) => ({ status: b.status, count: b._count._all })),
       plans,
+      // So the trial control in the admin UI starts from the real value rather
+      // than a hardcoded 7 that silently disagrees with production.
+      trial: await getTrialSettings(),
     });
   } catch {
     sendError(res, "Could not load subscription summary.", 500, "SUMMARY_FAILED");
+  }
+}
+
+// ============================================================================
+// FREE TRIAL
+//
+// The trial length is one admin-controlled number, and the landing pages read it.
+// Before this, the advertised length came from SubscriptionPlan.trialDays while
+// access was decided by User.accessUntil, and nothing ever wrote the second from
+// the first - so editing the plan changed the advert and not the product, and
+// new accounts got no trial at all.
+// ============================================================================
+
+function trialError(res: Response, err: unknown): void {
+  const code = err instanceof Error ? err.message : "";
+  if (code === "TRIAL_DAYS_INVALID") {
+    sendError(res, "Trial days must be a whole number of at least 1.", 400, code);
+    return;
+  }
+  if (code === `TRIAL_DAYS_MAX_${MAX_TRIAL_DAYS}`) {
+    sendError(res, `Trial days cannot exceed ${MAX_TRIAL_DAYS}.`, 400, code);
+    return;
+  }
+  if (code === "USER_NOT_FOUND") {
+    sendError(res, "No account has that id.", 404, code);
+    return;
+  }
+  console.error("[TRIAL] admin action failed:", err);
+  sendError(res, "Could not update the trial.", 500, "TRIAL_UPDATE_FAILED");
+}
+
+/** GET /admin/subscriptions/trial - current settings plus how many hold access. */
+export async function getTrialConfig(_req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const [settings, usersWithAccess, usersWithoutAccess] = await Promise.all([
+      getTrialSettings(),
+      prisma.user.count({
+        where: { accessUntil: { gt: new Date() }, role: { notIn: [...ADMIN_ROLES] } },
+      }),
+      prisma.user.count({
+        where: { OR: [{ accessUntil: null }, { accessUntil: { lte: new Date() } }] },
+      }),
+    ]);
+
+    sendSuccess(res, {
+      ...settings,
+      usersWithAccess,
+      usersWithoutAccess,
+      // Named explicitly because it is the operation with consequences: it moves
+      // real access windows for every account, and an admin about to press it
+      // should see the size of the change first.
+      bulkGrantNote:
+        "Setting days for all users only affects accounts without current access. Accounts that paid, or were granted access by an admin, are left untouched.",
+    });
+  } catch (err) {
+    console.error("[TRIAL] read failed:", err);
+    sendError(res, "Could not load trial settings.", 500, "TRIAL_READ_FAILED");
+  }
+}
+
+/**
+ * POST /admin/subscriptions/trial
+ * Sets the length every future signup receives.
+ */
+export async function updateTrialConfig(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const before = await getTrialSettings();
+    const days = await setTrialDays(req.body?.days);
+    const reason = typeof req.body?.reason === "string" ? req.body.reason : undefined;
+
+    await auditAdminAction({
+      req,
+      actorId: req.user?.userId ?? "unknown",
+      action: "TRIAL_DAYS_UPDATED",
+      section: "PRICING",
+      targetType: "Config",
+      targetId: TRIAL_DAYS_KEY,
+      oldValue: { days: before.days },
+      newValue: { days },
+      reason,
+    });
+
+    sendSuccess(res, await getTrialSettings(), `New accounts now get ${days} days.`);
+  } catch (err) {
+    trialError(res, err);
+  }
+}
+
+/**
+ * POST /admin/subscriptions/trial/grant-all
+ * Applies a length to every account that does not already have access.
+ */
+export async function grantTrialToAll(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const actorId = req.user?.userId ?? "unknown";
+    const reason = typeof req.body?.reason === "string" ? req.body.reason : undefined;
+    const result = await grantTrialToAllUsers(req.body?.days, actorId);
+
+    await auditAdminAction({
+      req,
+      actorId,
+      action: "TRIAL_DAYS_APPLIED_TO_ALL",
+      section: "PRICING",
+      targetType: "Config",
+      targetId: TRIAL_DAYS_KEY,
+      newValue: result,
+      reason,
+    });
+
+    sendSuccess(res, result, `${result.granted} account(s) given ${result.days} days.`);
+  } catch (err) {
+    trialError(res, err);
+  }
+}
+
+/** POST /admin/subscriptions/trial/users/:id - per-user set or clear. */
+export async function setUserTrial(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const actorId = req.user?.userId ?? "unknown";
+    const raw = req.body?.days;
+    // Explicit null means revoke. Absent means the caller sent nothing useful,
+    // which must not be read as "revoke" - a UI bug would then silently strip
+    // access from an account.
+    if (raw === undefined) {
+      sendError(res, "Provide days, or null to revoke access.", 400, "TRIAL_DAYS_INVALID");
+      return;
+    }
+    const days = raw === null ? null : normaliseTrialDays(raw);
+    const reason = typeof req.body?.reason === "string" ? req.body.reason : undefined;
+    const result = await setUserAccess(String(req.params.id ?? ""), days, actorId, reason);
+
+    await auditAdminAction({
+      req,
+      actorId,
+      action: days === null ? "TRIAL_REVOKED" : "TRIAL_GRANTED_USER",
+      section: "PRICING",
+      targetType: "User",
+      targetId: result.userId,
+      newValue: result,
+      reason,
+    });
+
+    sendSuccess(
+      res,
+      result,
+      days === null ? "Access revoked." : `Access granted until ${result.accessUntil?.toISOString()}.`,
+    );
+  } catch (err) {
+    trialError(res, err);
   }
 }

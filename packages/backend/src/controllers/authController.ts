@@ -20,6 +20,7 @@ import {
   PHONE_VERIFICATION_UNAVAILABLE_MESSAGE,
 } from "../services/phoneVisibility";
 import { emailStatus, sendIntroductionEmail, sendWelcomeEmail } from "../services/emailService";
+import { grantSignupTrial } from "../services/trialAccessService";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
 import { getFirebaseAuth, verifyIdToken, getUserByPhone, getUserByEmail, createUserWithPhone, createUserWithEmail } from "../services/firebaseAuthService";
@@ -174,6 +175,10 @@ async function createOrGetUserFromFirebase(uid: string, email?: string, phone?: 
   });
 
   await prisma.wallet.create({ data: { userId: user.id } });
+  // Every new account starts with a trial. The landing pages promise one, and
+  // without this the account is paywalled from the moment it exists - so the
+  // promise is only true because this call is here.
+  await grantSignupTrial(user.id);
   return user;
 }
 
@@ -353,6 +358,12 @@ export async function register(req: Request, res: Response): Promise<void> {
 
       return u;
     });
+
+    // Outside the transaction on purpose: grantSignupTrial reads and writes
+    // through the shared client, so inside it would be a second connection
+    // querying a row this transaction has not committed - it would not see the
+    // user at all and would report USER_NOT_FOUND.
+    await grantSignupTrial(user.id);
 
     // Verification codes go through the DB-backed OTP service (hashed,
     // purpose-bound, rate-limited). Delivery honesty is enforced there:
@@ -798,6 +809,12 @@ export async function googleSignIn(req: Request, res: Response): Promise<void> {
         await tx.wallet.create({ data: { userId: u.id } });
         return u;
       });
+
+      // Only for a newly created account. The branch above returns the existing
+      // user untouched, and re-granting there would reset a lapsed trial on every
+      // subsequent Google sign-in - which is a way to hold an expired account open
+      // forever by logging out and back in.
+      await grantSignupTrial(user.id);
     }
 
     const { accessToken, refreshToken } = await createUserSession(user.id, req);
@@ -885,6 +902,9 @@ export async function appleSignIn(req: AuthedRequest, res: Response): Promise<vo
         await tx.wallet.create({ data: { userId: u.id } });
         return u;
       });
+      // New account only - see the Google path. Re-granting on every Apple
+      // sign-in would reset an expired trial indefinitely.
+      await grantSignupTrial(user.id);
     } else if (!user.appleId) {
       await prisma.user.update({ where: { id: user.id }, data: { appleId } });
     }

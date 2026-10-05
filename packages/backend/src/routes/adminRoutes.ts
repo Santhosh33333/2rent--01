@@ -326,6 +326,20 @@ router.post("/subscriptions/plans", subPlansCreate, adminSubscriptionController.
 router.post("/subscriptions/plans/:code", pricingEdit, adminSubscriptionController.updatePlan);
 router.post("/subscriptions/plans/:code/toggle", pricingEdit, adminSubscriptionController.togglePlan);
 
+// Free trial. Read is PRICING VIEW; every write is PRICING EDIT, the same tier
+// that moves plan prices, because changing the trial length grants real access
+// and a narrower tier would let a read-only admin hand out paid access.
+router.get("/subscriptions/trial", subPlansView, adminSubscriptionController.getTrialConfig);
+router.post("/subscriptions/trial", pricingEdit, [body("days").isInt({ min: 1, max: 365 })], sanitizeInput, validateRequest, adminSubscriptionController.updateTrialConfig);
+// grant-all carries no day validator on the body because it may also be sent
+// without one, in which case the service applies the currently configured
+// length. Validating an optional field as required would reject the common case.
+router.post("/subscriptions/trial/grant-all", pricingEdit, [body("days").optional().isInt({ min: 1, max: 365 })], sanitizeInput, validateRequest, adminSubscriptionController.grantTrialToAll);
+// days is nullable on purpose: null is how an admin revokes access for one
+// account. express-validator's isInt rejects null, so the check is done in the
+// controller where null and absent can be told apart.
+router.post("/subscriptions/trial/users/:id", pricingEdit, sanitizeInput, validateRequest, adminSubscriptionController.setUserTrial);
+
 export default router;
 
 
