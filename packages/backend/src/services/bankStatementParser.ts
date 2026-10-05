@@ -44,6 +44,20 @@ export interface ParsedRow {
   lineNo: number;
   rawReference: string;
   referenceNorm: string;
+  /**
+   * Further references this same line legitimately answers to.
+   *
+   * A UPI credit on a Slice or Axis export puts the customer's UTR (the NPCI
+   * RRN) inside the narration, as "UPI-Credit-130500139151-...", while the
+   * reference column holds the bank's own internal booking number
+   * ("2026100148790401"). The user is told to type the UTR their UPI app shows,
+   * so only the narration value can ever match a claim. Without this, those files
+   * parse and then reconcile to nothing.
+   *
+   * Deliberately additional keys, never replacements: the reference column is
+   * still tried first, so a bank that does print the UTR there is unaffected.
+   */
+  altReferences: string[];
   rawAmount: string;
   rawDate: string;
   /** Null when the cell could not be read as a number. Never zero as a stand-in. */
@@ -83,6 +97,28 @@ export interface ParseResult {
 }
 
 /**
+ * Clean a column heading before it is matched against the role patterns.
+ *
+ * Banks punctuate their headings, and the punctuation lands exactly where the
+ * patterns were anchored. Slice prints "REF NO." and Axis prints "Ref No." -
+ * both with a trailing full stop - and `^ref\s*(no|number)?$` could not match
+ * either, so the only column holding a reference was invisible and the file was
+ * rejected for having "no UTR column" while the reference sat right there in the
+ * preview. Trimming the punctuation is what makes those exports readable.
+ *
+ * Only leading/trailing marks are removed. Punctuation *inside* a heading is
+ * meaningful ("a/c no." is not "a/c"), and rewriting it would let an unrelated
+ * column claim a role it does not have.
+ */
+function normaliseHeading(value: string): string {
+  return String(value ?? "")
+    .replace(/^[\s._#:;,\-/\\]+/, "")
+    .replace(/[\s._#:;,\-/\\]+$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
  * Header synonyms, longest and most specific first.
  *
  * Order matters within each role: "transaction reference" must be tested before
@@ -91,7 +127,12 @@ export interface ParseResult {
  */
 const ROLE_PATTERNS: Array<{ role: ColumnRole; re: RegExp }> = [
   // Reference. UTR first: it is the term an Indian bank's UPI credit line uses.
-  { role: "reference", re: /\b(utr|rrn)\b|utr\s*(no|number|ref)|bank\s*ref(erence)?|txn\s*ref|transaction\s*ref(erence)?|upi\s*ref|payment\s*ref|customer\s*ref|^ref(erence)?\s*(no|number)?$|transaction\s*id|^txn\s*id$|rrn\s*no/i },
+  //
+  // The `^ref…$` alternative now tolerates separators between the words and a
+  // trailing mark, because "REF NO." (Slice) and "Ref No." (Axis) are how the
+  // two most common merchant-bank exports spell it. It stays anchored at both
+  // ends so "Cheque No." and "Customer Ref" cannot be mistaken for it.
+  { role: "reference", re: /\b(utr|rrn)\b|utr\s*[._-]?\s*(no|number|ref)|bank\s*ref(erence)?|txn\s*ref|transaction\s*ref(erence)?|upi\s*ref|payment\s*ref|customer\s*ref|^ref(erence)?[\s._#:,\-/]*(no|number)?[\s._#:,\-/]*$|transaction\s*id|^txn\s*id$|rrn\s*no/i },
   // Direction. Before amount, because "debit/credit" headings contain neither a
   // bare amount word but do contain "credit", which the credit role wants.
   { role: "direction", re: /\b(dr\s*\/?\s*cr|cr\s*\/?\s*dr|txn\s*type|transaction\s*type|debit\s*\/?\s*credit|type)\s*$/i },
@@ -120,7 +161,7 @@ function looksLikeHeader(cells: string[]): boolean {
 function detectMapping(headers: string[]): ColumnMap {
   const map: ColumnMap = {};
   headers.forEach((header, index) => {
-    const text = header.trim();
+    const text = normaliseHeading(header);
     if (!text) return;
     for (const { role, re } of ROLE_PATTERNS) {
       if (map[role] !== undefined) continue;
@@ -152,6 +193,45 @@ export function normaliseReference(value: string | null | undefined): string {
   return String(value ?? "")
     .replace(/\s+/g, "")
     .toUpperCase();
+}
+
+/**
+ * Pull UPI transaction ids out of a narration line.
+ *
+ * On a UPI credit, the number a customer's app shows them is the NPCI RRN, and
+ * that is what they type into the top-up form. Banks print it inside the
+ * narration, never in a column of its own:
+ *
+ *   Slice:  UPI-Credit-130500139151-KATHIRVEL S-HDFC0001284-kathir3459-5@okhdfcbank
+ *   Axis:   UPI/CR/512345678901/SALARY CREDIT/...
+ *
+ * The "reference" column of those same exports holds the bank's own internal
+ * booking number, which the user has never seen and cannot type. Matching on it
+ * alone parses the file perfectly and then credits nobody.
+ *
+ * The CR/DR marker is required rather than optional, deliberately. Without it,
+ * prose like "UPI transfer to 9876543210" would contribute a phone number as a
+ * candidate reference; with it, only a line the bank explicitly labelled as a
+ * UPI credit or debit can contribute one.
+ */
+const UPI_NARRATION_ID = /UPI[\s\-_/.]+(?:CREDIT|CR|DEBIT|DR)[\s\-_/.]+(\d{9,20})/gi;
+
+export function extractUpiReferences(narration: string | null | undefined): string[] {
+  if (!narration) return [];
+  const text = String(narration);
+  const out: string[] = [];
+  // The pattern is global, so lastIndex must be reset per call or a second row
+  // would resume the previous row's scan position and miss matches.
+  UPI_NARRATION_ID.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = UPI_NARRATION_ID.exec(text)) !== null) {
+    const norm = normaliseReference(m[1]);
+    if (norm && !out.includes(norm)) out.push(norm);
+    if (m.index === UPI_NARRATION_ID.lastIndex) {
+      UPI_NARRATION_ID.lastIndex += 1;
+    }
+  }
+  return out;
 }
 
 /**
@@ -511,9 +591,35 @@ export function parseBankStatement(text: string, opts: ParseOptions = {}): Parse
     const tail = fallbackHeaders.some((h) => h)
       ? `Columns in the closest header-like row: ${seen}. `
       : "";
-    if (fallbackHeaders.some((h) => /utr|rrn|reference|ref\b/i.test(h))) {
+
+    // Which half of the mapping actually failed, so the message names the column
+    // the admin has to change.
+    //
+    // These two cases were previously collapsed into one message that always
+    // blamed the amount column. A Slice export has DEBIT and CREDIT recognised
+    // perfectly and only its "REF NO." heading unrecognised, and it was told to
+    // "add a 'Credit', 'Debit' or 'Amount' column" - columns it already had. The
+    // admin adds them, the file fails identically, and the real cause is never
+    // surfaced.
+    const fallbackMap = detectMapping(fallbackHeaders);
+    const hasAmountRole =
+      fallbackMap.amount !== undefined ||
+      fallbackMap.credit !== undefined ||
+      fallbackMap.debit !== undefined;
+    const refishHeading = fallbackHeaders.find((h) => {
+      const clean = normaliseHeading(h);
+      return clean.length > 0 && /\b(utr|rrn|ref|reference)\b/i.test(clean);
+    });
+
+    if (refishHeading && !hasAmountRole) {
       throw new Error(
         `${tail}No amount column was found next to the reference column. Add a 'Credit', 'Debit' or 'Amount' column.`,
+      );
+    }
+    if (refishHeading) {
+      throw new Error(
+        `${tail}Found a reference column ("${refishHeading}") and an amount column, but that heading was not ` +
+          "recognised as the reference. Rename it to 'UTR No' or 'Reference No' and upload again.",
       );
     }
     throw new Error(
@@ -573,8 +679,14 @@ export function parseBankStatement(text: string, opts: ParseOptions = {}): Parse
     const cells = matrix[i];
     const lineNo = i + 1;
 
+    const narration = map.narration !== undefined ? String(cells[map.narration] ?? "") : "";
+    const altReferences = extractUpiReferences(narration);
+
     const rawReference = String(cells[referenceColumn] ?? "").trim();
-    const referenceNorm = normaliseReference(rawReference);
+    // A row whose reference column is blank but whose narration carries a UPI id
+    // still names a payment the customer can claim, so promote that id instead of
+    // reporting the line as having no reference at all.
+    const referenceNorm = rawReference ? normaliseReference(rawReference) : altReferences[0] ?? "";
     const rawAmount = String(
       (map.credit !== undefined && cells[map.credit]) ||
       (map.debit !== undefined && cells[map.debit]) ||
@@ -590,6 +702,14 @@ export function parseBankStatement(text: string, opts: ParseOptions = {}): Parse
     const amount = effectiveAmount(cells);
     const txnDate = parseTxnDate(rawDate, dayFirst);
     const { inbound, weak } = resolveInbound(cells, map);
+
+    // A line with neither a reference nor a readable amount cannot match a claim
+    // and can never be credited, so there is nothing an admin could decide about
+    // it. On a PDF whose narration wraps across lines these are the continuation
+    // fragments, and they were being reported as "this line has no transaction
+    // reference" - filling the preview with warnings no one can act on while the
+    // two real payments scroll off the page.
+    if (!referenceNorm && amount === null) continue;
 
     let matchStatus: RowStatus = "PENDING";
     let matchReason = "";
@@ -619,6 +739,7 @@ export function parseBankStatement(text: string, opts: ParseOptions = {}): Parse
       lineNo,
       rawReference,
       referenceNorm,
+      altReferences,
       rawAmount,
       rawDate,
       amount,

@@ -50,6 +50,11 @@ const { db, gateway } = vi.hoisted(() => ({
     notification: { create: vi.fn() },
     auditLog: { create: vi.fn() },
     user: { findUnique: vi.fn() },
+    // PAYMENT_MODE now defaults to manual UPI, so a file that exercises the
+    // gateway order path has to turn it on explicitly - otherwise every gateway
+    // test stops at the "online payment is switched off" branch before reaching
+    // the code under test.
+    pricingConfig: { findMany: vi.fn(), findUnique: vi.fn() },
     $transaction: vi.fn(),
   },
   gateway: {
@@ -156,6 +161,11 @@ const verifyBody = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // This whole file covers the Cashfree order path, which is now off unless an
+  // operator explicitly selects it. getStringConfig reads this, so the mode is
+  // stated here rather than relied on as a default that no longer holds.
+  db.pricingConfig.findMany.mockResolvedValue([{ key: "PAYMENT_MODE", value: "gateway" }]);
+  db.pricingConfig.findUnique.mockResolvedValue(null);
   arrangeSuccessfulPayment();
 });
 

@@ -67,32 +67,38 @@ export async function createOrder(req: AuthedRequest, res: Response): Promise<vo
     // gateway is unconfigured the request errors so the client can say so,
     // rather than handing back an order id that could never be paid.
     //
-    // Two distinct reasons, because they need different answers. "switched_off"
-    // is the working manual-UPI state, so the response carries the UPI details
-    // and the client can show the QR straight away instead of an error. Missing
-    // credentials remain a plain 503 for the operator.
+    // Two distinct reasons, because they mean different things to whoever has to
+    // act on them. "switched_off" is the deliberate manual-UPI state;
+    // "not_configured" means the mode still says gateway but the credentials are
+    // gone, which after the Cashfree retirement is the *normal* state of a
+    // manual-UPI deployment rather than an emergency.
+    //
+    // Both carry the UPI details. That used to be true only for "switched_off",
+    // which left a bad failure mode once the keys were deleted: the reason a user
+    // hit became "not_configured", and that branch returned a bare 503 with no
+    // payment route in it at all. An error the user cannot pay their way out of
+    // is not a useful answer, whatever the operator log says about it. The error
+    // code still distinguishes the two for monitoring.
     const unavailable = await gatewayUnavailableReason();
     if (unavailable) {
-      if (unavailable === "switched_off") {
-        const [upiId, upiName] = await Promise.all([
-          prisma.pricingConfig.findUnique({ where: { key: "UPI_ID" } }),
-          prisma.pricingConfig.findUnique({ where: { key: "UPI_ACCOUNT_NAME" } }),
-        ]);
-        sendError(
-          res,
-          "Online payment is switched off. Pay using the UPI QR and submit the reference.",
-          503,
-          "MANUAL_UPI_ONLY",
-          undefined,
-          {
-            upiId: upiId?.value ?? null,
-            upiAccountName: upiName?.value ?? null,
-            upiQrUrl: upiId?.value ? BUILTIN_UPI_QR_PATH : null,
-          }
-        );
-        return;
-      }
-      sendError(res, "Payments are not configured on this server.", 503, "PAYMENT_NOT_CONFIGURED");
+      const [upiId, upiName] = await Promise.all([
+        prisma.pricingConfig.findUnique({ where: { key: "UPI_ID" } }),
+        prisma.pricingConfig.findUnique({ where: { key: "UPI_ACCOUNT_NAME" } }),
+      ]);
+      sendError(
+        res,
+        unavailable === "switched_off"
+          ? "Online payment is switched off. Pay using the UPI QR and submit the reference."
+          : "Online payment is unavailable. Pay using the UPI QR and submit the reference.",
+        503,
+        unavailable === "switched_off" ? "MANUAL_UPI_ONLY" : "PAYMENT_NOT_CONFIGURED",
+        undefined,
+        {
+          upiId: upiId?.value ?? null,
+          upiAccountName: upiName?.value ?? null,
+          upiQrUrl: upiId?.value ? BUILTIN_UPI_QR_PATH : null,
+        }
+      );
       return;
     }
 

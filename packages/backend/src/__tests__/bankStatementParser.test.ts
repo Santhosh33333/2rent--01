@@ -4,6 +4,7 @@ import {
   parseAmount,
   parseTxnDate,
   normaliseReference,
+  extractUpiReferences,
 } from "../services/bankStatementParser";
 
 /**
@@ -398,5 +399,150 @@ describe("header detection under a bank account-summary block", () => {
     // which of their columns is the problem.
     expect(() => parseBankStatement(csv)).toThrow(/Date, Description, Reference Number/);
     expect(() => parseBankStatement(csv)).toThrow(/no amount column/i);
+  });
+});
+
+/**
+ * Regression cover for the two defects that made a Slice statement reconcile to
+ * nobody while looking perfectly valid.
+ *
+ * Both were found against a real export from Slice Small Finance Bank
+ * (IFSC NESF0000333), and both are the kind of failure this file already exists
+ * to catch: the file imports, the preview renders, and the result is silence.
+ */
+describe("punctuated reference headings (Slice / Axis)", () => {
+  // Real column headers from the Slice export.
+  const SLICE_HEADER = "DATE,DETAILS,REF NO.,TRANSACTION TYPE,DEBIT,CREDIT,BALANCE";
+  const SLICE_ROWS = [
+    "01 Oct '26,UPI-Credit-130500139151-KATHIRVEL S-HDFC0001284-kathir3459-5@okhdfcbank,2026100148790401,CREDIT,,2880,2882.79",
+    "01 Oct '26,UPI-Debit-627377943583-SANTHOSH KUMAR U-UTIB0003492-sk128383828282@slc-self transfer,2026100152042401,DEBIT,2882,,0.79",
+  ];
+
+  const withPreamble = [
+    "Customer ID,380004016598,,Account,SAVINGS,,",
+    "Email,santhoshkrishna958@gmail.com,,IFSC,NESF0000333,,",
+    SLICE_HEADER,
+    ...SLICE_ROWS,
+  ].join("\n");
+
+  it("recognises 'REF NO.' as the reference column", () => {
+    // The heading is punctuated, and the pattern was anchored at the end of the
+    // string, so a trailing full stop hid the only reference column in the file
+    // and the upload was rejected outright.
+    const parsed = parseBankStatement(withPreamble);
+    expect(parsed.columnMap.reference).toBe(2);
+    expect(parsed.headers).toContain("REF NO.");
+  });
+
+  it("still separates debit and credit with the punctuated heading present", () => {
+    const parsed = parseBankStatement(withPreamble);
+    // Found by reference rather than line number: the preamble length is a fixture
+    // detail, and the point of the assertion is direction, not position.
+    const credit = parsed.rows.find((r) => r.rawReference === "2026100148790401")!;
+    const debit = parsed.rows.find((r) => r.rawReference === "2026100152042401")!;
+    expect(credit.amount).toBe(2880);
+    expect(credit.inbound).toBe(true);
+    expect(debit.inbound).toBe(false);
+  });
+
+  it("recognises the other spellings these banks use", () => {
+    const forms = ["Ref No.", "REF NO.", "Reference No.", "Ref No", "Reference Number"];
+    for (const heading of forms) {
+      const csv = [`Date,Details,${heading},Credit`, `01/10/2026,UPI,412233445566,500`].join("\n");
+      const parsed = parseBankStatement(csv);
+      expect(parsed.columnMap.reference, `heading: ${heading}`).toBe(2);
+    }
+  });
+
+  it("does not let a cheque number claim the reference slot", () => {
+    // Axis exports carry both. Crediting against a cheque number would match the
+    // wrong payment, so "Cheque No." must not be taken as the reference.
+    const csv = ["Date,Cheque No.,Reference No.,Credit", "01/10/2026,000123,412233445566,500"].join("\n");
+    const parsed = parseBankStatement(csv);
+    expect(parsed.columnMap.reference).toBe(2);
+    expect(parsed.rows[0].referenceNorm).toBe("412233445566");
+  });
+
+  it("blames the reference column, not the amount column, when only it is wrong", () => {
+    // The previous message always said "add a Credit, Debit or Amount column",
+    // for a file that already had both. Following that advice changed nothing and
+    // hid the real cause.
+    const csv = [
+      "Account ID,123456789",
+      "Date,Payee Details,Ref No (System),CREDIT",
+      "01/10/2026,UPI,412233445566,500",
+    ].join("\n");
+    // "Ref No (System)" is what banks print when they append their own internal
+    // label, and it is ref-ish without being one of the accepted spellings.
+    expect(() => parseBankStatement(csv)).toThrow(/reference/i);
+  });
+});
+
+describe("UPI transaction id inside the narration", () => {
+  it("extracts the RRN from a Slice-style narration", () => {
+    expect(
+      extractUpiReferences("UPI-Credit-130500139151-KATHIRVEL S-HDFC0001284-kathir3459-5@okhdfcbank")
+    ).toEqual(["130500139151"]);
+  });
+
+  it("extracts the RRN from an Axis-style narration", () => {
+    expect(extractUpiReferences("UPI/CR/512345678901/SALARY CREDIT/XYZ")).toEqual(["512345678901"]);
+    expect(extractUpiReferences("UPI/DR/512345678901/SELF TRANSFER")).toEqual(["512345678901"]);
+  });
+
+  it("adds it as an extra key without discarding the reference column", () => {
+    // The reference column holds Slice's internal booking number, which the
+    // customer has never seen. Keeping only that value parses the file perfectly
+    // and credits nobody, because no claim is filed under it.
+    const csv = [
+      "DATE,DETAILS,REF NO.,TRANSACTION TYPE,DEBIT,CREDIT,BALANCE",
+      "01 Oct '26,UPI-Credit-130500139151-KATHIRVEL S-HDFC0001284-kathir3459-5@okhdfcbank,2026100148790401,CREDIT,,2880,2882.79",
+    ].join("\n");
+    const row = parseBankStatement(csv).rows[0];
+    expect(row.referenceNorm).toBe("2026100148790401");
+    expect(row.altReferences).toEqual(["130500139151"]);
+  });
+
+  it("does not invent a reference from prose that lacks a CR/DR marker", () => {
+    // "UPI transfer to 9876543210" contains digits but is not a transaction id.
+    // Allowing it through would put a phone number into the candidate set.
+    expect(extractUpiReferences("UPI transfer to 9876543210")).toEqual([]);
+    expect(extractUpiReferences("NEFT IMFS12345678 to branch")).toEqual([]);
+    expect(extractUpiReferences("")).toEqual([]);
+    expect(extractUpiReferences(null)).toEqual([]);
+  });
+
+  it("finds every UPI line in a file, not just the first", () => {
+    // The pattern is global; a shared lastIndex would make the second row resume
+    // the first row's scan and silently miss its id.
+    const ids = ["111111111111", "222222222222", "333333333333"].map((id) =>
+      extractUpiReferences(`UPI-Credit-${id}-SOMEONE`)
+    );
+    expect(ids).toEqual([["111111111111"], ["222222222222"], ["333333333333"]]);
+  });
+
+  it("promotes the narration id when the reference column is empty", () => {
+    const csv = [
+      "DATE,DETAILS,REF NO.,DEBIT,CREDIT",
+      "01 Oct '26,UPI-Credit-130500139151-SOMEONE,,,2880",
+    ].join("\n");
+    const row = parseBankStatement(csv).rows[0];
+    expect(row.matchStatus).not.toBe("NO_REFERENCE");
+    expect(row.referenceNorm).toBe("130500139151");
+  });
+
+  it("drops wrapped fragments that carry neither a reference nor an amount", () => {
+    // A PDF whose narration wraps leaves continuation lines that hold neither.
+    // They can never match a claim, and reporting each as NO_REFERENCE buried the
+    // two real payments under noise no admin could act on.
+    const csv = [
+      "DATE,DETAILS,REF NO.,AMOUNT",
+      "01 Oct '26,UPI-Credit-130500139151-SANTHOSH KUMAR U-UTIB0003492,2026100148790401,\"₹2,880\"",
+      "001284-kathir3459-5@okhdfcbank,,,",
+      "01 Oct '26,UPI-Debit-627377943583-SELF,2026100152042401,\"₹2,882\"",
+    ].join("\n");
+    const rows = parseBankStatement(csv).rows;
+    expect(rows).toHaveLength(2);
+    expect(rows.every((r) => r.matchStatus !== "NO_REFERENCE")).toBe(true);
   });
 });

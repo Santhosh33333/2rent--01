@@ -437,6 +437,15 @@ export const paymentsApi = {
    */
   verify: (orderId: string) =>
     api.post('/payments/verify', { orderId }, { timeout: 60000 }),
+  /**
+   * Which rail is live, plus the platform UPI details needed to pay manually.
+   *
+   * `activeMethod` is the single value a client should branch on: "gateway",
+   * "manual_upi" or "none". It exists precisely so that no client has to
+   * hardcode a provider, and it was previously unreadable because no client
+   * method reached the endpoint at all.
+   */
+  getConfig: () => api.get('/payments/config'),
 }
 
 export type SupportTicketStatus = 'OPEN' | 'IN_PROGRESS' | 'WAITING_ON_USER' | 'RESOLVED' | 'CLOSED'

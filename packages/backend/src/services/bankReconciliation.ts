@@ -207,8 +207,63 @@ export interface MatchOutcome {
   claimedAmount?: number;
 }
 
+/**
+ * Reserved key inside a row's `rawJson` for the extra references a line answers
+ * to. Survives the upload so a rematch, which reads stored rows rather than the
+ * original file, can still find a claim by the UPI id in the narration.
+ *
+ * `rawJson` is otherwise the bank's own column names, so the key is prefixed to
+ * make a collision implausible.
+ */
+const ALT_REFERENCES_KEY = "__upiReferences";
+
+function storedAltReferences(rawJson: string | null | undefined): string[] {
+  if (!rawJson) return [];
+  const parsed = safeJson<Record<string, unknown>>(rawJson, {});
+  const value = parsed?.[ALT_REFERENCES_KEY];
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string" && v.length > 0) : [];
+}
+
+/**
+ * Every reference key a file line legitimately answers to.
+ *
+ * The reference column first, then any UPI transaction id the narration carried.
+ * Order matters only for which claim is reported when several match; the exact
+ * amount agreement below is what actually authorises a credit.
+ */
+function rowReferenceKeys(row: { referenceNorm: string; altReferences?: string[] | null }): string[] {
+  const keys = [row.referenceNorm, ...(row.altReferences ?? [])];
+  return [...new Set(keys.filter((k) => typeof k === "string" && k.length > 0))];
+}
+
+/**
+ * Collect the claims a line could be paying.
+ *
+ * Union across all of the line's keys rather than a single lookup, because a UPI
+ * export names the customer's reference in the narration while the reference
+ * column holds the bank's internal booking number. Deduped by claim identity, so
+ * a line whose two keys both point at the same claim is not treated as two
+ * competing claims and refused.
+ */
+function lookupClaims(
+  row: { referenceNorm: string; altReferences?: string[] | null },
+  byRef: Map<string, IndexedClaim[]>,
+): IndexedClaim[] {
+  const out: IndexedClaim[] = [];
+  const seenIds = new Set<string>();
+  for (const key of rowReferenceKeys(row)) {
+    for (const claim of byRef.get(key) ?? []) {
+      const id = `${claim.kind}:${claim.id}`;
+      if (seenIds.has(id)) continue;
+      seenIds.add(id);
+      out.push(claim);
+    }
+  }
+  return out;
+}
+
 export function matchRowAgainst(
-  row: { referenceNorm: string; amount: number | null; inbound: boolean; matchStatus: string },
+  row: { referenceNorm: string; altReferences?: string[] | null; amount: number | null; inbound: boolean; matchStatus: string },
   byRef: Map<string, IndexedClaim[]>,
   opts: { duplicate: boolean; truncated: boolean; reconstructed?: boolean },
 ): MatchOutcome {
@@ -251,7 +306,7 @@ export function matchRowAgainst(
   // decided, and it can still be credited, but only by a person who has looked
   // at the actual PDF and typed why.
   if (opts.reconstructed) {
-    const claims = byRef.get(row.referenceNorm) ?? [];
+    const claims = lookupClaims(row, byRef);
     const claim = claims.find((c) => c.status === "VERIFICATION_PENDING") ?? claims[0];
     return {
       status: "UNMATCHED",
@@ -261,7 +316,7 @@ export function matchRowAgainst(
     };
   }
 
-  const claims = byRef.get(row.referenceNorm) ?? [];
+  const claims = lookupClaims(row, byRef);
   if (claims.length === 0) {
     return {
       status: "UNMATCHED",
@@ -405,13 +460,17 @@ export async function uploadStatement(params: {
   // neither is something the matcher should resolve by picking the first.
   const seen = new Map<string, number>();
   for (const r of parsed.rows) {
-    if (!r.referenceNorm) continue;
-    seen.set(r.referenceNorm, (seen.get(r.referenceNorm) ?? 0) + 1);
+    for (const key of rowReferenceKeys(r)) {
+      seen.set(key, (seen.get(key) ?? 0) + 1);
+    }
   }
 
+  // Every key of every eligible line goes to the claim loader, not just the
+  // reference column value. A claim is stored under whatever reference the
+  // customer typed, which on a UPI export is the id inside the narration.
   const candidates = parsed.rows
-    .filter((r) => r.matchStatus === "PENDING" && r.inbound && r.referenceNorm)
-    .map((r) => r.referenceNorm);
+    .filter((r) => r.matchStatus === "PENDING" && r.inbound && rowReferenceKeys(r).length > 0)
+    .flatMap((r) => rowReferenceKeys(r));
   const uniqueRefs = [...new Set(candidates)];
 
   const { claims, truncated } = await loadCandidateClaims(uniqueRefs, parsed.periodFrom, parsed.periodTo);
@@ -432,7 +491,11 @@ export async function uploadStatement(params: {
   const reconstructed = ingest.warnings.some((w) => w.kind === "PDF_TABLE_RECONSTRUCTED");
 
   const persisted = parsed.rows.map((row) => {
-    const outcome = matchRowAgainst(row, byRef, { duplicate: (seen.get(row.referenceNorm) ?? 0) > 1, truncated, reconstructed });
+    const outcome = matchRowAgainst(row, byRef, {
+      duplicate: rowReferenceKeys(row).some((k) => (seen.get(k) ?? 0) > 1),
+      truncated,
+      reconstructed,
+    });
 
     if (outcome.status === "MATCHED") matched += 1;
     else unmatched += 1;
@@ -458,7 +521,7 @@ export async function uploadStatement(params: {
       matchedId: outcome.claim?.id ?? null,
       matchedAmount: outcome.claim ? new Prisma.Decimal(outcome.claim.amount) : null,
       matchedUserId: outcome.claim?.userId ?? null,
-      rawJson: JSON.stringify(row.raw),
+      rawJson: JSON.stringify({ ...row.raw, [ALT_REFERENCES_KEY]: row.altReferences }),
     };
   });
 
@@ -1070,18 +1133,29 @@ export async function rematchStatement(params: {
   }
 
   const rawJsonByLine = new Map<number, string>();
+  const altByRowId = new Map<string, string[]>();
   for (const r of statement.rows) {
     if (r.rawJson) rawJsonByLine.set(r.lineNo, r.rawJson);
+    const alt = storedAltReferences(r.rawJson);
+    if (alt.length) altByRowId.set(r.id, alt);
   }
+
+  // Every reference key a stored row answers to, recovered from the upload-time
+  // rawJson. A row qualifies on any of them: on a UPI export the reference column
+  // holds the bank's internal booking number, and the claim is filed under the id
+  // in the narration, so requiring a column value here would skip those rows
+  // forever - which is exactly what "rematch found nothing" looks like.
+  const keysFor = (r: { id: string; referenceNorm: string }): string[] =>
+    rowReferenceKeys({ referenceNorm: r.referenceNorm, altReferences: altByRowId.get(r.id) });
 
   // The candidate references come from the stored rows, not the file: the bytes
   // are gone by design (a statement is not kept), and the stored rows are what
   // the admin was shown.
   const pending = statement.rows.filter(
-    (r) => r.matchStatus !== "MATCHED" && !r.creditedAt && !r.decidedAt && r.inbound && r.referenceNorm,
+    (r) => r.matchStatus !== "MATCHED" && !r.creditedAt && !r.decidedAt && r.inbound && keysFor(r).length > 0,
   );
   const { claims, truncated } = await loadCandidateClaims(
-    [...new Set(pending.map((r) => r.referenceNorm))],
+    [...new Set(pending.flatMap((r) => keysFor(r)))],
     statement.periodFrom,
     statement.periodTo,
   );
@@ -1094,7 +1168,7 @@ export async function rematchStatement(params: {
 
   const seen = new Map<string, number>();
   for (const r of pending) {
-    seen.set(r.referenceNorm, (seen.get(r.referenceNorm) ?? 0) + 1);
+    for (const k of keysFor(r)) seen.set(k, (seen.get(k) ?? 0) + 1);
   }
 
   // `statement.warnings` is stored as a JSON array, so it reads back as one. It
@@ -1106,9 +1180,15 @@ export async function rematchStatement(params: {
   let newlyMatched = 0;
   for (const r of pending) {
     const outcome = matchRowAgainst(
-      { referenceNorm: r.referenceNorm, amount: r.amount === null ? null : Number(r.amount), inbound: r.inbound, matchStatus: "PENDING" },
+      {
+        referenceNorm: r.referenceNorm,
+        altReferences: altByRowId.get(r.id),
+        amount: r.amount === null ? null : Number(r.amount),
+        inbound: r.inbound,
+        matchStatus: "PENDING",
+      },
       byRef,
-      { duplicate: (seen.get(r.referenceNorm) ?? 0) > 1, truncated, reconstructed },
+      { duplicate: keysFor(r).some((k) => (seen.get(k) ?? 0) > 1), truncated, reconstructed },
     );
     if (outcome.status !== "MATCHED") continue;
     await prisma.bankStatementRow.update({

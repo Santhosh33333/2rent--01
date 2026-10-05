@@ -349,33 +349,44 @@ if (env.isProduction) {
   const placeholders = ["", "placeholder", "changeme", "dev", "test"];
   const isPlaceholder = (v: string | undefined) => !v || placeholders.includes(v.trim().toLowerCase());
 
-  // The Cashfree secret key is also what authenticates inbound webhooks, so
-  // without it payment notifications cannot be verified and the only way to
-  // keep accepting them would be to trust unsigned callbacks. That is the exact
-  // shape of a forged payment, so refuse to start rather than run with it unset.
-  if (isPlaceholder(env.CASHFREE_APP_ID) || env.CASHFREE_APP_ID?.includes("placeholder")) {
-    throw new Error(
-      "CASHFREE_APP_ID is required in production and must be the real app id (not the placeholder).",
-    );
-  }
+  // Cashfree is RETIRED. Payments are collected manually against the platform
+  // UPI QR and credited after an admin verifies the bank statement, so there is
+  // no gateway credential the server needs in order to take money.
+  //
+  // This gate used to refuse to boot without CASHFREE_APP_ID and
+  // CASHFREE_SECRET_KEY, which was correct while online checkout was the only
+  // rail. Left in place it would make the retired dependency fatal: deleting the
+  // keys - the whole point of retiring a gateway whose credentials were exposed -
+  // would take the API down with them. A gateway that is not in use must not be
+  // able to stop the service from starting.
+  //
+  // The webhook route still verifies signatures when keys ARE present, so an
+  // unsigned callback can never settle a payment regardless of this block.
+  const cashfreeKeysPresent =
+    !isPlaceholder(env.CASHFREE_APP_ID) &&
+    !isPlaceholder(env.CASHFREE_SECRET_KEY) &&
+    !env.CASHFREE_APP_ID?.includes("placeholder") &&
+    !env.CASHFREE_SECRET_KEY?.includes("placeholder");
 
-  if (isPlaceholder(env.CASHFREE_SECRET_KEY) || env.CASHFREE_SECRET_KEY?.includes("placeholder")) {
-    throw new Error(
-      "CASHFREE_SECRET_KEY is required in production and must be the real secret key (not the placeholder).",
+  if (!cashfreeKeysPresent) {
+    console.warn(
+      "[env] Cashfree credentials are not configured — online checkout is unavailable. " +
+        "This is expected: payments are collected manually via UPI.",
     );
-  }
-
-  // Fail loudly on the mismatch that is otherwise invisible: test keys sent to
-  // the production host (or the reverse) fail with a generic auth error on the
-  // first order, long after deploy.
-  const expectsSandbox = env.CASHFREE_API_ENV === "test";
-  const looksLikeTestKey = /^(test|sandbox)/i.test(env.CASHFREE_APP_ID || "");
-  if (expectsSandbox !== looksLikeTestKey) {
-    throw new Error(
-      `CASHFREE_API_ENV is "${env.CASHFREE_API_ENV}" but CASHFREE_APP_ID looks like a ` +
-        `${looksLikeTestKey ? "test" : "production"} key. Cashfree rejects credentials on the ` +
-        "wrong host. Set CASHFREE_API_ENV to match the keys you configured.",
-    );
+  } else {
+    // Only meaningful while the gateway is retired-but-present. If someone
+    // restores keys and flips PAYMENT_MODE back to "gateway", this still catches
+    // test keys aimed at the live host, which otherwise fail as an opaque auth
+    // error on the first order, long after deploy.
+    const expectsSandbox = env.CASHFREE_API_ENV === "test";
+    const looksLikeTestKey = /^(test|sandbox)/i.test(env.CASHFREE_APP_ID || "");
+    if (expectsSandbox !== looksLikeTestKey) {
+      throw new Error(
+        `CASHFREE_API_ENV is "${env.CASHFREE_API_ENV}" but CASHFREE_APP_ID looks like a ` +
+          `${looksLikeTestKey ? "test" : "production"} key. Cashfree rejects credentials on the ` +
+          "wrong host. Set CASHFREE_API_ENV to match the keys you configured.",
+      );
+    }
   }
 
   // SMTP: OTP email + transactional notifications won't be delivered without it.

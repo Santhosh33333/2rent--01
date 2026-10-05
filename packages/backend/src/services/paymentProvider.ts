@@ -17,9 +17,15 @@ import { getStringConfig } from "./pricingEngine";
 import * as cashfreeService from "./cashfreeService";
 
 /**
- * Cashfree is the only gateway. The previous Razorpay integration was removed
- * rather than left dormant: a disabled second path still gets edited by mistake
- * and still has to hold credentials it no longer needs.
+ * Cashfree is the only gateway the code has ever had left after Razorpay was
+ * removed. It is now RETIRED: payments are collected manually against the
+ * platform UPI QR and credited after an admin verifies the bank statement.
+ *
+ * The gateway code is still here because the schema, the refund engine and the
+ * historical order ledger all reference it, but it is unreachable unless an
+ * admin explicitly sets PAYMENT_MODE="gateway" (see below). The provider name is
+ * still "cashfree" because that string is persisted on existing rows; renaming
+ * it would mean a data migration for no behavioural gain.
  */
 export type Provider = "cashfree";
 
@@ -104,7 +110,23 @@ export function isGatewayConfigured(provider: Provider = ACTIVE_PROVIDER): boole
 // ============================================================================
 
 export const PAYMENT_MODE_KEY = "PAYMENT_MODE";
-export const DEFAULT_PAYMENT_MODE = "gateway";
+
+/** Online checkout. Reachable only when an admin sets the mode to this value. */
+export const GATEWAY_MODE = "gateway";
+
+/** Pay against the platform UPI QR, credited once an admin verifies the UTR. */
+export const MANUAL_UPI_MODE = "manual_upi";
+
+/**
+ * Manual UPI is the default, not the gateway.
+ *
+ * This is the one default that has to be safe rather than convenient: an unset
+ * or unreadable mode previously meant "gateway", so a missing config row sent
+ * users to hosted checkout that could not complete. Defaulting to manual UPI
+ * means the worst case is a slower payment, never a dead end or a charge the
+ * platform cannot verify.
+ */
+export const DEFAULT_PAYMENT_MODE = MANUAL_UPI_MODE;
 
 /**
  * Which rails are live: the hosted gateway, or manual UPI settled by an admin.
@@ -120,6 +142,11 @@ export const DEFAULT_PAYMENT_MODE = "gateway";
  * "manual_upi" means collect against the platform QR and credit on verification.
  * Both the order and verify paths consult it, so turning it off cannot leave an
  * order that no longer has anywhere to be paid.
+ *
+ * Cashfree is retired and its credentials are no longer deployed, so selecting
+ * "gateway" today resolves to isGatewayConfigured() === false and the gateway
+ * stays off regardless. Turning it back on therefore takes two deliberate acts -
+ * setting the mode AND restoring keys - not one.
  */
 export async function getPaymentMode(): Promise<string> {
   return getStringConfig(PAYMENT_MODE_KEY, DEFAULT_PAYMENT_MODE);
@@ -133,7 +160,7 @@ export async function getPaymentMode(): Promise<string> {
  * "are the keys there", which is a weaker and separately useful question.
  */
 export async function isGatewayLive(provider: Provider = ACTIVE_PROVIDER): Promise<boolean> {
-  if ((await getPaymentMode()) !== DEFAULT_PAYMENT_MODE) return false;
+  if ((await getPaymentMode()) !== GATEWAY_MODE) return false;
   return isGatewayConfigured(provider);
 }
 
@@ -149,7 +176,7 @@ export async function isGatewayLive(provider: Provider = ACTIVE_PROVIDER): Promi
 export async function gatewayUnavailableReason(
   provider: Provider = ACTIVE_PROVIDER
 ): Promise<"switched_off" | "not_configured" | null> {
-  if ((await getPaymentMode()) !== DEFAULT_PAYMENT_MODE) return "switched_off";
+  if ((await getPaymentMode()) !== GATEWAY_MODE) return "switched_off";
   if (!isGatewayConfigured(provider)) return "not_configured";
   return null;
 }
