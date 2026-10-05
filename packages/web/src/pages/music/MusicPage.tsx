@@ -26,6 +26,7 @@ import { AnimatedPage } from '../../components/AnimatedPage'
 import { PageHeader } from '../../components/PageHeader'
 import { EmptyState } from '../../components/EmptyState'
 import { useSongPlayer } from '../../lib/songPlayer'
+import { YouTubePlaylistPlayer } from './YouTubePlaylistPlayer'
 import type { SongTrack } from '../../lib/songLibrary'
 
 /**
@@ -75,10 +76,14 @@ function emptyCopy(reason: ReturnType<typeof useSongPlayer>['emptyReason']) {
         description: 'Turn it back on to see what is here.',
       }
     default:
+      // Scoped to the ambient player on purpose. This section can be empty
+      // while the page below it is full of playable YouTube playlists, so
+      // saying only "no music added yet" would read as the whole page being
+      // dead. It names what is missing and points at what does work.
       return {
-        title: 'No music added yet',
+        title: 'No ambient audio files yet',
         description:
-          'Instrumental love songs will appear here once the audio files are added and licensed. Nothing is listed until it can actually play.',
+          'Instrumental love songs for the background player will appear here once audio files are added and licensed. Nothing is listed until it can actually play. The YouTube playlists below do play today.',
       }
   }
 }
@@ -275,6 +280,17 @@ export function MusicPage() {
             }
           />
         )}
+      </AnimatedPage>
+
+      {/*
+        YouTube, after the local catalogue rather than instead of it. The empty
+        state above is honest about having no audio files; this is the part of
+        the page that can still make sound today, so it follows rather than
+        competes with the local player. See lib/youtubePlaylist.ts for why these
+        are a visible player and never ambient audio.
+      */}
+      <AnimatedPage delay={200}>
+        <YouTubePlaylistPlayer />
       </AnimatedPage>
     </div>
   )
