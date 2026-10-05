@@ -39,7 +39,7 @@ interface ImpersonationInfo {
 interface AuthContextType {
   user: User | null
   loading: boolean
-  login: (email: string, password: string) => Promise<void>
+  login: (identifier: string, password: string) => Promise<void>
   completeLogin: (data: { accessToken: string; refreshToken: string; user?: Record<string, unknown> }) => void
   register: (data: RegisterInput) => Promise<{
     userId?: string;
@@ -311,8 +311,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [user])
 
-  const login = async (email: string, password: string) => {
-    const response = await api.post('/auth/login', { email, password })
+  const login = async (identifier: string, password: string) => {
+    // Sent as `identifier`, NOT as `email`. The /auth/login route validates
+    // `email` with isEmail(), so a phone number placed in that field was
+    // rejected 422 VALIDATION_ERROR before the controller's phone lookup could
+    // ever run - which is why phone + password sign-in was unreachable no matter
+    // what the UI offered. `identifier` is validated as an opaque string and is
+    // what the controller actually reads (`identifier || email || phone`).
+    const response = await api.post('/auth/login', { identifier, password })
     const payload = response.data?.data || response.data || {}
     const success = response.data?.success !== false
     if (!success) {
@@ -327,16 +333,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error('Authentication tokens were not returned by the server.')
     }
 
+    // Only fall back to the typed value when it IS an email. A phone-only
+    // account has no address, and writing the digits into `user.email` would
+    // make every later "your email" surface show a phone number.
+    const typedEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier.trim()) ? identifier.trim() : ''
+
     const u = buildUserFromPayload(
       {
         ...apiUser,
-        email: apiUser?.email || email,
+        email: apiUser?.email || typedEmail || 'user@Sidebud.local',
         id: apiUser?.id || `user-${Date.now()}`,
         role: apiUser?.role || 'USER',
         activeRole: apiUser?.activeRole || apiUser?.role || 'USER',
         accountType: apiUser?.accountType || apiUser?.userType || apiUser?.activeRole || apiUser?.role || 'USER',
       },
-      email
+      typedEmail || 'user@Sidebud.local'
     )
 
     localStorage.removeItem('impersonating')

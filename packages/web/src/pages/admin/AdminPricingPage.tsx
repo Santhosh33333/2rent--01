@@ -1,7 +1,7 @@
 import { getErrorMessage } from '../../lib/error'
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { ArrowLeft, Beaker, Loader2, Percent, Plus, Save, ShieldCheck } from 'lucide-react'
+import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
+import { Beaker, Loader2, Percent, Plus, Save, ShieldCheck } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { adminApi } from '../../lib/api'
 
@@ -144,19 +144,12 @@ export function AdminPricingPage() {
   return (
     <div className="bg-slate-50">
       <div className="max-w-5xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold font-display text-slate-900 flex items-center gap-2">
-              <Percent className="w-6 h-6 text-indigo-600" /> Pricing &amp; Fees
-            </h1>
-            <p className="text-sm text-slate-500 mt-1">
-              Server engines read these values on every calculation — changes apply immediately.
-            </p>
-          </div>
-          <Link to="/admin/portal" className="flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900">
-            <ArrowLeft className="w-4 h-4" /> Portal
-          </Link>
-        </div>
+        <AdminPageHeader
+          title="Pricing & Fees"
+          subtitle="Server engines read these values on every calculation - changes apply immediately."
+          tone="slate"
+          leading={<Percent className="w-6 h-6 text-indigo-600" aria-hidden />}
+        />
 
         {loading ? (
           <div className="flex items-center justify-center py-24 text-slate-400">

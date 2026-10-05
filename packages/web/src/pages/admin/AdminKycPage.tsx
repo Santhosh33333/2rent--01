@@ -1,8 +1,8 @@
 import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
-import { ArrowLeft, ChevronLeft, ChevronRight, Check, X, Phone, Mail, ShieldCheck, AlertTriangle, FileDown } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Check, X, Phone, Mail, ShieldCheck, AlertTriangle, FileDown } from 'lucide-react'
 import { adminApi } from '../../lib/api'
+import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
 import { Avatar } from '../../components/Avatar'
 import { exportTableToPdf } from '../../lib/pdfExport'
 import { AuthImage } from '../../components/AuthImage'
@@ -165,22 +165,19 @@ export function AdminKycPage() {
   return (
     <div className="bg-gray-950 p-4 sm:p-6 rounded-3xl">
       <div className="max-w-5xl mx-auto">
-        <div className="flex items-center gap-3 mb-6">
-          <Link to="/admin/portal" className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition">
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold font-display text-white">KYC Verification</h1>
-            <p className="text-gray-400 text-sm mt-1">Review identity documents submitted by users</p>
-          </div>
-          <button
-            onClick={downloadPdf}
+        <AdminPageHeader
+          title="KYC Verification"
+          subtitle="Review identity documents submitted by users"
+          actions={
+            <button
+              onClick={downloadPdf}
             disabled={entries.length === 0}
             className="ml-auto inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-gray-300 hover:text-white text-sm transition"
           >
             <FileDown className="w-4 h-4" /> PDF
           </button>
-        </div>
+          }
+        />
 
         <div className="mb-6">
           <div className="flex flex-wrap gap-2">
@@ -224,7 +221,7 @@ export function AdminKycPage() {
                 return (
                   <div key={entry.id} className="bg-gray-800 rounded-xl overflow-hidden">
                     <div
-                      className="p-4 hover:bg-gray-750 cursor-pointer transition"
+                      className="p-4 hover:bg-gray-100 cursor-pointer transition"
                       onClick={() => setExpandedId(expandedId === entry.id ? null : entry.id)}
                     >
                       <div className="flex items-center justify-between">

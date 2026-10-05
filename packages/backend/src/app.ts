@@ -29,6 +29,7 @@ import publicEventRoutes from "./routes/publicEventRoutes";
 import publicMovieRoutes from "./routes/publicMovieRoutes";
 import messageRoutes from "./routes/messageRoutes";
 import datingRoutes from "./routes/datingRoutes";
+import preferenceRoutes from "./routes/preferenceRoutes";
 import subscriptionRoutes from "./routes/subscriptionRoutes";
 import adminRoutes from "./routes/adminRoutes";
 import adminRbacRoutes from "./routes/adminRbacRoutes";
@@ -53,6 +54,8 @@ import searchRoutes from "./routes/searchRoutes";
 import discoveryRoutes from "./routes/discoveryRoutes";
 import moviesRoutes from "./routes/moviesRoutes";
 import aiRoutes from "./routes/aiRoutes";
+import agentRoutes from "./routes/agentRoutes";
+import { installAgentAuditSink } from "./agent/auditSink";
 import legalRoutes from "./routes/legalRoutes";
 import supportRoutes from "./routes/supportRoutes";
 import referralRoutes from "./routes/referralRoutes";
@@ -60,6 +63,9 @@ import otpApiRoutes from "./routes/otpApiRoutes";
 import { isOriginAllowed, parseAllowedOrigins } from "./config/corsOrigins";
 
 export function createApp(): http.Server {
+  // Agent audit rows go to the same AuditLog as the rest of the app's security
+  // history. Installed here so every environment (server, tests, dev) gets it.
+  installAgentAuditSink();
   const app = express();
   // Render runs behind its own proxy; without this express treats every request
   // as coming from the single proxy IP, so per-IP rate limits apply to ALL users
@@ -318,6 +324,10 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
   app.use("/api/public/movies", publicMovieRoutes);
   app.use("/api/messages", messageRoutes);
 app.use("/api/dating", datingRoutes);
+// Preferences are mounted at the top level, not under /api/dating: they describe
+// the person, not a dating session, and gating them behind KYC or paid access
+// would make the form unreachable for anyone who has not paid yet.
+app.use("/api/preferences", preferenceRoutes);
 app.use("/api/subscriptions", subscriptionRoutes);
   app.use("/api/admin", adminRoutes);
   app.use("/api/admin", adminRbacRoutes);
@@ -341,6 +351,8 @@ app.use("/api/partner", partnerRoutes);
 app.use("/api/discovery", discoveryRoutes);
 app.use("/api/movies", moviesRoutes);
   app.use("/api/ai", aiRoutes);
+  // Action-capable assistant. Authorisation is per-tool inside the agent router.
+  app.use("/api/agent", agentRoutes);
   // Versioned legal documents + signed consent capture.
   app.use("/api/legal", legalRoutes);
   // Support desk: requester threads plus the staff queue.

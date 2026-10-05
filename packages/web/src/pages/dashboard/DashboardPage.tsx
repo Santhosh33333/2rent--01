@@ -7,6 +7,8 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../../lib/auth'
 import { api } from '../../lib/api'
 import { AnimatedPage } from '../../components/AnimatedPage'
+import { Reveal } from '../../components/motion/Reveal'
+import { Tilt } from '../../components/motion/Tilt'
 import { GlassCard } from '../../components/GlassCard'
 import { EmergencyPanel } from '../../components/EmergencyPanel'
 
@@ -118,6 +120,8 @@ export function DashboardPage() {
           <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2230%22%20height%3D%2230%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cdefs%3E%3Cpattern%20id%3D%22g%22%20width%3D%2230%22%20height%3D%2230%22%20patternUnits%3D%22userSpaceOnUse%22%3E%3Ccircle%20cx%3D%2215%22%20cy%3D%2215%22%20r%3D%221%22%20fill%3D%22rgba(255,255,255,0.08)%22/%3E%3C/pattern%3E%3C/defs%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22url(%23g)%22/%3E%3C/svg%3E')] opacity-50" />
           <div className="absolute -top-20 -right-20 w-60 h-60 bg-white/10 rounded-full blur-3xl" />
           <div className="absolute -bottom-20 -left-20 w-60 h-60 bg-accent-500/20 rounded-full blur-3xl" />
+          <div className="prism-aurora animate-prism-drift opacity-50" aria-hidden />
+          <div className="prism-sweep animate-prism-sweep" aria-hidden />
 
           <div className="relative z-10">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -153,21 +157,38 @@ export function DashboardPage() {
           <div className="flex items-center justify-between mb-4">
             <h2 className="section-title">Quick Actions</h2>
           </div>
-          <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            {features.map((feature) => (
-              <Link
-                key={feature.to}
-                to={feature.to}
-                className="group glass-card-static p-4 text-center hover:-translate-y-1 transition-all duration-300"
-              >
-                <div className={`w-12 h-12 mx-auto rounded-2xl bg-gradient-to-br ${feature.gradient} flex items-center justify-center mb-3 shadow-lg group-hover:scale-110 transition-transform duration-300`}>
-                  <feature.icon className="w-5 h-5 text-white" />
-                </div>
-                <p className="text-xs sm:text-sm font-bold text-surface-900 dark:text-surface-100">{feature.label}</p>
-                <p className="text-[10px] sm:text-xs text-surface-500 dark:text-surface-400 mt-0.5 hidden sm:block">{feature.desc}</p>
-              </Link>
-            ))}
-          </div>
+<div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              {features.map((feature, i) => (
+                <Reveal key={feature.to} from="up" delay={i * 0.05}>
+                <Tilt max={9} lift={14} scale={1.03} glare>
+                <Link
+                  to={feature.to}
+                  className="group relative flex h-full flex-col items-start gap-3 rounded-2xl p-4 text-left"
+                >
+                  {/* The surface is carried by the wrapper so the tilt can be
+                      applied to a single element. `glass-card-static` supplied a
+                      border but no prismatic hairline, which is what made these
+                      tiles read as flat grey boxes. */}
+                  <span className="prism-card prism-ring absolute inset-0 rounded-2xl" aria-hidden />
+                  <span className="relative z-10 prism-chip h-11 w-11 text-white shadow-lg shadow-primary-500/20">
+                    <feature.icon className="h-5 w-5" />
+                  </span>
+                  <span className="relative z-10 w-full">
+                    <span className="block text-xs font-bold text-surface-900 sm:text-sm dark:text-surface-100">
+                      {feature.label}
+                    </span>
+                    {/* Always shown: the description is what tells you where the
+                        tile actually goes, and hiding it below sm meant the most
+                        common phone width showed six unlabelled boxes. */}
+                    <span className="mt-0.5 block text-[11px] leading-snug text-surface-500 dark:text-surface-400">
+                      {feature.desc}
+                    </span>
+                  </span>
+                </Link>
+                </Tilt>
+                </Reveal>
+              ))}
+            </div>
         </div>
       </AnimatedPage>
 
@@ -251,10 +272,10 @@ export function DashboardPage() {
               </div>
               <p className="text-3xl font-bold font-display">₹{walletBalance.toLocaleString('en-IN')}</p>
               <div className="flex gap-2 mt-4">
-                <Link to="/wallet/withdraw" className="flex-1 text-center py-2.5 rounded-xl bg-white/15 hover:bg-white/25 text-xs font-semibold transition-colors">
+                <Link to="/wallet/withdraw" className="flex-1 text-center py-2.5 rounded-xl bg-black/40 hover:bg-black/60 text-xs font-semibold transition-colors">
                   Withdraw
                 </Link>
-                <Link to="/wallet/transactions" className="flex-1 text-center py-2.5 rounded-xl bg-white/15 hover:bg-white/25 text-xs font-semibold transition-colors">
+                <Link to="/wallet/transactions" className="flex-1 text-center py-2.5 rounded-xl bg-black/40 hover:bg-black/60 text-xs font-semibold transition-colors">
                   History
                 </Link>
               </div>

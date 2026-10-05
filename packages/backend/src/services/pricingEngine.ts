@@ -89,6 +89,9 @@ async function loadAllConfig(): Promise<Map<string, number>> {
 export function invalidateConfigCache(_key?: string): void {
   localConfigCache.clear();
   localConfigFetchedAt = 0;
+  localStringCache.clear();
+  localStringFetchedAt = 0;
+  stringInflight = null;
   void cacheDel(CONFIG_REDIS_KEY);
 }
 
@@ -129,6 +132,64 @@ export async function getConfig(key: string, defaultValue: number): Promise<numb
   try {
     const config = await getActiveConfig();
     const value = config.get(key);
+    return value === undefined ? defaultValue : value;
+  } catch {
+    return defaultValue;
+  }
+}
+
+/**
+ * String-valued knob, on the same table and the same invalidation hook as
+ * getConfig.
+ *
+ * The numeric path above parses every value with parseFloat and drops what will
+ * not parse, so a key like PAYMENT_MODE="manual_upi" is simply invisible to it -
+ * getConfig would hand back the default and look like the row was missing. The
+ * numeric cache is also what makes it unsafe to widen: mixing strings into
+ * Map<string, number> would put NaN in front of every reader of a price. So this
+ * is a second, separate cache over the same rows.
+ *
+ * The fallback is what makes a typo safe. An unrecognised or missing value
+ * resolves to the caller's default rather than throwing, because the one thing
+ * that must not happen here is a mistyped admin setting silently taking payments
+ * offline.
+ */
+const localStringCache = new Map<string, string>();
+let localStringFetchedAt = 0;
+let stringInflight: Promise<Map<string, string>> | null = null;
+
+async function loadAllStringConfig(): Promise<Map<string, string>> {
+  const rows = await prisma.pricingConfig.findMany({
+    where: { isActive: true },
+    select: { key: true, value: true },
+  });
+  const map = new Map<string, string>();
+  for (const row of rows) map.set(row.key, row.value);
+  return map;
+}
+
+export async function getStringConfig(key: string, defaultValue: string): Promise<string> {
+  try {
+    const now = Date.now();
+    if (localStringFetchedAt && now - localStringFetchedAt < CONFIG_CACHE_TTL_MS) {
+      const hit = localStringCache.get(key);
+      return hit === undefined ? defaultValue : hit;
+    }
+
+    stringInflight ??= (async () => {
+      try {
+        const map = await loadAllStringConfig();
+        localStringCache.clear();
+        for (const [k, v] of map) localStringCache.set(k, v);
+        localStringFetchedAt = Date.now();
+        return map;
+      } finally {
+        stringInflight = null;
+      }
+    })();
+
+    const map = await stringInflight;
+    const value = map.get(key);
     return value === undefined ? defaultValue : value;
   } catch {
     return defaultValue;

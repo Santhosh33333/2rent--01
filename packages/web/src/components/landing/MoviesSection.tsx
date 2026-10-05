@@ -85,7 +85,11 @@ function MovieCard({ movie, upcoming }: { movie: LandingMovie; upcoming: boolean
   const lang = languageLabel(movie.originalLanguage);
   return (
     <article
-      className="glass-card"
+      /* Was `glass-card`, which is the in-app component class (white /
+         dark-surface-800, with a primary top bar). Every other card on this
+         marketing page is an `nb-card`, so the movie grid rendered as a
+         different product sitting inside the same page. */
+      className="nb-card nb-card--hover"
       style={{ overflow: 'hidden', padding: 0, display: 'flex', flexDirection: 'column' }}
     >
       <div

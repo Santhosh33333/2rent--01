@@ -55,6 +55,18 @@ packages/backend/prisma/dev.db
 packages/backend/prisma/dev.db-journal
 packages/backend/prisma/*.db
 
+# Diagnostic scratch scripts written while investigating something.
+# These are throwaway probes (one-off curl/Prisma/psql fiddles, generated PDFs,
+# scraped CSVs), not project code. They are gitignored rather than deleted
+# because they are untracked: git cannot restore a file it never held, and the
+# point here is only to keep them out of a production build. Anything that earns
+# its keep gets renamed without the `.tmp-` prefix and added deliberately.
+packages/backend/scripts/.tmp-*
+
+# Superseded copy of the landing page, kept only while the redesign was in
+# flight. Nothing imports it; `src/pages/landing/` is the live version.
+packages/web/src/_landing-backup/
+
 # Expo / React Native
 packages/mobile/.expo/
 packages/mobile/android/

@@ -138,7 +138,9 @@ export function PartnerMapPage() {
           <GlassCard variant="elevated" padding="sm" className="bg-emerald-600 text-white border-0">
             <div className="flex items-center justify-between px-4 py-2">
               <span className="text-sm font-semibold">{nearby.length} nearby request{nearby.length !== 1 ? 's' : ''}</span>
-              <button onClick={() => setView(view === 'map' ? 'list' : 'map')} className="text-xs font-medium text-white/80 hover:text-white">
+              {/* white/90, not white/80: on this emerald-700 chip /80 renders at 4.11:1,
+                    just under AA. */}
+                <button onClick={() => setView(view === 'map' ? 'list' : 'map')} className="text-xs font-medium text-white/90 hover:text-white">
                 {view === 'map' ? 'View List' : 'View Map'}
               </button>
             </div>

@@ -281,7 +281,7 @@ export function MoviesPage() {
             </Link>
           </div>
           {meetups.length === 0 ? (
-            <p className="text-sm text-surface-500">No movie meetups yet — create one from Events.</p>
+            <p className="text-sm text-surface-500">No movie meetups yet - create one from Events.</p>
           ) : (
             <div className="space-y-2">
               {meetups.map((m) => (

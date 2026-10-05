@@ -2,6 +2,12 @@ import { Response } from "express";
 import { prisma } from "../config/database";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
+import {
+  normaliseIndianPhone,
+  phoneMatches,
+  phoneErrorBody,
+} from "../services/phoneNumber";
+import { maskPhone } from "../services/phoneVisibility";
 
 // ============================================================================
 // HELPER: Get or create verification record
@@ -29,7 +35,7 @@ function ageFromDateOfBirth(birthDate: Date): number {
 
 export async function submitPersonalDetails(req: AuthedRequest, res: Response): Promise<void> {
   try {
-    const { fullName, dateOfBirth, gender, city, country, address } = req.body;
+    const { fullName, dateOfBirth, gender, city, country, address, phone } = req.body;
 
     // Validate required fields
     if (!fullName || !dateOfBirth || !gender) {
@@ -49,6 +55,11 @@ export async function submitPersonalDetails(req: AuthedRequest, res: Response): 
       city: city ? String(city).trim() : (existingPersonal.city as string | null) ?? null,
       country: country ? String(country).trim() : (existingPersonal.country as string | null) ?? null,
       address: address ? String(address).trim() : (existingPersonal.address as string | null) ?? null,
+      // A flag, not a second copy of the number. The canonical value lives in
+      // Verification.confirmedPhone; duplicating the digits into this JSON would
+      // create two records of the same PII free to drift apart, and it is
+      // rewritten every time step 1 is re-saved.
+      phoneConfirmed: true,
       submittedAt: new Date().toISOString(),
     };
     const birthDate = new Date(`${personal.dateOfBirth}T00:00:00.000Z`);
@@ -63,6 +74,60 @@ export async function submitPersonalDetails(req: AuthedRequest, res: Response): 
     const age = ageFromDateOfBirth(birthDate);
     if (age < MIN_AGE) {
       sendError(res, `You must be at least ${MIN_AGE} years old to use Nabri.`, 403, "AGE_RESTRICTION");
+      return;
+    }
+
+    // -----------------------------------------------------------------------
+    // The user's OWN mobile number, which must be the number already on the
+    // account.
+    //
+    // SMS verification is switched off platform-wide (phoneVisibility.ts), so
+    // this comparison against User.phone is the only thing tying the KYC
+    // declaration to a real, reachable number. Without it, KYC asserts an
+    // identity while the contact number on the account - the one used for
+    // recovery and for every message the platform sends - is unconnected to it.
+    //
+    // Enforced in the controller, not in a route validator: `validateRequest`
+    // answers a failure with a generic "Validation failed." and never forwards
+    // the per-field detail, so a validator here would reject the mismatched
+    // number while telling the user nothing about which field was wrong.
+    // -----------------------------------------------------------------------
+    if (phone === undefined || phone === null || String(phone).trim() === "") {
+      sendError(res, "Enter the 10-digit mobile number on your profile to continue.", 400, "PHONE_REQUIRED");
+      return;
+    }
+    const parsedPhone = normaliseIndianPhone(phone);
+    if (!parsedPhone.ok) {
+      const { message, code } = phoneErrorBody(parsedPhone);
+      sendError(res, message, 400, code);
+      return;
+    }
+
+    const account = await prisma.user.findUnique({
+      where: { id: req.user!.userId },
+      select: { phone: true },
+    });
+    if (!account?.phone) {
+      // Not something the user can fix from this screen, so it is reported as a
+      // conflict rather than a validation slip.
+      sendError(
+        res,
+        "There is no mobile number on your account. Contact Nabri support to continue verification.",
+        409,
+        "PHONE_MISSING_ON_ACCOUNT",
+      );
+      return;
+    }
+    if (!phoneMatches(parsedPhone.e164, account.phone)) {
+      // Masked rather than echoed. This string can reach logs and admin
+      // surfaces, and two visible digits are enough for the user to recognise
+      // their own number - the point is which number to type, not to prove it.
+      sendError(
+        res,
+        `That does not match the mobile number on your profile (${maskPhone(account.phone)}). Enter the same 10-digit number you registered with.`,
+        422,
+        "PHONE_MISMATCH",
+      );
       return;
     }
 
@@ -82,7 +147,15 @@ export async function submitPersonalDetails(req: AuthedRequest, res: Response): 
       }),
       prisma.verification.update({
         where: { id: verification.id },
-        data: { personalDetails: personal, status: newStatus, updatedAt: new Date() },
+        // Re-declaring the number on every save of step 1 is the point: the
+        // declaration is re-checked against User.phone above, so this value can
+        // never drift from the account without step 1 being run again.
+        data: {
+          personalDetails: personal,
+          confirmedPhone: parsedPhone.e164,
+          status: newStatus,
+          updatedAt: new Date(),
+        },
       }),
       prisma.verificationHistory.create({
         data: {
@@ -274,13 +347,24 @@ export async function submitEmergencyContact(req: AuthedRequest, res: Response):
     }
     const contactEmail: string | null = candidate;
 
+    // A different person from the account holder, but the same country and the
+    // same rules - and this number is dialled by an SOS alert, so storing it
+    // unnormalised means an alert can be built for a number that cannot be
+    // called. Canonicalised for the same reason User.phone is.
+    const parsedContact = normaliseIndianPhone(phone);
+    if (!parsedContact.ok) {
+      const { message, code } = phoneErrorBody(parsedContact);
+      sendError(res, `Emergency contact: ${message}`, 400, code);
+      return;
+    }
+
     const verification = await upsertVerification(req.user!.userId);
 
     await prisma.verification.update({
       where: { id: verification.id },
       data: {
         emergencyContactName: name,
-        emergencyContactPhone: phone,
+        emergencyContactPhone: parsedContact.e164,
         emergencyContactEmail: contactEmail,
         emergencyContactRelation: relation,
         updatedAt: new Date(),
@@ -339,6 +423,40 @@ export async function submitForVerification(req: AuthedRequest, res: Response): 
         "Emergency contact information (name, phone and email) is required.",
         400,
         "INCOMPLETE_SUBMISSION"
+      );
+      return;
+    }
+
+    // Re-check the phone declaration at the moment of submission rather than
+    // trusting that it still held at step 1. Two things can invalidate it in
+    // between, and neither raises an error at the time:
+    //
+    //   - an administrator corrects the number on the account, which is the only
+    //     supported way to change a phone number;
+    //   - this Verification row predates the declaration entirely, so the user
+    //     did every other step and never confirmed a number.
+    //
+    // Both would otherwise reach an admin reviewer as a complete-looking KYC
+    // whose contact number does not belong to the person it describes.
+    if (!verification.confirmedPhone) {
+      sendError(
+        res,
+        "Confirm your mobile number in step 1 (personal details) before submitting.",
+        400,
+        "PHONE_NOT_CONFIRMED"
+      );
+      return;
+    }
+    const owner = await prisma.user.findUnique({
+      where: { id: req.user!.userId },
+      select: { phone: true },
+    });
+    if (!owner?.phone || !phoneMatches(verification.confirmedPhone, owner.phone)) {
+      sendError(
+        res,
+        `The mobile number confirmed in step 1 no longer matches your profile (${maskPhone(owner?.phone) ?? "not set"}). Redo step 1 with your current number, or contact Nabri support.`,
+        409,
+        "PHONE_MISMATCH"
       );
       return;
     }

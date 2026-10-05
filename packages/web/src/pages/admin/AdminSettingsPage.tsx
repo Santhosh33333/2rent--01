@@ -1,7 +1,7 @@
 import { getErrorMessage } from '../../lib/error'
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { ArrowLeft, Percent, Save, Loader2, CheckCircle2 } from 'lucide-react'
+import { AdminPageHeader, AdminShell } from '../../components/admin/AdminPageHeader'
+import { Percent, Save, Loader2, CheckCircle2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { adminApi } from '../../lib/api'
 
@@ -79,18 +79,11 @@ export function AdminSettingsPage() {
   }
 
   return (
-    <div className="bg-gray-950 p-4 sm:p-6 rounded-3xl">
-      <div className="max-w-3xl mx-auto">
-        <div className="flex items-center gap-3 mb-6">
-          <Link to="/admin/portal" className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition">
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold font-display text-white">Platform Settings</h1>
-            <p className="text-gray-400 text-sm mt-1">Fees and pricing — changes apply immediately</p>
-          </div>
-        </div>
-
+    <AdminShell width="max-w-3xl">
+        <AdminPageHeader
+        title="Platform Settings"
+        subtitle="Fees and pricing — changes apply immediately"
+/>
         {loading ? (
           <div className="flex items-center justify-center gap-3 py-20 text-gray-400">
             <Loader2 className="w-6 h-6 animate-spin" /> Loading settings...
@@ -172,7 +165,6 @@ export function AdminSettingsPage() {
             </div>
           </>
         )}
-      </div>
-    </div>
+    </AdminShell>
   )
 }

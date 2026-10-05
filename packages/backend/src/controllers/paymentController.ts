@@ -10,6 +10,9 @@ import {
   ACTIVE_PROVIDER,
   createGatewayOrder,
   isGatewayConfigured,
+  gatewayUnavailableReason,
+  getPaymentMode,
+  isGatewayLive,
   verifyGatewayPayment,
   PaymentVerificationError,
   type Provider,
@@ -63,7 +66,32 @@ export async function createOrder(req: AuthedRequest, res: Response): Promise<vo
     // Fail closed. There is deliberately no demo or simulated order: if the
     // gateway is unconfigured the request errors so the client can say so,
     // rather than handing back an order id that could never be paid.
-    if (!isGatewayConfigured()) {
+    //
+    // Two distinct reasons, because they need different answers. "switched_off"
+    // is the working manual-UPI state, so the response carries the UPI details
+    // and the client can show the QR straight away instead of an error. Missing
+    // credentials remain a plain 503 for the operator.
+    const unavailable = await gatewayUnavailableReason();
+    if (unavailable) {
+      if (unavailable === "switched_off") {
+        const [upiId, upiName] = await Promise.all([
+          prisma.pricingConfig.findUnique({ where: { key: "UPI_ID" } }),
+          prisma.pricingConfig.findUnique({ where: { key: "UPI_ACCOUNT_NAME" } }),
+        ]);
+        sendError(
+          res,
+          "Online payment is switched off. Pay using the UPI QR and submit the reference.",
+          503,
+          "MANUAL_UPI_ONLY",
+          undefined,
+          {
+            upiId: upiId?.value ?? null,
+            upiAccountName: upiName?.value ?? null,
+            upiQrUrl: upiId?.value ? BUILTIN_UPI_QR_PATH : null,
+          }
+        );
+        return;
+      }
       sendError(res, "Payments are not configured on this server.", 503, "PAYMENT_NOT_CONFIGURED");
       return;
     }
@@ -215,6 +243,14 @@ export async function verifyPayment(req: AuthedRequest, res: Response): Promise<
 
     const userId = req.user!.userId
 
+    // Credentials only, deliberately ignoring the payment mode switch.
+    //
+    // Verification reads a payment that may already have been taken and credits
+    // it; it never creates a charge. So switching to manual UPI must not stop it:
+    // an order created a minute before the switch can still have been paid
+    // through the gateway, and refusing to verify would strand that money with
+    // no way for the user to recover it. Gating this on the mode would be
+    // tidier-looking and strictly worse.
     if (!isGatewayConfigured()) {
       sendError(res, "Payments are not configured on this server.", 503, "PAYMENT_NOT_CONFIGURED");
       return;
@@ -768,19 +804,32 @@ export async function getUpiQrImage(req: AuthedRequest, res: Response): Promise<
 // actually work, rather than a button that fails at checkout.
 export async function getPaymentConfig(_req: AuthedRequest, res: Response): Promise<void> {
   try {
-    const [upiId, upiName, upiQr] = await Promise.all([
+    const [upiId, upiName, upiQr, mode, gatewayLive] = await Promise.all([
       prisma.pricingConfig.findUnique({ where: { key: "UPI_ID" } }),
       prisma.pricingConfig.findUnique({ where: { key: "UPI_ACCOUNT_NAME" } }),
       prisma.pricingConfig.findUnique({ where: { key: "UPI_QR_URL" } }),
+      getPaymentMode(),
+      isGatewayLive(),
     ]);
+    // Manual UPI is only offered when there is something to scan. Advertising
+    // it with no VPA configured produces a QR-less payment screen the user
+    // cannot complete, which is worse than not offering the rail at all.
+    const upiAvailable = Boolean(upiId?.value || upiQr?.value);
     sendSuccess(
       res,
       {
         provider: ACTIVE_PROVIDER,
+        mode,
+        // The rail the client should actually use. Deliberately a single value
+        // rather than two independent booleans: with both false there is nothing
+        // a client can do, and "which one wins" was previously left to each
+        // client to guess.
+        activeMethod: gatewayLive ? "gateway" : upiAvailable ? "manual_upi" : "none",
         // Also reported under the historical key so clients built before the
         // switch keep working until they are updated.
-        cashfree: isGatewayConfigured("cashfree"),
-        upiManual: Boolean(upiId?.value || upiQr?.value),
+        cashfree: gatewayLive,
+        gatewayEnabled: gatewayLive,
+        upiManual: upiAvailable,
         upiId: upiId?.value ?? null,
         upiAccountName: upiName?.value ?? null,
         // Fall back to the QR rendered by this service when no image has been

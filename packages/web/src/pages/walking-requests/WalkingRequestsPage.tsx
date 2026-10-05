@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { format } from 'date-fns'
 import {
   Dog, MapPin, IndianRupee, Plus, AlertTriangle,
-  Clock, Search, CheckCircle, Hourglass, Footprints
+  Clock, Search, Footprints
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { formatINR } from '../../lib/format'
@@ -13,24 +13,90 @@ import { EmptyState } from '../../components/EmptyState'
 import { FloatingActionButton } from '../../components/FloatingActionButton'
 import { getErrorMessage } from '../../lib/error'
 
-interface Request {
-  id: number
-  type: 'walking' | 'companionship'
-  location: string
-  date: string
-  status: 'open' | 'accepted' | 'completed'
-  reward: number
+/**
+ * Shape of a row from GET /walking-requests.
+ *
+ * This used to declare `type`, `location`, `date` and `reward` with a numeric
+ * `id` and lowercase statuses. None of those exist: the backend returns the raw
+ * WalkingRequest model, so every one of those reads was `undefined` and the
+ * page threw on the first render. The interface now matches the model.
+ *
+ * `fare` is a Prisma Decimal and arrives as a STRING ("112.75"), so it is typed
+ * as string | number and coerced at the point of display.
+ */
+interface WalkingRequest {
+  id: string
+  status: string
+  startLocation: string
+  endLocation: string
+  startTime: string
+  durationMinutes: number | null
+  fare: string | number | null
+  requester?: { id: string; fullName: string | null } | null
 }
 
-const statusConfig = {
-  open: { label: 'Open', icon: Hourglass, badge: 'badge-success' },
-  accepted: { label: 'Accepted', icon: CheckCircle, badge: 'badge-warning' },
-  completed: { label: 'Completed', icon: CheckCircle, badge: 'badge-neutral' },
+/**
+ * Keyed by the statuses the controller actually writes. `status` is a free-form
+ * String column, not an enum, so an unrecognised value is possible and must not
+ * be indexed into blindly — `statusConfig[r.status].badge` is exactly the kind
+ * of access that turns one unexpected row into a blank page for everyone.
+ */
+const STATUS_META: Record<string, { label: string; badge: string }> = {
+  OPEN: { label: 'Open', badge: 'badge-success' },
+  ACCEPTED: { label: 'Accepted', badge: 'badge-warning' },
+  COMPLETED: { label: 'Completed', badge: 'badge-neutral' },
+  CANCELLED: { label: 'Cancelled', badge: 'badge-danger' },
+}
+
+const UNKNOWN_STATUS = { label: 'Unknown', badge: 'badge-neutral' }
+
+const statusMeta = (status: string) => STATUS_META[status] ?? UNKNOWN_STATUS
+
+/**
+ * Filter tabs carry the exact backend status they match. The previous version
+ * compared a lowercase tab key against the uppercase column value, so every
+ * tab except "All" silently returned nothing.
+ */
+const FILTERS = [
+  { key: 'all', label: 'All', status: null },
+  { key: 'open', label: 'Open', status: 'OPEN' },
+  { key: 'accepted', label: 'Accepted', status: 'ACCEPTED' },
+  { key: 'completed', label: 'Completed', status: 'COMPLETED' },
+  { key: 'cancelled', label: 'Cancelled', status: 'CANCELLED' },
+] as const
+
+type FilterKey = (typeof FILTERS)[number]['key']
+
+const FILTER_STATUS: Record<string, string | null> = Object.fromEntries(
+  FILTERS.map(f => [f.key, f.status]),
+)
+
+/**
+ * date-fns `format` throws RangeError on an invalid Date, and a single malformed
+ * row inside a list takes the whole page down with it. Every date on this page
+ * goes through here, so an unparseable value degrades to a dash instead.
+ */
+function safeDate(value: string | null | undefined, pattern: string): string {
+  if (!value) return '—'
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return '—'
+  try {
+    return format(d, pattern)
+  } catch {
+    return '—'
+  }
+}
+
+/** "Koramangala → Indiranagar", collapsing the case where both ends match. */
+function routeLabel(r: WalkingRequest): string {
+  const from = r.startLocation?.trim() || 'Unknown start'
+  const to = r.endLocation?.trim() || 'Unknown end'
+  return from === to ? from : `${from} → ${to}`
 }
 
 export function WalkingRequestsPage() {
-  const [requests, setRequests] = useState<Request[]>([])
-  const [filter, setFilter] = useState<'all' | 'open' | 'accepted' | 'completed'>('all')
+  const [requests, setRequests] = useState<WalkingRequest[]>([])
+  const [filter, setFilter] = useState<FilterKey>('all')
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -91,12 +157,19 @@ export function WalkingRequestsPage() {
   }
 
   const filtered = requests.filter(r => {
-    if (filter !== 'all' && r.status !== filter) return false
-    if (search && !r.location.toLowerCase().includes(search.toLowerCase()) && !r.type.toLowerCase().includes(search.toLowerCase())) return false
-    return true
+    const wantStatus = FILTER_STATUS[filter]
+    if (wantStatus && r.status !== wantStatus) return false
+    // Search both ends of the route plus the requester's name. The old code
+    // called .toLowerCase() straight on `location` and `type`, which threw a
+    // TypeError the moment the user typed in the box.
+    const q = search.trim().toLowerCase()
+    if (!q) return true
+    const haystack = [r.startLocation, r.endLocation, r.requester?.fullName]
+      .filter((v): v is string => typeof v === 'string' && v.length > 0)
+      .join(' ')
+      .toLowerCase()
+    return haystack.includes(q)
   })
-
-  const filters = ['all', 'open', 'accepted', 'completed'] as const
 
   return (
     <div className="space-y-6">
@@ -123,17 +196,17 @@ export function WalkingRequestsPage() {
           />
         </div>
         <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
-          {filters.map(f => (
+          {FILTERS.map(f => (
             <button
-              key={f}
-              onClick={() => setFilter(f)}
+              key={f.key}
+              onClick={() => setFilter(f.key)}
               className={`px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${
-                filter === f
+                filter === f.key
                   ? 'bg-primary-600 text-white shadow-lg shadow-primary-500/25'
                   : 'bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 hover:bg-surface-200 dark:hover:bg-surface-700'
               }`}
             >
-              {f.charAt(0).toUpperCase() + f.slice(1)}
+              {f.label}
             </button>
           ))}
         </div>
@@ -169,25 +242,30 @@ export function WalkingRequestsPage() {
                     </div>
                     <div>
                       <h3 className="text-base font-bold font-display text-surface-900 dark:text-white capitalize group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
-                        {req.type} Request
+                        Walking Request
                       </h3>
                       <div className="flex flex-wrap items-center gap-3 mt-1.5">
                         <span className="flex items-center gap-1 text-xs text-surface-500">
-                          <MapPin className="w-3 h-3" /> {req.location}
+                          <MapPin className="w-3 h-3" /> {routeLabel(req)}
                         </span>
                         <span className="flex items-center gap-1 text-xs text-surface-500">
-                          <Clock className="w-3 h-3" /> {format(new Date(req.date), 'MMM d, yyyy')}
+                          <Clock className="w-3 h-3" /> {safeDate(req.startTime, 'MMM d, yyyy · h:mm a')}
                         </span>
+                        {req.durationMinutes ? (
+                          <span className="flex items-center gap-1 text-xs text-surface-500">
+                            <Footprints className="w-3 h-3" /> {req.durationMinutes} min
+                          </span>
+                        ) : null}
                       </div>
                     </div>
                   </div>
                   <div className="text-right flex flex-col items-end gap-2">
                       <span className="flex items-center gap-1 text-sm font-bold text-surface-900 dark:text-white">
                         <IndianRupee className="w-3.5 h-3.5 text-emerald-500" />
-                        {formatINR(req.reward)}
+                        {formatINR(req.fare)}
                       </span>
-                    <span className={statusConfig[req.status].badge}>
-                      {statusConfig[req.status].label}
+                    <span className={statusMeta(req.status).badge}>
+                      {statusMeta(req.status).label}
                     </span>
                   </div>
                 </div>

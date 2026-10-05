@@ -1,13 +1,15 @@
 import { Router } from "express";
 import { body } from "express-validator";
-import { authRateLimiter } from "../middleware/rateLimiter";
+import { authRateLimiter, generalRateLimiter } from "../middleware/rateLimiter";
 import { authenticateToken, requireAdmin, requireSuperAdmin } from "../middleware/auth";
 import { sanitizeInput, validateRequest } from "../middleware/validation";
 import { requireSectionAction } from "../rbac/permissions";
-import { upload, privateUpload } from "../middleware/upload";
+import { upload, privateUpload, statementUpload } from "../middleware/upload";
 import * as adminController from "../controllers/adminController";
+import * as bankReconciliationController from "../controllers/bankReconciliationController";
 import * as communityController from "../controllers/communityController";
 import * as eventController from "../controllers/eventController";
+import * as eventEscrowController from "../controllers/eventEscrowController";
 import * as otpController from "../controllers/otpController";
 import * as kycTrialController from "../controllers/kycTrialController";
 import * as adminSubscriptionController from "../controllers/adminSubscriptionController";
@@ -45,6 +47,12 @@ const communitiesView = requireSectionAction("COMMUNITIES", "VIEW");
 const eventsView = requireSectionAction("EVENTS", "VIEW");
 const adminMgmtView = requireSectionAction("ADMIN_MANAGEMENT", "VIEW");
 
+// Statement uploads are heavy (whole file in memory, PDF or workbook to decode)
+// and the endpoint that moves real money. The general limiter is per-window and
+// generous enough that a burst of statements would otherwise land as one
+// expensive request each, so it gets its own tighter budget.
+const paymentsUpload = generalRateLimiter;
+
 router.get("/dashboard", adminController.getDashboardStats);
 
 // Manual UPI / QR payment verification (temporary flow for personal UPI accounts)
@@ -73,7 +81,9 @@ router.put(
 router.get("/users", users, adminController.getUsers);
 router.get("/users/:id", users, adminController.getUserById);
 router.put("/users/:id/status", usersEdit, [body("status").isIn(["ACTIVE", "SUSPENDED", "BANNED", "DEACTIVATED"])], validateRequest, adminController.updateUserStatus);
-router.put("/users/:id/phone", usersEdit, [body("phone").isString().trim().isLength({ min: 10, max: 15 })], sanitizeInput, validateRequest, adminController.updateUserPhone);
+// Shape only - the controller applies the number rule so the admin gets the
+// specific reason. `isLength({ min: 10, max: 15 })` here accepted "abcdefghij".
+router.put("/users/:id/phone", usersEdit, [body("phone").isString().trim().isLength({ min: 1, max: 20 })], sanitizeInput, validateRequest, adminController.updateUserPhone);
 router.post("/users/:id/impersonate", usersEdit, adminController.impersonateUser);
 router.post(
   "/users/:id/block",
@@ -96,6 +106,62 @@ router.post("/demo/purge-test-payments", requireSuperAdmin, adminController.purg
 router.get("/otp/status", users, otpController.otpStatus);
 router.get("/topup-requests", paymentsView, adminController.listTopupRequests);
 router.post("/topup-requests/:id/verify", paymentsView, adminController.verifyTopupRequest);
+// ---- Bank statement reconciliation ----------------------------------------
+//
+// Reading a statement is PAYMENTS VIEW; crediting wallets from it is PAYMENTS
+// APPROVE, the same permission the single-request verify button needs. The two
+// are deliberately split so a payments viewer can prepare the queue without
+// being able to move money off it.
+router.get("/bank-statements", paymentsView, bankReconciliationController.list);
+router.get("/bank-statements/unresolved", paymentsView, bankReconciliationController.unresolved);
+router.post(
+  "/bank-statements",
+  paymentsUpload,
+  statementUpload.single("statement"),
+  bankReconciliationController.upload,
+);
+router.get("/bank-statements/:id", paymentsView, bankReconciliationController.detail);
+router.post("/bank-statements/:id/rematch", paymentsView, bankReconciliationController.rematch);
+router.post(
+  "/bank-statements/:id/apply",
+  requireSectionAction("PAYMENTS", "APPROVE"),
+  [body("note").optional().isString().isLength({ max: 500 })],
+  sanitizeInput,
+  validateRequest,
+  bankReconciliationController.apply,
+);
+// Declared after /bank-statements/:id so "rows" is not swallowed as an id.
+router.post(
+  "/bank-statements/rows/:rowId/decision",
+  requireSectionAction("PAYMENTS", "APPROVE"),
+  [
+    // Every message is spelled out. `validateRequest` forwards these verbatim,
+    // and the default express-validator text ("Invalid value") tells an admin
+    // nothing about which field is wrong or what to type instead.
+    body("decision")
+      .isIn(["CREDIT", "REJECT", "IGNORE"])
+      .withMessage("Choose CREDIT, REJECT or IGNORE."),
+    // The comment is not optional anywhere in this flow, and it is the only
+    // record of why a human overrode a line the matcher refused. Validating its
+    // length here means the client is told what is missing before the service
+    // decides whether the whole request is admissible.
+    body("comment")
+      .isString()
+      .bail()
+      .withMessage("Say why: a comment of at least 5 characters is required on every line you decide.")
+      .trim()
+      .isLength({ min: 5, max: 1000 })
+      .withMessage("The comment must be between 5 and 1000 characters."),
+    body("matchedType")
+      .optional()
+      .isIn(["TOPUP", "UPI_PAYMENT"])
+      .withMessage("matchedType must be TOPUP or UPI_PAYMENT."),
+    body("matchedId").optional().isString(),
+  ],
+  sanitizeInput,
+  validateRequest,
+  bankReconciliationController.decide,
+);
 router.post("/wallets/credit", requireSuperAdmin, adminController.creditUserWallet);
 router.delete("/users/:id", requireSuperAdmin, adminController.deleteUser);
 // Bulk selection for the admin user list. Separate route (not DELETE
@@ -196,6 +262,27 @@ router.get("/wallets", walletsView, adminController.getWallets);
 router.get("/dispatch-board", dispatchView, adminController.getDispatchBoard);
 router.get("/communities", communitiesView, communityController.getCommunities);
 router.get("/events", eventsView, eventController.getEvents);
+
+// --- Event fee escrow -----------------------------------------------------------
+// Money moves here, so every route below requires the REPORTS section at a level
+// that can adjudicate a dispute, not merely read it. Settling is irreversible
+// from the user's point of view - their money either reaches the organizer or
+// goes back to them - so APPROVE is the gate on both the decision and the sweep.
+router.get(
+  "/event-disputes",
+  requireSectionAction("REPORTS", "VIEW"),
+  eventEscrowController.listEventDisputes,
+);
+router.post(
+  "/events/:id/settle",
+  requireSectionAction("REPORTS", "APPROVE"),
+  eventEscrowController.decideEventSettlement,
+);
+router.post(
+  "/events/sweep-escrow",
+  requireSectionAction("REPORTS", "APPROVE"),
+  eventEscrowController.runEscrowSweep,
+);
 router.get("/services", revenueView, adminController.getServices);
 router.get("/chat-reports", reportsManage, adminController.getChatReports);
 router.post("/chat-reports/:id/resolve", reportsManage, adminController.resolveChatReport);

@@ -1,7 +1,7 @@
 import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
-import { ArrowLeft, ChevronLeft, ChevronRight, Check, X, Wallet, CreditCard, FileDown } from 'lucide-react'
+import { AdminPageHeader, AdminShell } from '../../components/admin/AdminPageHeader'
+import { ChevronLeft, ChevronRight, Check, X, Wallet, CreditCard, FileDown } from 'lucide-react'
 import { adminApi } from '../../lib/api'
 import { exportTableToPdf } from '../../lib/pdfExport'
 
@@ -141,16 +141,11 @@ export function AdminWalkingPartnersPage() {
   }
 
   return (
-    <div className="bg-gray-950 p-4 sm:p-6 rounded-3xl">
-      <div className="max-w-5xl mx-auto">
-        <div className="flex items-center gap-3 mb-6">
-          <Link to="/admin/portal" className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition">
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold font-display text-white">Partners</h1>
-            <p className="text-gray-400 text-sm mt-1">Approve & manage partner applications</p>
-          </div>
+    <AdminShell>
+      <AdminPageHeader
+        title="Partners"
+        subtitle="Approve & manage partner applications"
+        actions={
           <button
             onClick={() =>
               exportTableToPdf({
@@ -170,11 +165,12 @@ export function AdminWalkingPartnersPage() {
               })
             }
             disabled={partners.length === 0}
-            className="ml-auto inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-gray-300 hover:text-white text-sm transition"
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-gray-300 hover:text-white text-sm transition"
           >
             <FileDown className="w-4 h-4" /> PDF
           </button>
-        </div>
+        }
+      />
 
         <div className="mb-6">
           <div className="flex gap-2">
@@ -215,7 +211,7 @@ export function AdminWalkingPartnersPage() {
               {partners.map((partner) => (
                 <div key={partner.id} className="bg-gray-800 rounded-xl overflow-hidden">
                   <div
-                    className="p-4 cursor-pointer hover:bg-gray-750 transition"
+                    className="p-4 cursor-pointer hover:bg-gray-100 transition"
                     onClick={() => setExpandedId(expandedId === partner.id ? null : partner.id)}
                   >
                     <div className="flex items-center justify-between">
@@ -377,7 +373,6 @@ export function AdminWalkingPartnersPage() {
             </div>
           </>
         )}
-      </div>
-    </div>
+    </AdminShell>
   )
 }

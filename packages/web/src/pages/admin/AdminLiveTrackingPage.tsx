@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
+import { AdminPageHeader, AdminShell } from '../../components/admin/AdminPageHeader'
 import { Radio, MapPin, User as UserIcon, Navigation, RefreshCw, Siren } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useBookingTracking, useSocket } from '../../hooks/useSocket';
@@ -75,20 +76,22 @@ export function AdminLiveTrackingPage() {
     }));
 
   return (
-    <div className="bg-gray-950 p-4 sm:p-6 rounded-3xl">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex items-center gap-3 mb-6">
-          <Radio className="w-6 h-6 text-emerald-400" />
-          <div>
-            <h1 className="text-2xl font-bold font-display text-white">Live Tracking</h1>
-            <p className="text-gray-400 text-sm mt-1">
-              Monitor user &amp; partner live locations for active bookings (safety)
-            </p>
-          </div>
-          <button onClick={load} className="ml-auto p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300" title="Refresh">
-            <RefreshCw className="w-4 h-4" />
+    <AdminShell width="max-w-6xl">
+      <AdminPageHeader
+        title="Live Tracking"
+        subtitle="Monitor user & partner live locations for active bookings (safety)"
+        showBack={false}
+        leading={<Radio className="w-6 h-6 text-emerald-400" aria-hidden />}
+        actions={
+          <button
+            onClick={load}
+            aria-label="Refresh locations"
+            className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300"
+          >
+            <RefreshCw className="w-4 h-4" aria-hidden />
           </button>
-        </div>
+        }
+      />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-1 space-y-2">
@@ -172,8 +175,7 @@ export function AdminLiveTrackingPage() {
             )}
           </div>
         </div>
-      </div>
-    </div>
+    </AdminShell>
   );
 }
 

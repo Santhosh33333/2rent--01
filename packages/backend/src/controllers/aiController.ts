@@ -11,7 +11,7 @@ import {
 } from "../services/aiGateway";
 
 // ============================================================================
-// SideBud AI â€” assistant router (works WITHOUT any LLM key).
+// SideBud AI — assistant router (works WITHOUT any LLM key).
 // Parses intent with transparent keyword rules and answers ONLY from live
 // platform data (events, partners, movies, communities, bookings). Nothing
 // is ever invented: zero results returns an honest empty with next steps.
@@ -43,7 +43,7 @@ export async function askAssistant(req: AuthedRequest, res: Response): Promise<v
   try {
     const message = String(req.body?.message || "").trim().slice(0, 500);
     if (message.length < 2) {
-      sendError(res, "Ask me something â€” events, sports, movies, partners, communities or bookings.", 400, "VALIDATION_ERROR");
+      sendError(res, "Ask me something — events, sports, movies, partners, communities or bookings.", 400, "VALIDATION_ERROR");
       return;
     }
     const lat = req.body?.lat !== undefined ? Number(req.body.lat) : NaN;
@@ -122,8 +122,8 @@ export async function askAssistant(req: AuthedRequest, res: Response): Promise<v
       actions.push({ type: "route", label: "Open Discover", route: "/discover" });
     } else if (intent === "movies") {
       reply = hasPosition
-        ? "For live movie listings the app needs its movie provider key â€” meanwhile, movie meetups below are real and joinable now."
-        : "For live movie listings the app needs its movie provider key â€” meanwhile, movie meetups below are real and joinable now.";
+        ? "For live movie listings the app needs its movie provider key — meanwhile, movie meetups below are real and joinable now."
+        : "For live movie listings the app needs its movie provider key — meanwhile, movie meetups below are real and joinable now.";
       const items = await prisma.event.findMany({
         where: { status: "PUBLISHED", category: "movies" },
         orderBy: { startTime: "asc" },
@@ -144,7 +144,7 @@ export async function askAssistant(req: AuthedRequest, res: Response): Promise<v
       results = items;
       reply =
         items.length === 0
-          ? "No matching communities yet â€” create one and invite people with the same interest."
+          ? "No matching communities yet — create one and invite people with the same interest."
           : `Here ${items.length === 1 ? "is a community" : "are communities"} you can join:`;
       actions.push({ type: "route", label: "Browse communities", route: "/communities" });
     } else if (intent === "bookings") {
@@ -165,7 +165,7 @@ export async function askAssistant(req: AuthedRequest, res: Response): Promise<v
       actions.push({ type: "route", label: "Open my bookings", route: "/bookings" });
     } else {
       reply =
-        "I can help with: finding events, sports games, movie meetups, partners, communities, or explaining your bookings and payments. Try â€œsomething to do near me tomorrow eveningâ€.";
+        "I can help with: finding events, sports games, movie meetups, partners, communities, or explaining your bookings and payments. Try “something to do near me tomorrow evening”.";
       actions.push(
         { type: "route", label: "Discover", route: "/discover" },
         { type: "route", label: "My bookings", route: "/bookings" }
@@ -180,7 +180,7 @@ export async function askAssistant(req: AuthedRequest, res: Response): Promise<v
 }
 
 // ============================================================================
-// Matching â€” transparent signal scoring over real data. Every reason cites
+// Matching — transparent signal scoring over real data. Every reason cites
 // something that actually happened (shared city/community/event).
 // ============================================================================
 
@@ -256,7 +256,7 @@ export async function getMatches(req: AuthedRequest, res: Response): Promise<voi
 
 // ============================================================================
 // LLM-backed helpers (translate, draft). Honest 503 until AI_API_BASE +
-// AI_API_KEY are configured. Drafts are returned for user approval â€”
+// AI_API_KEY are configured. Drafts are returned for user approval —
 // nothing is ever published automatically.
 // ============================================================================
 
@@ -311,7 +311,7 @@ export async function draftText(req: AuthedRequest, res: Response): Promise<void
       );
       sendSuccess(
         res,
-        { draft: out.text, kind, model: out.model, cached: out.cached, note: "Review and edit before publishing â€” nothing was saved." },
+        { draft: out.text, kind, model: out.model, cached: out.cached, note: "Review and edit before publishing — nothing was saved." },
         "Draft ready for review."
       );
     } catch (err: any) {
@@ -333,7 +333,7 @@ export async function draftText(req: AuthedRequest, res: Response): Promise<void
 }
 
 // ============================================================================
-// Safety flags â€” rule signals for ADMIN REVIEW ONLY. Never auto-punishes.
+// Safety flags — rule signals for ADMIN REVIEW ONLY. Never auto-punishes.
 // Levels: LOW (watch), MEDIUM (check soon), REVIEW (needs a moderator now).
 // ============================================================================
 
@@ -398,7 +398,7 @@ export async function getSafetyFlags(_req: AuthedRequest, res: Response): Promis
       reasons: flagMap.get(id)!.reasons,
     }));
 
-    sendSuccess(res, { count: flags.length, flags, note: "Flags need human review â€” nothing was actioned automatically." }, "Safety flags.");
+    sendSuccess(res, { count: flags.length, flags, note: "Flags need human review — nothing was actioned automatically." }, "Safety flags.");
   } catch (err: any) {
     console.error("[ai] flags error:", err?.message);
     sendError(res, "Safety flags are unavailable right now.", 500, "INTERNAL_ERROR");
@@ -406,7 +406,7 @@ export async function getSafetyFlags(_req: AuthedRequest, res: Response): Promis
 }
 
 // ============================================================================
-// Admin summary â€” real counts only, straight from the database.
+// Admin summary — real counts only, straight from the database.
 // ============================================================================
 
 export async function getAdminSummary(_req: AuthedRequest, res: Response): Promise<void> {

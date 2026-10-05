@@ -240,7 +240,7 @@ export function MessagesPage() {
                     </div>
                     <div className="flex items-center justify-between">
                       <p className={`text-sm truncate ${conv.unreadCount > 0 ? 'text-surface-700 dark:text-surface-300 font-medium' : 'text-surface-500 dark:text-surface-400'}`}>
-                        {conv.lastMessage ?? 'Say hello 👋'.replace(' 👋','')}
+                        {conv.lastMessage ?? 'Say hello'}
                       </p>
                       <div className="flex items-center gap-2 ml-2">
                         {conv.unreadCount > 0 && (

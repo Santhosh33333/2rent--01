@@ -13,13 +13,27 @@ import { PRICING_VERSION_KEY } from "../services/bookingEngine";
 import { isDemoEmail, DEMO_WALLET_CEILING } from "../utils/demo";
 import { moneyTransaction } from "../utils/db";
 import { invalidateConfigCache } from "../services/pricingEngine";
+import { settleTopupRequest, AlreadySettledError } from "../services/topupSettlement";
+// Aliased: both services export an AlreadySettledError and they are different
+// classes for different claims. Collapsing them into one import would make
+// `instanceof` accept a top-up error where a UPI error was meant.
+import {
+  settleUpiPayment,
+  AlreadySettledError as UpiAlreadySettledError,
+} from "../services/upiSettlement";
 import { ensureAdminUser } from "../services/adminProvision";
 import { SERVICE_KEYS } from "../services/serviceCatalog";
 import * as partnerMatching from "../services/partnerMatchingEngine";
 import { sendEmail, emailStatus, sendKycEmail, sendWelcomeEmail, sendWithdrawalPaidEmail, sendWithdrawalRejectedEmail } from "../services/emailService";
 import { createAndSendAgreements } from "../services/agreementService";
 import { bankNameFromIfsc } from "../services/bankLookup";
+import { approveWithdrawalRequest, rejectWithdrawalRequest, WithdrawalError } from "../services/withdrawalService";
 import { PHONE_VERIFICATION_UNAVAILABLE_MESSAGE } from "../services/phoneVisibility";
+import {
+  normaliseIndianPhone,
+  phoneLookupCandidates,
+  phoneErrorBody,
+} from "../services/phoneNumber";
 import { renderEmail, paragraphHtml } from "../services/emailTemplate";
 import { ADMIN_ROLES, SUPER_ADMIN_ROLE } from "../rbac/sections";
 import { readBlob } from "../services/blobStorage";
@@ -309,10 +323,17 @@ export async function updateUserPhone(req: AuthedRequest, res: Response): Promis
   try {
     const { id } = req.params;
     const { phone } = req.body;
-    if (!phone || !/^\+?[0-9]{10,15}$/.test(String(phone))) {
-      sendError(res, "A valid phone number is required (10–15 digits, optional +country).", 400, "VALIDATION_ERROR");
+    // Canonicalised through the shared parser rather than a local regex. This is
+    // the only supported way to change a number on an account, so it has to obey
+    // exactly the same rules as the number the user typed at registration -
+    // otherwise an admin can install a shape that no user could ever enter.
+    const parsedPhone = normaliseIndianPhone(phone);
+    if (!parsedPhone.ok) {
+      const { message, code } = phoneErrorBody(parsedPhone);
+      sendError(res, message, 400, code);
       return;
     }
+    const canonicalPhone = parsedPhone.e164;
     const target = await prisma.user.findUnique({ where: { id }, select: { id: true, role: true, activeRole: true, phone: true, mobileVerified: true } });
     if (!target) {
       sendError(res, "User not found.", 404, "USER_NOT_FOUND");
@@ -323,39 +344,73 @@ export async function updateUserPhone(req: AuthedRequest, res: Response): Promis
       sendError(res, guard.error.message, 403, guard.error.code);
       return;
     }
-    const dup = await prisma.user.findFirst({ where: { phone: String(phone), id: { not: id } } });
+    // Checked across every equivalent spelling, so an admin cannot create a
+    // second account on a number that already has an owner under another format.
+    const dup = await prisma.user.findFirst({
+      where: { phone: { in: phoneLookupCandidates(canonicalPhone) }, id: { not: id } },
+    });
     if (dup) {
       sendError(res, "Another account already uses this number.", 409, "DUPLICATE_PHONE");
       return;
     }
+
     // Changing the number must clear the verified flag. The previous value was
     // not reset, so an account kept a "verified number" badge for a number
     // nobody had proven control of - a new number can never inherit the
     // verification of the old one.
-    const user = await prisma.user.update({
-      where: { id },
-      data: { phone: String(phone), mobileVerified: false },
-    });
-    await prisma.auditLog.create({
-      data: {
-        actorId: req.user!.userId,
-        actorType: "ADMIN",
-        action: "UPDATE_USER_PHONE",
-        entityType: "User",
-        entityId: id,
-        // Both values recorded so an admin can see exactly what was replaced.
-        metadata: JSON.stringify({
-          previousPhone: target.phone,
-          phone: String(phone),
-          previousMobileVerified: target.mobileVerified,
-          mobileVerifiedReset: Boolean(target.mobileVerified),
-        }),
-      },
-    });
+    //
+    // It must also clear the KYC phone declaration. The user confirmed a number
+    // during KYC step 1 and it was required to equal the one on the account; an
+    // admin edit breaks that agreement silently, and the declaration would sit
+    // there looking valid while describing a number the person no longer has.
+    // Clearing it restores the invariant this module relies on - that
+    // confirmedPhone is either equal to User.phone or null - and the submission
+    // gate then refuses the KYC until step 1 is redone with the new number.
+    //
+    // The APPROVED status is deliberately left alone: re-opening a completed
+    // verification is a policy decision, not a mechanical consequence of
+    // correcting a contact number.
+    const [, , verification] = await prisma.$transaction([
+      prisma.user.update({
+        where: { id },
+        data: { phone: canonicalPhone, mobileVerified: false },
+      }),
+      prisma.auditLog.create({
+        data: {
+          actorId: req.user!.userId,
+          actorType: "ADMIN",
+          action: "UPDATE_USER_PHONE",
+          entityType: "User",
+          entityId: id,
+          // Both values recorded so an admin can see exactly what was replaced.
+          metadata: JSON.stringify({
+            previousPhone: target.phone,
+            phone: canonicalPhone,
+            previousMobileVerified: target.mobileVerified,
+            mobileVerifiedReset: Boolean(target.mobileVerified),
+          }),
+        },
+      }),
+      prisma.verification.updateMany({
+        where: { userId: id, confirmedPhone: { not: null } },
+        data: { confirmedPhone: null },
+      }),
+    ]);
+
     sendSuccess(
       res,
-      { id: user.id, phone: user.phone, phoneVerified: user.mobileVerified, phoneVerificationNotice: PHONE_VERIFICATION_UNAVAILABLE_MESSAGE },
-      "Mobile number updated. It is unverified until verification is available."
+      {
+        id,
+        phone: canonicalPhone,
+        phoneVerified: false,
+        phoneVerificationNotice: PHONE_VERIFICATION_UNAVAILABLE_MESSAGE,
+        // Surfaced so the admin knows the user must redo KYC step 1, rather than
+        // discovering it later as a rejected submission.
+        kycPhoneConfirmationCleared: verification.count > 0,
+      },
+      verification.count > 0
+        ? "Mobile number updated. It is unverified until verification is available. The user must confirm the new number in KYC step 1."
+        : "Mobile number updated. It is unverified until verification is available."
     );
   } catch (err) {
     console.error("updateUserPhone error:", err);
@@ -1132,77 +1187,13 @@ export async function resolveChatReport(req: AuthedRequest, res: Response): Prom
 export async function approveWithdrawal(req: AuthedRequest, res: Response): Promise<void> {
   try {
     const { id } = req.params;
-    const request = await prisma.withdrawalRequest.findUnique({ where: { id } });
-    if (!request) {
-      sendError(res, "Withdrawal request not found.", 404, "WITHDRAWAL_NOT_FOUND");
-      return;
-    }
-    if (request.status !== "PENDING") {
-      sendError(res, "Withdrawal already processed.", 400, "INVALID_STATUS");
-      return;
-    }
-    // Funds were held (debited) when the user requested the withdrawal.
-    // Approval only settles the lifecycle — no further balance change.
-    await prisma.$transaction(async (tx) => {
-      const claimed = await tx.withdrawalRequest.updateMany({
-        where: { id, status: "PENDING" },
-        data: { status: "APPROVED", reviewedBy: req.user!.userId, reviewedAt: new Date() },
-      });
-
-      if (claimed.count !== 1) {
-        throw new Error("WITHDRAWAL_NOT_PENDING");
-      }
-
-      // Settle the paired hold ledger row
-      await tx.transaction.updateMany({
-        where: { referenceId: id, type: "WITHDRAWAL", status: "PENDING" },
-        data: { status: "COMPLETED", description: "Withdrawal approved and settled" },
-      });
-
-      // `PartnerEarnings.withdrawableBalance` is the figure the partner
-      // dashboard reports as "Available to withdraw". It was only ever
-      // incremented on booking completion, so it kept growing after payouts and
-      // disagreed with the `Wallet.balance` the withdrawal gate actually
-      // validates against. Settle it down as the money leaves.
-      //
-      // The new value is computed in JS rather than with `{ decrement }`: a
-      // decrement that would go negative is rejected by Postgres, and catching
-      // that error mid-transaction aborts the whole interactive transaction
-      // (Prisma does not open a savepoint per statement), taking the approval
-      // down with it.
-      const earnings = await tx.partnerEarnings.findUnique({
-        where: { userId: request.userId },
-        select: { withdrawableBalance: true },
-      });
-      if (earnings) {
-        const remaining = Number(earnings.withdrawableBalance) - Number(request.amount);
-        await tx.partnerEarnings.update({
-          where: { userId: request.userId },
-          data: { withdrawableBalance: Number.isFinite(remaining) ? Math.max(0, remaining) : 0 },
-        });
-      }
-
-
-await tx.auditLog.create({
-        data: { actorId: req.user!.userId, actorType: "ADMIN", action: "WITHDRAWAL_APPROVE", entityType: "WithdrawalRequest", entityId: id },
-      });
-    });
-    // Withdrawal payment completed — notify the user by email (fire-and-forget;
-    // never blocks or fails the approval path when delivery is unconfigured).
-    const paidUser = await prisma.user.findUnique({ where: { id: request.userId }, select: { email: true, fullName: true } });
-    if (paidUser) {
-      void sendWithdrawalPaidEmail(paidUser.email, paidUser.fullName || "there", {
-        withdrawalId: request.id,
-        amount: Number(request.amount),
-        method: request.method,
-        status: "APPROVED",
-        processedAt: new Date(),
-      }).catch((err) => console.error("[EMAIL] Withdrawal paid email failed:", err));
-    }
+    // Settlement lives in withdrawalService so the agent's admin_approve_withdrawal
+    // tool and this endpoint cannot drift apart on the money path.
+    await approveWithdrawalRequest(id, req.user!.userId);
     sendSuccess(res, undefined, "Withdrawal approved.");
   } catch (err: any) {
-    if (err?.message === "WITHDRAWAL_NOT_PENDING") {
-      sendError(res, "Withdrawal already processed.", 400, "INVALID_STATUS");
+    if (err instanceof WithdrawalError) {
+      sendError(res, err.message, err.statusCode, err.code);
     } else {
       sendError(res, "Failed to approve withdrawal.", 500, "INTERNAL_ERROR");
     }
@@ -1310,60 +1301,14 @@ export async function rejectWithdrawal(req: AuthedRequest, res: Response): Promi
   try {
     const { id } = req.params;
     const { reason } = req.body;
-    const request = await prisma.withdrawalRequest.findUnique({ where: { id } });
-    if (!request) {
-      sendError(res, "Withdrawal request not found.", 404, "WITHDRAWAL_NOT_FOUND");
-      return;
-    }
-    if (request.status !== "PENDING") {
-      sendError(res, "Withdrawal already processed.", 400, "INVALID_STATUS");
-      return;
-    }
-    // Release the held funds exactly once (conditional claim prevents double-release)
-    await prisma.$transaction(async (tx) => {
-      const claimed = await tx.withdrawalRequest.updateMany({
-        where: { id, status: "PENDING" },
-        data: { status: "REJECTED", reviewedBy: req.user!.userId, reviewedAt: new Date(), rejectionReason: reason || "Rejected by admin" },
-      });
-
-      if (claimed.count !== 1) {
-        throw new Error("WITHDRAWAL_NOT_PENDING");
-      }
-
-      await tx.wallet.update({
-        where: { id: request.walletId },
-        data: { balance: { increment: request.amount } },
-      });
-
-      // Close the paired hold ledger row
-      await tx.transaction.updateMany({
-        where: { referenceId: id, type: "WITHDRAWAL", status: "PENDING" },
-        data: { status: "FAILED", description: `Withdrawal rejected${reason ? `: ${reason}` : ""}; hold released` },
-      });
-
-await tx.auditLog.create({
-        data: { actorId: req.user!.userId, actorType: "ADMIN", action: "WITHDRAWAL_REJECT", entityType: "WithdrawalRequest", entityId: id, metadata: reason ? JSON.stringify({ reason }) : null },
-      });
-    });
-    // Funds released back to the wallet — tell the user what happened.
-    const rejectedUser = await prisma.user.findUnique({ where: { id: request.userId }, select: { email: true, fullName: true } });
-    if (rejectedUser) {
-      void sendWithdrawalRejectedEmail(rejectedUser.email, rejectedUser.fullName || "there", {
-        withdrawalId: request.id,
-        amount: Number(request.amount),
-        method: request.method,
-        status: "REJECTED",
-        processedAt: new Date(),
-        rejectionReason: reason || undefined,
-      }).catch((err) => console.error("[EMAIL] Withdrawal rejected email failed:", err));
-    }
+    await rejectWithdrawalRequest(id, req.user!.userId, reason);
     sendSuccess(res, undefined, "Withdrawal rejected.");
-  } catch (err: any) {
-    if (err?.message === "WITHDRAWAL_NOT_PENDING") {
-      sendError(res, "Withdrawal already processed.", 400, "INVALID_STATUS");
-    } else {
-      sendError(res, "Failed to reject withdrawal.", 500, "INTERNAL_ERROR");
-    }
+} catch (err: any) {
+  if (err instanceof WithdrawalError) {
+  sendError(res, err.message, err.statusCode, err.code);
+  } else {
+  sendError(res, "Failed to reject withdrawal.", 500, "INTERNAL_ERROR");
+  }
   }
 }
 
@@ -2413,68 +2358,20 @@ export async function verifyUpiPayment(req: AuthedRequest, res: Response): Promi
     const amount = Number(upi.amount);
 
     if (action === "VERIFY") {
-      await moneyTransaction(async (tx) => {
-        // Hold escrow only if this booking hasn't already been paid (idempotent).
-        if (booking.paymentStatus !== "PAID") {
-          const wallet = await tx.wallet.findUnique({ where: { userId: upi.userId } });
-          if (!wallet) throw new Error("WALLET_MISSING");
-          if (Number(wallet.balance) < amount) throw new Error("INSUFFICIENT_BALANCE");
-          await tx.wallet.update({ where: { userId: upi.userId }, data: { balance: { decrement: amount } } });
-          await tx.transaction.create({
-            data: {
-              userId: upi.userId,
-              walletId: wallet.id,
-              bookingId: booking.id,
-              type: "WALLET_DEBIT",
-              amount,
-              status: "SUCCESS",
-              description: `UPI booking payment - ${booking.serviceType}`,
-            },
-          });
+      // The money movement, booking transition, audit record, notification and
+      // partner dispatch all live in the service now, because bank-statement
+      // reconciliation settles the same payment and two hand-written copies of
+      // "debit the wallet and confirm the booking" is how a double-debit gets
+      // written. This handler is now only the HTTP edge.
+      try {
+        await settleUpiPayment(upi, req.user!.userId, "MANUAL", note);
+      } catch (settleErr: any) {
+        if (settleErr instanceof UpiAlreadySettledError) {
+          sendSuccess(res, { status: "VERIFIED" }, "Already verified.");
+          return;
         }
-        await tx.upiPayment.update({
-          where: { id },
-          data: { status: "VERIFIED", verifiedByAdminId: req.user!.userId, verificationNote: note ?? null },
-        });
-        await tx.booking.updateMany({
-          where: { id: booking.id, paymentStatus: "VERIFICATION_PENDING" },
-          data: { status: "PARTNER_SEARCHING", paymentStatus: "PAID", paymentVerifiedAt: new Date(), paymentMethod: "UPI_MANUAL" },
-        });
-        await tx.auditLog.create({
-          data: {
-            actorId: req.user!.userId,
-            actorType: "ADMIN",
-            action: "UPI_PAYMENT_VERIFIED",
-            entityType: "Booking",
-            entityId: booking.id,
-            metadata: JSON.stringify({ referenceNumber: upi.referenceNumber, amount, note }),
-          },
-        });
-      });
-
-      await prisma.notification.create({
-        data: {
-          userId: upi.userId,
-          title: "Payment Verified",
-          body: `Your UPI payment for booking ${booking.id.slice(0, 8)} is verified. Searching for a partner.`,
-          data: JSON.stringify({ bookingId: booking.id }),
-        },
-      });
-      // Trigger partner matching (same as the verified path).
-      partnerMatching
-        .assignPartnerToBooking(booking.id, {
-          serviceType: booking.serviceType,
-          startLocation: booking.startLocation,
-          endLocation: booking.endLocation,
-          startLatitude: booking.startLatitude || undefined,
-          startLongitude: booking.startLongitude || undefined,
-          endLatitude: booking.endLatitude || undefined,
-          endLongitude: booking.endLongitude || undefined,
-          durationMinutes: booking.durationMinutes || undefined,
-          userId: booking.userId,
-        })
-        .catch((e) => console.error("[UPI] dispatch error:", e));
-
+        throw settleErr;
+      }
       sendSuccess(res, { status: "VERIFIED" }, "Payment verified. Booking confirmed.");
     } else if (action === "REJECT") {
       await prisma.$transaction(async (tx) => {
@@ -2915,47 +2812,20 @@ export async function verifyTopupRequest(req: AuthedRequest, res: Response): Pro
       return;
     }
     if (action === "VERIFY") {
-      await moneyTransaction(async (tx) => {
-        const claimed = await tx.topupRequest.updateMany({
-          where: { id, status: "VERIFICATION_PENDING" },
-          data: { status: "VERIFIED", verifiedByAdminId: req.user!.userId, verificationNote: note ?? null },
-        });
-        if (claimed.count !== 1) throw new Error("ALREADY_SETTLED");
-        const wallet = await tx.wallet.upsert({
-          where: { userId: row.userId },
-          update: { balance: { increment: Number(row.amount) } },
-          create: { userId: row.userId, balance: Number(row.amount) },
-        });
-        await tx.transaction.create({
-          data: {
-            userId: row.userId,
-            walletId: wallet.id,
-            type: "TOPUP",
-            amount: Number(row.amount),
-            status: "SUCCESS",
-            description: `Manual UPI top-up (UTR ${row.referenceNumber})`,
-            referenceId: `TOPUP-${row.id.slice(0, 8)}`,
-          },
-        });
-        await tx.auditLog.create({
-          data: {
-            actorId: req.user!.userId,
-            actorType: "ADMIN",
-            action: "TOPUP_VERIFIED",
-            entityType: "TopupRequest",
-            entityId: id,
-            metadata: JSON.stringify({ amount: Number(row.amount), referenceNumber: row.referenceNumber }),
-          },
-        });
-      });
-      await prisma.notification.create({
-        data: {
+      // The credit itself lives in topupSettlement so that this endpoint and
+      // bank-statement reconciliation cannot drift into two different
+      // implementations of "money arrives in a wallet".
+      await settleTopupRequest(
+        {
+          id: row.id,
           userId: row.userId,
-          title: "Wallet topped up",
-          body: `Rs ${Number(row.amount)} added to your wallet. ${note || ""}`.trim(),
-          data: JSON.stringify({ kind: "TOPUP_VERIFIED", topupId: id }),
+          amount: row.amount,
+          referenceNumber: row.referenceNumber,
         },
-      });
+        req.user!.userId,
+        "MANUAL",
+        note,
+      );
       sendSuccess(res, { status: "VERIFIED" }, "Top-up verified. Wallet credited.");
     } else if (action === "REJECT") {
       await prisma.topupRequest.updateMany({
@@ -2989,7 +2859,9 @@ export async function verifyTopupRequest(req: AuthedRequest, res: Response): Pro
       sendError(res, "Action must be VERIFY, REJECT or REQUEST_INFO.", 400, "VALIDATION_ERROR");
     }
   } catch (err: any) {
-    if (err?.message === "ALREADY_SETTLED") {
+    // The settlement service throws a typed error; older call sites in this file
+    // still throw the bare string, so both are recognised.
+    if (err instanceof AlreadySettledError || err?.message === "ALREADY_SETTLED") {
       sendError(res, "This request was already settled.", 409, "ALREADY_SETTLED");
       return;
     }

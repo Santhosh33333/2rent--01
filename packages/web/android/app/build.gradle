@@ -14,8 +14,17 @@ android {
         applicationId "app.rentbuddy.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 13
-        versionName "1.0.12"
+        // 15 / 1.0.14: ships the walking-request create form fix. That form
+        // posted field names the API does not read (startLocation/endLocation
+        // are non-nullable, startTime went through `new Date(undefined)`), so
+        // every submit returned a bare 500 and the feature was unusable. Also
+        // the digest financial report and the Verification step-metadata fix.
+        //
+        // 14 / 1.0.13 was the previous build. Android refuses to install an
+        // update whose versionCode is not higher, so this must be bumped on
+        // every release users already have.
+        versionCode 15
+        versionName "1.0.14"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

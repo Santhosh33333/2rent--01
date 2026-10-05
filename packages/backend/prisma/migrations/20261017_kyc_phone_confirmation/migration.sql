@@ -1,0 +1,11 @@
+-- The user's own mobile number, declared during KYC step 1.
+--
+-- Nullable on purpose: every Verification row that already exists predates this
+-- column, and those users are mid-flow. Requiring a value here would invalidate
+-- work they have already done. The controller treats NULL as "not declared yet"
+-- and refuses final submission with an instruction to redo step 1, which is a
+-- message the user can act on rather than a dead end.
+--
+-- No index: the column is only ever read as part of a row already located by
+-- Verification.userId, which is @unique.
+ALTER TABLE "Verification" ADD COLUMN "confirmedPhone" TEXT;

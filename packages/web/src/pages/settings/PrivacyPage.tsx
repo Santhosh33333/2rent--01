@@ -9,6 +9,30 @@ import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
 import { EmptyState } from '../../components/EmptyState'
 import { api } from '../../lib/api'
+import { getErrorMessage } from '../../lib/error'
+
+/**
+ * When self-service account deletion reopens.
+ *
+ * Mirrors `DEFAULT_SELF_DELETION_FROZEN_UNTIL` in the backend's
+ * `services/accountDeletionPolicy.ts`. Duplicated for the same reason the ten
+ * digits are duplicated in the KYC step: the app cannot import from the backend
+ * package.
+ *
+ * This is presentational only. The server enforces the lock regardless of what
+ * this file believes - if the two drift, the server wins and the button simply
+ * turns out to be closed when the user presses it. Hard-coding a date here that
+ * the server does not agree with would be misleading, so the copy below states
+ * the rule rather than promising a specific outcome.
+ */
+const SELF_DELETION_FROZEN_UNTIL_ISO = '2027-01-04T00:00:00.000Z'
+
+const selfDeletionFrozen = (): boolean => new Date().getTime() < new Date(SELF_DELETION_FROZEN_UNTIL_ISO).getTime()
+
+const frozenUntilLabel = (): string =>
+  new Date(SELF_DELETION_FROZEN_UNTIL_ISO).toLocaleDateString('en-GB', {
+    day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
+  })
 
 interface BlockedUser {
   id: string
@@ -59,6 +83,9 @@ function SettingRow({ icon: Icon, label, description, children }: { icon: any; l
 }
 
 export function PrivacyPage() {
+  // Read once per render rather than in module scope, so the page cannot keep
+  // showing the freeze long after it has lifted.
+  const deletionFrozen = selfDeletionFrozen()
   const navigate = useNavigate()
   const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([])
   const [loading, setLoading] = useState(true)
@@ -99,7 +126,13 @@ export function PrivacyPage() {
       localStorage.clear()
       toast.success('Account deleted')
       navigate('/login')
-    } catch { toast.error('Failed to delete account') }
+    } catch (err: unknown) {
+      // The server's message is the actionable one here: it names the date the
+      // lock lifts and points at an administrator. A generic "Failed to delete
+      // account" would leave the user with a button that does nothing and no
+      // idea why.
+      toast.error(getErrorMessage(err, 'Failed to delete account'))
+    }
     finally { setDeleting(false) }
   }
 
@@ -206,10 +239,31 @@ export function PrivacyPage() {
             <AlertTriangle className="w-5 h-5 text-danger-500" />
             <h2 className="text-lg font-semibold text-danger-600 dark:text-danger-400">Danger Zone</h2>
           </div>
-          <p className="text-sm text-surface-500 mb-4">Once you delete your account, there is no going back. Please be certain.</p>
-          <button onClick={() => setShowDeleteConfirm(true)} className="btn-outline text-danger-500 hover:bg-danger-50 dark:hover:bg-danger-500/10 border-danger-200 dark:border-danger-800/30">
-            <Ban className="w-4 h-4" /> Delete Account
-          </button>
+          {deletionFrozen ? (
+            // The button is REMOVED rather than disabled. A greyed-out control
+            // invites people to press it and then be told no; saying plainly
+            // that the option is closed, and until when, respects the user more
+            // than a control that cannot work.
+            <>
+              <p className="text-sm text-surface-500 mb-1">
+                Deleting your own account is paused until {frozenUntilLabel()}.
+              </p>
+              <p className="text-sm text-surface-500 mb-4">
+                Until then, only a Nabri administrator can delete an account. Contact Nabri support if you need yours removed.
+              </p>
+              <div className="inline-flex items-center gap-2 rounded-xl border border-surface-300 bg-surface-100 px-3 py-2 text-sm text-surface-500 dark:border-surface-700 dark:bg-surface-800 dark:text-surface-400">
+                <Ban className="w-4 h-4" />
+                Delete Account — unavailable until {frozenUntilLabel()}
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-surface-500 mb-4">Once you delete your account, there is no going back. Please be certain.</p>
+              <button onClick={() => setShowDeleteConfirm(true)} className="btn-outline text-danger-500 hover:bg-danger-50 dark:hover:bg-danger-500/10 border-danger-200 dark:border-danger-800/30">
+                <Ban className="w-4 h-4" /> Delete Account
+              </button>
+            </>
+          )}
         </GlassCard>
       </AnimatedPage>
 

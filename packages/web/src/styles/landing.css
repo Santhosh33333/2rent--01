@@ -11,16 +11,31 @@
  */
 
 .nb {
-  /* Ground */
+/* Ground */
   --nb-bg: #fbfaf8;
   --nb-bg-soft: #f4f2ef;
   --nb-surface: #ffffff;
   --nb-line: #e8e4de;
 
+  /*
+   * These three were referenced across the landing components as
+   * `var(--nb-surface-soft, #F8FAFC)` and friends, but were never actually
+   * defined. Because they resolved to nothing, the hardcoded LIGHT fallback
+   * applied in both themes, which put near-white body text on a near-white
+   * card in dark mode - measured at 2:1 against a 4.5:1 requirement. Defining
+   * them per theme fixes every call site at once instead of one by one.
+   */
+  --nb-surface-soft: #f8fafc;
+  --nb-surface-sunk: #f1f5f9;
+  --nb-border: #e2e8f0;
+
   /* Ink */
   --nb-ink: #16233c;
   --nb-ink-soft: #5b6779;
-  --nb-ink-faint: #8b94a3;
+  /* Was #8b94a3: 2.93:1 on the warm ground and 3.06:1 on a white card, both
+     well under AA for the 16px legal body copy that uses it. Darkened to the
+     first value clearing 4.62:1 against both surfaces. */
+  --nb-ink-faint: #677283;
 
   /* Accents */
   --nb-blue: #2b4fd8;
@@ -30,8 +45,33 @@
   --nb-purple: #a78bfa;
   --nb-pink: #ec6a9c;
 
-  --nb-grad-brand: linear-gradient(135deg, #2b4fd8 0%, #22b8cf 52%, #a78bfa 100%);
+--nb-grad-brand: linear-gradient(135deg, #2b4fd8 0%, #22b8cf 52%, #a78bfa 100%);
   --nb-grad-warm: linear-gradient(135deg, #2b4fd8 0%, #7c5cf0 60%, #ec6a9c 100%);
+
+  /* Solid-colour variant of the brand gradient, for surfaces that carry white
+     text. The brand gradient's mid and end stops are light by design (cyan is
+     2.38:1 against white, lilac 2.72:1), so white labels on it measured well
+     under the 4.5:1 AA floor. These are the same hues taken down to where white
+     clears it - cyan 4.64, lilac 4.66, rose 4.64 - so the button still reads as
+     the brand gradient while becoming legible.
+
+     Kept separate from --nb-grad-brand rather than darkening that token,
+     because the brand gradient is also used for `.nb-gradient-text` and the nav
+     underline, where darkening it would dim decorative elements that carry no
+     text and have no contrast requirement. */
+  --nb-grad-brand-solid: linear-gradient(135deg, #2b4fd8 0%, #188090 52%, #7c67ba 100%);
+  --nb-grad-warm-solid: linear-gradient(135deg, #2b4fd8 0%, #7c5cf0 60%, #b85279 100%);
+
+  /* Feature CTA label colours. Each is its art hue taken down to the first
+     value that clears 4.5:1 on the white card (cyan 2.38 -> 4.64, lilac 2.72 ->
+     4.66, rose 2.95 -> 4.64, green 3.51 -> 4.64). Blue and violet already
+     passed as-is and are listed for symmetry with the art tints. */
+  --nb-cta-blue: #2b4fd8;
+  --nb-cta-rose: #b85279;
+  --nb-cta-cyan: #188090;
+  --nb-cta-violet: #7c5cf0;
+  --nb-cta-lilac: #7c67ba;
+  --nb-cta-green: #0d864b;
 
   --nb-radius: 20px;
   --nb-radius-sm: 12px;
@@ -87,7 +127,14 @@
 }
 
 .nb-h1 {
-  font-size: clamp(2.5rem, 7.2vw, 5.25rem);
+  /* Was clamp(2.5rem, 7.2vw, 5.25rem), which rendered this seven-word headline
+     at 84px and wrapped it to three lines on a 1264px desktop. A hero headline
+     reads as one unit and should land on two lines; 64px is the largest size
+     that does that here. */
+  font-size: clamp(2.25rem, 5vw, 4rem);
+  /* The display scale is 0.98 for single-line marks. A wrapping headline needs
+     a touch more room or the descenders and ascenders collide across lines. */
+  line-height: 1.03;
 }
 
 .nb-h2 {
@@ -159,7 +206,7 @@
 }
 
 .nb-btn--primary {
-  background: var(--nb-grad-brand);
+  background: var(--nb-grad-brand-solid);
   color: #fff;
   box-shadow: 0 2px 6px rgba(43, 79, 216, 0.22), 0 14px 30px -12px rgba(43, 79, 216, 0.4);
 }
@@ -269,6 +316,19 @@
   .nb-grid--4 { grid-template-columns: minmax(0, 1fr); }
 }
 
+/*
+ * The assistant block's two-column split (prose left, capability cards right).
+ *
+ * Declared here rather than inline because the component sets
+ * gridTemplateColumns: minmax(0, 1fr) as its base and needs a breakpoint to
+ * escape it — an inline style has a higher specificity than a media query in
+ * the stylesheet, so a class could never win. Keeping the base in JS and the
+ * override in CSS is what makes the collapse work at all.
+ */
+@media (min-width: 900px) {
+  .nb-ai__layout { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
+
 /* --------------------------------------------------------------- badges */
 
 .nb-pill {
@@ -363,6 +423,81 @@
   transform: translate3d(0, 0, 0);
 }
 
+/* ------------------------------------------------------------- stagger ---
+ * `.nb-reveal` animates every element in a section at the same instant, so a
+ * grid of six cards pops in as one block and reads as a single flash rather
+ * than a sequence. `.nb-stagger` puts the delay on the children instead of the
+ * container, so a group cascades once its parent scrolls into view.
+ *
+ * Delay is pure CSS nth-child rather than a JS-assigned index: the markup needs
+ * no data attributes, and the count is capped at 12 so a 30-item grid does not
+ * leave the last card waiting two seconds. Items past the cap share the last
+ * step instead of being skipped.
+ */
+.nb-stagger > * {
+  opacity: 0;
+  transform: translate3d(0, 18px, 0);
+  transition:
+    opacity 0.6s var(--nb-ease),
+    transform 0.6s var(--nb-ease);
+}
+
+.nb-stagger.is-visible > * {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+
+.nb-stagger.is-visible > *:nth-child(1)  { transition-delay: 0ms; }
+.nb-stagger.is-visible > *:nth-child(2)  { transition-delay: 55ms; }
+.nb-stagger.is-visible > *:nth-child(3)  { transition-delay: 110ms; }
+.nb-stagger.is-visible > *:nth-child(4)  { transition-delay: 165ms; }
+.nb-stagger.is-visible > *:nth-child(5)  { transition-delay: 220ms; }
+.nb-stagger.is-visible > *:nth-child(6)  { transition-delay: 275ms; }
+.nb-stagger.is-visible > *:nth-child(7)  { transition-delay: 330ms; }
+.nb-stagger.is-visible > *:nth-child(8)  { transition-delay: 385ms; }
+.nb-stagger.is-visible > *:nth-child(9)  { transition-delay: 430ms; }
+.nb-stagger.is-visible > *:nth-child(n + 11) { transition-delay: 470ms; }
+
+/* Directional reveal, for sections that lead with an image or a side panel
+   rather than a symmetric grid. */
+.nb-reveal-left  { transform: translate3d(-26px, 0, 0); }
+.nb-reveal-right { transform: translate3d(26px, 0, 0); }
+.nb-reveal-zoom  { transform: scale(0.96); }
+
+.nb-reveal-left.is-visible,
+.nb-reveal-right.is-visible,
+.nb-reveal-zoom.is-visible {
+  transform: translate3d(0, 0, 0) scale(1);
+}
+
+/* ------------------------------------------------------- hero entrance ---
+ * The hero is above the fold, so it cannot wait for the scroll observer. It
+ * plays once on mount with fixed delays instead. Delays are per-element rather
+ * than a `.nb-stagger` container because the children are not siblings in a
+ * grid column.
+ */
+@keyframes nb-enter-up {
+  from { opacity: 0; transform: translate3d(0, 22px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+.nb-enter {
+  animation: nb-enter-up 0.75s var(--nb-ease) both;
+}
+
+/* Crossfade for the rotating headline. The element is re-keyed on each change
+   in JS, which restarts the animation — a class change alone would not, because
+   the class never differs between rotations. */
+@keyframes nb-line-in {
+  from { opacity: 0; transform: translate3d(0, 12px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+.nb-rotating-line {
+  display: inline-block;
+  animation: nb-line-in 0.55s var(--nb-ease) both;
+}
+
 /* -------------------------------------------------------- reduced motion */
 
 @media (prefers-reduced-motion: reduce) {
@@ -379,15 +514,43 @@
     opacity: 1 !important;
     transform: none !important;
   }
+
+  /* Stagger children must also start visible, or the group stays invisible
+     while the container is force-shown. */
+  .nb-stagger > * {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
 }
 
 /* ----------------------------------------------------------------- hero */
 
 .nb-hero {
   position: relative;
-  padding-top: clamp(40px, 6vw, 72px);
-  padding-bottom: clamp(56px, 8vw, 104px);
+  /* The hero is a viewport-height moment: it must fit, with its CTAs visible,
+     without scrolling. Padding is capped and the block is allowed to shrink on
+     short viewports rather than pushing the actions below the fold. */
+  padding-top: clamp(24px, 4vh, 56px);
+  padding-bottom: clamp(28px, 5vh, 64px);
   isolation: isolate;
+}
+
+/* Short laptop viewports (the common 1366x768 / 1280x720 case) lose the padding
+   before they lose the message. The content itself is unchanged, so this only
+   reclaims whitespace - it never hides anything. */
+@media (max-height: 780px) {
+  .nb-hero {
+    padding-top: clamp(16px, 3vh, 32px);
+    padding-bottom: clamp(20px, 4vh, 40px);
+  }
+  .nb-hero .nb-h1 {
+    font-size: clamp(2rem, 5.4vw, 3.25rem);
+  }
+  .nb-hero .nb-h2,
+  .nb-hero .nb-h3 {
+    font-size: clamp(1.5rem, 3vw, 2rem);
+  }
 }
 
 .nb-hero__glow {
@@ -449,6 +612,34 @@
   -webkit-backdrop-filter: saturate(180%) blur(14px);
   border-bottom: 1px solid transparent;
   transition: border-color 0.3s var(--nb-ease), box-shadow 0.3s var(--nb-ease);
+}
+
+/* The header row must never clip. An earlier fix set `overflow: hidden` on the
+   link row, which did not solve the overflow - it silently truncated the links
+   mid-word ("Discover" became "cover"). The row is now allowed to keep its
+   natural width and the breakpoint above is set from a measurement of it, so it
+   either fits or collapses to the menu button. It never truncates. */
+.nb-nav .nb-container {
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+
+.nb-nav-desktop {
+  flex-shrink: 0;
+}
+
+/* Laptop band: 1180-1440px is where a 1280x720 or 1366x768 screen lands. The
+   full nav fits here, but only at a tighter tracking than desktop. Shrinking
+   the type keeps all eight links readable instead of swapping them for a
+   hamburger, which is a downgrade on the most common laptop width. */
+@media (min-width: 1181px) and (max-width: 1440px) {
+  .nb-nav .nb-container {
+    gap: 14px;
+  }
+  .nb-nav__link {
+    font-size: 0.8125rem;
+    letter-spacing: -0.005em;
+  }
 }
 
 /* Shadow only once scrolled, per the brief. */
@@ -632,10 +823,13 @@
 
 /* --------------------------------------------------- desktop vs mobile */
 
-/* One breakpoint for the whole header. The centre nav plus three right-hand
-   controls stop fitting well before 1080px, and squeezing them produces the
-   overlapping text the brief rules out. */
-@media (max-width: 1080px) {
+/* One breakpoint for the whole header, measured rather than guessed.
+   The centre nav plus the language selector, theme toggle and the two auth
+   buttons needed ~1300px of the 1200px content column before they started to
+   overlap. The 1180-1440 band above now tightens the link type so they fit from
+   1181px, and 1180 is where the row genuinely cannot hold them and the menu
+   button is the honest answer. */
+@media (max-width: 1180px) {
   .nb-nav-desktop {
     display: none !important;
   }
@@ -644,7 +838,7 @@
   }
 }
 
-@media (min-width: 1081px) {
+@media (min-width: 1181px) {
   .nb-nav-mobile {
     display: none !important;
   }
@@ -671,14 +865,20 @@
   z-index: 200;
   padding: 10px 16px;
   border-radius: 10px;
-  background: var(--nb-ink);
+  /* Dark ink in both themes. `--nb-ink` inverts to a near-white in dark mode,
+     which put this white label on a near-white chip: 1.13:1, and the link was
+     unreadable exactly when a keyboard user needed it. */
+  background: #16233c;
   color: #fff;
   font-weight: 600;
   text-decoration: none;
   transition: top 0.2s var(--nb-ease);
 }
 
-.nb-skip-link:focus {
+/* :focus-visible, not :focus. Plain `:focus` also fires on mouse clicks, so
+   clicking anywhere in the page shoved this chip on-screen at the top-left,
+   overlapping the header. Keyboard focus is the only case that needs it. */
+.nb-skip-link:focus-visible {
   top: 12px;
 }
 
@@ -704,19 +904,48 @@
 .dark .nb {
   --nb-bg: #0d1220;
   --nb-bg-soft: #141a2c;
-  --nb-surface: #1a2136;
+--nb-surface: #1a2136;
   --nb-line: #273049;
+
+  /* Dark counterparts. These MUST differ from the light values: the whole point
+     of defining them is that the light fallbacks were being applied in dark
+     mode, which is what broke text contrast. */
+  --nb-surface-soft: #202740;
+  --nb-surface-sunk: #232323;
+  --nb-border: #2f3955;
 
   --nb-ink: #edf1fb;
   --nb-ink-soft: #a7b1cc;
-  --nb-ink-faint: #6e7a9a;
+  /* Was #6e7a9a, which measures 4.37:1 on the dark ground - just under AA for
+     the 16px legal body copy that uses it. Nudged to the first value clearing
+     4.62:1 on the ground and on the raised card surface. */
+  --nb-ink-faint: #868d9f;
 
   --nb-blue: #7b96ff;
   --nb-blue-deep: #c9d5ff;
   --nb-cyan: #3ec9de;
   --nb-violet: #a28cff;
   --nb-purple: #b78ffb;
-  --nb-pink: #f278a8;
+--nb-pink: #f278a8;
+
+  /* Dark-theme solid variant for white-text fills. Same reasoning as the light
+     pair: the dark hues are brighter still (cyan only 1.98:1 against white), so
+     they are taken down to clear 4.5:1 - cyan 4.66, lilac 4.63, rose 4.68.
+     Declared here because the dark block redefines the hue tokens but never
+     redefined the gradients, so the light --nb-grad-*-solid values would
+     otherwise leak through unchanged. */
+  --nb-grad-brand-solid: linear-gradient(135deg, #2b4fd8 0%, #277f8d 52%, #8366b4 100%);
+  --nb-grad-warm-solid: linear-gradient(135deg, #2b4fd8 0%, #7968be 60%, #b0577a 100%);
+
+  /* Dark cards run the same CTA hues the other direction: the light-theme values
+     drop to ~3.27:1 against the dark card, so each is taken UP to the first
+     value clearing 4.5:1 (rose 4.67, cyan 4.72, lilac 4.63, green 4.64). */
+  --nb-cta-blue: #7b96ff;
+  --nb-cta-rose: #c77695;
+  --nb-cta-cyan: #499ba7;
+  --nb-cta-violet: #a28cff;
+  --nb-cta-lilac: #9584c7;
+  --nb-cta-green: #409f71;
 
   --nb-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.42), 0 2px 8px rgba(0, 0, 0, 0.3);
   --nb-shadow: 0 2px 6px rgba(0, 0, 0, 0.46), 0 12px 32px -12px rgba(0, 0, 0, 0.56);
@@ -772,4 +1001,1084 @@
 
 .dark .nb-modal__backdrop {
   background: rgba(0, 0, 0, 0.62);
+}
+
+/* =============================================================================
+   PRISM LAYER
+   The landing page already carried the violet/cyan glow language; this makes it
+   a single deliberate material instead of scattered highlights. Depth comes
+   from a prismatic hairline, a drifting aurora and real 3D tilt on the cards a
+   visitor is meant to touch.
+   ============================================================================= */
+
+.nb-prism {
+  position: relative;
+  isolation: isolate;
+}
+
+/* Multi-hued hairline, drawn with a masked gradient so it costs no layout. */
+.nb-prism::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    135deg,
+    rgba(167, 139, 250, 0.6) 0%,
+    rgba(244, 114, 182, 0.5) 30%,
+    rgba(56, 189, 248, 0.55) 58%,
+    rgba(52, 211, 153, 0.45) 80%,
+    rgba(167, 139, 250, 0.6) 100%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.nb-aurora {
+  position: absolute;
+  inset: -25%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(36% 40% at 20% 24%, rgba(167, 139, 250, 0.38) 0%, transparent 62%),
+    radial-gradient(32% 36% at 80% 20%, rgba(56, 189, 248, 0.34) 0%, transparent 64%),
+    radial-gradient(38% 42% at 66% 80%, rgba(244, 114, 182, 0.3) 0%, transparent 66%),
+    radial-gradient(30% 34% at 28% 84%, rgba(52, 211, 153, 0.26) 0%, transparent 64%);
+  filter: blur(30px);
+}
+
+/* 3D tilt. Perspective lives on the grid, rotation on the card, so siblings do
+   not inherit each other's transform. */
+.nb-tilt-grid {
+  perspective: 1100px;
+}
+
+.nb-tilt {
+  transform-style: preserve-3d;
+  transition:
+    transform 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.3s ease;
+  will-change: transform;
+}
+
+.nb-tilt:hover {
+  transform: perspective(1100px) rotateX(6deg) rotateY(-7deg) translateZ(14px);
+  box-shadow: var(--nb-shadow-lg);
+}
+
+/* Content inside a tilting card lifts further, which is what actually sells the
+   depth: the gap between the layers reads as parallax. */
+.nb-tilt > * {
+  transform: translateZ(24px);
+  transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.nb-tilt:hover > * {
+  transform: translateZ(38px);
+}
+
+/* The product mock gets a slow float so the hero has one living element. */
+.nb-float {
+  animation: nbFloat 7s ease-in-out infinite alternate;
+}
+
+@keyframes nbFloat {
+  from { transform: translate3d(0, 0, 0) rotateX(0deg) rotateY(0deg); }
+  to   { transform: translate3d(0, -14px, 0) rotateX(2.5deg) rotateY(-3deg); }
+}
+
+@keyframes nbAuroraDrift {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(2.5%, -3%, 0) scale(1.07); }
+  100% { transform: translate3d(-2.5%, 2%, 0) scale(1.02); }
+}
+
+.nb-aurora-drift { animation: nbAuroraDrift 24s ease-in-out infinite alternate; }
+
+/* Interactive gradient text, reserved for headlines and figures. */
+.nb-prism-text {
+  background-image: linear-gradient(
+    100deg,
+    var(--nb-indigo) 0%,
+    #a78bfa 30%,
+    #f472b6 56%,
+    #38bdf8 80%,
+    var(--nb-indigo) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nb-float,
+  .nb-aurora-drift {
+    animation: none;
+  }
+  .nb-tilt:hover,
+  .nb-tilt:hover > * {
+    transform: none;
+  }
+}
+
+/* A "sunken" card: one step below the surrounding surface so it reads as inset
+   rather than raised. Needs an explicit dark value because the element text
+   colour is theme-aware, so a single light background is unreadable at night. */
+[data-nb-sunken] {
+  background: #f1f5f9;
+}
+
+.dark [data-nb-sunken] {
+  background: #232323;
+}
+
+/* =================================================================
+   Hero motion backdrop
+
+   A continuously moving layer behind the hero so the page reads as alive
+   on load, rather than a static wash that only reacts on hover.
+
+   Deliberately built from transform/opacity animation on blurred blobs
+   instead of a video file. Three reasons: it ships no binary, it costs
+   nothing to download, and it stays crisp on any display density. A real
+   clip can still be dropped in on top (see .nb-motion-video) without
+   touching anything below.
+
+   Contrast note: this layer sits BEHIND the hero copy, so its opacity is
+   capped low on purpose. The hero text is the product and has already been
+   driven to AA; a decorative wash must never be the thing that breaks it.
+   Peak blob alpha is 0.3 in the light theme and 0.34 at night, against an
+   existing aurora that already runs up to 0.38.
+   ================================================================= */
+
+.nb-hero__motion {
+  position: absolute;
+  /* Overhangs the section on all sides so the parallax drift never exposes
+     an unpainted edge. */
+  inset: -14% -8% -22%;
+  z-index: -2;
+  pointer-events: none;
+  overflow: hidden;
+  /* Written by the rAF-throttled scroll handler in HeroMotion. Transform-only
+     so scrolling never invalidates layout. */
+  transform: translate3d(0, var(--nb-motion-y, 0px), 0);
+  will-change: transform;
+}
+
+/* Optional real video, under the procedural mesh. Hidden entirely unless a
+   source is supplied, so the default build makes no network request for it. */
+.nb-motion-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.34;
+  filter: saturate(1.15);
+}
+
+.nb-motion-mesh {
+  position: absolute;
+  inset: 0;
+}
+
+.nb-motion-blob {
+  position: absolute;
+  display: block;
+  border-radius: 50%;
+  filter: blur(48px);
+  opacity: var(--nb-blob-o, 0.26);
+  will-change: transform;
+  animation: nbMeshDrift var(--nb-blob-dur, 26s) var(--nb-blob-ease, ease-in-out)
+    var(--nb-blob-delay, 0s) infinite alternate;
+}
+
+.nb-motion-blob--a {
+  --nb-blob-dur: 27s;
+  --nb-blob-delay: -4s;
+  width: 52%;
+  height: 74%;
+  top: -8%;
+  left: -6%;
+  background: radial-gradient(circle at 38% 38%, rgba(43, 79, 216, 0.95), rgba(43, 79, 216, 0) 70%);
+}
+
+.nb-motion-blob--b {
+  --nb-blob-dur: 33s;
+  --nb-blob-delay: -11s;
+  width: 46%;
+  height: 68%;
+  top: 2%;
+  right: -8%;
+  background: radial-gradient(circle at 52% 44%, rgba(34, 184, 207, 0.9), rgba(34, 184, 207, 0) 70%);
+}
+
+.nb-motion-blob--c {
+  --nb-blob-dur: 30s;
+  --nb-blob-delay: -19s;
+  width: 44%;
+  height: 62%;
+  bottom: -10%;
+  left: 22%;
+  background: radial-gradient(circle at 50% 50%, rgba(167, 139, 250, 0.88), rgba(167, 139, 250, 0) 72%);
+}
+
+.nb-motion-blob--d {
+  --nb-blob-dur: 36s;
+  --nb-blob-delay: -27s;
+  width: 38%;
+  height: 54%;
+  bottom: 2%;
+  right: 16%;
+  background: radial-gradient(circle at 50% 50%, rgba(236, 106, 156, 0.8), rgba(236, 106, 156, 0) 72%);
+}
+
+/* A single slow conic sweep. Kept very faint: at higher alpha this is the
+   first thing that starts banding on 8-bit displays. */
+.nb-motion-beam {
+  position: absolute;
+  inset: -30%;
+  background: conic-gradient(
+    from 0deg at 50% 50%,
+    transparent 0deg,
+    rgba(124, 92, 240, 0.11) 70deg,
+    transparent 150deg,
+    rgba(34, 184, 207, 0.1) 240deg,
+    transparent 330deg
+  );
+  filter: blur(26px);
+  animation: nbBeamSpin 68s linear infinite;
+}
+
+/* Film grain. A static SVG turbulence tile rather than an animated one: noise
+   that changes every frame is pure cost on a layer that is already animating,
+   and the fixed grain still removes the gradient banding underneath. */
+.nb-motion-grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/></filter><rect width='140' height='140' filter='url(%23n)'/></svg>");
+  background-size: 140px 140px;
+  mix-blend-mode: overlay;
+}
+
+.dark .nb-motion-grain {
+  opacity: 0.07;
+}
+
+/* Durations are coprime and every blob starts at a negative delay, so the mesh
+   never returns to the same arrangement - the loop point is not visible. */
+@keyframes nbMeshDrift {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(6%, -7%, 0) scale(1.12);
+  }
+  66% {
+    transform: translate3d(-5%, 6%, 0) scale(0.94);
+  }
+  100% {
+    transform: translate3d(3%, 3%, 0) scale(1.06);
+  }
+}
+
+@keyframes nbBeamSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.dark .nb-motion-blob {
+  filter: blur(56px);
+  opacity: var(--nb-blob-o, 0.3);
+}
+
+.dark .nb-motion-blob--a { --nb-blob-o: 0.34; }
+.dark .nb-motion-blob--b { --nb-blob-o: 0.3; }
+.dark .nb-motion-blob--c { --nb-blob-o: 0.32; }
+.dark .nb-motion-blob--d { --nb-blob-o: 0.26; }
+
+/* =================================================================
+   Motion marquee
+
+   An infinite ticker. The list is duplicated once in the markup and the
+   track is translated by exactly -50%, which is what makes the wrap
+   seamless: the copy leaving the left edge is the copy entering the right.
+   ================================================================= */
+
+.nb-marquee {
+  position: relative;
+  display: flex;
+  overflow: hidden;
+  padding: 14px 0;
+  border-top: 1px solid var(--nb-line);
+  border-bottom: 1px solid var(--nb-line);
+  background: var(--nb-bg-soft);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+}
+
+.nb-marquee__track {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 34px;
+  padding-right: 34px;
+  animation: nbMarquee 38s linear infinite;
+  will-change: transform;
+}
+
+.nb-marquee:hover .nb-marquee__track {
+  animation-play-state: paused;
+}
+
+.nb-marquee__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--nb-ink-soft);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.nb-marquee__item:hover,
+.nb-marquee__item:focus-visible {
+  color: var(--nb-blue);
+}
+
+.nb-marquee__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--nb-marquee-accent, var(--nb-blue));
+  flex-shrink: 0;
+}
+
+@keyframes nbMarquee {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Motion off means the blobs sit still, the beam stops spinning and the
+     marquee becomes a plain static row of links rather than a dead ticker.
+     It is hidden here and re-laid-out as a wrap grid below, so the links
+     stay reachable instead of just disappearing. */
+  .nb-motion-blob,
+  .nb-motion-beam,
+  .nb-marquee__track {
+    animation: none;
+  }
+  .nb-hero__motion {
+    transform: none;
+  }
+  .nb-marquee {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+  .nb-marquee__track {
+    flex-wrap: wrap;
+    gap: 10px 22px;
+    padding: 0;
+  }
+/* Items 1-12 are the real list; 13-24 are the seamless-loop
+     duplicate and must be dropped, or reduced-motion users read
+     everything twice. */
+  .nb-marquee__item:nth-child(n + 13) {
+    display: none;
+  }
+}
+
+/* =================================================================
+   3D interaction layer
+
+   Paired with components/landing/motion3d.tsx, which only ever writes
+   the --nb-rx / --nb-ry / --nb-px / --nb-py custom properties. All of
+   the actual 3D happens here.
+
+   Every rule animates transform or opacity only, and every one is
+   mirrored in the reduced-motion block at the end of this file.
+   ================================================================= */
+
+.nb-3d-scene {
+  /* A parent perspective, for cards that hold several independently
+     tilting children and should share one vanishing point. */
+  perspective: 1400px;
+  perspective-origin: 50% 40%;
+}
+
+/* ------------------------------------------------------------ tilt card */
+
+.nb-tilt-card {
+  position: relative;
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  /* perspective() as a transform function applies the vanishing point to the
+     element itself, so these cards need no positioned parent to look 3D. */
+  transform: perspective(1200px)
+    rotateX(var(--nb-rx, 0deg))
+    rotateY(var(--nb-ry, 0deg))
+    translateZ(0);
+  transform-style: preserve-3d;
+  transition:
+    transform 0.42s var(--nb-ease),
+    box-shadow 0.42s var(--nb-ease),
+    border-color 0.3s ease;
+  will-change: transform;
+}
+
+/* The card's own contents ride forward on Z so the whole object gains depth
+   rather than just looking like a rotated photograph of itself. */
+.nb-tilt-card > * {
+  transform: translateZ(26px);
+  transition: transform 0.42s var(--nb-ease);
+}
+
+.nb-tilt-card:hover > *,
+.nb-tilt-card:focus-visible > * {
+  transform: translateZ(44px);
+}
+
+/* Click. This is a real 3D press — the face tips away from the viewer and
+   drops below the surface — and it is pure CSS on :active, so the navigation
+   still happens on the same click with nothing delayed or suppressed. */
+.nb-tilt-card:active {
+  transform: perspective(1200px) rotateX(7deg) rotateY(0deg)
+    scale(0.962) translateZ(-14px);
+  transition-duration: 0.09s;
+}
+
+/* Pointer-tracked sheen. Kept on soft-light so it lifts the surface without
+   shifting the perceived contrast of the text sitting on it. */
+.nb-tilt-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(
+    58% 58% at var(--nb-px, 50%) var(--nb-py, 50%),
+    rgba(255, 255, 255, 0.30),
+    transparent 72%
+  );
+  mix-blend-mode: soft-light;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+
+.nb-tilt-card:hover::after,
+.nb-tilt-card:focus-visible::after {
+  opacity: 1;
+}
+
+/* ------------------------------------------------------------- flip card */
+
+.nb-flip {
+  perspective: 1400px;
+  perspective-origin: 50% 45%;
+}
+
+.nb-flip__inner {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transform-style: preserve-3d;
+  transition: transform 0.72s var(--nb-ease);
+  border-radius: var(--nb-radius);
+}
+
+.nb-flip.is-flipped .nb-flip__inner {
+  transform: rotateY(180deg);
+}
+
+.nb-flip__face {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 22px;
+  border-radius: var(--nb-radius);
+  border: 1px solid var(--nb-line);
+  background: var(--nb-surface);
+  box-shadow: var(--nb-shadow);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  overflow: hidden;
+}
+
+/* The front face stays in flow so it sets the card's height; the back face
+   overlays it. Without that the container would collapse to nothing, since
+   both faces are absolutely positioned in the usual flip-card recipe. */
+.nb-flip__face--front {
+  position: relative;
+  height: 100%;
+}
+
+.nb-flip__face--back {
+  position: absolute;
+  inset: 0;
+  /* Pre-rotated, so that when the parent turns 180 degrees this face ends up
+     square to the viewer rather than mirrored. */
+  transform: rotateY(180deg);
+  background: var(--nb-surface);
+  justify-content: center;
+}
+
+.nb-flip__hint {
+  margin-top: auto;
+  padding-top: 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--nb-ink-faint);
+}
+
+.nb-flip__inner:focus-visible {
+  outline: 3px solid var(--nb-blue);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Cards still change colour and elevation on hover — that is feedback, not
+     motion — but nothing rotates, presses or flips. */
+  .nb-tilt-card,
+  .nb-tilt-card > *,
+  .nb-flip__inner {
+    transition:
+      box-shadow 0.2s ease,
+      border-color 0.2s ease,
+      background-color 0.2s ease;
+  }
+  .nb-tilt-card,
+  .nb-tilt-card:active {
+    transform: none;
+  }
+  .nb-tilt-card > *,
+  .nb-tilt-card:hover > *,
+  .nb-tilt-card:focus-visible > * {
+    transform: none;
+  }
+  .nb-flip__inner,
+  .nb-flip.is-flipped .nb-flip__inner {
+    transform: none;
+  }
+  .nb-flip__face {
+    backface-visibility: visible;
+    -webkit-backface-visibility: visible;
+  }
+  /* A flip that does not flip is just two overlapping cards, so under reduced
+     motion only the active face is shown. */
+  .nb-flip__face--back {
+    display: none;
+  }
+  .nb-flip.is-flipped .nb-flip__face--front {
+    display: none;
+  }
+  .nb-flip.is-flipped .nb-flip__face--back {
+    display: flex;
+  }
+  .nb-tilt-card::after {
+    display: none;
+  }
+}
+
+/* =================================================================
+   New landing page
+
+   Layout and motion for NewHero / NewSections. Same tokens, same
+   easing, same reduced-motion contract as the blocks above.
+   ================================================================= */
+
+.nb-hero--v2 {
+  position: relative;
+  padding-top: clamp(28px, 5vh, 68px);
+  padding-bottom: clamp(34px, 6vh, 78px);
+  isolation: isolate;
+}
+
+.nb-hero__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.7fr);
+  gap: clamp(24px, 3vw, 44px);
+  align-items: center;
+}
+
+.nb-hero__copy {
+  position: relative;
+  z-index: 1;
+}
+
+.nb-hero__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 18px;
+}
+
+/* Slow breathing dot. Sells "this is live" without the word being a lie —
+   it marks that the platform is running, not that a person is watching. */
+.nb-hero__pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--nb-blue);
+  animation: nbPulse 2.6s ease-in-out infinite;
+}
+
+@keyframes nbPulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.45);
+    opacity: 0.55;
+  }
+}
+
+.nb-hero__title {
+  margin: 0;
+  /* Slightly tighter than the old hero: the words are separate spans now, so
+     they need a defined line box to stagger against. */
+  line-height: 1.04;
+}
+
+/* Each word tips up into place rather than fading. transform-origin is the
+   bottom edge so the words hinge upward like type being set. */
+.nb-hero__word {
+  display: inline-block;
+  transform-origin: 50% 100%;
+  animation: nbWordIn 0.82s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+.nb-hero__word--accent {
+  background-image: var(--nb-grad-brand);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@keyframes nbWordIn {
+  from {
+    opacity: 0;
+    transform: perspective(900px) translate3d(0, 26px, -60px) rotateX(-72deg);
+  }
+  to {
+    opacity: 1;
+    transform: perspective(900px) translate3d(0, 0, 0) rotateX(0deg);
+  }
+}
+
+.nb-hero__rotator {
+  margin: 22px 0 0;
+  min-height: 1.5em;
+  font-size: clamp(1rem, 2.2vw, 1.25rem);
+  font-weight: 600;
+  color: var(--nb-blue);
+}
+
+/* Re-keyed on every change, so it replays: the outgoing word flips up and out
+   while the incoming one flips in. */
+.nb-hero__rotator-line {
+  display: inline-block;
+  transform-origin: 50% 100%;
+  animation: nbWordFlip 0.62s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+@keyframes nbWordFlip {
+  from {
+    opacity: 0;
+    transform: perspective(700px) rotateX(-88deg) translateZ(-40px);
+  }
+  60% {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+    transform: perspective(700px) rotateX(0deg) translateZ(0);
+  }
+}
+
+.nb-hero__lead {
+  margin: 14px 0 0;
+  max-width: 46ch;
+}
+
+.nb-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 32px;
+}
+
+.nb-hero__note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 28px 0 0;
+  font-size: 14px;
+  color: var(--nb-ink-faint);
+}
+
+.nb-hero__count {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 12px 0 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--nb-line);
+  background: var(--nb-surface);
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--nb-ink-soft);
+}
+
+/* ------------------------------------------------------------- cluster */
+
+.nb-hero__cluster {
+  position: relative;
+  min-height: 420px;
+}
+
+.nb-event-card {
+  position: absolute;
+  width: 218px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid var(--nb-line);
+  background: var(--nb-surface);
+  box-shadow: var(--nb-shadow-lg);
+  animation-fill-mode: both;
+}
+
+.nb-event-card__row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.nb-event-card__swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+.nb-event-card__title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--nb-ink);
+  /* Two lines max, so one long event title cannot stretch the absolutely
+     positioned card and break the cluster's layout. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.nb-event-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--nb-ink-faint);
+}
+
+.nb-event-card__live {
+  color: #e11d48;
+}
+
+/* --------------------------------------------------------- section head */
+
+.nb-section__head {
+  max-width: 60ch;
+  margin: 0 0 clamp(24px, 3vw, 40px);
+}
+
+.nb-section__head .nb-eyebrow {
+  margin: 0 0 10px;
+}
+
+.nb-section__head .nb-display {
+  margin: 0;
+}
+
+.nb-section__head .nb-body {
+  margin: 12px 0 0;
+}
+
+/* ---------------------------------------------------------- discovery */
+
+.nb-discovery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+  gap: 12px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.nb-discovery__card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 62px;
+  padding: 12px 16px;
+  border-radius: var(--nb-radius);
+  border: 1px solid var(--nb-line);
+  background: var(--nb-surface);
+  box-shadow: var(--nb-shadow-sm);
+  font-weight: 650;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  color: var(--nb-ink);
+}
+
+.nb-discovery__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.nb-discovery__label {
+  transform: translateZ(30px);
+}
+
+.nb-discovery__arrow {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--nb-ink-faint);
+  transform: translateZ(30px);
+  transition: transform 0.32s var(--nb-ease), color 0.32s ease;
+}
+
+/* The arrow leads on hover, in Z as well as X — it lifts toward the viewer
+   rather than sliding, which is what sells the depth. */
+.nb-discovery__card:hover .nb-discovery__arrow,
+.nb-discovery__card:focus-visible .nb-discovery__arrow {
+  transform: translateZ(52px) translateX(4px);
+  color: var(--nb-blue);
+}
+
+/* ------------------------------------------------------------ features */
+
+.nb-feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(272px, 1fr));
+  gap: 16px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.nb-feature {
+  height: 100%;
+}
+
+.nb-feature__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  flex-shrink: 0;
+  transform: translateZ(34px);
+}
+
+.nb-feature__title {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--nb-ink);
+  transform: translateZ(28px);
+}
+
+.nb-feature__lead {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--nb-ink-soft);
+  transform: translateZ(22px);
+}
+
+/* The cue is what tells a visitor the card is interactive at all. Without it
+   a 3D flip is an undiscoverable affordance. */
+.nb-feature__cue {
+  margin-top: auto;
+  padding-top: 10px;
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--nb-blue);
+  transform: translateZ(24px);
+}
+
+.nb-feature__detail {
+  font-size: 14.5px;
+  line-height: 1.62;
+  color: var(--nb-ink);
+}
+
+/* --------------------------------------------------------------- steps */
+
+.nb-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.nb-step {
+  position: relative;
+  padding: 24px 22px;
+  border-radius: var(--nb-radius);
+  border: 1px solid var(--nb-line);
+  background: var(--nb-surface);
+  box-shadow: var(--nb-shadow-sm);
+  transform: translateZ(0);
+  transition: transform 0.42s var(--nb-ease), box-shadow 0.42s var(--nb-ease);
+}
+
+.nb-step:hover {
+  transform: perspective(1200px) translateZ(34px) rotateX(3deg);
+  box-shadow: var(--nb-shadow-lg);
+}
+
+.nb-step__n {
+  font-family: var(--nb-font-display, inherit);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--nb-blue);
+}
+
+.nb-step__title {
+  margin: 12px 0 0;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--nb-ink);
+}
+
+.nb-step__body {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--nb-ink-soft);
+}
+
+/* ----------------------------------------------------------------- cta */
+
+.nb-cta {
+  padding: clamp(28px, 4vw, 52px);
+  border-radius: var(--nb-radius-lg);
+  border: 1px solid var(--nb-line);
+  background: var(--nb-surface);
+  box-shadow: var(--nb-shadow);
+  text-align: center;
+}
+
+.nb-cta .nb-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 12px;
+}
+
+.nb-cta .nb-display {
+  margin: 0;
+}
+
+.nb-cta .nb-body {
+  margin: 14px auto 0;
+  max-width: 56ch;
+}
+
+.nb-cta__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 26px;
+}
+
+/* ------------------------------------------------------- 3d press button */
+
+/* A real 3D press on the primary actions. Same reasoning as the tilt card:
+   :active only, so the click still navigates with nothing delayed. */
+.nb-press {
+  transform: perspective(900px) translateZ(0);
+  transition:
+    transform 0.26s var(--nb-ease),
+    box-shadow 0.26s var(--nb-ease),
+    background-color 0.26s ease;
+  will-change: transform;
+}
+
+.nb-press:hover {
+  transform: perspective(900px) translateZ(10px);
+}
+
+.nb-press:active {
+  transform: perspective(900px) translateZ(-22px) rotateX(10deg) scale(0.975);
+  transition-duration: 0.08s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nb-hero__word,
+  .nb-hero__rotator-line,
+  .nb-hero__pulse {
+    animation: none;
+  }
+  .nb-press,
+  .nb-press:hover,
+  .nb-press:active,
+  .nb-step,
+  .nb-step:hover {
+    transform: none;
+  }
+  .nb-feature__icon,
+  .nb-feature__title,
+  .nb-feature__lead,
+  .nb-feature__cue,
+  .nb-discovery__label,
+  .nb-discovery__arrow {
+    transform: none;
+  }
 }

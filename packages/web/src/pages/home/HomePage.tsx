@@ -18,6 +18,9 @@ import { api } from '../../lib/api'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
 import { QUICK_ACTIONS } from '../../lib/discoveryData'
+import { AskNabriPanel } from './AskNabriPanel'
+import { Reveal } from '../../components/motion/Reveal'
+import { Tilt } from '../../components/motion/Tilt'
 
 interface Booking {
   id: string
@@ -113,6 +116,11 @@ export function HomePage() {
       <AnimatedPage>
         <div className="hero-indigo overflow-hidden">
           <div className="hero-sheen pointer-events-none absolute inset-0" />
+          {/* Slow prismatic wash: the only ambient colour on the screen, so the
+              hero reads as premium rather than decorated. */}
+          <div className="prism-aurora animate-prism-drift opacity-60" aria-hidden />
+          {/* One light sweep, to signal that the balance below is live. */}
+          <div className="prism-sweep animate-prism-sweep" aria-hidden />
           <div className="absolute -right-16 -top-24 h-72 w-72 rounded-full bg-[#D2F53C]/10 blur-3xl" />
           <div className="absolute -bottom-24 -left-16 h-64 w-64 rounded-full bg-white/5 blur-3xl" />
 
@@ -152,7 +160,12 @@ export function HomePage() {
         </div>
       </AnimatedPage>
 
+      <AnimatedPage delay={60}>
+        <AskNabriPanel />
+      </AnimatedPage>
+
       <AnimatedPage delay={100}>
+        <Reveal>
         <div>
           <div className="mb-4 flex items-center justify-between">
             <h2 className="section-title">Quick Actions</h2>
@@ -161,27 +174,33 @@ export function HomePage() {
             </Link>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {QUICK_ACTIONS.map((action) => {
+            {QUICK_ACTIONS.map((action, i) => {
               const Icon = action.label.includes('❤️') ? Sparkles : activityIcons[action.key] || Sparkles
               return (
-                <Link
-                  key={action.key}
-                  to={action.route}
-                  className="group rounded-2xl border border-surface-200 bg-white p-3 text-center shadow-sm transition hover:-translate-y-1 hover:shadow-md dark:border-surface-800 dark:bg-surface-900"
-                >
-                  <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-violet-600 text-white shadow-lg shadow-primary-500/20 mx-auto">
-                    <Icon className="w-5 h-5" />
-                  </div>
-                  <p className="text-xs sm:text-sm font-semibold">{action.label.replace(/^[^\w]*/g, '')}</p>
-                </Link>
+                <Reveal key={action.key} delay={i * 0.05} from="up">
+                  <Tilt max={10} lift={16} scale={1.04} glare>
+                    <Link
+                      to={action.route}
+                      className="group relative flex h-full flex-col items-center rounded-2xl border border-surface-200 bg-white p-3 text-center shadow-card transition-shadow hover:shadow-card-hover dark:border-surface-800 dark:bg-surface-900"
+                    >
+                      <span className="prism-chip mb-3 h-12 w-12 text-white shadow-lg shadow-primary-500/20">
+                        <Icon className="h-5 w-5" />
+                      </span>
+                      <p className="text-xs font-semibold sm:text-sm">
+                        {action.label.replace(/^[^\w]*/g, '')}
+                      </p>
+                    </Link>
+                  </Tilt>
+                </Reveal>
               )
             })}
           </div>
         </div>
+        </Reveal>
       </AnimatedPage>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <AnimatedPage delay={200} className="lg:col-span-2">
+        <AnimatedPage delay={200} className="lg:col-span-2"><Reveal>
           <GlassCard variant="elevated" padding="lg">
             <div className="flex items-center justify-between mb-6">
               <h2 className="section-title flex items-center gap-2">
@@ -215,16 +234,19 @@ export function HomePage() {
               ))}
             </div>
           </GlassCard>
+        </Reveal>
         </AnimatedPage>
 
-        <AnimatedPage delay={300}>
+        <AnimatedPage delay={300}><Reveal>
           <div className="space-y-6">
-            <GlassCard variant="elevated" padding="lg" className="bg-gradient-to-br from-primary-600 to-primary-700 text-white border-0">
+            <GlassCard variant="elevated" padding="lg" className="prism-ring border-0 bg-gradient-to-br from-primary-600 to-primary-700 text-white">
               <div className="flex items-center gap-2 mb-4">
                 <Wallet className="w-5 h-5 text-white/80" />
                 <span className="text-sm font-medium text-white/80">Wallet Balance</span>
               </div>
-              <p className="text-3xl font-bold font-display">₹{(wallet?.balance ?? 0).toLocaleString('en-IN')}</p>
+              <p className="prism-text animate-prism-breathe font-display text-3xl font-bold">
+                ₹{(wallet?.balance ?? 0).toLocaleString('en-IN')}
+              </p>
               <div className="flex gap-2 mt-4">
                 <Link to="/wallet/topup" className="flex-1 text-center py-2.5 rounded-xl bg-white/15 hover:bg-white/25 text-xs font-semibold transition-colors">
                   Top Up
@@ -250,10 +272,11 @@ export function HomePage() {
               </div>
             </GlassCard>
           </div>
+        </Reveal>
         </AnimatedPage>
       </div>
 
-      <AnimatedPage delay={350}>
+      <AnimatedPage delay={350}><Reveal>
         <GlassCard variant="elevated" padding="lg">
           <div className="flex items-center justify-between mb-4">
             <h2 className="section-title flex items-center gap-2">
@@ -288,6 +311,7 @@ export function HomePage() {
             </div>
           )}
         </GlassCard>
+      </Reveal>
       </AnimatedPage>
     </div>
   )

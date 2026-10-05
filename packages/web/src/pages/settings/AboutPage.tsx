@@ -9,11 +9,17 @@ const BUILD_NUMBER = '2026.07.19'
 export function AboutPage() {
   const navigate = useNavigate()
 
+  // These four used to navigate to /about/terms, /about/privacy,
+  // /about/data-safety and /about/community-guidelines. None of those paths are
+  // declared in App.tsx, so every one of them fell through to the catch-all
+  // route and silently dumped the user on the home page instead of showing a
+  // document. They now point at routes that exist: the dedicated /terms and
+  // /privacy pages, and the relevant anchored sections of the /legal hub.
   const links = [
-    { icon: FileText, label: 'Terms & Conditions', desc: 'Read our terms of service', action: () => navigate('/about/terms') },
-    { icon: Shield, label: 'Privacy Policy', desc: 'How we protect your data', action: () => navigate('/about/privacy') },
-    { icon: Lock, label: 'Data Safety', desc: 'How your data is collected and used', action: () => navigate('/about/data-safety') },
-    { icon: Scale, label: 'Community Guidelines', desc: 'Rules for using Nabri', action: () => navigate('/about/community-guidelines') },
+    { icon: FileText, label: 'Terms & Conditions', desc: 'Read our terms of service', action: () => navigate('/terms') },
+    { icon: Shield, label: 'Privacy Policy', desc: 'How we protect your data', action: () => navigate('/privacy') },
+    { icon: Lock, label: 'Data Safety', desc: 'How your data is collected and used', action: () => navigate('/legal#data') },
+    { icon: Scale, label: 'Community Guidelines', desc: 'Rules for using Nabri', action: () => navigate('/legal#prohibited') },
     { icon: Mail, label: 'Contact Us', desc: 'nabri.support@gmail.com', action: () => window.location.href = 'mailto:nabri.support@gmail.com' },
     { icon: Globe, label: 'Website', desc: 'www.nabri.app', action: () => window.open('https://www.nabri.app', '_blank') },
   ]

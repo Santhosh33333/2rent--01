@@ -1,9 +1,10 @@
 import { Link } from 'react-router-dom'
 import {
   LayoutDashboard, Users, ShieldCheck, Handshake,
-  Banknote, Flag, ScrollText, ArrowLeft, Settings, Percent, CalendarCheck, Wallet, Radio, Users2, CalendarDays, Layers, ShieldAlert, QrCode, Siren, FileSignature, LifeBuoy
+  Banknote, Flag, ScrollText, Settings, Percent, CalendarCheck, Wallet, Radio, Users2, CalendarDays, Layers, ShieldAlert, QrCode, Siren, FileSignature, LifeBuoy, Landmark
 } from 'lucide-react'
 import { RoleSwitcher } from '../../components/RoleSwitcher'
+import { AdminPageHeader, AdminShell } from '../../components/admin/AdminPageHeader'
 
 export function AdminPortalPage() {
   const sections = [
@@ -24,6 +25,7 @@ export function AdminPortalPage() {
     { path: '/admin/payments', title: 'Payment Center', desc: 'Transactions & cash stats', icon: Banknote },
     { path: '/admin/upi-verification', title: 'UPI Verification', desc: 'Verify manual UPI payments', icon: QrCode },
     { path: '/admin/topups', title: 'Wallet Top-ups', desc: 'Verify manual UPI top-ups & credit', icon: Wallet },
+    { path: '/admin/bank-statements', title: 'Bank Reconciliation', desc: 'Upload a statement, match & credit', icon: Landmark },
     { path: '/admin/reports', title: 'Reports', desc: 'Review user reports', icon: Flag },
   { path: '/admin/support', title: 'Support desk', desc: 'Answer user requests', icon: LifeBuoy },
     { path: '/admin/audit-logs', title: 'Audit Logs', desc: 'System activity logs', icon: ScrollText },
@@ -31,20 +33,15 @@ export function AdminPortalPage() {
     { path: '/admin/settings', title: 'Settings', desc: 'Platform configuration', icon: Settings },
   ]
 
-  return (
-    <div className="bg-gray-950 p-4 sm:p-6 rounded-3xl">
-      <div className="max-w-5xl mx-auto">
-        <div className="flex items-center gap-3 mb-8">
-          <Link to="/dashboard" className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition">
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold font-display text-white">Admin Portal</h1>
-            <p className="text-gray-400 text-sm mt-1">Manage your Nabri platform</p>
-          </div>
-          {/* Switch between admin / user / partner account views */}
-          <RoleSwitcher />
-        </div>
+return (
+    <AdminShell>
+      <AdminPageHeader
+        title="Admin Portal"
+        subtitle="Manage your Nabri platform"
+        backTo="/dashboard"
+        backLabel="Back to dashboard"
+        leading={<RoleSwitcher />}
+      />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {sections.map((s) => (
@@ -61,8 +58,7 @@ export function AdminPortalPage() {
             </Link>
           ))}
         </div>
-      </div>
-    </div>
+    </AdminShell>
   )
 }
 

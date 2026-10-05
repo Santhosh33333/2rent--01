@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { QrCode, Search, Check, X, HelpCircle, IndianRupee, User as UserIcon, Clock } from 'lucide-react'
 import { adminApi, assetUrl } from '../../lib/api'
+import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
 import { getErrorMessage } from '../../lib/error'
 
 interface UpiRow {
@@ -109,12 +110,14 @@ export function AdminUpiVerificationPage() {
   return (
     <div className="bg-surface-50 dark:bg-surface-950 p-4 md:p-6">
       <div className="max-w-5xl mx-auto">
-        <h1 className="text-2xl font-display font-bold text-surface-900 dark:text-white flex items-center gap-2">
-          <QrCode className="w-6 h-6 text-primary" /> UPI Verification
-        </h1>
-        <p className="text-sm text-surface-500 dark:text-surface-400 mt-1">
-          Users pay your personal UPI QR externally, then submit the UTR. Verify against your bank statement before confirming the booking.
-        </p>
+        {/* This page had no way back to the admin portal. The shared header
+            supplies the back link along with the title block. */}
+        <AdminPageHeader
+          title="UPI Verification"
+          subtitle="Users pay your personal UPI QR externally, then submit the UTR. Verify against your bank statement before confirming the booking."
+          tone="surface"
+          leading={<QrCode className="w-6 h-6 text-primary-600" aria-hidden />}
+        />
 
         {error ? <div className="mt-3 rounded-lg bg-red-900/30 text-red-300 px-3 py-2 text-sm">{error}</div> : null}
 
@@ -145,7 +148,7 @@ export function AdminUpiVerificationPage() {
             <button
               onClick={saveUpi}
               disabled={upiSaving}
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+              className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
             >
               {upiSaving ? 'Saving…' : 'Save UPI config'}
             </button>

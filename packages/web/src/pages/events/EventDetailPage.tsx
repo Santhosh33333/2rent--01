@@ -14,6 +14,7 @@ import { isSignedIn } from '../../lib/auth'
 import { directionsUrl } from '../../lib/maps'
 import { openExternalUrl } from '../../lib/externalLink'
 import { EventChat } from '../../components/events/EventChat'
+import { EventCostSheet } from '../../components/events/EventCostSheet'
 
 interface EventDetail {
   id: string
@@ -448,6 +449,14 @@ export function EventDetailPage() {
               {event.description || 'Details for this event have not been written yet.'}
             </p>
           </div>
+
+          {/* Cost sheet. The organizer sets one per-person amount and the total
+              is derived from it; attendees pay their own share from the wallet. */}
+          {event.status !== 'CANCELLED' && (
+            <div className="mt-6">
+              <EventCostSheet eventId={event.id} isOrganizer={event.isOrganizer === true} />
+            </div>
+          )}
 
           {/* Organizer */}
           {event.organizer && (

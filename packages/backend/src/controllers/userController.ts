@@ -12,6 +12,7 @@ import {
   PHONE_CHANGE_ADMIN_ONLY_MESSAGE,
   phoneVerificationState,
 } from "../services/phoneVisibility";
+import { selfDeletionGate, resolveFreezeUntil } from "../services/accountDeletionPolicy";
 
 export async function getProfile(req: AuthedRequest, res: Response): Promise<void> {
   try {
@@ -161,6 +162,15 @@ export async function uploadProfilePhoto(req: AuthedRequest, res: Response): Pro
 
 export async function deleteAccount(req: AuthedRequest, res: Response): Promise<void> {
   try {
+    // Self-service deletion is frozen for a fixed window; admins keep the ability
+    // to delete an account through PUT /admin/users/:id/status -> DEACTIVATED.
+    // Checked before any write so a refused request changes nothing at all.
+    const gate = selfDeletionGate(new Date(), resolveFreezeUntil(env.SELF_DELETION_FROZEN_UNTIL));
+    if (!gate.allowed) {
+      sendError(res, gate.message, 403, gate.code);
+      return;
+    }
+
     await prisma.user.update({
       where: { id: req.user!.userId },
       data: { status: "DEACTIVATED" },
@@ -168,6 +178,7 @@ export async function deleteAccount(req: AuthedRequest, res: Response): Promise<
     await prisma.session.deleteMany({ where: { userId: req.user!.userId } });
     sendSuccess(res, undefined, "Account deactivated.");
   } catch (err) {
+    console.error("deleteAccount error:", err);
     sendError(res, "Failed to delete account.", 500, "INTERNAL_ERROR");
   }
 }

@@ -18,6 +18,16 @@ import { LifeBuoy, Mail, MessageCircle, ShieldQuestion, ArrowRight, Clock } from
 const SUPPORT_EMAIL = 'nabri.support@gmail.com';
 const FOUNDER_EMAIL = 'founder_nabri@zohomail.in';
 
+/**
+ * `accent` fills the icon chip, so it stays a saturated brand colour and is
+ * never used as text.
+ *
+ * `ink` is the same hue resolved for text. It has to be a separate value: the
+ * raw accents above are chosen to read as a chip fill on a light card, and as
+ * text on the dark surface they fell to 2.8:1 — well under AA. These point at
+ * the existing `--nb-cta-*` ramp, which is already defined per theme and
+ * already carries AA against `--nb-surface` in both.
+ */
 const CHANNELS = [
   {
     icon: MessageCircle,
@@ -26,6 +36,7 @@ const CHANNELS = [
     cta: 'Open support',
     to: '/support',
     accent: 'var(--nb-blue)',
+    ink: 'var(--nb-cta-blue)',
   },
   {
     icon: Mail,
@@ -34,6 +45,7 @@ const CHANNELS = [
     cta: SUPPORT_EMAIL,
     href: `mailto:${SUPPORT_EMAIL}`,
     accent: '#0E9F6E',
+    ink: 'var(--nb-cta-green)',
   },
   {
     icon: ShieldQuestion,
@@ -42,6 +54,7 @@ const CHANNELS = [
     cta: FOUNDER_EMAIL,
     href: `mailto:${FOUNDER_EMAIL}`,
     accent: '#7C3AED',
+    ink: 'var(--nb-cta-violet)',
   },
 ] as const;
 
@@ -90,7 +103,7 @@ export function SupportSection() {
                     marginTop: 4,
                     fontSize: 13.5,
                     fontWeight: 650,
-                    color: channel.accent,
+                    color: channel.ink,
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: 6,

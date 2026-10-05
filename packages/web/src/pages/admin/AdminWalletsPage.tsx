@@ -1,7 +1,7 @@
 import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
-import { ArrowLeft, ChevronLeft, ChevronRight, FileDown, Wallet } from 'lucide-react'
+import { AdminPageHeader, AdminShell } from '../../components/admin/AdminPageHeader'
+import { ChevronLeft, ChevronRight, FileDown, Wallet } from 'lucide-react'
 import { adminApi } from '../../lib/api'
 import { exportTableToPdf } from '../../lib/pdfExport'
 
@@ -58,16 +58,11 @@ export function AdminWalletsPage() {
   }, [page, search])
 
   return (
-    <div className="bg-gray-950 p-4 sm:p-6 rounded-3xl">
-      <div className="max-w-5xl mx-auto">
-        <div className="flex items-center gap-3 mb-6">
-          <Link to="/admin/portal" className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition">
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold font-display text-white">Wallets</h1>
-            <p className="text-gray-400 text-sm mt-1">User wallet balances &amp; platform float</p>
-          </div>
+    <AdminShell>
+        <AdminPageHeader
+        title="Wallets"
+        subtitle="User wallet balances &amp; platform float"
+actions={
           <button
             onClick={() =>
               exportTableToPdf({
@@ -88,9 +83,8 @@ export function AdminWalletsPage() {
             className="ml-auto inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-gray-300 hover:text-white text-sm transition"
           >
             <FileDown className="w-4 h-4" /> PDF
-          </button>
-        </div>
-
+          </button>}
+        />
         <div className="bg-gray-800 rounded-xl p-4 mb-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gray-700 flex items-center justify-center">
@@ -179,8 +173,7 @@ export function AdminWalletsPage() {
             </div>
           </>
         )}
-      </div>
-    </div>
+    </AdminShell>
   )
 }
 

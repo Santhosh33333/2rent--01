@@ -429,7 +429,12 @@ export function EventsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    // This route is deliberately mounted OUTSIDE <Layout> (it is public, so an
+    // anonymous visitor can browse without an account), and <Layout> is what
+    // supplies the horizontal container for every other page. Without
+    // repeating that container here the header sat at x=0 and the search
+    // field ran the full width of the viewport, edge to edge.
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
       <PageHeader title="Events" subtitle="Discover walking events and meetups near you" action={
         <>
           <button

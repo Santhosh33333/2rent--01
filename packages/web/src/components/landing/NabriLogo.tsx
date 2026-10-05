@@ -7,6 +7,8 @@
  * SVG geometry so it stays crisp at every size and in both themes.
  */
 
+import { useTheme } from '../../lib/themeContext';
+
 export type NabriLogoSize = 'sm' | 'md' | 'lg' | 'xl';
 
 const MARK_SIZE: Record<NabriLogoSize, number> = {
@@ -78,10 +80,17 @@ export function NabriMark({
 /**
  * Mark plus wordmark. `tone` swaps the wordmark colour for dark surfaces
  * instead of inverting the mark, which would put white-on-white.
+ *
+ * `tone` now defaults to the ACTIVE theme rather than always 'light'. It used
+ * to be hardcoded, so every caller that omitted it - including the marketing
+ * header - rendered the light navy wordmark on the dark page, measuring 1.19:1
+ * against the near-black background. Because the colour was an inline style it
+ * outranked every stylesheet rule, so no CSS override could reach it; the fix
+ * has to be here. An explicit `tone` still wins.
  */
 export function NabriLogo({
   size = 'md',
-  tone = 'light',
+  tone,
   showWordmark = true,
   className = '',
 }: {
@@ -90,6 +99,8 @@ export function NabriLogo({
   showWordmark?: boolean;
   className?: string;
 }) {
+  const { theme } = useTheme();
+  const resolvedTone: 'light' | 'dark' = tone ?? (theme === 'dark' ? 'dark' : 'light');
   const px = typeof size === 'number' ? size : MARK_SIZE[size];
   const wordSize = Math.round(px * 0.62);
 
@@ -109,7 +120,7 @@ export function NabriLogo({
           fontWeight: 800,
           letterSpacing: '-0.03em',
           lineHeight: 1,
-          color: tone === 'dark' ? '#FFFFFF' : '#16233C',
+          color: resolvedTone === 'dark' ? '#FFFFFF' : '#16233C',
           fontFamily: "'Plus Jakarta Sans', 'Inter', ui-sans-serif, system-ui, sans-serif",
         }}
       >

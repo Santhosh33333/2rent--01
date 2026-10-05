@@ -214,6 +214,77 @@ const envSchema = z.object({
   // MOVIES_NOT_CONFIGURED and the app shows meetups only. Never fake data.
   TMDB_API_KEY: z.string().optional(),
 
+  // Catalogue shape. These were previously hardcoded to India on every request,
+  // which made the film list India-only by accident rather than by decision, and
+  // made "show more" impossible to reason about. Defaults keep the current
+  // behaviour; set TMDB_ORIGIN_COUNTRY to an empty value to drop the origin
+  // filter entirely and show theatrical releases worldwide.
+  TMDB_REGION: z.string().default("IN"),
+  TMDB_ORIGIN_COUNTRY: z.string().default("IN"),
+  // Original languages to keep, in priority order, comma separated.
+  //
+  // The app is built for Chennai, so the default is Tamil only. `region` is NOT a
+  // language filter - it only affects release-date certification - which is why
+  // the catalogue was showing Resident Evil and Spider-Man on a Tamil cinema app.
+  //
+  // TMDB's `with_original_language` rejects a comma list (it silently returns
+  // zero results) and only accepts a pipe for OR, so `ta,en` here becomes
+  // `ta|en` on the wire. Set it empty to drop the filter and show every language.
+  TMDB_LANGUAGES: z.string().default("ta"),
+  TMDB_INCLUDE_ADULT: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
+
+  // How far ahead "coming soon" reaches. A film releasing today has to have been
+  // listed before today, so this window is what guarantees that: anything inside
+  // it is visible for COMING_SOON_DAYS before its release, not on release day.
+  TMDB_COMING_SOON_DAYS: z.coerce.number().int().min(1).max(30).default(7),
+
+  // Days ahead for the wider "upcoming" shelf.
+  TMDB_UPCOMING_HORIZON_DAYS: z.coerce.number().int().min(7).max(365).default(120),
+
+  // How far BACK "now playing" reaches, in days.
+  //
+  // This is the setting that decides whether the shelf is honest. The query used
+  // to have an upper bound only (`primary_release_date.lte = today`) sorted by
+  // popularity, so it answered "the most popular Indian film of all time" and a
+  // 2021 release outranked a film that opened three days ago. A theatrical run
+  // in India is roughly 4-6 weeks, so 45 days is a window that still contains
+  // films genuinely in cinemas while dropping anything that finished its run.
+  TMDB_NOW_PLAYING_WINDOW_DAYS: z.coerce.number().int().min(7).max(180).default(45),
+
+  // Where "book tickets" sends people.
+  //
+  // NOT a search URL. BookMyShow has no public movie search endpoint - the
+  // header search is a JavaScript modal with no addressable URL - so the
+  // fabricated `https://in.bookmyshow.com/search?q=<title>` link that used to
+  // be hardcoded in the mapper returned 404 for every film. This is the real
+  // movies page, which resolves and asks the visitor for their city.
+  //
+  // Per-film deep links exist but need BookMyShow's internal EventCode
+  // (`/movies/drishyam-the-conclusion/ET00477911`), which TMDB does not expose,
+  // so they cannot be constructed from the data we have. Point this at a real
+  // partner booking page if the business gets partner API access.
+  TMDB_BOOKING_BASE_URL: z
+    .string()
+    .url()
+    .default("https://in.bookmyshow.com/movies"),
+
+  // How long a fetched feed stays fresh, and how often the proactive sync runs.
+  // The sync exists so a release is on the shelf with real data before the day
+  // it opens, instead of being fetched for the first time when people look.
+  TMDB_CACHE_TTL_MINUTES: z.coerce.number().int().min(5).max(1440).default(30),
+  TMDB_SYNC_INTERVAL_MINUTES: z.coerce.number().int().min(15).max(1440).default(360),
+
+  // Account deletion
+  //
+  // Absolute ISO date until which users cannot delete their own account. An
+  // administrator can always delete one through the admin status endpoint. See
+  // services/accountDeletionPolicy.ts - an unparseable value fails CLOSED (the
+  // freeze stays on) rather than opening deletion by accident.
+  SELF_DELETION_FROZEN_UNTIL: z.string().optional(),
+
   // AI gateway — all optional. Without AI_API_BASE + AI_API_KEY the LLM
   // features honestly report AI_NOT_CONFIGURED; rules-based AI (matching,
   // safety flags, assistant router, admin summary) works without any key.

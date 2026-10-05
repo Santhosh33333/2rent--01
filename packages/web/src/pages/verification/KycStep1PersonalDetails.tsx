@@ -12,6 +12,41 @@ import { GlassCard } from '../../components/GlassCard'
 // 18 is refused service, so the flow must stop at the very first step.
 const MIN_AGE = 18
 
+/**
+ * Reduce typed input to the ten digits the backend expects.
+ *
+ * Deliberately duplicated rather than imported. The server is the authority for
+ * what a valid number is (`services/phoneNumber.ts`), and the app has no way to
+ * import from the backend package. This is an input aid only: the server still
+ * re-validates and re-compares every submission, and if the two ever disagree
+ * the server wins and nothing unsafe gets through.
+ *
+ * THE COUNTRY CODE RULE, AND WHY IT IS NOT SIMPLER
+ * -------------------------------------------------
+ * The field shows a `+91` prefix, so people will type `+91` anyway - it is the
+ * reflex for an Indian phone number. Stripping non-digits alone is not enough:
+ * `+917121156906` becomes `917121156906`, and truncating that to ten digits
+ * yields `9171211569`, which is a DIFFERENT (and wrong) number. The user would
+ * type their number correctly and be told it did not match their profile.
+ *
+ * So the `91` is treated as a country code - but ONLY once more than ten digits
+ * have been entered. That condition is what keeps a genuine number that happens
+ * to begin `91` intact:
+ *
+ *   9123456780   typed as-is  -> 9123456780   (ten digits: a local number)
+ *   +91912345678 typed        -> 9123456780   (twelve: 91 is the code)
+ *
+ * A leading 0 (the Indian trunk prefix, `09820012345`) is dropped for the same
+ * reason. The two rules cannot collide: one applies above ten digits with a `91`
+ * prefix, the other at exactly eleven with a `0`.
+ */
+function toTenDigits(input: string): string {
+  let digits = String(input ?? '').replace(/\D/g, '')
+  if (digits.length > 10 && digits.startsWith('91')) digits = digits.slice(2)
+  else if (digits.length === 11 && digits.startsWith('0')) digits = digits.slice(1)
+  return digits.slice(0, 10)
+}
+
 function ageFromDob(dob: string): number | null {
   if (!dob) return null
   const birth = new Date(dob)
@@ -39,6 +74,8 @@ export function KycStep1PersonalDetails() {
     city: user?.city || '',
     country: user?.country || 'India',
     address: '',
+    // Pre-filled from the account, so the common case needs no typing at all.
+    phone: toTenDigits(user?.phone ?? ''),
   }))
 
   useEffect(() => {
@@ -73,11 +110,32 @@ export function KycStep1PersonalDetails() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
     edited.current = true
-    setFormData(prev => ({ ...prev, [name]: value }))
+    // Reduced as the user types, so a pasted or typed `+91 98765 43210` collapses
+    // to the ten digits the server expects. See toTenDigits for why the country
+    // code cannot simply be stripped.
+    const nextValue = name === 'phone' ? toTenDigits(value) : value
+    setFormData(prev => ({ ...prev, [name]: nextValue }))
   }
 
   const age = ageFromDob(formData.dateOfBirth)
   const underage = age !== null && age < MIN_AGE
+
+  /**
+   * Why the phone field is not acceptable, or null when it is.
+   *
+   * The rules mirror the server's, and deliberately stop where the server's stop:
+   * this validates SHAPE only. It does not try to detect sample numbers like
+   * 9999999999, because a browser-side guess at that would either let one
+   * through to the server or block a legitimate number, and the server already
+   * handles it correctly with a clear message.
+   */
+  const phoneProblem: string | null = (() => {
+    const value = formData.phone.trim()
+    if (!value) return 'Enter your 10-digit mobile number'
+    if (!/^\d{10}$/.test(value)) return 'Your mobile number must be exactly 10 digits'
+    if (!/^[6-9]/.test(value)) return 'Indian mobile numbers start with 6, 7, 8 or 9'
+    return null
+  })()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -93,6 +151,13 @@ export function KycStep1PersonalDetails() {
     // Hard stop: 18+ only, no proceeding to the next step.
     if (underage) {
       toast.error(`You must be at least ${MIN_AGE} years old to use Nabri`)
+      return
+    }
+    // Checked here purely to save a round trip. The server compares this against
+    // the number on the account and refuses a mismatch regardless of what the
+    // browser thought.
+    if (phoneProblem) {
+      toast.error(phoneProblem)
       return
     }
     if (submissionLock.current) return
@@ -187,6 +252,42 @@ export function KycStep1PersonalDetails() {
                 {underage
                   ? `You entered ${age} — you must be at least ${MIN_AGE} years old to use Nabri. You cannot continue.`
                   : `You must be at least ${MIN_AGE} years old to use Nabri.`}
+              </p>
+            </div>
+
+            {/* Mobile Number — must match the number on the account */}
+            <div>
+              <label htmlFor="kyc-phone" className="block text-sm font-medium text-surface-900 dark:text-white mb-2">
+                Mobile Number <span className="text-red-500">*</span>
+              </label>
+              <div className="flex items-stretch">
+                <span
+                  className="inline-flex items-center rounded-l-xl border border-r-0 border-surface-300 bg-surface-100 px-3 text-sm font-medium text-surface-600 dark:border-surface-700 dark:bg-surface-800 dark:text-surface-400"
+                  aria-hidden="true"
+                >
+                  +91
+                </span>
+                <input
+                  id="kyc-phone"
+                  type="tel"
+                  name="phone"
+                  inputMode="numeric"
+                  autoComplete="tel-national"
+                  maxLength={20}
+                  value={formData.phone}
+                  onChange={handleChange}
+                  placeholder="9876543210"
+                  className="input w-full rounded-l-none"
+                  required
+                  aria-invalid={Boolean(phoneProblem) || undefined}
+                  aria-describedby="phone-hint"
+                />
+              </div>
+              <p
+                id="phone-hint"
+                className={`text-xs mt-1 ${phoneProblem ? 'text-danger-600 dark:text-danger-400 font-medium' : 'text-surface-500'}`}
+              >
+                {phoneProblem ?? 'Your 10-digit number. The +91 above is added for you — it must match the number on your profile.'}
               </p>
             </div>
 

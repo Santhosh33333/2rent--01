@@ -13,6 +13,7 @@
  */
 import crypto from "crypto";
 import { env } from "../config/env";
+import { getStringConfig } from "./pricingEngine";
 import * as cashfreeService from "./cashfreeService";
 
 /**
@@ -96,6 +97,61 @@ export function isGatewayConfigured(provider: Provider = ACTIVE_PROVIDER): boole
   const appId = (env.CASHFREE_APP_ID || "").trim();
   const secret = (env.CASHFREE_SECRET_KEY || "").trim();
   return Boolean(appId && secret) && !appId.includes("placeholder") && !secret.includes("placeholder");
+}
+
+// ============================================================================
+// PAYMENT MODE
+// ============================================================================
+
+export const PAYMENT_MODE_KEY = "PAYMENT_MODE";
+export const DEFAULT_PAYMENT_MODE = "gateway";
+
+/**
+ * Which rails are live: the hosted gateway, or manual UPI settled by an admin.
+ *
+ * isGatewayConfigured only asks whether credentials exist. That is necessary but
+ * not sufficient - a gateway can be fully configured and still not be usable,
+ * because the merchant account behind it is not activated. That is exactly the
+ * state a merchant is in while onboarding is still being reviewed, and it is
+ * invisible from here: keys are present, so the app keeps sending users to a
+ * checkout that cannot complete.
+ *
+ * So the mode is a separate, admin-set switch. "gateway" means online checkout,
+ * "manual_upi" means collect against the platform QR and credit on verification.
+ * Both the order and verify paths consult it, so turning it off cannot leave an
+ * order that no longer has anywhere to be paid.
+ */
+export async function getPaymentMode(): Promise<string> {
+  return getStringConfig(PAYMENT_MODE_KEY, DEFAULT_PAYMENT_MODE);
+}
+
+/**
+ * True only when online checkout can actually be completed right now: the admin
+ * has not switched to manual UPI, and credentials are present.
+ *
+ * This is the check the payment paths must use. isGatewayConfigured stays for
+ * "are the keys there", which is a weaker and separately useful question.
+ */
+export async function isGatewayLive(provider: Provider = ACTIVE_PROVIDER): Promise<boolean> {
+  if ((await getPaymentMode()) !== DEFAULT_PAYMENT_MODE) return false;
+  return isGatewayConfigured(provider);
+}
+
+/**
+ * Why online checkout is unavailable, or null when it is available.
+ *
+ * One place decides this so the three payment paths cannot drift into telling
+ * the user different things. The distinction matters to the client: "not
+ * configured" is an operator problem, while "switched off" is the deliberate,
+ * working state where the correct next step is to pay against the UPI QR - so
+ * the app can offer that instead of showing an error.
+ */
+export async function gatewayUnavailableReason(
+  provider: Provider = ACTIVE_PROVIDER
+): Promise<"switched_off" | "not_configured" | null> {
+  if ((await getPaymentMode()) !== DEFAULT_PAYMENT_MODE) return "switched_off";
+  if (!isGatewayConfigured(provider)) return "not_configured";
+  return null;
 }
 
 // ============================================================================

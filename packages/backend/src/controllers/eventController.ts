@@ -2,6 +2,7 @@ import { Response } from "express";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../config/database";
 import { NOT_PRIVILEGED } from "../rbac/privilegedUsers";
+import { checkCancel, checkJoin } from "../services/eventJoinPolicy";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
 import {
@@ -20,7 +21,7 @@ class EventFullError extends Error {}
 
 // Fallback category list, used ONLY when the EventCategory table is empty
 // (fresh DB / migration not yet applied) so the filter bar is never blank.
-// It mirrors the seeded migration exactly â€” including Astrology â€” because a
+// It mirrors the seeded migration exactly — including Astrology — because a
 // fallback that quietly omits a category would make that category
 // unfilterable and uncreatable on an un-migrated database.
 export const EVENT_CATEGORIES = [
@@ -134,53 +135,52 @@ const DEFAULT_CATEGORY_LABELS: Record<string, string> = {
   other: "Other",
 };
 
-const DEFAULT_CATEGORY_ICONS: Record<string, string> = {
-  walking: "ðŸš¶",
-  running: "ðŸƒ",
-  cycling: "ðŸš´",
-  football: "âš½",
-  cricket: "ðŸ",
-  badminton: "ðŸ¸",
-  tennis: "ðŸŽ¾",
-  basketball: "ðŸ€",
-  volleyball: "ðŸ",
-  "gym-fitness": "ðŸ‹ï¸",
-  yoga: "ðŸ§˜",
-  travel: "âœˆï¸",
-  movies: "ðŸŽ¬",
-  music: "ðŸŽµ",
-  concerts: "ðŸŽ¤",
-  photography: "ðŸ“·",
-  gaming: "ðŸŽ®",
-  esports: "ðŸ•¹ï¸",
-  chess: "â™Ÿï¸",
-  food: "ðŸ½ï¸",
-  coffee: "â˜•",
-  cooking: "ðŸ³",
-  shopping: "ðŸ›ï¸",
-  technology: "ðŸ’»",
-  coding: "ðŸ‘¨â€ðŸ’»",
-  business: "ðŸ“ˆ",
-  startups: "ðŸš€",
-  study: "ðŸ“š",
-  books: "ðŸ“–",
-  education: "ðŸŽ“",
-  art: "ðŸŽ¨",
-  dance: "ðŸ’ƒ",
-  nature: "ðŸŒ¿",
-  beach: "ðŸ–ï¸",
-  hiking: "ðŸ¥¾",
-  volunteering: "ðŸ¤",
-  pets: "ðŸ¾",
-  cars: "ðŸš—",
-  bikes: "ðŸï¸",
-  fashion: "ðŸ‘—",
-  networking: "ðŸ¤",
-  "local-events": "ðŸ“",
-  community: "ðŸ˜ï¸",
-  workshops: "ðŸ› ï¸",
-  astrology: "ðŸ”®",
-  other: "ðŸ“¦",
+const DEFAULT_CATEGORY_ICONS: Record<string, string> = {  walking: "🚶",
+  running: "🏃",
+  cycling: "🚴",
+  football: "⚽",
+  cricket: "🏏",
+  badminton: "🏸",
+  tennis: "🎾",
+  basketball: "🏀",
+  volleyball: "🏐",
+  "gym-fitness": "🏋️",
+  yoga: "🧘",
+  travel: "✈️",
+  movies: "🎬",
+  music: "🎵",
+  concerts: "🎤",
+  photography: "📷",
+  gaming: "🎮",
+  esports: "🕹️",
+  chess: "♟️",
+  food: "🍽️",
+  coffee: "☕",
+  cooking: "👨‍🍳",
+  shopping: "🛍️",
+  technology: "💻",
+  coding: "👨‍💻",
+  business: "📈",
+  startups: "🚀",
+  study: "📚",
+  books: "📖",
+  education: "🎓",
+  art: "🎨",
+  dance: "💃",
+  nature: "🌿",
+  beach: "🏖️",
+  hiking: "🥾",
+  volunteering: "🤝",
+  pets: "🐾",
+  cars: "🚗",
+  bikes: "🏍️",
+  fashion: "👗",
+  networking: "🤝",
+  "local-events": "📍",
+  community: "🏘️",
+  workshops: "🛠️",
+  astrology: "🔮",
+  other: "📦",
 };
 
 async function getDisabledCategories(): Promise<Set<string>> {
@@ -228,13 +228,13 @@ export async function loadEventCategories(): Promise<EventCategoryRow[]> {
       }));
     }
   } catch {
-    // Table missing (migration not applied yet) â€” fall through to defaults.
+    // Table missing (migration not applied yet) — fall through to defaults.
   }
   return EVENT_CATEGORIES.map((key, i) => ({
     key,
     label: DEFAULT_CATEGORY_LABELS[key] || key.charAt(0).toUpperCase() + key.slice(1),
     description: null,
-    icon: DEFAULT_CATEGORY_ICONS[key] || "ðŸ“…",
+    icon: DEFAULT_CATEGORY_ICONS[key] || DEFAULT_CATEGORY_ICONS.other,
     coverImageUrl: null,
     sortOrder: (i + 1) * 10,
     enabled: true,
@@ -250,7 +250,7 @@ export async function getEventCategories(req: AuthedRequest, res: Response): Pro
       key: "all",
       label: "All Events",
       description: "Every live and upcoming event",
-      icon: "ðŸŒ",
+      icon: "🌐",
       coverImageUrl: null,
       sortOrder: 0,
       enabled: true,
@@ -368,7 +368,7 @@ const TIME_WINDOWS: Record<string, [number, number]> = {
  *
  * The local-time constructor resolves against the *server's* zone, so the same
  * filter produced 17:00 local == 11:30Z on this box and would shift again on a
- * host in another region â€” the filter would silently mean different hours in
+ * host in another region — the filter would silently mean different hours in
  * different deployments. Hours are therefore evaluated in UTC.
  *
  * Known limitation: this buckets by UTC hour, not by each event's own
@@ -1144,6 +1144,25 @@ export async function registerForEvent(req: AuthedRequest, res: Response): Promi
       return;
     }
 
+    // Joining closes 12 hours before the event starts, so the organizer has a
+    // fixed window in which to buy tickets and commit. Without this, attendees
+    // could arrive right up to the start time and leave the organizer paying for
+    // a seat nobody claimed.
+    const joinCheck = checkJoin(
+      {
+        status: event.status,
+        startTime: event.startTime,
+        capacity: event.capacity,
+        attendeeCount: event.attendeeCount,
+      },
+      new Date(),
+    );
+    if (!joinCheck.allowed) {
+      // 409, not 400: the request is well-formed - it is the event's state that
+      // refuses it, and that distinction is what tells a client to stop retrying.
+      sendError(res, joinCheck.message, 409, joinCheck.reason);
+      return;
+    }
     try {
       await prisma.$transaction(async (tx) => {
         const existing = await tx.eventAttendee.findUnique({
@@ -1210,6 +1229,29 @@ export async function cancelRegistration(req: AuthedRequest, res: Response): Pro
       return;
     }
 
+    const cancelEvent = await prisma.event.findUnique({
+      where: { id },
+      select: { status: true, startTime: true },
+    });
+    if (!cancelEvent) {
+      sendError(res, "Event not found.", 404, "EVENT_NOT_FOUND");
+      return;
+    }
+
+    // Two rules apply together, and each gets its own message:
+    //  - a 24-hour lock from when the person joined, so join-and-immediately-
+    //    drop churn cannot damage the organizer's committed headcount;
+    //  - the same 12-hour cutoff that closes joining, because cancelling late
+    //    is exactly as disruptive as joining late.
+    const cancelCheck = checkCancel(
+      { status: cancelEvent.status, startTime: cancelEvent.startTime },
+      attendee.createdAt,
+      new Date(),
+    );
+    if (!cancelCheck.allowed) {
+      sendError(res, cancelCheck.message, 409, cancelCheck.reason);
+      return;
+    }
     await prisma.$transaction([
       prisma.eventAttendee.delete({
         where: { eventId_userId: { eventId: id, userId: req.user!.userId } },

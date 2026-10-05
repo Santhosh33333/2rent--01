@@ -3,32 +3,10 @@ import { prisma } from "../config/database";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
 import { getPartnerEarnings, getConfig } from "../services/pricingEngine";
-import { isDemoEmail } from "../utils/demo";
 import { moneyTransaction } from "../utils/db";
 import { sendWithdrawalRequestedEmail } from "../services/emailService";
 import { bankNameFromIfsc, isValidIfsc, lookupUpi } from "../services/bankLookup";
-
-// Serializes concurrent money-affecting operations per user so the app-level
-// "one open withdrawal at a time" rule cannot be raced by two parallel requests
-// on a single server instance. (For multi-instance deployments, replace with a
-// distributed lock such as Redis.)
-function createMutex() {
-  let lock: Promise<unknown> = Promise.resolve();
-  return (fn: () => Promise<unknown>) => {
-    const result = lock.then(fn, fn);
-    lock = result.catch(() => {});
-    return result;
-  };
-}
-const userMutexes = new Map<string, ReturnType<typeof createMutex>>();
-function withUserLock<T>(userId: string, fn: () => Promise<T>): Promise<T> {
-  let m = userMutexes.get(userId);
-  if (!m) {
-    m = createMutex();
-    userMutexes.set(userId, m);
-  }
-  return m(fn as () => Promise<unknown>) as Promise<T>;
-}
+import { createWithdrawalRequest, WithdrawalError } from "../services/withdrawalService";
 
 
 // ============================================================================
@@ -363,174 +341,33 @@ export async function getUpiInfo(req: AuthedRequest, res: Response): Promise<voi
 // REQUEST WITHDRAWAL
 // ============================================================================
 
+/**
+ * HTTP wrapper only.
+ *
+ * Every rule that decides whether money may leave a wallet now lives in
+ * withdrawalService, which the agent's request_withdrawal tool calls too. Keeping
+ * the decision in one place is the point: a balance check that exists on the REST
+ * path but not in the tool is a way to overspend a balance.
+ */
 export async function requestWithdrawal(req: AuthedRequest, res: Response): Promise<void> {
   try {
-    // Demo sandbox money has no cash value and can never leave the platform.
-    if (isDemoEmail(req.user?.email)) {
-      sendError(res, "Demo accounts cannot withdraw play money.", 403, "DEMO_NO_WITHDRAW");
-      return;
-    }
     const { amount, method, accountDetail } = req.body;
-
-    const validMethods = ["BANK_TRANSFER", "UPI"];
-    if (!method || !validMethods.includes(method)) {
-      sendError(res, "Invalid withdrawal method.", 400, "INVALID_METHOD");
-      return;
-    }
-
-    // A payout destination is mandatory and must be well-formed.
-    if (method === "BANK_TRANSFER") {
-      const ad = accountDetail as { accountNumber?: string; ifsc?: string; bankName?: string; accountHolderName?: string } | undefined;
-      if (!ad?.accountNumber || !ad?.ifsc) {
-        sendError(res, "Bank account number and IFSC are required.", 400, "INVALID_ACCOUNT");
-        return;
-      }
-      // Enrich with the resolved bank name so finance sees it without looking
-      // the IFSC up. Never trust a client-supplied name over the IFSC table.
-      if (!ad.bankName || !isValidIfsc(ad.ifsc)) {
-        ad.bankName = bankNameFromIfsc(ad.ifsc) || ad.bankName;
-      }
-    } else if (method === "UPI") {
-      const ad = accountDetail as { upiId?: string; accountHolderName?: string; upiBank?: string } | undefined;
-      if (!ad?.upiId || !/^[\w.\-]+@[a-zA-Z]{2,}$/.test(ad.upiId)) {
-        sendError(res, "A valid UPI ID is required.", 400, "INVALID_ACCOUNT");
-        return;
-      }
-    }
-
-    const [minWithdrawal, maxWithdrawal, withdrawalFee] = await Promise.all([
-      getConfig("MIN_WITHDRAWAL_AMOUNT", 100),
-      getConfig("MAX_WITHDRAWAL_AMOUNT", 500000),
-      getConfig("WITHDRAWAL_FEE_FLAT", 0),
-    ]);
-
-    if (!amount || amount <= 0 || amount < minWithdrawal) {
-      sendError(res, `Minimum withdrawal amount is ${minWithdrawal.toLocaleString("en-IN")}.`, 400, "VALIDATION_ERROR");
-      return;
-    }
-
-    if (amount > maxWithdrawal) {
-      sendError(res, `Maximum withdrawal amount is ${maxWithdrawal.toLocaleString("en-IN")}.`, 400, "AMOUNT_EXCEEDS_LIMIT");
-      return;
-    }
-
-    const wallet = await prisma.wallet.findUnique({
-      where: { userId: req.user!.userId },
+    const result = await createWithdrawalRequest({
+      userId: req.user!.userId,
+      email: req.user?.email,
+      amount: Number(amount),
+      method,
+      accountDetail,
     });
-
-    if (!wallet) {
-      sendError(res, "Wallet not found.", 404, "WALLET_NOT_FOUND");
-      return;
-    }
-
-    // Fee must not exceed the payout itself.
-    if (withdrawalFee >= amount) {
-      sendError(res, "Amount must exceed the withdrawal fee.", 400, "VALIDATION_ERROR");
-      return;
-    }
-
-    if (amount > wallet.balance) {
-      sendError(res, "Insufficient wallet balance.", 400, "INSUFFICIENT_FUNDS");
-      return;
-    }
-
-    const withdrawal = await withUserLock(req.user!.userId, () =>
-      moneyTransaction(async (tx) => {
-        const lockedWallet = await tx.wallet.findUnique({
-          where: { id: wallet.id },
-        });
-
-        if (!lockedWallet || amount > lockedWallet.balance) {
-          throw new Error("INSUFFICIENT_FUNDS");
-        }
-
-        // Anti-duplicate (Part 28): re-checked inside the serialized transaction so
-        // two parallel requests cannot both pass the pre-check and create two payouts.
-        const openWithdrawal = await tx.withdrawalRequest.findFirst({
-          where: { userId: req.user!.userId, status: { in: ["PENDING", "PROCESSING"] } },
-          select: { id: true },
-        });
-        if (openWithdrawal) {
-          const e: any = new Error("Duplicate withdrawal");
-          e.code = "DUPLICATE_WITHDRAWAL";
-          throw e;
-        }
-
-        // Hold funds immediately (single debit for the whole lifecycle)
-      await tx.wallet.update({
-        where: { id: wallet.id },
-        data: { balance: { decrement: amount } },
-      });
-
-      const created = await tx.withdrawalRequest.create({
-        data: {
-          userId: req.user!.userId,
-          walletId: wallet.id,
-          amount,
-          method,
-          accountDetail: JSON.stringify(accountDetail),
-          status: "PENDING",
-        },
-      });
-
-      // Paused ledger row: PENDING until settled (approved) or released (rejected/cancelled)
-      await tx.transaction.create({
-        data: {
-          userId: req.user!.userId,
-          walletId: wallet.id,
-          type: "WITHDRAWAL",
-          status: "PENDING",
-          amount,
-          description: "Withdrawal held pending review",
-          referenceId: created.id,
-        },
-      });
-
-      return created;
-    }),
-    );
-
-    await prisma.auditLog.create({
-      data: {
-        actorId: req.user!.userId,
-        actorType: "USER",
-        action: "WITHDRAWAL_REQUEST",
-        entityType: "WithdrawalRequest",
-        entityId: withdrawal.id,
-        metadata: JSON.stringify({ amount, method, withdrawalFee }),
-      },
-    });
-
-    let out: any = withdrawal;
-    try { out = { ...withdrawal, accountDetail: JSON.parse((withdrawal as any).accountDetail) }; } catch { /* keep as-is */ }
-
-    // Confirmation email to the requester (fire-and-forget; best-effort).
-    const requester = await prisma.user.findUnique({ where: { id: req.user!.userId }, select: { email: true, fullName: true } }).catch(() => null);
-    if (requester?.email) {
-      void sendWithdrawalRequestedEmail(requester.email, requester.fullName || "there", {
-        withdrawalId: withdrawal.id,
-        amount,
-        method,
-        status: "PENDING",
-        createdAt: withdrawal.createdAt,
-      }).catch((err) => console.error("[EMAIL] Withdrawal requested email failed:", err));
-    }
-
-    sendSuccess(res, out, "Withdrawal request submitted.", 201);
+    sendSuccess(res, result, "Withdrawal request submitted.", 201);
   } catch (err: any) {
-    if (err?.code === "DUPLICATE_WITHDRAWAL") {
-      sendError(res, "You already have a withdrawal being processed.", 409, "DUPLICATE_WITHDRAWAL");
-    } else if (err?.message === "INSUFFICIENT_FUNDS") {
-      sendError(res, "Insufficient wallet balance.", 400, "INSUFFICIENT_FUNDS");
-    } else {
-      sendError(res, "Failed to request withdrawal.", 500, "INTERNAL_ERROR");
+    if (err instanceof WithdrawalError) {
+      sendError(res, err.message, err.statusCode, err.code);
+      return;
     }
+    sendError(res, "Failed to request withdrawal.", 500, "INTERNAL_ERROR");
   }
 }
-
-// ============================================================================
-// CANCEL WITHDRAWAL
-// ============================================================================
 
 export async function cancelWithdrawal(req: AuthedRequest, res: Response): Promise<void> {
   try {

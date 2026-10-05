@@ -39,7 +39,7 @@ export function DownloadPage() {
           <h1 className="mt-8 text-3xl sm:text-5xl font-bold font-display tracking-tight text-gradient wordmark-on-navy">
             Get Nabri on your phone
           </h1>
-          <p className="mt-4 text-sm sm:text-base text-surface-400 max-w-md mx-auto">
+          <p className="mt-4 text-sm sm:text-base text-white/70 max-w-md mx-auto">
             One app for every side of life — CarryBuddy, walking partners, bookings,
             communities and more. Runs natively with notifications and live location.
           </p>
@@ -53,16 +53,20 @@ export function DownloadPage() {
             Download Android APK
           </a>
 
-          <p className="mt-3 text-xs text-surface-500">
+          {/* This panel is hardcoded navy in BOTH themes (bg-[#081F4F]), so its
+              muted text is white-based rather than a `surface-*` step. Using
+              text-surface-400/500 put a warm mid-grey on that navy: 2.78:1 for
+              the links and 2.82:1 for the intro line. */}
+          <p className="mt-3 text-xs text-white/70">
             Android · {APK_SIZE} · v{APK_VERSION}
           </p>
 
-          <div className="mt-6 flex items-center justify-center gap-6 text-xs text-surface-500">
-            <Link to="/account-type" className="flex items-center gap-1.5 hover:text-primary-400 transition-colors">
+          <div className="mt-6 flex items-center justify-center gap-6 text-xs text-white/70">
+            <Link to="/account-type" className="flex items-center gap-1.5 hover:text-white transition-colors">
               <Monitor className="w-4 h-4" /> Use in your browser
             </Link>
-            <Link to="/login" className="flex items-center gap-1.5 hover:text-primary-400 transition-colors">
-              Already have an account? <span className="font-semibold text-primary-400">Sign in</span>
+            <Link to="/login" className="flex items-center gap-1.5 hover:text-white transition-colors">
+              Already have an account? <span className="font-semibold text-white">Sign in</span>
             </Link>
           </div>
         </div>

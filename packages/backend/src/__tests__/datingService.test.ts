@@ -1,16 +1,39 @@
 ﻿import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const { prismaMock } = vi.hoisted(() => ({ prismaMock: {
-  user: { findFirst: vi.fn(), findMany: vi.fn() },
-  like: { findFirst: vi.fn(), upsert: vi.fn(), deleteMany: vi.fn(), findMany: vi.fn() },
+  user: { findFirst: vi.fn(), findMany: vi.fn(), findUnique: vi.fn() },
+  // discover() reads the viewer's saved preferences and, for the candidate window,
+  // every candidate's preferences. One findMany for the whole window is the point -
+  // per-candidate lookups would be an N+1 this feature could easily have shipped.
+  userPreferences: { findUnique: vi.fn(), findMany: vi.fn(), upsert: vi.fn() },
+  like: { findFirst: vi.fn(), findUnique: vi.fn(), upsert: vi.fn(), deleteMany: vi.fn(), findMany: vi.fn() },
   pass: { upsert: vi.fn(), deleteMany: vi.fn(), findMany: vi.fn() },
   userBlock: { findFirst: vi.fn(), findMany: vi.fn() },
   match: { upsert: vi.fn(), findMany: vi.fn() },
+  wallet: { upsert: vi.fn(), update: vi.fn() },
+  transaction: { create: vi.fn() },
+  // recordSwipe announces a new request to the recipient through
+  // notificationController.createNotification, which writes here. Mocked so the
+  // tests can assert on what the other person was actually told.
+  notification: { create: vi.fn() },
   $transaction: vi.fn(async (arg: unknown) => {
     if (typeof arg === "function") return (arg as (t: unknown) => Promise<unknown>)(prismaMock);
     return Promise.all(arg as Promise<unknown>[]);
   }),
 } }));
+
+// The request charge reads its rate through pricingEngine.getConfig, which
+// would otherwise reach for redis and PricingConfig. Stubbed to the documented
+// default so discovery/swipe tests exercise the real charging path without
+// touching the network; the money behaviour itself is covered in
+// datingCharge.test.ts, which can vary the rate.
+vi.mock("../services/pricingEngine", () => ({
+  getConfig: vi.fn(async () => 0.5),
+  // Matching weights. Must be provided because this factory replaces the whole
+  // module: an import of getStringConfig that resolves to undefined would throw
+  // the moment discover() scores a non-empty candidate window.
+  getStringConfig: vi.fn(async () => ""),
+}));
 
 vi.mock("../config/database", () => ({ prisma: prismaMock }));
 
@@ -26,10 +49,27 @@ const USER_B = "22222222-2222-2222-2222-222222222222";
 beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.user.findFirst.mockResolvedValue({ id: USER_B });
+  // discover() reads the viewer's own saved preferences and the candidate window's.
+  // "Nothing saved" is the default because it is the state of a brand-new account,
+  // and it must produce a working feed rather than an error - see getPreferences.
+  prismaMock.userPreferences.findUnique.mockResolvedValue(null);
+  prismaMock.userPreferences.findMany.mockResolvedValue([]);
+  // No saved location: distance is then unrankable rather than zero.
+  prismaMock.user.findUnique.mockResolvedValue({ latitude: null, longitude: null });
   prismaMock.userBlock.findFirst.mockResolvedValue(null);
   prismaMock.userBlock.findMany.mockResolvedValue([]);
   prismaMock.like.findMany.mockResolvedValue([]);
   prismaMock.pass.findMany.mockResolvedValue([]);
+  // Defaults for the charging path: no prior like, and a wallet that can afford
+  // the request. The charge itself is asserted in datingCharge.test.ts.
+  prismaMock.like.findUnique.mockResolvedValue(null);
+  prismaMock.wallet.upsert.mockResolvedValue({ id: "w1", balance: { toString: () => "100" } });
+  prismaMock.wallet.update.mockResolvedValue({});
+  prismaMock.transaction.create.mockResolvedValue({});
+  // Names used in the "someone likes you" / "it's a match" copy, looked up only
+  // on the branches that actually send a notification.
+  prismaMock.user.findUnique.mockResolvedValue({ fullName: "Test User" });
+  prismaMock.notification.create.mockResolvedValue({});
 });
 
 describe("recordSwipe", () => {

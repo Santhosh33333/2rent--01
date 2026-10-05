@@ -115,21 +115,127 @@ export interface AiCompletion {
   cached: boolean;
 }
 
+export interface AiChatMessage {
+  role: "system" | "user" | "assistant" | "tool";
+  content: string | null;
+  /** OpenAI-compatible tool plumbing. */
+  tool_calls?: Array<{
+    id: string;
+    type: "function";
+    function: { name: string; arguments: string };
+  }>;
+  tool_call_id?: string;
+}
+
+/**
+ * A chat turn that may come back asking for tools. Kept separate from
+ * aiComplete, which is a single-shot prompt/response helper, so existing
+ * callers are unaffected by the agent's tool loop.
+ */
+export interface AiChatCompletion {
+  message: AiChatMessage;
+  model: string;
+  finishReason: string | null;
+}
+
+function notConfigured(): Error {
+  const info = aiConfigInfo();
+  const err: any = new Error(
+    `AI features are not configured. Required env: ${info.requiredEnv.join(", ")}. Set AI_PROVIDER=gemini|nim|openai-compatible plus AI_API_KEY (free tiers).`
+  );
+  err.code = "AI_NOT_CONFIGURED";
+  return err;
+}
+
+/**
+ * One HTTP call to the provider, with the error handling both entry points share.
+ *
+ * aiChat had proper 429 handling and aiComplete did not, which meant the same
+ * rate limit surfaced as "AI_RATE_LIMITED, retry in Ns" from one path and as a
+ * bare "AI provider responded 429" from the other - the exact wording a user sees
+ * when the assistant gives up mid-conversation. One helper means there is no
+ * second place to forget.
+ */
+async function postCompletion(
+  payload: Record<string, unknown>,
+  timeoutMs: number,
+): Promise<any> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${aiBaseUrl()}/chat/completions`, {
+      method: "POST",
+      signal: ctrl.signal,
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${env.AI_API_KEY}` },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      // Never surface a provider response body to the caller: it can echo
+      // prompt content. Log the status server-side so failures are diagnosable.
+      const err: any = new Error(`AI provider responded ${res.status}.`);
+      if (res.status === 429) {
+        // Rate limiting is transient and self-clearing, so it must not be
+        // reported to the user as a broken assistant. Providers advertise the
+        // wait in a header and/or in the message; prefer the header.
+        err.code = "AI_RATE_LIMITED";
+        const retryAfterSec = Number(res.headers.get("retry-after"));
+        err.retryAfterSec = Number.isFinite(retryAfterSec) && retryAfterSec > 0 ? retryAfterSec : 10;
+      } else {
+        err.code = "AI_PROVIDER_ERROR";
+      }
+      err.status = res.status;
+      console.warn(`[aiGateway] ${aiProvider()} ${aiModelName()} responded ${res.status}`);
+      throw err;
+    }
+    return await res.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function aiChat(
+  userId: string,
+  messages: AiChatMessage[],
+  opts: { tools?: unknown[]; maxTokens?: number; temperature?: number; toolChoice?: unknown } = {}
+): Promise<AiChatCompletion> {
+  if (aiProvider() === "none") throw notConfigured();
+
+  const quota = checkAiQuota(userId);
+  if (!quota.allowed) {
+    const err: any = new Error("AI quota exceeded. Try again later.");
+    err.code = "AI_QUOTA_EXCEEDED";
+    err.retryAfterSec = quota.retryAfterSec;
+    throw err;
+  }
+
+  const payload: Record<string, unknown> = {
+    model: aiModelName(),
+    temperature: opts.temperature ?? 0.2,
+    max_tokens: Math.min(1024, Math.max(64, opts.maxTokens ?? 700)),
+    messages,
+  };
+  if (opts.tools?.length) payload.tools = opts.tools;
+  if (opts.toolChoice) payload.tool_choice = opts.toolChoice;
+
+  const data = await postCompletion(payload, 45000);
+  const choice = data?.choices?.[0];
+  const message: AiChatMessage = choice?.message ?? { role: "assistant", content: "" };
+  if (message.content === undefined) message.content = null;
+  return {
+    message,
+    model: data?.model ?? aiModelName(),
+    finishReason: choice?.finish_reason ?? null,
+  };
+}
+
 export async function aiComplete(
   userId: string,
   systemPrompt: string,
   userPrompt: string,
   opts: { maxTokens?: number; temperature?: number; cacheKey?: string } = {}
 ): Promise<AiCompletion> {
-  const provider = aiProvider();
-  if (provider === "none") {
-    const info = aiConfigInfo();
-    const err: any = new Error(
-      `AI features are not configured. Required env: ${info.requiredEnv.join(", ")}. Set AI_PROVIDER=gemini|nim|openai-compatible plus AI_API_KEY (free tiers).`
-    );
-    err.code = "AI_NOT_CONFIGURED";
-    throw err;
-  }
+  if (aiProvider() === "none") throw notConfigured();
+
   const quota = checkAiQuota(userId);
   if (!quota.allowed) {
     const err: any = new Error("AI quota exceeded. Try again later.");
@@ -145,36 +251,25 @@ export async function aiComplete(
     }
   }
   const maxTokens = Math.min(1024, Math.max(64, opts.maxTokens ?? 512));
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 30000);
-  const baseUrl = aiBaseUrl();
   const model = aiModelName();
-  try {
-    const res = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      signal: ctrl.signal,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${env.AI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model,
-        temperature: opts.temperature ?? 0.3,
-        max_tokens: maxTokens,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-      }),
-    });
-    if (!res.ok) throw new Error(`AI provider responded ${res.status}.`);
-    const data: any = await res.json();
-    const text = data?.choices?.[0]?.message?.content?.trim() || "";
-    if (!text) throw new Error("AI provider returned an empty response.");
-    const out: AiCompletion = { text, model, cached: false };
-    if (cacheKey) aiCacheSet(cacheKey, out);
-    return out;
-  } finally {
-    clearTimeout(timer);
-  }
+
+  // Same helper as aiChat, so a rate limit here reports AI_RATE_LIMITED with a
+  // retry hint rather than an opaque "AI provider responded 429".
+  const data = await postCompletion(
+    {
+      model,
+      temperature: opts.temperature ?? 0.3,
+      max_tokens: maxTokens,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+    },
+    30000,
+  );
+  const text = data?.choices?.[0]?.message?.content?.trim() || "";
+  if (!text) throw new Error("AI provider returned an empty response.");
+  const out: AiCompletion = { text, model, cached: false };
+  if (cacheKey) aiCacheSet(cacheKey, out);
+  return out;
 }

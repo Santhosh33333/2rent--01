@@ -11,14 +11,21 @@ import { initRedis } from "./services/redisClient";
 import { emitToUser } from "./services/socketService";
 import { processTimeoutBookings, sendUpcomingReminders } from "./services/bookingEngine";
 import { runReengagementSweep } from "./services/emailService";
+import { startMovieCatalogSync, stopMovieCatalogSync } from "./services/movieCatalogSync";
+import { sweepReleasableEscrows } from "./services/eventEscrowService";
+import { startDigestScheduler, stopDigestScheduler } from "./services/digestScheduler";
 import { ensureLegalDocumentsSeeded } from "./services/legalConsentService";
 
 const TIMEOUT_SWEEP_INTERVAL_MS = 30_000;
 const REMINDER_SWEEP_INTERVAL_MS = 60_000;
 const REENGAGEMENT_SWEEP_INTERVAL_MS = 60 * 60 * 1000; // hourly, idempotent per-user
+// Five minutes. The escrow deadline is per-event (event end + 24h), so this needs
+// to be fine-grained; see the comment on startEscrowSweeper.
+const ESCROW_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 let timeoutSweeper: ReturnType<typeof setInterval> | null = null;
 let reminderSweeper: ReturnType<typeof setInterval> | null = null;
 let reengagementSweeper: ReturnType<typeof setInterval> | null = null;
+let escrowSweeper: ReturnType<typeof setInterval> | null = null;
 
 function startTimeoutSweeper(): void {
   // Recovers bookings stuck in PARTNER_SEARCHING/PARTNER_ASSIGNED past their
@@ -29,6 +36,45 @@ function startTimeoutSweeper(): void {
     );
   }, TIMEOUT_SWEEP_INTERVAL_MS);
   timeoutSweeper.unref?.();
+}
+
+function startEscrowSweeper(): void {
+  // Releases event fee money to its organizer once the 24-hour dispute window
+  // closes with nothing filed against it.
+  //
+  // Every 5 minutes rather than daily, because the deadline is per-EVENT (event
+  // end + 24h), not a fixed wall-clock moment: an event ending at 4pm should
+  // release its money around 4pm the next day, not whenever the next daily sweep
+  // happens to land. A daily sweep would hold each organizer's money for up to
+  // 24 extra hours, which is exactly the "the platform kept my money" complaint
+  // this is meant to prevent.
+  //
+  // The sweep is idempotent (each escrow is claimed with a guarded update), so
+  // running it more often than strictly necessary costs nothing and is safe if
+  // two processes ever overlap.
+  escrowSweeper = setInterval(() => {
+    sweepReleasableEscrows()
+      .then((r) => {
+        if (r.released > 0 || r.failed > 0) {
+          console.log(
+            `[ESCROW] auto-release: ${r.released} released, ${r.skippedDisputed} skipped, ${r.failed} failed (scanned ${r.scanned})`,
+          );
+        }
+      })
+      .catch((err) => console.error("[ESCROW] Sweeper run failed:", err));
+  }, ESCROW_SWEEP_INTERVAL_MS);
+  escrowSweeper.unref?.();
+  // Release anything already overdue at boot rather than waiting a full
+  // interval - after a restart or deploy, money due yesterday must not sit idle.
+  sweepReleasableEscrows()
+    .then((r) => {
+      if (r.released > 0 || r.failed > 0) {
+        console.log(
+          `[ESCROW] boot release: ${r.released} released, ${r.skippedDisputed} skipped, ${r.failed} failed`,
+        );
+      }
+    })
+    .catch((err) => console.error("[ESCROW] Boot release failed:", err));
 }
 
 function startReminderSweeper(): void {
@@ -368,7 +414,7 @@ if (!dbAvailable) {
 
   // Realtime + push fan-out for EVERY in-app notification row (spec: OTP and
   // arrival alerts must reach the user live, not sit silently in the DB).
-  // Installed once on the shared singleton â€” covers all creators, so no
+  // Installed once on the shared singleton — covers all creators, so no
   // call site can forget to emit. Never throws into the write path.
   prisma.$use(async (params, next) => {
     const result = await next(params);
@@ -397,9 +443,18 @@ if (!dbAvailable) {
     return result;
   });
 
-  startTimeoutSweeper();
-  startReminderSweeper();
-  startReengagementSweeper();
+startTimeoutSweeper();
+startReminderSweeper();
+startReengagementSweeper();
+  // Releases event fee money to its organizer once the 24h dispute window closes
+  // clean. Also runs once at boot so anything overdue after a deploy is not left
+  // sitting until the next tick.
+  startEscrowSweeper();
+  // Film catalogue is pushed, not pulled: a release has to be on the shelf
+  // before its release day, which a request-driven cache cannot guarantee.
+  startMovieCatalogSync();
+  // Midnight ops digest, one role-scoped email per configured admin role.
+  startDigestScheduler();
 
   // Publish version 1 of any legal document that has no current row. Idempotent
   // and never overwrites existing wording, so it is safe on every boot.
@@ -421,9 +476,11 @@ if (!dbAvailable) {
     if (reminderSweeper) {
       clearInterval(reminderSweeper);
     }
-    if (reengagementSweeper) {
+if (reengagementSweeper) {
       clearInterval(reengagementSweeper);
     }
+    stopMovieCatalogSync();
+    stopDigestScheduler();
     server.close(() => {
       console.log("HTTP server closed.");
     });

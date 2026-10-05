@@ -47,8 +47,10 @@ export async function searchMoviesHandler(req: AuthedRequest, res: Response): Pr
       sendError(res, "Search needs at least 2 characters.", 400, "VALIDATION_ERROR");
       return;
     }
-    const page = Math.min(50, Math.max(1, Number(req.query.page) || 1));
-    const data = await searchMovies(q, page);
+    // No page parameter: search returns one bounded, relevance-ordered set and
+    // the client renders all of it. Paging it would be paging a filter TMDB does
+    // not support server-side.
+    const data = await searchMovies(q);
     sendSuccess(res, data, "Movie search results.");
   } catch (err: any) {
     console.error("[movies] search error:", err?.message);

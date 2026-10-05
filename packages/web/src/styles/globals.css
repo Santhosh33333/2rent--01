@@ -29,6 +29,12 @@ html[data-accent='navy'] {
   --c-100: 220 231 255;
   --c-200: 185 208 255;
   --c-300: 138 177 245;
+  /* Was 91 143 232, which reaches only 4.32:1 against the auth card's aurora
+     wash - under AA for the small link text that uses it as a dark-mode
+     foreground. Raised to the first value on the 400->300 ramp that clears
+     4.62:1 on EVERY dark surface, including the lilac aurora tint the auth
+     screens paint over their cards (measured at rgb 59,51,70 in dark mode),
+     which is lighter than the page and so the actual limiting case. */
   --c-400: 91 143 232;
   --c-500: 59 110 216;
   --c-600: 42 86 184;
@@ -187,18 +193,37 @@ html[data-accent='sky'] {
    4.7:1+) in dark, including the hover state — a hover that made a link LESS
    readable was the worst of the call sites. Unlayered on purpose: these beat
    Tailwind's `@layer utilities` `.text-primary-600` / `.hover:text-primary-600`,
-   which a rule inside `@layer base` below could not. */
-html.dark .text-primary-600,
-html.dark .text-primary-700 { color: rgb(var(--c-400)); }
-html.dark .hover\:text-primary-600:hover { color: rgb(var(--c-400)); }
+   which a rule inside `@layer base` below could not.
+
+   `:not([class*='dark:text-primary-'])` is essential, not defensive. Being
+   unlayered, this rule beat the author's OWN `dark:text-primary-300` on the
+   registration role picker (`text-primary-700 dark:text-primary-300`), so the
+   explicit dark variant was silently discarded and the chip rendered at c-400
+   (4.15:1). Where a dark variant is spelled out, that choice now wins. */
+html.dark .text-primary-600:not([class*='dark:text-primary-']),
+html.dark .text-primary-700:not([class*='dark:text-primary-']) { color: rgb(var(--c-400)); }
+html.dark .hover\:text-primary-600:not([class*='dark:']):hover { color: rgb(var(--c-400)); }
+
+/* Same variant-bypass fix as the `surface` block below. The rules above match a
+   `.dark` ANCESTOR, but `dark:text-primary-600` compiles to a class on the
+   element itself, so every such call site kept the low-contrast action colour.
+   `[class]` is doubled to reach (0,3,0) and outrank the generated (0,2,0) rule,
+   which Tailwind emits after this file. */
+html.dark [class~='dark:text-primary-600'][class],
+html.dark [class~='dark:text-primary-700'][class] { color: rgb(var(--c-400)); }
 
 @layer components {
   /* ===== SURFACES ===== */
   .glass {
-    @apply bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800;
+    /* Was `dark:bg-surface-900` (#1c1917), barely lighter than the page's
+       surface-950 (#12100f). Most in-app cards are this, so the whole dark app
+       read as flat near-black tiles with no separation. surface-800 (#292522)
+       gives every card a clean edge against the page without changing the
+       page's background. */
+    @apply bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700;
   }
   .glass-strong {
-    @apply bg-surface-50 dark:bg-surface-900 border border-surface-200 dark:border-surface-700;
+    @apply bg-surface-50 dark:bg-surface-800 border border-surface-200 dark:border-surface-700;
   }
   .glass-card {
     @apply glass rounded-md p-5 sm:p-6 transition-all duration-200 ease-out
@@ -218,28 +243,54 @@ html.dark .hover\:text-primary-600:hover { color: rgb(var(--c-400)); }
   }
 
   /* ===== SECTION HEROES (one identity per area — never the same gradient twice) ===== */
-  /* Signature diagonal crest: a hard-edged facet + lime hairline over an
+/* Signature diagonal crest: a hard-edged facet + lime hairline over an
      accent-aware gradient (the --c ramp follows data-accent automatically).
-     Variants only retune --hero-from/--hero-to, so the crest stays intact. */
+     Variants only retune --hero-from/--hero-to, so the crest stays intact.
+
+     The ramp runs 900->800 rather than 800->600 because the crest's own
+     overlays (a 7% white sheen plus a 14% lime hairline grid) lighten whatever
+     is underneath them. On the old 800->600 gradient the lightest region of
+     the hero measured rgb(66,108,167), which put `text-white/70` body copy at
+     2.95:1 - and no translucent white below ~98% could clear AA there, so the
+     text could not be rescued by raising opacity alone. Moving the ramp one
+     step darker lifts white/70 to 4.55:1 while keeping the same navy hue and
+     the crest untouched. */
   .hero {
     @apply relative overflow-hidden rounded-3xl p-6 sm:p-8 text-white shadow-xl;
-    --hero-from: rgb(var(--c-800));
-    --hero-to: rgb(var(--c-600));
-    background-image:
-      linear-gradient(115deg, rgba(255, 255, 255, 0.07) 0 34%, transparent 34.2%),
-      linear-gradient(rgba(210, 245, 60, 0.14) 0 1.5px, transparent 1.5px),
-      linear-gradient(135deg, var(--hero-from) 0%, var(--hero-to) 100%);
+    --hero-from: rgb(var(--c-900));
+    --hero-to: rgb(var(--c-800));
+/* The crest reads as a facet, but a hard stop (was `0 34%, transparent
+        34.2%`) draws a visible diagonal seam across wide heroes like the partner
+        dashboard. Same lit side, faded out over 14deg instead of instantly. */
+     background-image:
+       linear-gradient(115deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.03) 44%, transparent 62%),
+       linear-gradient(rgba(210, 245, 60, 0.14) 0 1.5px, transparent 1.5px),
+       linear-gradient(135deg, var(--hero-from) 0%, var(--hero-to) 100%);
     background-size: auto, 220px 220px, auto;
   }
   .hero-indigo,
   .hero-emerald,
   .hero-violet { @apply hero shadow-primary-950/25; }
-  .hero-amber { @apply hero; --hero-from: #b45309; --hero-to: #d97706; }
-  .hero-rose { @apply hero; --hero-from: #be123c; --hero-to: #e11d48; }
-  .hero-sky { @apply hero; --hero-from: #075985; --hero-to: #0284c7; }
+  /* Variants carry the same overlays, so their stops are darkened to match the
+     base ramp. `.hero-sky` is the only one still rendered (MessagesPage);
+     amber and rose are unused today but were corrected anyway so they do not
+     reintroduce the defect if they are wired up later. */
+  .hero-amber { @apply hero; --hero-from: #3d1c03; --hero-to: #4a2802; }
+  .hero-rose { @apply hero; --hero-from: #5f091e; --hero-to: #700e24; }
+  .hero-sky { @apply hero; --hero-from: #032435; --hero-to: #013550; }
   .hero-dots {
     @apply absolute inset-0 opacity-30 pointer-events-none;
   }
+
+  /* Hero copy uses `text-white/60` and `text-white/50` in~10 places. The warm
+     accents' c-900/c-800 stops under the crest overlays can only carry FULL
+     white text to AA - white/70 fails for five of seven accents (~2.6 worst) -
+     so these secondary small-label uses are forced to solid white in one rule.
+     Genuinely decorative translucent text (`text-white/15`, fades) is left
+     alone - it is not readable text. Unlayered so they beat utilities. */
+  .hero .text-white\/50,
+  .hero .text-white\/60,
+  .hero .text-white\/70 { color: #fff; }
 
   /* ===== BUTTONS ===== */
    .btn {
@@ -249,8 +300,18 @@ html.dark .hover\:text-primary-600:hover { color: rgb(var(--c-400)); }
            active:scale-[0.97] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-transparent
            select-none cursor-pointer;
   }
+  /* Fills use 600->700 rather than 600->500. White text needs 4.5:1 against the
+     fill, and across the 7 accent ramps `500` is the step that fails that for
+     amber (2.15), emerald (2.54) and sky (2.77), while `700` clears it for all
+     seven (worst case amber at 5.02). Lightening on hover also walked the fill
+     up into that failing range.
+
+     The ramp itself is left alone: 500/600/700 are also used as *foreground*
+     text on light surfaces at 226 call sites, and no single value can serve
+     both roles - anything dark enough to carry white text is too dark to read
+     on cream. So the fill steps are chosen per component instead. */
   .btn-primary {
-    @apply btn bg-primary-600 text-white hover:bg-primary-500 focus:ring-primary-500
+    @apply btn bg-primary-700 text-white hover:bg-primary-800 focus:ring-primary-500
            shadow-md shadow-primary-700/20 hover:shadow-primary-600/30
             hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98];
   }
@@ -272,9 +333,11 @@ html.dark .hover\:text-primary-600:hover { color: rgb(var(--c-400)); }
            hover:bg-surface-50 dark:hover:bg-surface-800 focus:ring-surface-400
            hover:border-surface-300 dark:hover:border-surface-600;
   }
+  /* 700->600 for the same reason as .btn-primary: 600->500 put the hover end of
+     the ramp at a step that fails white text for four of the seven accents. */
   .btn-gradient {
-    @apply btn text-white bg-gradient-to-r from-primary-700 to-primary-600
-           hover:from-primary-600 hover:to-primary-500
+    @apply btn text-white bg-gradient-to-r from-primary-800 to-primary-700
+           hover:from-primary-900 hover:to-primary-800
            shadow-md shadow-primary-900/15 hover:shadow-lg hover:shadow-primary-900/20
            hover:-translate-y-0.5 active:translate-y-0;
   }
@@ -443,7 +506,30 @@ html.dark .hover\:text-primary-600:hover { color: rgb(var(--c-400)); }
   }
 
   /* ===== AUTH BACKDROP (signature look, distinct from app interior) ===== */
-  .auth-backdrop { @apply min-h-screen relative overflow-hidden bg-surface-50 dark:bg-surface-950; display: flex; align-items: center; padding: max(1rem, env(safe-area-inset-top)) 1rem max(1rem, env(safe-area-inset-bottom)); background-image: linear-gradient(rgba(13,55,139,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(13,55,139,.04) 1px, transparent 1px); background-size: 34px 34px; }
+  /* Sign-in and registration. The grid is kept because it is what makes the page
+   feel structured rather than a centred box, and the aurora is layered on top
+   so the first screen of the product has the same depth language as the app
+   itself rather than reading as a different product. */
+.auth-backdrop {
+  @apply min-h-screen relative overflow-hidden bg-surface-50 dark:bg-surface-950;
+  display: flex;
+  align-items: center;
+  padding: max(1rem, env(safe-area-inset-top)) 1rem max(1rem, env(safe-area-inset-bottom));
+  background-image:
+    radial-gradient(58% 46% at 18% 12%, rgba(167, 139, 250, 0.16) 0%, transparent 62%),
+    radial-gradient(52% 44% at 86% 20%, rgba(56, 189, 248, 0.14) 0%, transparent 64%),
+    linear-gradient(rgba(13, 55, 139, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(13, 55, 139, 0.04) 1px, transparent 1px);
+  background-size: auto, auto, 34px 34px, 34px 34px;
+}
+
+.dark .auth-backdrop {
+  background-image:
+    radial-gradient(58% 46% at 18% 12%, rgba(167, 139, 250, 0.2) 0%, transparent 62%),
+    radial-gradient(52% 44% at 86% 20%, rgba(56, 189, 248, 0.17) 0%, transparent 64%),
+    linear-gradient(rgba(251, 247, 239, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(251, 247, 239, 0.03) 1px, transparent 1px);
+}
   .auth-editorial {
     @apply min-h-screen grid lg:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)];
     padding-top: env(safe-area-inset-top);
@@ -667,3 +753,457 @@ html.dark .hover\:text-primary-600:hover { color: rgb(var(--c-400)); }
 @keyframes drawerEnter { from { opacity: .6; transform: translateX(-24px); } to { opacity: 1; transform: translateX(0); } }
 @keyframes scrimEnter { from { opacity: 0; } to { opacity: 1; } }
 @keyframes skeletonSweep { from { background-position: 100% 0; } to { background-position: -120% 0; } }
+
+/* =============================================================================
+   PRISM / "UNICORN" LAYER
+   A restrained iridescent treatment layered on the warm-neutral base. The point
+   is depth, not decoration: one prismatic hairline, one slow aurora wash, one
+   sweep of light. Neutrals stay warm so the accent hues read as intentional
+   rather than as a rainbow smeared over everything.
+   ============================================================================= */
+
+@layer components {
+  /* The hue set is fixed so the app keeps one recognisable identity. It reads
+     as a single material catching light, not as five competing brand colours. */
+  .prism-ring {
+    position: relative;
+    isolation: isolate;
+  }
+  /* Gradient hairline border via a masked pseudo-element, so the border can be
+     multi-hued without any layout shift. */
+  .prism-ring::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      135deg,
+      rgba(167, 139, 250, 0.55) 0%,
+      rgba(244, 114, 182, 0.45) 28%,
+      rgba(56, 189, 248, 0.5) 55%,
+      rgba(52, 211, 153, 0.4) 78%,
+      rgba(167, 139, 250, 0.55) 100%
+    );
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* Premium surface: warm glass plus a barely-there prismatic wash. */
+  .prism-card {
+    @apply relative overflow-hidden rounded-3xl shadow-card dark:shadow-card-dark;
+    background:
+      linear-gradient(160deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.72) 55%, rgba(244, 240, 255, 0.8) 100%);
+  }
+  /* Deliberately lighter than the page surface (surface-950 is #12100f). An
+     earlier version used a near-black gradient, which made every card the same
+     value as the background behind it - the tiles then read as flat dark boxes
+     with no edge at all. */
+  .dark .prism-card {
+    background:
+      linear-gradient(160deg, rgba(48, 43, 40, 0.96) 0%, rgba(34, 30, 29, 0.94) 60%, rgba(46, 38, 58, 0.94) 100%);
+  }
+
+  /* A single light sweep. Used to signal "this is live", so it runs on one
+     element per screen rather than everywhere. */
+  .prism-sweep {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(
+      100deg,
+      transparent 30%,
+      rgba(255, 255, 255, 0.5) 48%,
+      rgba(255, 255, 255, 0.12) 56%,
+      transparent 72%
+    );
+    transform: translateX(-120%);
+  }
+
+  /* Slow multi-hue wash for hero surfaces. */
+  .prism-aurora {
+    position: absolute;
+    inset: -30%;
+    pointer-events: none;
+    background:
+      radial-gradient(38% 42% at 18% 22%, rgba(167, 139, 250, 0.34) 0%, transparent 62%),
+      radial-gradient(34% 38% at 82% 18%, rgba(56, 189, 248, 0.3) 0%, transparent 64%),
+      radial-gradient(40% 44% at 68% 82%, rgba(244, 114, 182, 0.26) 0%, transparent 66%),
+      radial-gradient(32% 36% at 26% 86%, rgba(52, 211, 153, 0.22) 0%, transparent 64%);
+    filter: blur(28px);
+  }
+
+  /* Gradient type, reserved for money and headline figures only. */
+  .prism-text {
+    background-image: linear-gradient(
+      100deg,
+      rgb(var(--c-600)) 0%,
+      #a78bfa 32%,
+      #f472b6 58%,
+      #38bdf8 82%,
+      rgb(var(--c-600)) 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .dark .prism-text {
+    background-image: linear-gradient(
+      100deg,
+      #c4b5fd 0%,
+      #f0abfc 32%,
+      #7dd3fc 58%,
+      #6ee7b7 82%,
+      #c4b5fd 100%
+    );
+  }
+
+  /* Icon chip: a soft tinted well that lifts to the full prismatic gradient on
+     hover, so the row reads as one object rather than a stack of parts. */
+  .prism-chip {
+    @apply flex items-center justify-center rounded-2xl transition-all duration-300 ease-out;
+    background: linear-gradient(150deg, rgba(167, 139, 250, 0.22), rgba(56, 189, 248, 0.18));
+  }
+  .dark .prism-chip {
+    background: linear-gradient(150deg, rgba(167, 139, 250, 0.32), rgba(56, 189, 248, 0.26));
+  }
+  .prism-chip:hover {
+    background-image: linear-gradient(135deg, #a78bfa, #f472b6 45%, #38bdf8);
+  }
+  /* The glyph inverts with its chip, so the whole well reads as one object. */
+  .prism-chip:hover > svg { color: #fff; }
+
+  /* Interactive row: the only place the lift-and-tint treatment is used, so it
+     always means "you can act on this". */
+  .prism-row {
+    @apply flex w-full items-center gap-3 rounded-2xl border border-transparent text-left
+           transition-all duration-200 ease-out active:scale-[0.99];
+  }
+  .prism-row:hover {
+    @apply border-surface-200 bg-white shadow-card dark:border-surface-700 dark:bg-surface-800;
+  }
+  .prism-row:hover .prism-chip {
+    background-image: linear-gradient(135deg, #a78bfa, #f472b6 45%, #38bdf8);
+  }
+  .prism-row:hover .prism-chip > svg { color: #fff; }
+  .prism-row:hover .prism-row-chevron { transform: translateX(2px); color: rgb(var(--c-500)); }
+}
+
+@layer utilities {
+  /* Every prism animation collapses to a static, fully readable state when the
+     user has asked for reduced motion. */
+  @media (prefers-reduced-motion: no-preference) {
+    .animate-prism-sweep { animation: prismSweep 4.5s cubic-bezier(0.16, 1, 0.3, 1) infinite; }
+    .animate-prism-drift { animation: prismDrift 22s ease-in-out infinite alternate; }
+    .animate-prism-breathe { animation: prismBreathe 6s ease-in-out infinite; }
+  }
+  .animate-none-reduced { animation: none; }
+}
+
+@keyframes prismSweep {
+  0% { transform: translateX(-120%); }
+  55%, 100% { transform: translateX(120%); }
+}
+@keyframes prismDrift {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(2%, -3%, 0) scale(1.06); }
+  100% { transform: translate3d(-2%, 2%, 0) scale(1.02); }
+}
+@keyframes prismBreathe {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.04); }
+}
+
+/* =============================================================================
+   TEXT CONTRAST
+
+   The `surface` scale is a single set of hex values, and neither end of it
+   clears WCAG AA on its own. Two failures, both corrected centrally here
+   because there are 300+ call sites that would otherwise need hundreds of
+   individual edits that drift apart again.
+
+   These rules sit outside @layer, so they take precedence over the generated
+   utility regardless of layer order, and `!important`-free overrides are kept.
+   ============================================================================= */
+
+/* --- Dark mode ------------------------------------------------------------
+   `surface-500` (#716457) reads fine on the cream page but reaches only 3.3:1
+   against the near-black dark page, below the 4.5:1 WCAG AA requirement for body
+   text. The muted steps are lifted to match.
+
+   Two selector forms are needed, because Tailwind v4 compiles
+   `dark:text-surface-400` into `.dark\:text-surface-400:is(.dark *)` — a class
+   ON THE ELEMENT, not a descendant of `.dark`. A rule written only as
+   `.dark .text-surface-400` therefore misses all 289 `dark:` call sites, which
+   kept rendering the raw #716457.
+
+   The variant classes are matched with `[class~=...]` rather than by writing
+   `.dark\:text-surface-400`. An escaped colon in hand-written CSS gets escaped a
+   second time by the Tailwind/PostCSS pipeline and emits `.dark\\:...`, which
+   matches a class containing a literal backslash and so matches nothing.
+   Matching the class by substring sidesteps the escaping entirely and is
+   immune to how the variant compiles.
+
+   Specificity has to beat the generated rule, because Tailwind emits
+   `dark:text-surface-*` AFTER this file's hand-written CSS (line ~8450 of the
+   output vs ~6890 here). Both selectors are only (0,2,0), so source order alone
+   would hand the win to Tailwind. The doubled attribute compounds to (0,3,0),
+   which wins regardless of order, and stays `!important`-free. */
+.dark .text-surface-400,
+.dark [class~='dark:text-surface-400'][class] { color: #a99e8f; }
+.dark .text-surface-500,
+.dark [class~='dark:text-surface-500'][class] { color: #b8ad9c; }
+.dark .text-surface-600,
+.dark [class~='dark:text-surface-600'][class] { color: #cabfac; }
+.dark .text-surface-700,
+.dark [class~='dark:text-surface-700'][class] { color: #dcd1c0; }
+
+/* --- Accent text on light surfaces ----------------------------------------
+   Pre-existing and unrelated to fills: `text-primary-500/600` used as
+   FOREGROUND on the cream page measures 1.76:1 (amber) to 3.91:1 (navy) at the
+   500 step, and 2.61:1 to 5.52:1 at 600 - all under the 4.5:1 AA floor for body
+   copy. 181 call sites use these steps as text, so they are stepped up here
+   rather than edited one by one.
+
+   Only the LIGHT case is touched. The `dark:` variants already resolve to the
+   lighter 300/400 steps via the rules above, and those pass on the near-black
+   page, so leaving them alone keeps dark mode from washing out.
+
+   800 is the step used, not 700. 700 clears 4.5:1 for five of the seven accents
+   but lands at 4.12:1 in amber and 4.50:1 in emerald against the lilac aurora
+   wash, so 800 is used uniformly to stay clear of every accent (worst 5.82). */
+.text-primary-500 { color: rgb(var(--c-800)); }
+.text-primary-600 { color: rgb(var(--c-800)); }
+.text-accent-500,
+.text-accent-600,
+.text-indigo-500,
+.text-indigo-600,
+.text-violet-500,
+.text-violet-600,
+.text-purple-500,
+.text-purple-600 { color: rgb(var(--c-800)); }
+
+/* `hover:text-primary-500/600` on light backgrounds has the same floor. */
+.hover\:text-primary-500:hover,
+.hover\:text-primary-600:hover { color: rgb(var(--c-800)); }
+
+/* --- Accent foreground in DARK mode ---------------------------------------
+   The 400 step is the dark-mode foreground, but as authored it only reaches
+   3.75:1 against the auth card's aurora wash (rgb 59,51,70) in navy, and fails
+   for indigo, rose and coral too. Lift it to the 300 step's territory, which
+   clears every dark surface (worst 5.54:1).
+
+   This is the one place a ramp value genuinely has to move: 400 is a FOREGROUND
+   step here, never a fill, so darkening it for white-text contrast is not in
+   play and nothing regresses. */
+.dark .text-primary-400,
+.dark [class~='dark:text-primary-400'][class] { color: rgb(var(--c-300)); }
+
+/* --- White-on-accent fills ------------------------------------------------
+   `primary-500` carries white text at 60 call sites (`bg-primary-600
+   text-white` and friends), but white needs 4.5:1 from the FILL and that step
+   only reaches 2.15:1 in amber, 2.54 in emerald, 2.77 in sky and 3.58 in coral.
+
+   The ramp cannot simply be darkened to fix this. Those same 500/600/700 steps
+   are used as FOREGROUND text on light surfaces at 181 call sites, where they
+   need to be dark - and the two requirements pull in opposite directions, so no
+   single value satisfies both. Darkening the ramp was tried and regressed every
+   one of those 181 sites to ~3.8:1.
+
+   Instead the fill is remapped only where white text actually sits on it. This
+   targets the compound selector, so the plain `bg-primary-500` utility keeps its
+   original value everywhere it is used decoratively or under dark text. */
+.bg-primary-500.text-white,
+.text-white.bg-primary-500 { background-color: rgb(var(--c-700)); }
+.bg-primary-600.text-white,
+.text-white.bg-primary-600 { background-color: rgb(var(--c-800)); }
+.bg-primary-700.text-white,
+.text-white.bg-primary-700 { background-color: rgb(var(--c-900)); }
+
+/* Same treatment for the two palettes that bypass the runtime accent ramp and
+   are used with white labels.
+
+   `bg-blue-500` is Tailwind's built-in "info" blue, hardcoded across 13 files,
+   and white on it is 3.68:1. `bg-accent-500` is the fixed lime in the Tailwind
+   config - not part of `--c-*` - and white on that is 2.37:1. Both are stepped
+   up to the first value that clears AA (blue-600 at 5.17, accent-700 at 5.93)
+   without changing which hue is being used, so "info is blue" still holds and
+   the hover steps stay in the same family. */
+.bg-blue-500.text-white,
+.text-white.bg-blue-500 { background-color: rgb(37 99 235); }
+.bg-blue-400.text-white,
+.text-white.bg-blue-400 { background-color: rgb(37 99 235); }
+.bg-accent-500.text-white,
+.text-white.bg-accent-500 { background-color: rgb(85 108 22); }
+.bg-accent-400.text-white,
+.text-white.bg-accent-400 { background-color: rgb(85 108 22); }
+
+/* Tailwind's built-in status palettes carry white labels too, and their mid
+   steps are all too light: emerald-600 is 3.77:1, amber-600 3.19:1, orange-600
+   3.56:1. Stepped up to 700 (emerald 5.48, amber 5.02, orange 5.18), which is
+   the first shade that clears AA in each family and keeps the hue. */
+.bg-emerald-600.text-white,
+.text-white.bg-emerald-600 { background-color: rgb(4 120 87); }
+.bg-emerald-500.text-white,
+.text-white.bg-emerald-500 { background-color: rgb(4 120 87); }
+.bg-amber-500.text-white,
+.text-white.bg-amber-500 { background-color: rgb(180 83 9); }
+.bg-amber-600.text-white,
+.text-white.bg-amber-600 { background-color: rgb(180 83 9); }
+.bg-orange-500.text-white,
+.text-white.bg-orange-500 { background-color: rgb(194 65 12); }
+.bg-orange-600.text-white,
+.text-white.bg-orange-600 { background-color: rgb(194 65 12); }
+
+/* `.prism-card` sets its surface with the `background` SHORTHAND, which paints a
+   near-white glass gradient. That gradient sits on top of any `background-color`
+   a caller adds (GlassCard appends className after prism-card, so both land on
+   the same element), so an explicit fill was silently invisible and white text
+   sat on near-white - 1.12:1 on the partner map's "View List" chip.
+
+   Where a solid fill plus white text is clearly intended, the decorative
+   gradient is cancelled so the fill shows through. Listed explicitly rather
+   than matched by pattern so this cannot fire on a card that only wanted a
+   tinted glass surface. */
+.prism-card:is(
+  .bg-emerald-500, .bg-emerald-600,
+  .bg-primary-500, .bg-primary-600, .bg-primary-700,
+  .bg-blue-500, .bg-accent-500, .bg-danger-500
+).text-white { background-image: none; }
+
+/* Same fixed-lime problem via a gradient STOP rather than a background colour.
+   `from-primary-500 to-accent-500` appears 10 times with white labels, and the
+   lime end stop is only 2.37:1 against white - a compound `.bg-accent-500`
+   selector cannot catch it because `to-accent-500` only sets a gradient stop,
+   not `background-color`. Rewriting the stop custom property fixes every call
+   site at once, including the two where `text-white` sits on a child icon
+   rather than the gradient element itself.
+
+   accent-700 (rgb 85 108 22) is the same hue at 5.93:1, so the two-tone
+   gradient keeps its lime character. `accent-600` is left alone: it is only
+   3.81:1 and would need the same treatment if it is ever used behind white. */
+.to-accent-500.to-accent-500 { --tw-gradient-to: rgb(85 108 22) var(--tw-gradient-to-position, ); }
+.to-accent-400.to-accent-400 { --tw-gradient-to: rgb(85 108 22) var(--tw-gradient-to-position, ); }
+
+/* `from-primary-500` starts a brand gradient under a white label at 79 call
+   sites. primary-500 only clears AA under white in the cool accents (navy 4.76,
+   indigo 4.62) and fails badly in the warm ones - amber 2.15, emerald 2.54,
+   sky 2.77 - so validating this against navy hid the problem for every other
+   theme. primary-700 clears it for all seven (worst 5.02).
+
+   Tailwind v4 paints the gradient from `--tw-gradient-stops`, which is itself
+   composed from these individual variables, so overriding the stop variable is
+   enough. Doubled class name beats Tailwind's own utility, which is emitted
+   later at equal (0,1,0) specificity. */
+.from-primary-500.from-primary-500 {
+  --tw-gradient-from: rgb(var(--c-700)) var(--tw-gradient-from-position, );
+}
+.from-primary-600.from-primary-600 {
+  --tw-gradient-from: rgb(var(--c-700)) var(--tw-gradient-from-position, );
+}
+
+/* Amber/orange are CarryBuddy's own sub-brand and are hardcoded rather than
+   accent-aware, so they need the same two corrections the ramps got:
+   as a light-mode foreground they are far too light (amber-600 is 3.19:1,
+   amber-500 2.15:1), and as a fill under white text they fail the same way.
+
+   800 is the light-mode text step (amber 7.09:1, orange 6.9:1) and 700 the
+   fill step (amber 5.02:1, orange 5.18:1). The dark: variants already move to
+   the lighter end of each ramp, so only the light case is touched here. */
+/* All of the foreground corrections below are scoped with `:not(.dark *)` so
+   they only apply while <html> has no `.dark`. Left unscoped they would also
+   fire in dark mode and drag already-light text down toward the dark surface.
+   `:not(.dark *)` reads as "nothing up the tree is .dark", which is exactly the
+   light-mode condition, and it still outranks Tailwind's plain (0,1,0)
+   utility. */
+.text-amber-500:not(.dark *),
+.text-amber-600:not(.dark *) { color: rgb(146 64 14); }
+.text-orange-500:not(.dark *),
+.text-orange-600:not(.dark *) { color: rgb(154 52 18); }
+/* Tailwind's `red` is separate from the app's `danger` scale and is used for
+   load-failure copy ("Failed to Load"), which lands at 3.76:1 on a white card.
+   red-700 is 5.91:1. */
+.text-red-500:not(.dark *),
+.text-red-400:not(.dark *) { color: rgb(185 28 28); }
+/* Dark surfaces need the other direction: red-500 falls to 4.04:1 on a card, so
+   foreground red moves up to 400 (5.49:1) while fills keep red-600 below. */
+.dark .text-red-500,
+.dark .text-red-400 { color: rgb(248 113 113); }
+.bg-red-500.text-white,
+.text-white.bg-red-500 { background-color: rgb(220 38 38); }
+.bg-red-400.text-white,
+.text-white.bg-red-400 { background-color: rgb(220 38 38); }
+
+/* Doubled class so these beat Tailwind's own `from-*`/`via-*`/`to-*` rules.
+   Single-class specificity ties with them at (0,1,0) and Tailwind's utilities
+   are emitted after this file, so the original values were winning. */
+/* CarryBuddy's amber surfaces are hand-authored per component now (its hero uses
+   from-amber-800/via-orange-800/to-amber-900), so no global gradient remap is
+   needed for them. Overriding only `--tw-gradient-via` was never enough anyway:
+   Tailwind paints the composed `--tw-gradient-stops`, so the variable could change
+   while the rendered gradient kept the original colour. */
+
+/* Red is the destructive-action colour and is used two ways: as button TEXT on
+   the cream page (Sign Out on the profile screens) and as a fill under white.
+   The app's `danger` scale tops out at 500 (#ef4444), which is 3.52:1 on cream
+   and only 3.76:1 under white - short of AA for both. Rather than add a shade to
+   the config, both roles move to the existing danger-600 (#dc2626), which
+   measures 4.52:1 on cream and 4.83:1 against white. */
+/* `danger` foreground vs fill want different steps. As button text on the cream
+   page (and on the lilac-tinted prism cards) danger-600 is only 4.41:1, so
+   foreground uses danger-700 (5.9:1). As a fill under white text, danger-600 is
+   4.83:1 and is the right step - going to 700 would be needlessly heavy. The
+   two directions differ again in dark, where foreground moves back up to 400. */
+.text-danger-500,
+.text-danger-400 { color: rgb(185 28 28); }
+.dark .text-danger-500,
+.dark .text-danger-400 { color: rgb(252 165 165); }
+.bg-danger-500.text-white,
+.text-white.bg-danger-500 { background-color: rgb(220 38 38); }
+
+/* Same remap for hover, so lightening the fill cannot drop below the floor. */
+.hover\:bg-primary-500:hover,
+.text-white.hover\:bg-primary-500:hover { background-color: rgb(var(--c-700)); }
+.hover\:bg-primary-600:hover,
+.text-white.hover\:bg-primary-600:hover { background-color: rgb(var(--c-800)); }
+.hover\:bg-primary-700:hover,
+.text-white.hover\:bg-primary-700:hover { background-color: rgb(var(--c-900)); }
+
+/* Same defect, different scale. The built-in Tailwind `slate`/`gray` values are
+   tuned for white, so `text-slate-500` on a dark surface also lands near 3.8-4.2:1.
+   Lifted one step so muted body copy clears 4.5:1 without becoming primary text. */
+/* Excluded on an explicitly light panel. A few admin screens (Pricing today)
+   are light-themed in BOTH themes - `bg-slate-50` with no `dark:` variants - and
+   lightening slate-500 there dropped it to 2.45:1, since #94a3b8 is slate-400.
+   The lift is only correct when the surrounding surface is actually dark. */
+.dark .text-slate-500 { color: #94a3b8; }
+.dark .bg-slate-50 .text-slate-500,
+.dark .bg-white .text-slate-500 { color: rgb(71 85 105); }
+.dark .text-gray-500 { color: #9ca3af; }
+.dark .text-neutral-500 { color: #a3a3a3; }
+.dark .text-zinc-500 { color: #a1a1aa; }
+.dark .text-stone-500 { color: #a8a29e; }
+
+/* --- Light mode -----------------------------------------------------------
+   `surface-400` (#9d8f7e) is the lightest step still meant to carry text, but
+   against the cream page it lands at 2.95:1 and against white 3.15:1, both
+   under the 4.5:1 AA floor for body copy. It is used for small muted text in
+   ~490 places, so it is darkened once here instead of per call site.
+
+   #726558 is the lightest value on the 400->500 ramp that clears 4.62:1 against
+   every background `text-surface-400` actually lands on in light mode: white, the
+   cream page, surface-100 cards, and the translucent aurora/prism washes the
+   auth screens tint their surfaces with. Those washes push the surface toward
+   lilac (measured at rgb 238,230,241), which is a harder case than the flat
+   palette values and is what an earlier guess at this colour failed on.
+   Verified that no light-mode usage puts this utility on a dark background, so
+   darkening it cannot reduce contrast anywhere.
+
+   Left deliberately short of `surface-500` (#716457) so the muted tone keeps its
+   original lightness and hierarchy; large text and icons gain contrast for free. */
+.text-surface-400 { color: #726558; }

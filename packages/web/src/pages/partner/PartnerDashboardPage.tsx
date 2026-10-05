@@ -173,6 +173,9 @@ export function PartnerDashboardPage() {
       <AnimatedPage>
         <div className="hero-indigo">
           <div className="hero-sheen pointer-events-none absolute inset-0" />
+
+          <div className="prism-aurora animate-prism-drift opacity-50" aria-hidden />
+
           <div className="absolute -top-20 -right-20 h-60 w-60 rounded-full bg-[#D2F53C]/15 blur-3xl" />
           <div className="absolute -bottom-20 -left-20 h-60 w-60 rounded-full bg-white/5 blur-3xl" />
           <div className="relative z-10">

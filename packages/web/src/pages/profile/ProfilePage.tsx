@@ -4,6 +4,8 @@ import { useAuth } from '../../lib/auth'
 import { Link } from 'react-router-dom'
 import { VerificationBadge } from '../../components/VerificationBadge'
 import { TrustScoreDisplay } from '../../components/TrustScoreDisplay'
+import { ReferralCard } from '../../components/account/ReferralCard'
+import { Reveal } from '../../components/motion/Reveal'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
 import { RoleSwitcher } from '../../components/RoleSwitcher'
@@ -137,6 +139,8 @@ export function ProfilePage() {
         <div className="hero-indigo">
           <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2230%22%20height%3D%2230%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cdefs%3E%3Cpattern%20id%3D%22g%22%20width%3D%2230%22%20height%3D%2230%22%20patternUnits%3D%22userSpaceOnUse%22%3E%3Ccircle%20cx%3D%2215%22%20cy%3D%2215%22%20r%3D%221%22%20fill%3D%22rgba(255,255,255,0.08)%22/%3E%3C/pattern%3E%3C/defs%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22url(%23g)%22/%3E%3C/svg%3E')] opacity-30" />
           <div className="absolute -top-20 -right-20 w-60 h-60 bg-white/10 rounded-full blur-3xl" />
+          <div className="prism-aurora animate-prism-drift opacity-50" aria-hidden />
+          <div className="prism-sweep animate-prism-sweep" aria-hidden />
 
           <div className="relative z-10 flex flex-col sm:flex-row items-center sm:items-start gap-6">
             <div className="relative group">
@@ -407,6 +411,13 @@ export function ProfilePage() {
                 </Link>
               </GlassCard>
             )}
+
+            {/* Invite friends. The referral code and reward tracking already
+                exist on the server; this is the first place a user can actually
+                see their code, share it, or check whether a reward landed. */}
+            <Reveal from="up">
+              <ReferralCard className="mt-6" />
+            </Reveal>
 
             {/* Account Settings */}
             <GlassCard variant="elevated" padding="lg">

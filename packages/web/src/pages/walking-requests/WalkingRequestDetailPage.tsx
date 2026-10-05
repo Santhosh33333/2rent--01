@@ -2,35 +2,94 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Dog, MapPin, Calendar, Clock, DollarSign,
-  Loader2, AlertTriangle, CheckCircle, XCircle,
-  MessageCircle, Phone, Star, Shield
+  Loader2, AlertTriangle, CheckCircle, XCircle, Hourglass,
+  MessageCircle, Phone, Shield
 } from 'lucide-react'
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
 import { api } from '../../lib/api'
+import { formatINR } from '../../lib/format'
 import { useAuth } from '../../lib/auth'
 
+/**
+ * Shape of GET /walking-requests/:id.
+ *
+ * This previously declared `type`, `location`, `date`, `time`, `reward` and
+ * `description`, none of which exist on WalkingRequest. Every one of them read
+ * as undefined, so the page threw on render: `format(new Date(undefined))` is a
+ * RangeError, and `request.reward.toFixed(2)` is a TypeError right behind it.
+ * The interface now matches the model the API actually returns.
+ *
+ * `fare`, `platformFee` and `partnerEarning` are Prisma Decimals and arrive as
+ * STRINGS, so they are typed string | number and coerced where displayed.
+ */
 interface RequestDetail {
-  id: number
-  type: 'walking' | 'companionship'
-  location: string
-  date: string
-  time: string
-  status: 'open' | 'accepted' | 'completed'
-  reward: number
-  description: string
-  requesterId?: string
+  id: string
+  status: string
+  startLocation: string
+  endLocation: string
+  startTime: string
+  durationMinutes: number | null
+  notes: string | null
+  fare: string | number | null
+  platformFee: string | number | null
+  partnerEarning: string | number | null
+  requesterId: string
   acceptedById?: string | null
   completedById?: string | null
+  completedAt?: string | null
   confirmedAt?: string | null
-  requester: { name: string; avatar?: string; rating?: number }
-  acceptedBy?: { name: string; avatar?: string }
+  createdAt: string
+  requester?: { id: string; fullName: string | null; avatarUrl: string | null } | null
+  acceptedBy?: { id: string; fullName: string | null; avatarUrl: string | null } | null
 }
 
-const statusConfig = {
-  open: { label: 'Open', icon: Dog, class: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' },
-  accepted: { label: 'Accepted', icon: CheckCircle, class: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' },
-  completed: { label: 'Completed', icon: CheckCircle, class: 'bg-surface-100 dark:bg-surface-800 text-surface-500 dark:text-surface-400' },
+/**
+ * Keyed by the statuses the controller writes. `status` is a free-form String
+ * column, so CANCELLED is reachable and an unknown value must not be indexed
+ * into blindly.
+ */
+const STATUS_CONFIG: Record<string, { label: string; icon: typeof Dog; class: string }> = {
+  OPEN: { label: 'Open', icon: Hourglass, class: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' },
+  ACCEPTED: { label: 'Accepted', icon: CheckCircle, class: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' },
+  COMPLETED: { label: 'Completed', icon: CheckCircle, class: 'bg-surface-100 dark:bg-surface-800 text-surface-500 dark:text-surface-400' },
+  CANCELLED: { label: 'Cancelled', icon: XCircle, class: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' },
+}
+
+const UNKNOWN_STATUS = {
+  label: 'Unknown',
+  icon: Hourglass,
+  class: 'bg-surface-100 dark:bg-surface-800 text-surface-500 dark:text-surface-400',
+}
+
+const statusConfig = (status: string) => STATUS_CONFIG[status] ?? UNKNOWN_STATUS
+
+/**
+ * Avatar initials. Guards the null and empty cases: the previous code called
+ * `.split(' ')` straight on a name that the API may omit, and the user relation
+ * is nullable, so this has to survive `null`.
+ */
+function initials(name: string | null | undefined): string {
+  if (!name) return '?'
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return '?'
+  return parts.slice(0, 2).map(p => p[0]!.toUpperCase()).join('')
+}
+
+/**
+ * date-fns throws RangeError on an invalid Date. A detail page has exactly one
+ * row, but that row can still carry a malformed timestamp, and an unparseable
+ * value should read as a dash rather than blanking the page.
+ */
+function safeDate(value: string | null | undefined, pattern: string): string {
+  if (!value) return '—'
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return '—'
+  try {
+    return format(d, pattern)
+  } catch {
+    return '—'
+  }
 }
 
 export function WalkingRequestDetailPage() {
@@ -135,10 +194,11 @@ export function WalkingRequestDetailPage() {
     )
   }
 
-  const StatusIcon = statusConfig[request.status].icon
-  const isOpen = request.status === 'open'
-  const isAccepted = request.status === 'accepted'
-  const isCompleted = request.status === 'completed'
+  const meta = statusConfig(request.status)
+  const StatusIcon = meta.icon
+  const isOpen = request.status === 'OPEN'
+  const isAccepted = request.status === 'ACCEPTED'
+  const isCompleted = request.status === 'COMPLETED'
   const myId = (user as any)?.id
   const iAmRequester = !!myId && request.requesterId === myId
   const iAmWalker = !!myId && request.acceptedById === myId
@@ -168,15 +228,15 @@ export function WalkingRequestDetailPage() {
             <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center shadow-lg shadow-primary-500/30">
               <Dog className="w-8 h-8 text-white" />
             </div>
-            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${statusConfig[request.status].class}`}>
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${meta.class}`}>
               <StatusIcon className="w-4 h-4" />
-              {statusConfig[request.status].label}
+              {meta.label}
             </span>
           </div>
 
           {/* Title */}
           <h1 className="text-2xl font-bold font-display text-surface-900 dark:text-white capitalize mb-1">
-            {request.type} Request
+            Walking Request
           </h1>
           <p className="text-sm text-surface-500">Request #{request.id}</p>
 
@@ -186,28 +246,29 @@ export function WalkingRequestDetailPage() {
               <Calendar className="w-4 h-4 text-primary-500 mx-auto mb-1" />
               <p className="text-[10px] text-surface-400">Date</p>
               <p className="text-xs font-medium text-surface-900 dark:text-white">
-                {format(new Date(request.date), 'MMM d, yyyy')}
+                {safeDate(request.startTime, 'MMM d, yyyy')}
               </p>
             </div>
             <div className="glass-card-sm p-3 text-center">
               <Clock className="w-4 h-4 text-accent-500 mx-auto mb-1" />
               <p className="text-[10px] text-surface-400">Time</p>
               <p className="text-xs font-medium text-surface-900 dark:text-white">
-                {request.time || 'Flexible'}
+                {safeDate(request.startTime, 'h:mm a')}
               </p>
             </div>
             <div className="glass-card-sm p-3 text-center">
               <MapPin className="w-4 h-4 text-emerald-500 mx-auto mb-1" />
-              <p className="text-[10px] text-surface-400">Location</p>
-              <p className="text-xs font-medium text-surface-900 dark:text-white truncate">
-                {request.location}
+              <p className="text-[10px] text-surface-400">Route</p>
+              <p className="text-xs font-medium text-surface-900 dark:text-white truncate"
+                 title={`${request.startLocation} → ${request.endLocation}`}>
+                {request.startLocation} → {request.endLocation}
               </p>
             </div>
             <div className="glass-card-sm p-3 text-center">
               <DollarSign className="w-4 h-4 text-violet-500 mx-auto mb-1" />
-              <p className="text-[10px] text-surface-400">Reward</p>
+              <p className="text-[10px] text-surface-400">Fare</p>
               <p className="text-xs font-bold text-surface-900 dark:text-white">
-                ₹{request.reward.toFixed(2)}
+                {formatINR(request.fare)}
               </p>
             </div>
           </div>
@@ -216,7 +277,7 @@ export function WalkingRequestDetailPage() {
           <div className="mt-6">
             <h2 className="text-sm font-semibold text-surface-900 dark:text-white mb-2">Description</h2>
             <p className="text-sm text-surface-600 dark:text-surface-400 leading-relaxed">
-              {request.description || 'No description provided.'}
+              {request.notes || 'No description provided.'}
             </p>
           </div>
 
@@ -224,17 +285,13 @@ export function WalkingRequestDetailPage() {
           <div className="mt-4 p-4 rounded-xl bg-surface-50 dark:bg-surface-800/50">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary-500/20 to-accent-500/20 flex items-center justify-center text-primary-600 dark:text-primary-400 font-semibold text-lg">
-                {request.requester.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                {initials(request.requester?.fullName)}
               </div>
               <div className="flex-1">
                 <p className="text-xs text-surface-400">Requested by</p>
-                <p className="text-sm font-medium text-surface-900 dark:text-white">{request.requester.name}</p>
-                {request.requester.rating && (
-                  <span className="flex items-center gap-1 text-xs text-amber-500 mt-0.5">
-                    <Star className="w-3 h-3 fill-current" />
-                    {request.requester.rating.toFixed(1)}
-                  </span>
-                )}
+                <p className="text-sm font-medium text-surface-900 dark:text-white">
+                  {request.requester?.fullName || 'Unknown user'}
+                </p>
               </div>
               <div className="flex gap-2">
                 <button className="w-9 h-9 rounded-xl bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700 flex items-center justify-center text-surface-500 hover:text-primary-600 transition-colors">
@@ -252,11 +309,13 @@ export function WalkingRequestDetailPage() {
             <div className="mt-3 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/20 flex items-center justify-center text-amber-600 dark:text-amber-400 font-semibold text-sm">
-                  {request.acceptedBy.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                  {initials(request.acceptedBy?.fullName)}
                 </div>
                 <div>
                   <p className="text-xs text-amber-600 dark:text-amber-400">Accepted by</p>
-                  <p className="text-sm font-medium text-amber-900 dark:text-amber-200">{request.acceptedBy.name}</p>
+                  <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+                    {request.acceptedBy?.fullName || 'Unknown user'}
+                  </p>
                 </div>
                 <Shield className="w-4 h-4 text-amber-500 ml-auto" />
               </div>

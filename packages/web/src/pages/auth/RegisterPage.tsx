@@ -10,6 +10,7 @@ import { useAuth } from '../../lib/auth'
 import { resolveLandingRole } from '../../lib/roles'
 import { api } from '../../lib/api'
 import { AnimatedPage } from '../../components/AnimatedPage'
+import { stashPendingReferralCode } from '../../components/account/ReferralCard'
 
 function ageFrom(dob: string): number {
   const birth = new Date(dob)
@@ -234,15 +235,25 @@ export function RegisterPage() {
           signatureValue: data.name,
         },
       })
-      // If the user signed up with a valid referral code, link them as soon as
-      // the account exists. Non-fatal on failure (e.g. invalid/unused code).
+// If the user signed up with a valid referral code, link them as soon as
+      // the account exists. The account is already created by this point, so a
+      // failed apply must not fail registration. It used to be swallowed
+      // outright, which made a typo'd or already-used code indistinguishable
+      // from a working one - the user silently lost the reward. The code is now
+      // parked so ReferralCard can offer a retry.
       if (isReferral) {
+        const code = data.referralCode!.trim()
         try {
-          await api.post('/referrals/apply', { code: data.referralCode!.trim() })
+          await api.post('/referrals/apply', { code })
+          toast.success('Referral code applied!')
         } catch {
-          /* best-effort — invalid codes are simply ignored */
+          stashPendingReferralCode(code)
+          toast("You're signed up, but that referral code didn't apply — you can retry it from your profile.", {
+            icon: '⚠️',
+            duration: 6000,
+          })
         }
-      }
+}
       toast.success('Registration successful!')
       const userId = result?.userId || user?.id
       if (userId) {
@@ -332,7 +343,8 @@ export function RegisterPage() {
           </div>
 
           {/* Card */}
-          <div className="glass-elevated p-8">
+          <div className="prism-card prism-ring p-8">
+            <div className="prism-sweep animate-prism-sweep" aria-hidden />
             <div className="text-center mb-6">
               <h3 className="text-lg font-bold font-display text-surface-900 dark:text-white">{steps[step - 1].title}</h3>
               <p className="text-sm text-surface-500 mt-1">{steps[step - 1].subtitle}</p>

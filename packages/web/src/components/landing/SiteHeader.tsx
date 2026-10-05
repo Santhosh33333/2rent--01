@@ -122,7 +122,7 @@ export function SiteHeader() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: 26,
+              gap: 22,
               listStyle: 'none',
               margin: 0,
               padding: 0,

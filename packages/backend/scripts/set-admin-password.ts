@@ -43,6 +43,20 @@ async function main(): Promise<void> {
       where: { id: user.id },
       data: { passwordHash, status: "ACTIVE" },
     });
+
+    // Clear the admin lockout. Resetting only the password is not enough: once
+    // the failed-attempt counter trips, checkAdminLockout keeps rejecting the
+    // new password with ACCOUNT_LOCKED, so this script would appear to do
+    // nothing. Absence of an AdminUser row is tolerated, since the primary super
+    // admin can authenticate without one.
+    const admin = await tx.adminUser.findUnique({ where: { userId: user.id } });
+    if (admin) {
+      await tx.adminUser.update({
+        where: { userId: user.id },
+        data: { failedLoginAttempts: 0, lockedUntil: null },
+      });
+    }
+
     await tx.auditLog.create({
       data: {
         actorId: user.id,
@@ -50,7 +64,10 @@ async function main(): Promise<void> {
         action: "ADMIN_PASSWORD_SET_VIA_SCRIPT",
         entityType: "User",
         entityId: user.id,
-        metadata: JSON.stringify({ note: "break-glass local recovery; password never logged" }),
+        metadata: JSON.stringify({
+          note: "break-glass local recovery; password never logged",
+          lockoutCleared: Boolean(admin),
+        }),
       },
     });
   });

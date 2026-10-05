@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Wallet, Check, X, HelpCircle, IndianRupee, User as UserIcon, Clock, FileDown } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Check, X, HelpCircle, IndianRupee, User as UserIcon, FileDown } from 'lucide-react'
+import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
 import { adminApi, assetUrl } from '../../lib/api'
 import { getErrorMessage } from '../../lib/error'
 import { exportTableToPdf } from '../../lib/pdfExport'
@@ -72,24 +72,18 @@ export function AdminTopupsPage() {
   return (
     <div className="bg-surface-50 dark:bg-surface-950 p-4 md:p-6">
       <div className="max-w-5xl mx-auto">
-        <div className="flex items-center gap-3 mb-1">
-          <Link to="/admin/portal" className="p-2 rounded-lg bg-surface-200 dark:bg-surface-800 hover:bg-surface-300 dark:hover:bg-surface-700 text-surface-600 dark:text-surface-300 hover:text-surface-900 dark:hover:text-white transition">
-            <span className="flex items-center gap-1 text-sm"><Clock className="w-4 h-4" /> Back</span>
-          </Link>
-        </div>
-        <h1 className="text-2xl font-display font-bold text-surface-900 dark:text-white flex items-center gap-2 mt-3">
-          <Wallet className="w-6 h-6 text-primary" /> Manual UPI Top-ups
-        </h1>
-        <p className="text-sm text-surface-500 dark:text-surface-400 mt-1">
-          Users pay your UPI QR externally and submit the UTR. Verify the amount against your bank statement, then credit their wallet.
-        </p>
+        <AdminPageHeader
+          title="Manual UPI Top-ups"
+          subtitle="Users pay your UPI QR externally and submit the UTR. Verify the amount against your bank statement, then credit their wallet."
+          tone="surface"
+        />
 
         <div className="flex flex-wrap items-center gap-2 mt-4 mb-4">
           {[['VERIFICATION_PENDING', 'Pending'], ['REQUEST_INFO', 'More Info'], ['VERIFIED', 'Credited'], ['REJECTED', 'Rejected'], ['ALL', 'All']].map(([s, label]) => (
             <button
               key={s}
               onClick={() => setFilter(s)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${filter === s ? 'bg-primary text-white' : 'bg-surface-200 dark:bg-surface-800 text-surface-600 dark:text-surface-300 hover:bg-surface-300 dark:hover:bg-surface-700'}`}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${filter === s ? 'bg-primary-600 text-white' : 'bg-surface-200 dark:bg-surface-800 text-surface-600 dark:text-surface-300 hover:bg-surface-300 dark:hover:bg-surface-700'}`}
             >
               {label}
             </button>
@@ -165,7 +159,7 @@ export function AdminTopupsPage() {
                         value={note[r.id] ?? ''}
                         onChange={(e) => setNote((n) => ({ ...n, [r.id]: e.target.value }))}
                         placeholder="Note (required for reject/info)"
-                        className="w-full px-3 py-2 rounded-lg bg-surface-100 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 text-sm text-surface-900 dark:text-white placeholder:text-surface-400 focus:outline-none focus:border-primary"
+                        className="w-full px-3 py-2 rounded-lg bg-surface-100 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 text-sm text-surface-900 dark:text-white placeholder:text-surface-400 focus:outline-none focus:border-primary-600"
                       />
                       <div className="flex gap-2">
                         <button

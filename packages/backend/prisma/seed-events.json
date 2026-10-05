@@ -1,0 +1,15 @@
+[
+  {
+    "_comment": "Replace these with the REAL events. Delete this object and the sample entry before running. The script refuses to run on an empty list rather than inventing listings. Required: title, category, startTime (ISO, must be in the future).",
+    "title": "REPLACE ME — real event title",
+    "category": "sports",
+    "subcategory": "Badminton",
+    "description": "What actually happens, who it is for, what to bring.",
+    "location": "Venue name and area",
+    "startTime": "2026-11-07T06:30:00.000Z",
+    "endTime": "2026-11-07T08:00:00.000Z",
+    "capacity": 12,
+    "price": 0,
+    "isVerified": false
+  }
+]

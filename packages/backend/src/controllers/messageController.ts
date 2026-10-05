@@ -235,9 +235,17 @@ export async function getConversations(req: AuthedRequest, res: Response): Promi
     });
 
     await Promise.all(
-      accepted.map((r) =>
-        ensureConversation(r.senderId === userId ? r.receiverId : r.senderId, userId)
-      )
+      accepted
+        // Skip self-pairs. A ChatRequest whose sender and receiver are the same
+        // account would otherwise resolve to ensureConversation(you, you) and
+        // materialise a Conversation with the user on both sides, which then
+        // shows up in the list as a thread you are talking to yourself. New
+        // self-requests are rejected upstream; this guards rows written before
+        // that check existed, or straight to the database.
+        .filter((r) => (r.senderId === userId ? r.receiverId : r.senderId) !== userId)
+        .map((r) =>
+          ensureConversation(r.senderId === userId ? r.receiverId : r.senderId, userId)
+        )
     );
 
     // The total is the real number of conversations, counted after the

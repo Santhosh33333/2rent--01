@@ -19,7 +19,11 @@ import { useEffect } from 'react';
 
 export function useRevealOnScroll() {
   useEffect(() => {
-    const targets = Array.from(document.querySelectorAll<HTMLElement>('.nb-reveal'));
+    // `.nb-stagger` containers are observed alongside `.nb-reveal` items:
+    // the group gets `is-visible` and its CSS cascade releases the children.
+    const targets = Array.from(
+      document.querySelectorAll<HTMLElement>('.nb-reveal, .nb-stagger'),
+    );
 
     if (targets.length === 0) return;
 

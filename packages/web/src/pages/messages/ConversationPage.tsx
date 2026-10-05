@@ -1,11 +1,12 @@
 ﻿import { getErrorMessage } from '../../lib/error'
 import toast from 'react-hot-toast'
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { Link, useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Send, Loader2, AlertTriangle,
   CheckCheck, MessageCircle, ImagePlus, Mic, Square,
-  Trash2, Flag, Ban, X, MessageCircleReply, Phone
+  Trash2, Flag, Ban, X, MessageCircleReply, Phone,
+  Compass, Calendar
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
@@ -533,14 +534,42 @@ export function ConversationPage() {
       <div className="flex-1 glass-card mt-4 overflow-hidden flex flex-col">
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {messages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary-500/10 to-accent-500/10 flex items-center justify-center mb-4">
-                <MessageCircle className="w-8 h-8 text-primary-500/50" />
+            /* Was a grey icon, one line, and a sub-line. An empty thread is the
+               first thing a new user sees on their primary Chat tab, so it now
+               says what will happen and offers the action that starts it. */
+            <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+              <div className="prism-card prism-ring relative mb-5 flex h-20 w-20 items-center justify-center rounded-3xl">
+                <div className="prism-aurora animate-prism-breathe opacity-60" aria-hidden />
+                <MessageCircle
+                  className="relative z-10 h-8 w-8 text-primary-500 dark:text-primary-300"
+                  aria-hidden
+                />
               </div>
-              <p className="text-surface-500 dark:text-surface-400 font-medium">No messages yet</p>
-              <p className="text-sm text-surface-400 dark:text-surface-500 mt-1">
-                Send a message to start the conversation
+
+              <h3 className="font-display text-lg font-bold text-surface-900 dark:text-white">
+                No messages yet
+              </h3>
+              <p className="mt-1.5 max-w-[34ch] text-sm leading-relaxed text-surface-500 dark:text-surface-400">
+                Start the conversation. Messages you send stay here, and both of you can pick up
+                where you left off.
               </p>
+
+              <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+                <Link
+                  to="/discover"
+                  className="inline-flex items-center gap-2 rounded-full bg-gradient-to-br from-violet-500 to-primary-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary-500/25 transition active:scale-[0.97]"
+                >
+                  <Compass className="h-4 w-4" aria-hidden />
+                  Find people
+                </Link>
+                <Link
+                  to="/events"
+                  className="inline-flex items-center gap-2 rounded-full border border-surface-200 bg-white px-5 py-2.5 text-sm font-semibold text-surface-700 transition hover:bg-surface-50 active:scale-[0.97] dark:border-surface-700 dark:bg-surface-800 dark:text-surface-200 dark:hover:bg-surface-700"
+                >
+                  <Calendar className="h-4 w-4" aria-hidden />
+                  Join an event
+                </Link>
+              </div>
             </div>
           ) : (
             messages.map((msg, idx) => {

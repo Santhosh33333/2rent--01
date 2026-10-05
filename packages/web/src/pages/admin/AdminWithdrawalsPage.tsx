@@ -1,7 +1,7 @@
-﻿import { getErrorMessage } from '../../lib/error'
+import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
-import { ArrowLeft, ChevronLeft, ChevronRight, Check, X, FileDown, ImagePlus, Loader2, Copy } from 'lucide-react'
+import { AdminPageHeader, AdminShell } from '../../components/admin/AdminPageHeader'
+import { ChevronLeft, ChevronRight, Check, X, FileDown, ImagePlus, Loader2, Copy } from 'lucide-react'
 import { adminApi, assetUrl } from '../../lib/api'
 import { exportTableToPdf } from '../../lib/pdfExport'
 import toast from 'react-hot-toast'
@@ -204,48 +204,46 @@ const handleApprove = async (id: string) => {
   }
 
   return (
-    <div className="bg-gray-950 p-4 sm:p-6 rounded-3xl">
-      <div className="max-w-5xl mx-auto">
-        <div className="flex items-center gap-3 mb-6">
-          <Link to="/admin/portal" className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition">
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold font-display text-white">Withdrawals</h1>
-            <p className="text-gray-400 text-sm mt-1">Review withdrawal requests</p>
-          </div>
-          <button
-            onClick={() =>
-              exportTableToPdf({
-                title: 'Withdrawal Requests',
-                subtitle: `Page ${page} of ${totalPages}`,
-                columns: ['User', 'Email', 'Amount', 'Method', 'Account', 'Status', 'Requested'],
-                rows: withdrawals.map((w) => [
-                  w.userName || '-',
-                  w.userEmail || '-',
-                  `₹${w.amount}`,
-                  w.method || '-',
-                  w.accountSummary || w.accountDetail || '-',
-                  w.status || '-',
-                  w.createdAt ? new Date(w.createdAt).toLocaleString('en-IN') : '-',
-                ]),
-                fileName: `nabri-withdrawals-${new Date().toISOString().slice(0, 10)}`,
-                landscape: true,
-              })
-            }
-            disabled={withdrawals.length === 0}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-gray-300 hover:text-white text-sm transition"
-          >
-            <FileDown className="w-4 h-4" /> PDF
-          </button>
-          <button
-            type="button"
-            onClick={() => void copyNextPay()}
-            className="ml-auto inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm transition"
-          >
-            <Copy className="w-4 h-4" /> Copy next payout
-          </button>
-        </div>
+    <AdminShell>
+      <AdminPageHeader
+        title="Withdrawals"
+        subtitle="Review withdrawal requests"
+        actions={
+          <>
+            <button
+              onClick={() =>
+                exportTableToPdf({
+                  title: 'Withdrawal Requests',
+                  subtitle: `Page ${page} of ${totalPages}`,
+                  columns: ['User', 'Email', 'Amount', 'Method', 'Account', 'Status', 'Requested'],
+                  rows: withdrawals.map((w) => [
+                    w.userName || '-',
+                    w.userEmail || '-',
+                    `₹${w.amount}`,
+                    w.method || '-',
+                    w.accountSummary || w.accountDetail || '-',
+                    w.status || '-',
+                    w.createdAt ? new Date(w.createdAt).toLocaleString('en-IN') : '-',
+                  ]),
+                  fileName: `nabri-withdrawals-${new Date().toISOString().slice(0, 10)}`,
+                  landscape: true,
+                })
+              }
+              disabled={withdrawals.length === 0}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-gray-300 hover:text-white text-sm transition"
+            >
+              <FileDown className="w-4 h-4" /> PDF
+            </button>
+            <button
+              type="button"
+              onClick={() => void copyNextPay()}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm transition"
+            >
+              <Copy className="w-4 h-4" /> Copy next payout
+            </button>
+          </>
+        }
+      />
 
         <div className="mb-6">
           <div className="flex gap-2">
@@ -414,7 +412,6 @@ const handleApprove = async (id: string) => {
             </div>
           </>
         )}
-      </div>
-    </div>
+      </AdminShell>
   )
 }

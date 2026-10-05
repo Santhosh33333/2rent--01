@@ -1,0 +1,1845 @@
+/* ==================================================================
+   Nabri landing
+   ------------------------------------------------------------------
+   Layout is a fixed header over a stack of full-bleed sections. Each
+   section owns a video backdrop (with a still poster and a pure-CSS
+   gradient behind it) and a two-column body: copy on one side, a
+   3D-styled stage on the other.
+
+   Three rules this stylesheet exists to keep:
+
+   1. Every backdrop degrades. Poster -> video -> gradient. A visitor on a
+      metered connection, with reduced motion on, or on a browser that
+      refuses to decode H.264 still gets a coloured panel and all the text.
+   2. Nothing hides content. Reveal animations start from opacity 0, so
+      every one of them is disabled under `prefers-reduced-motion` and has
+      a failsafe that shows everything after 1.5s regardless.
+   3. Contrast is checked against the veil, not against the page. The
+      veil is what actually sits behind the copy, so the ratios quoted in
+      the tokens below are the ratios a reader sees.
+   ================================================================== */
+
+.nb {
+  /* Neon on near-black. The accents sit on the veil, not on --nb-ink, so
+     they clear 4.5:1 at their own alpha (pink #FF2D87 on the veil is 5.1:1). */
+  --nb-ink: #07040f;
+  --nb-navy: #0a0d24;
+  --nb-paper: #ffffff;
+  --nb-pink: #ff2d87;
+  --nb-mag: #d11fd1;
+  --nb-purple: #7b3cff;
+  --nb-blue: #2f7bff;
+  --nb-teal: #19d3a2;
+  --nb-amber: #ff963c;
+  --nb-film: #b57cff;
+
+  /* Body copy sits at 0.82 alpha over a veil that is at least 0.82 alpha
+     over #07040f, so the effective background is ~#0d0917 and white at
+     0.82 is 11.4:1 against it. Comfortably past AA at this text size. */
+  --nb-copy: rgba(255, 255, 255, 0.88);
+  --nb-dim: rgba(255, 255, 255, 0.72);
+  --nb-line: rgba(255, 255, 255, 0.16);
+  --nb-glass: rgba(255, 255, 255, 0.07);
+  --nb-glass-strong: rgba(255, 255, 255, 0.12);
+
+  --nb-radius: 16px;
+  --nb-wrap: 1280px;
+
+  position: relative;
+  min-height: 100vh;
+  background: var(--nb-ink);
+  color: #fff;
+  font-family: 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
+  line-height: 1.5;
+  isolation: isolate;
+  overflow-x: hidden;
+}
+
+.nb *,
+.nb *::before,
+.nb *::after {
+  box-sizing: border-box;
+}
+
+.nb img,
+.nb video {
+  display: block;
+  max-width: 100%;
+}
+
+.nb a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.nb button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border: 0;
+  background: none;
+}
+
+.nb :focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+.nb-wrap {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  max-width: var(--nb-wrap);
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.nb-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.nb-script {
+  font-family: 'Brush Script MT', 'Segoe Script', 'Snell Roundhand', cursive;
+  font-style: italic;
+}
+
+/* ==================================================================
+   Brand
+   ------------------------------------------------------------------
+   The heart-and-script-wordmark from the reference design is replaced
+   with the shipped brand: the white glyph (`logo-glyph-white.svg`, the
+   asset every other dark surface in the app uses) beside the wordmark.
+   The glyph is white-on-transparent, so it needs no tinted tile - the
+   original had one because it was drawing a `currentColor` icon.
+   ================================================================== */
+
+.nb-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  font-size: var(--s, 28px);
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.nb-logo img {
+  width: 1.05em;
+  height: 1.05em;
+  filter: drop-shadow(0 0 10px rgba(255, 45, 135, 0.55));
+}
+
+.nb-logo--hero {
+  --s: clamp(44px, 6.5vw, 76px);
+}
+
+.nb-logo--foot {
+  --s: 24px;
+}
+
+/* ==================================================================
+   Header
+   ================================================================== */
+
+.nb-header {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 50;
+  background: rgba(7, 4, 15, 0.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--nb-line);
+}
+
+.nb-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: 72px;
+}
+
+.nb-nav ul {
+  display: flex;
+  gap: 30px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nb-nav ul a {
+  display: block;
+  padding: 26px 2px;
+  font-size: 15px;
+  color: var(--nb-dim);
+  position: relative;
+  transition: color 0.25s ease;
+}
+
+.nb-nav ul a:hover,
+.nb-nav ul a[data-on='true'] {
+  color: #fff;
+}
+
+.nb-nav ul a[data-on='true'] {
+  color: var(--nb-pink);
+}
+
+.nb-nav ul a[data-on='true']::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 12px;
+  height: 2px;
+  background: var(--nb-pink);
+  box-shadow: 0 0 12px var(--nb-pink), 0 0 24px var(--nb-pink);
+}
+
+.nb-nav-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+/* The header used to carry a fake "now playing: Good Vibes" widget - a
+   title, an artist and an animated equaliser for a song that does not
+   exist and never will. There is no real audio catalogue endpoint to
+   replace it with, so it is gone rather than restyled. */
+.nb-burger {
+  display: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--nb-glass);
+  border: 1px solid var(--nb-line);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.nb-burger svg {
+  width: 20px;
+  height: 20px;
+  margin: auto;
+}
+
+/* ==================================================================
+   Buttons
+   ================================================================== */
+
+.nb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--nb-pink), var(--nb-mag));
+  color: #fff;
+  font-weight: 650;
+  font-size: 15px;
+  box-shadow: 0 6px 24px rgba(255, 45, 135, 0.4);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+/* Sheen sweep. Kept on a pseudo-element so the transform does not fight
+   the hover transform on the button itself. */
+.nb-btn::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -80%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  transform: skewX(-20deg);
+  transition: left 0.6s ease;
+  pointer-events: none;
+}
+
+.nb-btn {
+  position: relative;
+  overflow: hidden;
+}
+
+.nb-btn:hover {
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: 0 10px 32px rgba(255, 45, 135, 0.6);
+}
+
+.nb-btn:hover::after {
+  left: 130%;
+}
+
+.nb-btn--ghost {
+  background: var(--nb-glass);
+  border-color: var(--nb-line);
+  box-shadow: none;
+  color: #fff;
+}
+
+.nb-btn--ghost:hover {
+  background: var(--nb-glass-strong);
+  box-shadow: none;
+}
+
+.nb-btn--purple {
+  background: linear-gradient(90deg, var(--nb-purple), var(--nb-blue));
+  box-shadow: 0 6px 24px rgba(91, 80, 255, 0.45);
+}
+
+.nb-btn--purple:hover {
+  box-shadow: 0 10px 32px rgba(91, 80, 255, 0.65);
+}
+
+.nb-btn--teal {
+  background: linear-gradient(90deg, #0fc29a, #19d37a);
+  box-shadow: 0 6px 24px rgba(25, 211, 162, 0.4);
+}
+
+.nb-btn--teal:hover {
+  box-shadow: 0 10px 32px rgba(25, 211, 162, 0.6);
+}
+
+.nb-btn--lg {
+  font-size: 17px;
+  padding: 15px 34px;
+}
+
+.nb-btn svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+/* ==================================================================
+   Backdrops
+   ================================================================== */
+
+.nb-media {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.nb-media img,
+.nb-media video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 30%;
+}
+
+/* The photo/video panel is inset from the left on wide screens and fades
+   out, so the copy side of the section stays legible and the footage reads
+   as a window rather than a wallpaper. */
+.nb-photo {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 64%;
+  -webkit-mask-image: linear-gradient(90deg, #000 60%, transparent);
+  mask-image: linear-gradient(90deg, #000 60%, transparent);
+}
+
+.nb-photo--hero {
+  left: 12%;
+  width: 78%;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 22%, #000 72%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 22%, #000 72%, transparent);
+}
+
+/* Procedural backdrop. Always rendered, always underneath, and the reason
+   the page looks finished with zero bytes of imagery loaded. */
+.nb-scene {
+  position: absolute;
+  inset: 0;
+}
+
+.nb-scene--hero {
+  background:
+    radial-gradient(circle at 20% 40%, rgba(255, 45, 135, 0.55), transparent 45%),
+    radial-gradient(circle at 80% 20%, rgba(123, 60, 255, 0.6), transparent 50%),
+    radial-gradient(circle at 60% 90%, rgba(209, 31, 209, 0.4), transparent 50%),
+    linear-gradient(160deg, #1a0620, #0a0420 60%, #12072e);
+}
+
+.nb-scene--dating {
+  background:
+    radial-gradient(circle at 25% 50%, rgba(255, 45, 135, 0.5), transparent 50%),
+    radial-gradient(circle at 80% 30%, rgba(123, 60, 255, 0.35), transparent 50%),
+    linear-gradient(120deg, #220827, #12061f);
+}
+
+.nb-scene--events {
+  background:
+    radial-gradient(circle at 30% 20%, rgba(47, 123, 255, 0.6), transparent 45%),
+    radial-gradient(circle at 25% 80%, rgba(209, 31, 209, 0.5), transparent 50%),
+    linear-gradient(120deg, #0a0f3a, #150a38);
+}
+
+.nb-scene--community {
+  background:
+    radial-gradient(circle at 30% 90%, rgba(255, 150, 60, 0.5), transparent 45%),
+    radial-gradient(circle at 70% 20%, rgba(25, 211, 162, 0.25), transparent 50%),
+    linear-gradient(120deg, #0c1a26, #0a1220);
+}
+
+.nb-scene--movies {
+  background:
+    radial-gradient(ellipse at 40% 25%, rgba(255, 90, 140, 0.55), transparent 40%),
+    radial-gradient(circle at 20% 100%, rgba(190, 20, 60, 0.55), transparent 50%),
+    linear-gradient(120deg, #1a0716, #0d0620);
+}
+
+.nb-scene--cta {
+  background:
+    radial-gradient(ellipse at 50% 100%, rgba(255, 120, 60, 0.7), transparent 55%),
+    radial-gradient(circle at 50% 30%, rgba(209, 31, 209, 0.5), transparent 55%),
+    linear-gradient(180deg, #2a0c3c, #14062a);
+}
+
+/* The veil. This is the element that actually sits behind the copy, so it
+   is what the contrast notes on the tokens above refer to. */
+.nb-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.nb-veil--hero {
+  background:
+    linear-gradient(90deg, rgba(7, 4, 15, 0.86), rgba(7, 4, 15, 0.2) 70%),
+    linear-gradient(0deg, var(--nb-ink), transparent 25%);
+}
+
+.nb-veil--pillar {
+  background: linear-gradient(90deg, rgba(7, 4, 15, 0.12), rgba(7, 4, 15, 0.88) 50%);
+}
+
+.nb-veil--cta {
+  background: linear-gradient(0deg, rgba(7, 4, 15, 0.72), transparent);
+}
+
+/* ==================================================================
+   Sections
+   ================================================================== */
+
+.nb-section {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.nb-hero {
+  display: flex;
+  align-items: center;
+  min-height: 760px;
+  padding: 120px 0 80px;
+}
+
+.nb-hero-grid {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  gap: 20px;
+  align-items: center;
+  width: 100%;
+}
+
+.nb-hero h1 {
+  margin: 12px 0 18px;
+  font-size: clamp(40px, 5.4vw, 72px);
+  line-height: 1.05;
+  font-weight: 700;
+}
+
+.nb-hero h1 em {
+  font-style: normal;
+  background: linear-gradient(90deg, var(--nb-pink), var(--nb-mag));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 18px rgba(255, 45, 135, 0.55));
+}
+
+.nb-kicker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-bottom: 14px;
+  font-size: 17px;
+}
+
+.nb-kicker span::before {
+  content: '\2022';
+  color: var(--nb-pink);
+  margin-right: 10px;
+}
+
+.nb-kicker span:first-child::before {
+  display: none;
+}
+
+.nb-lead {
+  max-width: 470px;
+  margin-bottom: 26px;
+  color: var(--nb-copy);
+}
+
+.nb-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.nb-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.nb-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--nb-glass);
+  border: 1px solid var(--nb-line);
+  font-size: 13px;
+  color: var(--nb-copy);
+  backdrop-filter: blur(8px);
+}
+
+.nb-badge svg {
+  width: 14px;
+  height: 14px;
+  color: var(--nb-teal);
+}
+
+/* ==================================================================
+   Pillars (dating / events / community / movies)
+   ================================================================== */
+
+.nb-pillar {
+  display: flex;
+  align-items: center;
+  min-height: 620px;
+  padding: 80px 0;
+  border-top: 1px solid var(--nb-line);
+}
+
+.nb-pillar-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+  align-items: center;
+  width: 100%;
+}
+
+.nb-pillar-info {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.nb-pillar-stage {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+/* The little glass caption that hangs in the media column. It is the one
+   element allowed to sit over the footage, so it carries its own opaque
+   background and blur rather than relying on the veil. */
+.nb-cap {
+  grid-column: 1;
+  grid-row: 1 / 3;
+  align-self: end;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  width: max-content;
+  max-width: 100%;
+  padding: 14px 18px;
+  border-radius: var(--nb-radius);
+  border: 1px solid var(--nb-line);
+  background: rgba(7, 4, 15, 0.78);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.nb-cap-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--nb-pink);
+}
+
+.nb-cap-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.nb-cap strong {
+  display: block;
+  font-size: 15px;
+}
+
+.nb-cap small {
+  display: block;
+  font-size: 12.5px;
+  color: var(--nb-dim);
+}
+
+.nb-pillar h2 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  font-size: clamp(32px, 4vw, 48px);
+  line-height: 1.1;
+}
+
+.nb-pillar h2 svg {
+  width: 46px;
+  height: 46px;
+  flex: none;
+}
+
+.nb-pillar--dating h2 svg {
+  color: var(--nb-pink);
+}
+
+.nb-pillar--events h2 svg {
+  color: var(--nb-blue);
+}
+
+.nb-pillar--community h2 svg {
+  color: var(--nb-teal);
+}
+
+.nb-pillar--movies h2 svg {
+  color: var(--nb-film);
+}
+
+.nb-pillar h3 {
+  margin: 6px 0 14px;
+  font-size: 21px;
+  font-weight: 400;
+  color: var(--nb-copy);
+}
+
+.nb-pillar .nb-body {
+  max-width: 430px;
+  margin-bottom: 22px;
+  color: var(--nb-copy);
+}
+
+.nb-hand {
+  position: absolute;
+  right: 3%;
+  bottom: 34px;
+  z-index: 3;
+  font-size: 30px;
+  line-height: 1.1;
+  text-align: right;
+  color: #ffd0ef;
+  text-shadow: 0 0 14px var(--nb-pink);
+  transform: rotate(-8deg);
+  pointer-events: none;
+}
+
+/* ==================================================================
+   Stages - the 3D-styled mock-ups
+   ================================================================== */
+
+.nb-stage {
+  position: relative;
+  perspective: 1400px;
+  min-height: 560px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nb-stage--sm {
+  min-height: 420px;
+}
+
+/* These three are the positioning frames for the absolute cards inside them.
+   They need a real width. Left to their own devices they are flex items with
+   no in-flow children, so they resolve to zero width and the cards - which are
+   positioned against them - spill symmetrically out of the column and off the
+   right edge of the viewport. The max-widths are the exact widths the card
+   rows need; `margin: auto` centres them inside the stage. */
+.nb-duo,
+.nb-evwrap,
+.nb-posters {
+  position: relative;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.nb-duo {
+  height: 380px;
+  max-width: 380px;
+  perspective: 1200px;
+}
+
+.nb-evwrap {
+  height: 380px;
+  max-width: 540px;
+  perspective: 1200px;
+}
+
+.nb-posters {
+  height: 340px;
+  max-width: 440px;
+  perspective: 1200px;
+}
+
+/* --- phone --- */
+
+.nb-phone {
+  position: relative;
+  width: 270px;
+  height: 560px;
+  transform-style: preserve-3d;
+  transform: rotateY(-24deg) rotateX(7deg) rotateZ(4deg);
+  animation: nb-sway 8s ease-in-out infinite;
+}
+
+@keyframes nb-sway {
+  0%,
+  100% {
+    transform: rotateY(-24deg) rotateX(7deg) rotateZ(4deg) translateY(0);
+  }
+  50% {
+    transform: rotateY(-14deg) rotateX(4deg) rotateZ(2deg) translateY(-16px);
+  }
+}
+
+.nb-phone > * {
+  position: absolute;
+}
+
+.nb-phone-back {
+  inset: 0;
+  border-radius: 42px;
+  background: linear-gradient(135deg, #2b1f45, #10091f);
+  transform: translateZ(-14px);
+}
+
+.nb-phone-frame {
+  inset: 0;
+  border-radius: 42px;
+  background: #0b0618;
+  border: 7px solid #2a2140;
+  box-shadow:
+    inset 0 0 0 2px #4b3d6b,
+    0 0 60px rgba(255, 45, 135, 0.4);
+  overflow: hidden;
+  transform: translateZ(14px);
+}
+
+.nb-phone-side {
+  top: 30px;
+  bottom: 30px;
+  left: 50%;
+  width: 28px;
+  margin-left: -14px;
+  background: linear-gradient(90deg, #3a2d58, #1b1230);
+  transform: rotateY(90deg) translateZ(135px);
+}
+
+.nb-phone-side--left {
+  transform: rotateY(90deg) translateZ(-135px);
+}
+
+.nb-notch {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  width: 84px;
+  height: 22px;
+  margin-left: -42px;
+  background: #000;
+  border-radius: 14px;
+  z-index: 5;
+}
+
+.nb-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 44px 16px 16px;
+  text-align: center;
+  background: linear-gradient(170deg, #2a0b3c, #12061f 55%, #3a0b44);
+}
+
+.nb-screen::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.14) 48%, transparent 60%);
+  animation: nb-shine 6s infinite;
+  pointer-events: none;
+}
+
+@keyframes nb-shine {
+  0% {
+    transform: translateX(-100%);
+  }
+  60%,
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.nb-screen h3 {
+  margin: 4px 0 2px;
+  font-size: 17px;
+  line-height: 1.2;
+}
+
+.nb-screen-tag {
+  margin: 0;
+  font-size: 11px;
+  color: var(--nb-dim);
+}
+
+/* Rows inside the phone. Every one of these is a real row from the API. */
+.nb-mini {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  border-radius: 14px;
+  background: var(--nb-glass);
+  border: 1px solid var(--nb-line);
+  font-size: 11px;
+  text-align: left;
+}
+
+.nb-mini-av {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 50%;
+  overflow: hidden;
+  background: linear-gradient(135deg, var(--nb-pink), var(--nb-purple));
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.nb-mini-av img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.nb-mini b {
+  font-size: 11.5px;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nb-mini small {
+  display: block;
+  font-size: 10.5px;
+  color: var(--nb-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nb-pill {
+  margin-top: auto;
+  width: 100%;
+  padding: 11px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--nb-pink), var(--nb-mag));
+  font-size: 13px;
+  font-weight: 650;
+  text-align: center;
+}
+
+.nb-float {
+  position: absolute;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 16px;
+  border-radius: var(--nb-radius);
+  border: 1px solid var(--nb-line);
+  background: var(--nb-glass);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.45),
+    0 0 24px rgba(255, 45, 135, 0.2);
+  font-size: 13px;
+  animation: nb-bob 6s ease-in-out infinite;
+  transform: translateZ(60px);
+  max-width: 60%;
+}
+
+@keyframes nb-bob {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 -14px;
+  }
+}
+
+.nb-float-dot {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--nb-pink), var(--nb-purple));
+}
+
+.nb-float-dot svg {
+  width: 14px;
+  height: 14px;
+}
+
+.nb-float b {
+  display: block;
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.nb-float small {
+  display: block;
+  font-size: 11.5px;
+  color: var(--nb-dim);
+}
+
+/* --- dating cards --- */
+
+.nb-duo-card {
+  position: absolute;
+  width: 210px;
+  height: 370px;
+  border-radius: 30px;
+  border: 5px solid #2a2140;
+  background: linear-gradient(170deg, #3a0d44, #12061f);
+  overflow: hidden;
+  box-shadow:
+    0 30px 60px rgba(0, 0, 0, 0.6),
+    0 0 30px rgba(255, 45, 135, 0.32);
+  animation: nb-bob3 7s ease-in-out infinite;
+  transition: transform 0.5s ease;
+}
+
+@keyframes nb-bob3 {
+  0%,
+  100% {
+    transform: var(--rest, none) translateY(0);
+  }
+  50% {
+    transform: var(--rest, none) translateY(-14px);
+  }
+}
+
+.nb-duo-front {
+  left: 0;
+  z-index: 2;
+  --rest: rotateY(18deg) rotateZ(-3deg);
+  transform: var(--rest);
+}
+
+.nb-duo-back {
+  left: 150px;
+  opacity: 0.92;
+  animation-delay: -3s;
+  --rest: rotateY(18deg) rotateZ(4deg) translateZ(-60px);
+  transform: var(--rest);
+}
+
+.nb-duo:hover .nb-duo-front {
+  --rest: rotateY(8deg) rotateZ(-1deg);
+}
+
+/* --- event cards --- */
+
+.nb-ev {
+  position: absolute;
+  width: 190px;
+  height: 330px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 2px;
+  padding: 14px;
+  border-radius: 22px;
+  border: 2px solid var(--nb-line);
+  overflow: hidden;
+  font-size: 13px;
+  box-shadow: 0 30px 50px rgba(0, 0, 0, 0.6);
+  animation: nb-bob3 7s ease-in-out infinite;
+}
+
+.nb-ev h5 {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.2;
+  /* An organiser can put a very long title in. Two lines then ellipsis. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.nb-ev span {
+  display: block;
+  font-size: 12.5px;
+  color: var(--nb-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nb-ev--main {
+  left: 130px;
+  top: 0;
+  z-index: 3;
+  width: 220px;
+  height: 350px;
+  border-color: #fff;
+  background:
+    linear-gradient(180deg, rgba(255, 45, 135, 0) 30%, rgba(7, 4, 15, 0.95) 65%),
+    radial-gradient(circle at 50% 25%, #ff4fb0, #6a2cff 55%, #12061f);
+  box-shadow:
+    0 30px 60px rgba(0, 0, 0, 0.6),
+    0 0 40px rgba(123, 60, 255, 0.55);
+  --rest: rotateY(-12deg);
+  transform: var(--rest);
+}
+
+.nb-ev--left {
+  left: 0;
+  top: 30px;
+  background:
+    linear-gradient(180deg, transparent, rgba(7, 4, 15, 0.9)),
+    linear-gradient(135deg, #3b1d6e, #d11fd1);
+  --rest: rotateY(28deg) rotateZ(-6deg);
+  transform: var(--rest);
+}
+
+.nb-ev--right {
+  left: 300px;
+  top: 20px;
+  animation-delay: -3s;
+  background:
+    linear-gradient(180deg, transparent, rgba(7, 4, 15, 0.9)),
+    linear-gradient(135deg, #1e5bff, #0fc29a);
+  --rest: rotateY(-30deg) rotateZ(6deg);
+  transform: var(--rest);
+}
+
+/* --- movie posters --- */
+
+.nb-poster {
+  position: absolute;
+  width: 150px;
+  height: 270px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 2px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  overflow: hidden;
+  font-size: 12px;
+  text-align: left;
+  box-shadow: 0 30px 50px rgba(0, 0, 0, 0.65);
+  animation: nb-bob3 7s ease-in-out infinite;
+  transition: transform 0.4s ease;
+}
+
+.nb-poster img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+}
+
+.nb-poster::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(180deg, transparent 40%, rgba(7, 4, 15, 0.94));
+}
+
+.nb-poster b,
+.nb-poster span {
+  position: relative;
+  z-index: 2;
+}
+
+.nb-poster b {
+  font-size: 19px;
+  line-height: 1.1;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.nb-poster span {
+  color: var(--nb-dim);
+  font-size: 11.5px;
+}
+
+.nb-poster--1 {
+  left: 0;
+  top: 30px;
+  background: linear-gradient(160deg, #ff9a3c, #5a1a0a);
+  --rest: rotateY(22deg);
+  transform: var(--rest);
+}
+
+.nb-poster--2 {
+  left: 140px;
+  top: 0;
+  z-index: 2;
+  background: linear-gradient(160deg, #e0a25a, #2a1608);
+  animation-delay: -2s;
+  --rest: rotateY(0deg);
+  transform: var(--rest);
+}
+
+.nb-poster--3 {
+  left: 280px;
+  top: 30px;
+  background: linear-gradient(160deg, #4b8a6a, #0a1a14);
+  animation-delay: -4s;
+  --rest: rotateY(-22deg);
+  transform: var(--rest);
+}
+
+.nb-poster:hover {
+  --rest: rotateY(0deg);
+  transform: translateZ(40px) scale(1.06);
+  z-index: 5;
+}
+
+/* --- movies: the "on the way" row under the posters --- */
+
+/* The poster composition is a fixed 440x340 frame of absolutely-positioned
+   cards, so the upcoming row cannot live inside it - it goes below, in a column
+   that the stage's own centring already handles. */
+.nb-movies {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  width: 100%;
+}
+
+.nb-soon {
+  width: 100%;
+  max-width: 440px;
+  margin: 0 auto;
+  padding: 12px 12px 8px;
+  border-radius: var(--nb-radius);
+  border: 1px solid var(--nb-line);
+  background: rgba(12, 6, 24, 0.62);
+}
+
+.nb-soon-head {
+  margin: 0 0 8px 2px;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--nb-dim);
+}
+
+.nb-soon-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.nb-soon-item {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 11px;
+  align-items: center;
+  padding: 6px;
+  border-radius: 10px;
+  color: inherit;
+  text-decoration: none;
+  transition: background 0.25s ease;
+}
+
+.nb-soon-item:hover,
+.nb-soon-item:focus-visible {
+  background: var(--nb-glass);
+}
+
+.nb-soon-item img,
+.nb-soon-blank {
+  width: 36px;
+  height: 52px;
+  border-radius: 6px;
+  object-fit: cover;
+  display: block;
+  background: linear-gradient(160deg, #40225e, #150a24);
+  border: 1px solid var(--nb-line);
+}
+
+.nb-soon-item b {
+  display: block;
+  font-size: 14.5px;
+  line-height: 1.15;
+}
+
+.nb-soon-item small {
+  display: block;
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--nb-dim);
+}
+
+/* --- community --- */
+
+.nb-msgs {
+  display: grid;
+  gap: 10px;
+  perspective: 1000px;
+}
+
+/* A message row. Deliberately says what it is rather than impersonating a
+   real conversation: no invented names, no invented sentences. */
+.nb-msg {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  max-width: 420px;
+  padding: 10px 14px;
+  border-radius: var(--nb-radius);
+  border: 1px solid rgba(25, 211, 162, 0.45);
+  background: rgba(7, 30, 30, 0.7);
+  backdrop-filter: blur(10px);
+  transform: rotateY(-8deg);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.4);
+  font-size: 13px;
+}
+
+.nb-msg:nth-child(2) {
+  margin-left: 24px;
+}
+
+.nb-msg:nth-child(3) {
+  margin-left: 48px;
+}
+
+.nb-msg strong {
+  display: block;
+  font-size: 12px;
+  color: var(--nb-dim);
+}
+
+.nb-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.nb-chip {
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(25, 211, 162, 0.55);
+  background: rgba(25, 211, 162, 0.1);
+  font-size: 13px;
+  transition: background 0.25s ease, transform 0.25s ease;
+}
+
+.nb-chip:hover {
+  background: rgba(25, 211, 162, 0.28);
+  transform: translateY(-3px);
+}
+
+/* ==================================================================
+   Data states
+   ------------------------------------------------------------------
+   A section whose API failed still renders its heading, its copy and its
+   CTA. Only the stage swaps to an explanation. A marketing page that
+   renders an empty hole where its content should be looks broken.
+   ================================================================== */
+
+.nb-state {
+  display: grid;
+  gap: 8px;
+  align-content: center;
+  justify-items: center;
+  min-height: 240px;
+  padding: 32px 24px;
+  border-radius: var(--nb-radius);
+  border: 1px dashed var(--nb-line);
+  background: rgba(7, 4, 15, 0.6);
+  text-align: center;
+}
+
+.nb-state-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: var(--nb-glass);
+  color: var(--nb-dim);
+}
+
+.nb-state-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.nb-state-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.nb-state-body {
+  max-width: 40ch;
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--nb-dim);
+}
+
+.nb-state--error .nb-state-icon {
+  color: #ffb4b4;
+}
+
+.nb-state--loading {
+  min-height: 240px;
+}
+
+.nb-skeleton {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  max-width: 420px;
+}
+
+.nb-skeleton i {
+  display: block;
+  height: 14px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.06));
+  background-size: 200% 100%;
+  animation: nb-shimmer 1.4s linear infinite;
+}
+
+.nb-skeleton i:nth-child(2) {
+  width: 80%;
+}
+
+.nb-skeleton i:nth-child(3) {
+  width: 60%;
+}
+
+@keyframes nb-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* An inline retry. Real failure gets a real way out of it. */
+.nb-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--nb-line);
+  background: var(--nb-glass);
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  transition: background 0.25s ease;
+}
+
+.nb-retry:hover {
+  background: var(--nb-glass-strong);
+}
+
+.nb-retry svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ==================================================================
+   Offer
+   ================================================================== */
+
+.nb-offer {
+  position: relative;
+  max-width: 430px;
+  margin-top: 26px;
+  padding: 22px 26px;
+  border-radius: 24px;
+  background: rgba(20, 8, 36, 0.82);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow:
+    0 30px 60px rgba(0, 0, 0, 0.5),
+    0 0 50px rgba(255, 45, 135, 0.3);
+  transform: perspective(900px) rotateX(6deg) rotateY(-6deg);
+  transform-style: preserve-3d;
+  overflow: hidden;
+}
+
+/* Conic border. `@property` is what lets a custom property be animated as
+   an angle; without it the gradient jumps instead of turning. Browsers that
+   do not support it get a static pink border from the fallback below. */
+@property --nb-spin {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.nb-offer::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 2px;
+  background: conic-gradient(from var(--nb-spin, 0deg), var(--nb-pink), var(--nb-purple), var(--nb-blue), var(--nb-pink));
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: nb-spin 5s linear infinite;
+  pointer-events: none;
+}
+
+@supports not (background: conic-gradient(from var(--nb-spin, 0deg), red, blue)) {
+  .nb-offer {
+    border: 2px solid var(--nb-pink);
+  }
+}
+
+@keyframes nb-spin {
+  to {
+    --nb-spin: 360deg;
+  }
+}
+
+.nb-offer-label {
+  display: inline-block;
+  margin-bottom: 8px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--nb-pink);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+}
+
+.nb-offer h4 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  color: var(--nb-dim);
+}
+
+/* The headline figure. It comes from `trialDays` on the plan the server
+   returned, so it reads "1 DAY FREE" today because that is the seeded
+   trial - not because someone typed a marketing number here. */
+.nb-offer-huge {
+  font-size: clamp(34px, 4.5vw, 52px);
+  font-weight: 800;
+  line-height: 1.05;
+  text-shadow: 0 0 28px var(--nb-pink);
+}
+
+.nb-offer p {
+  margin: 6px 0 14px;
+  font-size: 14px;
+  color: var(--nb-copy);
+}
+
+.nb-offer-note {
+  display: block;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--nb-dim);
+}
+
+/* ==================================================================
+   Download / CTA
+   ================================================================== */
+
+.nb-cta {
+  padding: 110px 0 90px;
+  text-align: center;
+  border-top: 1px solid var(--nb-line);
+}
+
+.nb-cta h2 {
+  margin: 16px 0 8px;
+  font-size: clamp(30px, 4vw, 48px);
+}
+
+.nb-cta p {
+  margin-bottom: 24px;
+  color: var(--nb-copy);
+}
+
+.nb-cta .nb-hand {
+  left: 6%;
+  right: auto;
+  bottom: 80px;
+  text-align: left;
+}
+
+.nb-cta-offer {
+  display: inline-block;
+  margin-top: 22px;
+  padding: 8px 20px;
+  border-radius: 999px;
+  border: 1px solid var(--nb-pink);
+  background: rgba(255, 45, 135, 0.15);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  box-shadow: 0 0 28px rgba(255, 45, 135, 0.45);
+}
+
+.nb-stores {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.nb-store {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 18px;
+  border: 1px solid var(--nb-line);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.55);
+  font-size: 11px;
+  line-height: 1.15;
+  transition: transform 0.25s ease, border-color 0.25s ease;
+}
+
+.nb-store:hover {
+  transform: translateY(-3px);
+  border-color: var(--nb-pink);
+}
+
+.nb-store strong {
+  display: block;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.nb-store svg {
+  width: 24px;
+  height: 24px;
+  flex: none;
+}
+
+/* ==================================================================
+   Footer
+   ================================================================== */
+
+.nb-footer {
+  position: relative;
+  z-index: 2;
+  padding: 44px 0 28px;
+  border-top: 1px solid var(--nb-line);
+  background: linear-gradient(180deg, var(--nb-navy), var(--nb-ink));
+}
+
+.nb-footer-grid {
+  display: grid;
+  gap: 28px;
+  grid-template-columns: minmax(0, 1.4fr) repeat(auto-fit, minmax(140px, 1fr));
+  align-items: start;
+}
+
+.nb-footer-tag {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--nb-dim);
+  max-width: 34ch;
+}
+
+.nb-footer h3 {
+  margin: 0 0 12px;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--nb-dim);
+  font-weight: 700;
+}
+
+.nb-footer ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 14px;
+}
+
+.nb-footer a {
+  color: var(--nb-dim);
+  transition: color 0.25s ease;
+}
+
+.nb-footer a:hover {
+  color: var(--nb-pink);
+}
+
+.nb-footer-social {
+  margin-top: 24px;
+}
+
+.nb-footer-social ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.nb-footer-copy {
+  margin: 28px 0 0;
+  font-size: 12px;
+  color: var(--nb-dim);
+  text-align: center;
+}
+
+/* ==================================================================
+   Reveal
+   ================================================================== */
+
+.nb-rv {
+  opacity: 0;
+  transform: translateY(34px);
+  transition: opacity 0.9s ease, transform 0.9s ease;
+}
+
+.nb-rv.is-in {
+  opacity: 1;
+  transform: none;
+}
+
+/* ==================================================================
+   Responsive
+   ================================================================== */
+
+@media (max-width: 1000px) {
+  .nb-nav ul,
+  .nb-nav-right .nb-btn {
+    display: none;
+  }
+
+  .nb-burger {
+    display: grid;
+    place-items: center;
+  }
+
+  .nb-nav ul.is-open {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    position: absolute;
+    top: 72px;
+    left: 0;
+    right: 0;
+    padding: 12px 24px;
+    background: rgba(7, 4, 15, 0.97);
+    border-bottom: 1px solid var(--nb-line);
+  }
+
+  .nb-nav ul.is-open a {
+    padding: 12px 0;
+  }
+
+  .nb-hero-grid,
+  .nb-pillar-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .nb-pillar-info,
+  .nb-pillar-stage,
+  .nb-cap {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .nb-cap {
+    display: none;
+  }
+
+  .nb-veil--pillar {
+    background: linear-gradient(180deg, rgba(7, 4, 15, 0.6), rgba(7, 4, 15, 0.9));
+  }
+
+  .nb-photo,
+  .nb-photo--hero {
+    left: 0;
+    width: 100%;
+    opacity: 0.5;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+
+  .nb-stage {
+    min-height: 520px;
+  }
+
+  .nb-hand {
+    display: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .nb-wrap {
+    padding: 0 16px;
+  }
+
+  .nb-hero {
+    min-height: auto;
+    padding: 96px 0 48px;
+  }
+
+  .nb-phone {
+    transform: rotateY(-18deg) rotateX(5deg) scale(0.9);
+    animation: none;
+  }
+
+  .nb-float {
+    font-size: 11px;
+    padding: 8px 10px;
+  }
+
+  /* The card rows are fixed-width compositions. Below ~520px they do not fit,
+     so they are scaled down as a unit rather than being rewritten as a
+     responsive layout - which would mean a second set of offsets to keep in
+     sync with the first. */
+  .nb-duo,
+  .nb-evwrap,
+  .nb-posters {
+    transform: scale(0.72);
+    transform-origin: center top;
+  }
+
+  /* Scaling the 340px poster frame to 72% leaves ~95px of empty stage below it,
+     because the frame keeps its layout height while the cards inside it shrink.
+     Pulling the upcoming row up by 61px puts the gap between them back at the
+     ~62px the desktop layout has, instead of leaving a hole in the middle. */
+  .nb-movies {
+    gap: 0;
+  }
+
+  .nb-soon {
+    margin-top: -61px;
+  }
+
+  .nb-stage {
+    min-height: 380px;
+  }
+
+  .nb-msg {
+    transform: none;
+  }
+
+  .nb-msg:nth-child(n) {
+    margin-left: 0;
+  }
+
+  .nb-offer {
+    transform: none;
+    max-width: 100%;
+  }
+
+  .nb-btn {
+    padding: 12px 20px;
+  }
+
+  .nb-cta .nb-btn {
+    padding: 14px 26px;
+    font-size: 16px;
+  }
+
+  .nb-footer-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ==================================================================
+   Reduced motion
+   ------------------------------------------------------------------
+   The reveal starts from `opacity: 0`, so honouring this properly means
+   never hiding anything - not just stopping the transform. Same for the
+   backdrop videos: the poster stays, the decode never starts.
+   ================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  .nb *,
+  .nb *::before,
+  .nb *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+
+  .nb-rv {
+    opacity: 1;
+    transform: none;
+  }
+}

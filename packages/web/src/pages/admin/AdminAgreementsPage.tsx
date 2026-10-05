@@ -1,7 +1,7 @@
 import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
-import { ArrowLeft, ChevronLeft, ChevronRight, FileDown, FileText, Search, Eye, X } from 'lucide-react'
+import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
+import { ChevronLeft, ChevronRight, FileDown, FileText, Search, Eye, X } from 'lucide-react'
 import { adminApi } from '../../lib/api'
 import { exportTableToPdf } from '../../lib/pdfExport'
 import toast from 'react-hot-toast'
@@ -89,22 +89,19 @@ export function AdminAgreementsPage() {
   return (
     <div className="min-h-screen bg-gray-950">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-        <div className="flex items-center gap-4 mb-8">
-          <Link to="/admin/dashboard" className="text-gray-400 hover:text-white transition">
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold font-display text-white">Agreements</h1>
-            <p className="text-gray-400 text-sm mt-1">Post-KYC legal agreement archive</p>
-          </div>
-          <button
-            onClick={() =>
-              exportTableToPdf({
-                title: 'Agreement Register',
-                subtitle: `Page ${page} of ${totalPages}`,
-                columns: ['User', 'Email', 'Type', 'Title', 'Status', 'Issued', 'Accepted'],
-                rows: agreements.map((a) => [
-                  a.user?.fullName || '-',
+        <AdminPageHeader
+          title="Agreements"
+          subtitle="Post-KYC legal agreement archive"
+          backTo="/admin/dashboard"
+          backLabel="Back to dashboard"
+          actions={
+            <button
+              onClick={() =>
+                exportTableToPdf({
+                  title: 'Agreement Register',
+                  subtitle: `Page ${page} of ${totalPages}`,
+                  columns: ['User', 'Email', 'Type', 'Title', 'Status', 'Issued', 'Accepted'],
+                  rows: agreements.map((a) => [
                   a.user?.email || '-',
                   a.kind === 'PARTNER' ? 'Partner' : 'Member',
                   a.title || '-',
@@ -121,7 +118,8 @@ export function AdminAgreementsPage() {
           >
             <FileDown className="w-4 h-4" /> PDF
           </button>
-        </div>
+        }
+      />
 
         <div className="mb-6 flex flex-wrap items-center gap-3">
           <div className="flex gap-2">

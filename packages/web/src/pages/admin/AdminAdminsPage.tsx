@@ -1,7 +1,7 @@
 import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect, FormEvent } from 'react'
-import { Link } from 'react-router-dom'
-import { ArrowLeft, ShieldCheck, UserPlus, X, Loader2, KeyRound, Check, FileDown } from 'lucide-react'
+import { AdminPageHeader, AdminShell } from '../../components/admin/AdminPageHeader'
+import { ShieldCheck, UserPlus, X, Loader2, KeyRound, Check, FileDown } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { adminApi } from '../../lib/api'
 import { exportTableToPdf } from '../../lib/pdfExport'
@@ -323,17 +323,12 @@ export function AdminAdminsPage() {
   }
 
   return (
-    <div className="bg-gray-950 p-4 sm:p-6 rounded-3xl">
-      <div className="max-w-5xl mx-auto">
-        <div className="flex items-center justify-between gap-3 mb-6">
-          <div className="flex items-center gap-3">
-            <Link to="/admin/portal" className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition">
-              <ArrowLeft className="w-5 h-5" />
-            </Link>
-            <div>
-              <h1 className="text-2xl font-bold font-display text-white">Admin Accounts</h1>
-              <p className="text-gray-400 text-sm mt-1">Provision platform administrators and control their access</p>
-            </div>
+    <AdminShell>
+      <AdminPageHeader
+        title="Admin Accounts"
+        subtitle="Provision platform administrators and control their access"
+        actions={
+          <>
             <button
               onClick={() =>
                 exportTableToPdf({
@@ -345,7 +340,11 @@ export function AdminAdminsPage() {
                     a.email || '-',
                     a.phone || '-',
                     a.role || '-',
-                    a.role === 'SUPER_ADMIN' ? 'FULL ACCESS' : (a.permissions ?? []).length === 0 ? 'NO ACCESS' : `${(a.permissions ?? []).length} perms`,
+                    a.role === 'SUPER_ADMIN'
+                      ? 'FULL ACCESS'
+                      : (a.permissions ?? []).length === 0
+                        ? 'NO ACCESS'
+                        : `${(a.permissions ?? []).length} perms`,
                     a.status || '-',
                   ]),
                   fileName: `nabri-admins-${new Date().toISOString().slice(0, 10)}`,
@@ -357,16 +356,17 @@ export function AdminAdminsPage() {
             >
               <FileDown className="w-4 h-4" /> PDF
             </button>
-          </div>
-          {isSuperAdmin && !showForm && (
-            <button
-              onClick={() => setShowForm(true)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition"
-            >
-              <UserPlus className="w-4 h-4" /> Add Admin
-            </button>
-          )}
-        </div>
+            {isSuperAdmin && !showForm && (
+              <button
+                onClick={() => setShowForm(true)}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition"
+              >
+                <UserPlus className="w-4 h-4" /> Add Admin
+              </button>
+            )}
+          </>
+        }
+      />
 
         {!isSuperAdmin && (
           <div className="mb-6 p-4 rounded-xl bg-amber-900/20 border border-amber-700/40 text-amber-300 text-sm">
@@ -497,7 +497,6 @@ export function AdminAdminsPage() {
             ))
           )}
         </div>
-      </div>
 
       {resetPw && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setResetPw(null)}>
@@ -519,6 +518,6 @@ export function AdminAdminsPage() {
           </div>
         </div>
       )}
-    </div>
+    </AdminShell>
   )
 }

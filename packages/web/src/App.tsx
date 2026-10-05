@@ -4,6 +4,7 @@ import { Toaster } from 'react-hot-toast'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { Layout } from './components/Layout'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { AppErrorFallback } from './components/AppErrorFallback'
 import { ThemeProvider } from './lib/themeContext'
 import { AppLockProvider, useAppLock } from './lib/appLock'
 import { LockScreen } from './components/LockScreen'
@@ -22,7 +23,11 @@ const VerifyMobilePage = lazy(() => import('./pages/auth/VerifyMobilePage').then
 
 // Splash & Onboarding
 const SplashPage = lazy(() => import('./pages/splash/SplashPage').then(m => ({ default: m.SplashPage })))
-const LandingPage = lazy(() => import('./pages/LandingPage').then(m => ({ default: m.LandingPage })))
+// The landing page at "/". Video-backdrop sections on the real API - see
+// src/pages/landing/LandingPage.tsx. Two earlier implementations are still on
+// disk (src/pages/landing3d/, src/pages/LandingPage.tsx + src/_landing-backup/),
+// so a revert is a one-line change here rather than a rewrite.
+const LandingPage = lazy(() => import('./pages/landing/LandingPage').then(m => ({ default: m.LandingPage })))
 const OnboardingPage = lazy(() => import('./pages/onboarding/OnboardingPage').then(m => ({ default: m.OnboardingPage })))
 const ProfileCompletionPage = lazy(() => import('./pages/profile/ProfileCompletionPage').then(m => ({ default: m.ProfileCompletionPage })))
 
@@ -92,6 +97,7 @@ const AdminAdminsPage = lazy(() => import('./pages/admin/AdminAdminsPage').then(
 const AdminPaymentsPage = lazy(() => import('./pages/admin/AdminPaymentsPage').then(m => ({ default: m.AdminPaymentsPage })))
 const AdminUpiVerificationPage = lazy(() => import('./pages/admin/AdminUpiVerificationPage').then(m => ({ default: m.AdminUpiVerificationPage })))
 const AdminTopupsPage = lazy(() => import('./pages/admin/AdminTopupsPage').then(m => ({ default: m.AdminTopupsPage })))
+const AdminBankStatementsPage = lazy(() => import('./pages/admin/AdminBankStatementsPage').then(m => ({ default: m.AdminBankStatementsPage })))
 const AdminSettingsPage = lazy(() => import('./pages/admin/AdminSettingsPage').then(m => ({ default: m.AdminSettingsPage })))
 const AdminPricingPage = lazy(() => import('./pages/admin/AdminPricingPage').then(m => ({ default: m.AdminPricingPage })))
 const AdminLiveTrackingPage = lazy(() => import('./pages/admin/AdminLiveTrackingPage').then(m => ({ default: m.AdminLiveTrackingPage })))
@@ -113,9 +119,11 @@ const WithdrawalPage = lazy(() => import('./pages/wallet/WithdrawalPage').then(m
 const HomePage = lazy(() => import('./pages/home/HomePage').then(m => ({ default: m.HomePage })))
 const DiscoverPage = lazy(() => import('./pages/discovery/DiscoveryHubPage').then(m => ({ default: m.DiscoveryHubPage })))
 const DatingDiscoverPage = lazy(() => import('./pages/dating/DiscoverPage').then(m => ({ default: m.DiscoverPage })))
+const PreferencesPage = lazy(() => import('./pages/PreferencesPage').then(m => ({ default: m.PreferencesPage })))
 const SubscriptionPage = lazy(() => import('./pages/subscription/SubscriptionPage').then(m => ({ default: m.SubscriptionPage })))
 const DiscoveryCategoryPage = lazy(() => import('./components/DiscoveryCategoryPage').then(m => ({ default: m.DiscoveryCategoryPage })))
 const BookingsListPage = lazy(() => import('./pages/bookings/BookingsListPage').then(m => ({ default: m.BookingsListPage })))
+const RequestsPage = lazy(() => import('./pages/requests/RequestsPage').then(m => ({ default: m.RequestsPage })))
 const CreateBookingPage = lazy(() => import('./pages/bookings/CreateBookingPage').then(m => ({ default: m.CreateBookingPage })))
 const BookingDetailPage = lazy(() => import('./pages/bookings/BookingDetailPage').then(m => ({ default: m.BookingDetailPage })))
 const BookingPaymentPage = lazy(() => import('./pages/bookings/BookingPaymentPage').then(m => ({ default: m.BookingPaymentPage })))
@@ -147,24 +155,7 @@ function DiscoveryCategoryRoute() {
 export function App() {
   return (
     <ThemeProvider>
-      <ErrorBoundary fallback={(error) => (
-        <div className="flex min-h-screen items-center justify-center p-4 bg-surface-50 dark:bg-surface-950">
-          <div className="max-w-md text-center">
-            <h1 className="text-xl font-bold text-surface-900 dark:text-white">This page could not load</h1>
-            <p className="mt-2 text-sm text-surface-500 dark:text-surface-400">
-              { /chunk|import|fetch/i.test(error.message)
-                ? 'The app was updated while this page was open. Reload to get the latest version.'
-                : 'Please reload the app and try again.' }
-            </p>
-            <button
-              onClick={() => window.location.reload()}
-              className="mt-6 rounded-2xl bg-primary-600 px-6 py-3 text-sm font-semibold text-white"
-            >
-              Reload app
-            </button>
-          </div>
-        </div>
-      )}>
+      <ErrorBoundary fallback={(error) => <AppErrorFallback error={error} />}>
         <Toaster position="top-center" toastOptions={{ duration: 3000, style: { background: '#18181b', color: '#fafafa', borderRadius: '16px' } }} />
         <UpdateNotice />
         <Suspense fallback={<LoadingSpinner />}>
@@ -228,6 +219,10 @@ export function App() {
               <Route path="/home" element={<HomePage />} />
               <Route path="/discover" element={<DiscoverPage />} />
         <Route path="/dating" element={<DatingDiscoverPage />} />
+        {/* Sits next to /dating rather than under /settings/privacy: this decides who
+            appears in the Discover feed, while privacy settings decide what those
+            people may learn about you. Different questions, different page. */}
+        <Route path="/preferences" element={<PreferencesPage />} />
         <Route path="/subscription" element={<SubscriptionPage />} />
               <Route path="/discover/:categoryKey" element={<DiscoveryCategoryRoute />} />
               <Route path="/sports" element={<SportsPage />} />
@@ -236,6 +231,7 @@ export function App() {
 
               {/* New Booking System */}
               <Route path="/bookings" element={<BookingsListPage />} />
+              <Route path="/requests" element={<RequestsPage />} />
               <Route path="/bookings/create" element={<CreateBookingPage />} />
               <Route path="/bookings/:id" element={<BookingDetailPage />} />
               <Route path="/bookings/:id/payment" element={<BookingPaymentPage />} />
@@ -331,6 +327,7 @@ export function App() {
                <Route path="/admin/payments" element={<AdminPaymentsPage />} />
                <Route path="/admin/upi-verification" element={<AdminUpiVerificationPage />} />
                <Route path="/admin/topups" element={<AdminTopupsPage />} />
+          <Route path="/admin/bank-statements" element={<AdminBankStatementsPage />} />
               <Route path="/admin/settings" element={<AdminSettingsPage />} />
               <Route path="/admin/pricing" element={<AdminPricingPage />} />
               <Route path="/admin/live-tracking" element={<AdminLiveTrackingPage />} />

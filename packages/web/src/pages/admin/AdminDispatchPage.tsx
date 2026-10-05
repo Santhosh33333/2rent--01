@@ -1,7 +1,7 @@
 import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
-import { ArrowLeft, ChevronLeft, ChevronRight, Radio, FileDown } from 'lucide-react'
+import { AdminPageHeader, AdminShell } from '../../components/admin/AdminPageHeader'
+import { ChevronLeft, ChevronRight, Radio, FileDown } from 'lucide-react'
 import { adminApi } from '../../lib/api'
 import { exportTableToPdf } from '../../lib/pdfExport'
 
@@ -73,44 +73,42 @@ export function AdminDispatchPage() {
   }, [auto, page])
 
   return (
-    <div className="bg-gray-950 p-4 sm:p-6 rounded-3xl">
-      <div className="max-w-5xl mx-auto">
-        <div className="flex items-center gap-3 mb-6">
-          <Link to="/admin/portal" className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition">
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold font-display text-white">Dispatch Monitor</h1>
-            <p className="text-gray-400 text-sm mt-1">Live view of bookings in the assignment lifecycle</p>
-          </div>
-          <label className="ml-auto flex items-center gap-2 text-sm text-gray-400">
-            <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} className="accent-blue-500" />
-            Auto-refresh (5s)
-          </label>
-          <button
-            onClick={() =>
-              exportTableToPdf({
-                title: 'Dispatch Board',
-                subtitle: `Page ${page} of ${totalPages}`,
-                columns: ['User', 'Partner', 'Service', 'Status', 'Offers', 'Created'],
-                rows: rows.map((r) => [
-                  r.userName || '-',
-                  r.partnerName || '(unassigned)',
-                  r.serviceType || '-',
-                  r.status || '-',
-                  String(r.offersSent),
-                  r.createdAt ? new Date(r.createdAt).toLocaleString('en-IN') : '-',
-                ]),
-                fileName: `nabri-dispatch-${new Date().toISOString().slice(0, 10)}`,
-                landscape: true,
-              })
-            }
-            disabled={rows.length === 0}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-gray-300 hover:text-white text-sm transition"
-          >
-            <FileDown className="w-4 h-4" /> PDF
-          </button>
-        </div>
+    <AdminShell>
+      <AdminPageHeader
+        title="Dispatch Monitor"
+        subtitle="Live view of bookings in the assignment lifecycle"
+        actions={
+          <>
+            <label className="flex items-center gap-2 text-sm text-gray-400">
+              <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} className="accent-blue-500" />
+              Auto-refresh (5s)
+            </label>
+            <button
+              onClick={() =>
+                exportTableToPdf({
+                  title: 'Dispatch Board',
+                  subtitle: `Page ${page} of ${totalPages}`,
+                  columns: ['User', 'Partner', 'Service', 'Status', 'Offers', 'Created'],
+                  rows: rows.map((r) => [
+                    r.userName || '-',
+                    r.partnerName || '(unassigned)',
+                    r.serviceType || '-',
+                    r.status || '-',
+                    String(r.offersSent),
+                    r.createdAt ? new Date(r.createdAt).toLocaleString('en-IN') : '-',
+                  ]),
+                  fileName: `nabri-dispatch-${new Date().toISOString().slice(0, 10)}`,
+                  landscape: true,
+                })
+              }
+              disabled={rows.length === 0}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-gray-300 hover:text-white text-sm transition"
+            >
+              <FileDown className="w-4 h-4" /> PDF
+            </button>
+          </>
+        }
+      />
 
         {error && <div className="bg-red-900/20 border border-red-800 text-red-300 p-4 rounded-xl mb-4 text-center">{error}</div>}
 
@@ -184,8 +182,7 @@ export function AdminDispatchPage() {
             </div>
           </>
         )}
-      </div>
-    </div>
+    </AdminShell>
   )
 }
 

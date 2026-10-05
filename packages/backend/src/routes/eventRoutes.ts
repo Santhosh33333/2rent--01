@@ -4,7 +4,9 @@ import { authenticateToken, requireKycVerified } from "../middleware/auth";
 import { sanitizeInput, validateRequest } from "../middleware/validation";
 import { upload } from "../middleware/upload";
 import * as eventController from "../controllers/eventController";
+import * as eventPaymentController from "../controllers/eventPaymentController";
 import * as eventChatController from "../controllers/eventChatController";
+import * as eventEscrowController from "../controllers/eventEscrowController";
 import { requireReConsent } from "../middleware/legalConsent";
 
 const router = Router();
@@ -96,7 +98,29 @@ router.post("/:id/cancel", eventController.cancelRegistration);
 router.post("/:id/checkin", eventController.checkInEvent);
 
 // Get event attendees
-router.get("/:id/attendees", eventController.getEventAttendees);
+  router.get("/:id/attendees", eventController.getEventAttendees);
+
+  // --- Event cost sheet ---------------------------------------------------------
+  // The organizer sets one per-person amount (usually a common preset) and the
+  // per-attendee total is derived from it, then tracked share by share.
+  router.get("/:id/cost-sheet", eventPaymentController.getEventCostSheet);
+  router.put("/:id/cost-sheet", eventPaymentController.setEventAmount);
+  router.post("/:id/cost-sheet/waive", eventPaymentController.waiveEventShare);
+  router.post("/:id/cost-sheet/pay", eventPaymentController.payEventShare);
+
+  // --- Event fee escrow ---------------------------------------------------------
+  // `report` is the action that stops the organizer's payout: filing it freezes
+  // every held fee on the event until an admin decides. No validator middleware
+  // here on purpose - the controller checks the reason against the real list and
+  // returns specific messages, and `sanitizeInput` would strip the description
+  // an admin needs in order to review the report at all.
+  router.post("/:id/report", eventEscrowController.reportEvent);
+  // Where the organizer's money is: held, released, or frozen pending a review.
+  router.get("/:id/escrow", eventEscrowController.getEventEscrowStatus);
+  // Everything held on the CALLER's own behalf, across all events. Lives here
+  // rather than under /admin because it is the payer's own money, not an
+  // operator view of it.
+  router.get("/escrow/mine", eventEscrowController.getMyEscrow);
 
 // --- Event group thread -------------------------------------------------------
 // Restricted to the organizer and the event's attendees; the controller enforces

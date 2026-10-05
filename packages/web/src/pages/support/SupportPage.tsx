@@ -1,10 +1,57 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, LifeBuoy, Plus, MessageSquare, Send, X } from 'lucide-react'
+import { ArrowLeft, LifeBuoy, Plus, MessageSquare, Send, X, Bot, ShieldCheck, Clock, CreditCard } from 'lucide-react'
 import { getErrorMessage } from '../../lib/error'
 import { isSignedIn } from '../../lib/auth'
+import { AgentPanel } from '../../components/agent/AgentPanel'
 import { supportApi, SUPPORT_CATEGORIES } from '../../lib/api'
 import { supportTicketStatusLabel, supportStatusClass, supportPriorityClass } from '../../lib/supportFormat'
+
+/**
+ * Illustration for the assistant card.
+ *
+ * Hand-drawn SVG rather than a bitmap or a remote URL: an <img> pointing at
+ * somewhere else is a broken image and a privacy leak the moment the host goes
+ * away, and shipping a binary nobody can edit is worse than 40 lines of markup
+ * that scales, themes with the rest of the page, and costs nothing.
+ */
+function SupportIllustration() {
+  return (
+    <svg viewBox="0 0 220 150" className="h-full w-full" role="img" aria-label="A support conversation between a person and an assistant">
+      <defs>
+        <linearGradient id="sup-orb" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#3b82f6" />
+          <stop offset="100%" stopColor="#8b5cf6" />
+        </linearGradient>
+      </defs>
+
+      {/* Assistant bubble */}
+      <rect x="8" y="14" width="132" height="58" rx="14" fill="url(#sup-orb)" opacity="0.16" />
+      <rect x="8" y="14" width="132" height="58" rx="14" fill="none" stroke="url(#sup-orb)" strokeWidth="1.5" />
+      <circle cx="28" cy="34" r="9" fill="url(#sup-orb)" />
+      <path d="M24 34h8M28 30v8" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" />
+      <rect x="44" y="28" width="78" height="6" rx="3" fill="url(#sup-orb)" opacity="0.7" />
+      <rect x="44" y="41" width="60" height="6" rx="3" fill="url(#sup-orb)" opacity="0.4" />
+      <rect x="20" y="56" width="44" height="6" rx="3" fill="url(#sup-orb)" opacity="0.25" />
+
+      {/* Person bubble */}
+      <rect x="76" y="82" width="136" height="52" rx="14" fill="#1f2937" stroke="#374151" strokeWidth="1.5" />
+      <circle cx="196" cy="108" r="13" fill="#374151" />
+      <circle cx="196" cy="103" r="4.6" fill="#9ca3af" />
+      <path d="M188.5 118c1.6-5 4-7.5 7.5-7.5s5.9 2.5 7.5 7.5z" fill="#9ca3af" />
+      <rect x="90" y="96" width="72" height="6" rx="3" fill="#4b5563" />
+      <rect x="90" y="109" width="52" height="6" rx="3" fill="#374151" />
+    </svg>
+  )
+}
+
+/** The questions the assistant is actually good at, so the entry is not a blank box. */
+const ASSISTANT_STARTERS = [
+  'Why is my wallet top-up still pending?',
+  'A booking I paid for has not started.',
+  'How do I change or cancel a booking?',
+  'Someone is messaging me and I am not comfortable.',
+]
 
 interface TicketRow {
   id: string
@@ -76,6 +123,13 @@ export function SupportPage() {
   const [reply, setReply] = useState('')
   const [replyError, setReplyError] = useState('')
   const [sending, setSending] = useState(false)
+
+  // The assistant panel, opened from the card below. Mounted here rather than
+  // relying on the global launcher because /support is routed outside <Layout>,
+  // where AgentLauncher lives - so without this the only way to reach the
+  // assistant from the support page was to navigate away from it.
+  const [assistantOpen, setAssistantOpen] = useState(false)
+  const [assistantPrompt, setAssistantPrompt] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     // "My requests" is an authenticated list. On this now-public route an
@@ -201,6 +255,111 @@ export function SupportPage() {
         {error && (
           <div className="bg-red-900/20 border border-red-800 text-red-300 p-4 rounded-xl mb-4 text-center">{error}</div>
         )}
+
+        {/*
+          The assistant, ahead of the ticket form.
+
+          Ordering is the design: most visits here are "why has my money not
+          arrived", which is a question with an answer, not a ticket. Putting
+          the assistant first means the common case never produces a support
+          request, and the human path is still there for everything else.
+        */}
+        <section className="bg-gray-900 border border-gray-800 rounded-2xl p-5 mb-6">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+            <div className="hidden sm:block w-40 h-32 shrink-0">
+              <SupportIllustration />
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <h2 className="text-white font-semibold flex items-center gap-2">
+                <Bot className="w-5 h-5 text-violet-400" />
+                Ask Nabri Assistant
+              </h2>
+              <p className="text-gray-400 text-sm mt-1.5">
+                Instant answers from your own account - wallet, bookings and payment status. It can
+                only read your data, never spend it.
+              </p>
+
+              {isSignedIn() ? (
+                <>
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {ASSISTANT_STARTERS.map((q) => (
+                      <button
+                        key={q}
+                        type="button"
+                        onClick={() => { setAssistantPrompt(q); setAssistantOpen(true) }}
+                        className="text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 rounded-full px-3 py-1.5 transition"
+                      >
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAssistantOpen(true)}
+                    className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium transition"
+                  >
+                    <Bot className="w-4 h-4" /> Open the assistant
+                  </button>
+                </>
+              ) : (
+                <div className="mt-4 rounded-xl bg-gray-800/70 border border-gray-700 p-3.5">
+                  <p className="text-sm text-gray-300">
+                    The assistant answers from your account, so it needs you to be signed in.
+                  </p>
+                  <Link
+                    to="/login"
+                    className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium transition"
+                  >
+                    Sign in to ask
+                  </Link>
+                  <p className="mt-2 text-xs text-gray-500">
+                    No account? Send a request below and a human will read it.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/*
+            Emergency and trust rows. A support page that offers only an AI
+            would be the wrong advice for the two cases where a person is in
+            trouble, so the human paths stay one glance away.
+          */}
+          <div className="grid gap-3 mt-5 pt-5 border-t border-gray-800 sm:grid-cols-3">
+            <div className="flex items-start gap-2.5">
+              <ShieldCheck className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-xs font-medium text-gray-200">Someone is bothering you</p>
+                <p className="text-xs text-gray-500 mt-0.5">Block, then report it to us.</p>
+                <Link to="/messages" className="text-xs text-blue-400 hover:text-blue-300 mt-1 inline-block">
+                  Open messages
+                </Link>
+              </div>
+            </div>
+            <div className="flex items-start gap-2.5">
+              <CreditCard className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-xs font-medium text-gray-200">Money looks wrong</p>
+                <p className="text-xs text-gray-500 mt-0.5">Send a request with the amount.</p>
+                <button
+                  type="button"
+                  onClick={() => { setCategory('PAYMENTS'); setShowForm(true) }}
+                  className="text-xs text-blue-400 hover:text-blue-300 mt-1 inline-block"
+                >
+                  Report a payment
+                </button>
+              </div>
+            </div>
+            <div className="flex items-start gap-2.5">
+              <Clock className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-xs font-medium text-gray-200">How long a reply takes</p>
+                <p className="text-xs text-gray-500 mt-0.5">Usually same day, Mon-Sat.</p>
+              </div>
+            </div>
+          </div>
+        </section>
 
         {showForm && (
           <form onSubmit={submit} className="bg-gray-900 border border-gray-800 rounded-2xl p-5 mb-6">
@@ -369,6 +528,16 @@ export function SupportPage() {
           </div>
         )}
       </div>
+
+      {/* Overlay variant: a sheet on small screens, docked right on desktop. It
+          reports the prompt as consumed immediately, so picking a starter
+          question sends it once rather than re-sending on every re-render. */}
+      <AgentPanel
+        open={assistantOpen}
+        onClose={() => setAssistantOpen(false)}
+        pendingPrompt={assistantPrompt}
+        onPromptConsumed={() => setAssistantPrompt(null)}
+      />
     </div>
   )
 }

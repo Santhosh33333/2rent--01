@@ -9,6 +9,7 @@ import { Response } from "express";
 import { prisma } from "../config/database";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
+import { isAdminTierRole } from "../rbac/activeRole";
 import { calculatePrice, getConfig } from "../services/pricingEngine";
 
 function getPagination(req: AuthedRequest) {
@@ -22,7 +23,16 @@ function round2(value: number): number {
 // Server-authoritative fare bounds: the client-proposed fare is accepted only
 // when it sits within a sane band around the server estimate. This stops
 // requester/partner collusion (e.g. fare=1 to dodge fees, or absurd fares).
-async function resolveWalkingFare(clientFare: unknown, durationMinutes: unknown): Promise<number> {
+/**
+ * Server-side fare authority.
+ *
+ * Exported so the agent's create_request tool resolves prices through this exact
+ * function rather than a second implementation. A client-supplied fare is only
+ * honoured inside a band around the server estimate, so a model cannot talk a
+ * user into an arbitrary price and the REST and agent paths cannot disagree
+ * about what a walk costs.
+ */
+export async function resolveWalkingFare(clientFare: unknown, durationMinutes: unknown): Promise<number> {
   const duration = Number(durationMinutes) || 0;
   const estimate = await calculatePrice({ durationMinutes: duration, distanceKm: 0 });
   const parsed = Number(clientFare);
@@ -73,7 +83,34 @@ export async function createWalkingRequest(req: AuthedRequest, res: Response): P
 export async function getWalkingRequests(req: AuthedRequest, res: Response): Promise<void> {
   try {
     const { page, limit } = getPagination(req);
-    const where = req.query.status ? { status: req.query.status as any } : {};
+    const userId = req.user!.userId;
+
+    // Ownership scope. Without this the list endpoint returned EVERY walking
+    // request in the table to any authenticated KYC-verified caller, exposing
+    // other users' start/end locations, notes and fares. getWalkingRequestById
+    // already scoped reads to requester / assigned partner / applicant; this
+    // brings the list in line with it. Admins keep the unscoped view for support.
+    //
+    // isAdminTierRole comes from rbac/activeRole rather than middleware/auth on
+    // purpose: middleware/auth reaches config/env, which throws at import time
+    // when env vars are absent, so importing it here made this controller
+    // unloadable in tests that stub Prisma and nothing else.
+    const isAdmin = isAdminTierRole(req.user?.activeRole) || isAdminTierRole(req.user?.role);
+    const visibility = isAdmin
+      ? {}
+      : {
+          OR: [
+            { requesterId: userId },
+            { acceptedById: userId },
+            { applications: { some: { applicantId: userId } } },
+          ],
+        };
+
+    const where: any = { ...visibility };
+    if (req.query.status) {
+      where.status = req.query.status as any;
+    }
+
     const [items, total] = await Promise.all([
       prisma.walkingRequest.findMany({
         where,

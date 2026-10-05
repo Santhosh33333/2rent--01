@@ -20,6 +20,12 @@ const SEED = [
   { key: "TAX_PERCENT", value: "0", category: "USER", label: "Tax (GST)", unitNote: "% on total" },
   { key: "MIN_BOOKING_AMOUNT", value: "50", category: "USER", label: "Minimum booking amount", unitNote: "flat ₹" },
   { key: "CANCELLATION_FEE_USER", value: "20", category: "USER", label: "User cancellation fee", unitNote: "flat ₹" },
+  // Dating request charge. Charged to whoever sends a LIKE or SUPER_LIKE, in
+  // the sender's wallet, inside the same transaction that records the request.
+  // Set to 0 to make requests free (launch promotion) - getDatingRequestCharge
+  // treats 0 as a real zero, not as missing config, so this genuinely switches
+  // charging off rather than silently falling back to the ₹0.50 default.
+  { key: "DATING_REQUEST_CHARGE", value: "0.5", category: "USER", label: "Dating request charge", unitNote: "flat ₹ per request sent" },
   // ---- PARTNER fees ----
   { key: "PARTNER_COMMISSION_PERCENT", value: "1", category: "PARTNER", label: "Partner commission", unitNote: "% deducted from earning" },
   { key: "PARTNER_SERVICE_FEE_FLAT", value: "0", category: "PARTNER", label: "Partner service fee", unitNote: "flat ₹ per job" },

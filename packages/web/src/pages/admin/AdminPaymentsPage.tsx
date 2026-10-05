@@ -1,7 +1,7 @@
 import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
-import { ArrowLeft, Search, ChevronLeft, ChevronRight, CreditCard, IndianRupee, Clock, XCircle, Percent, Banknote, Wallet, Download, Phone, Mail, User as UserIcon, FileDown } from 'lucide-react'
+import { AdminPageHeader, AdminShell } from '../../components/admin/AdminPageHeader'
+import { Search, ChevronLeft, ChevronRight, CreditCard, IndianRupee, Clock, XCircle, Percent, Banknote, Wallet, Download, Phone, Mail, User as UserIcon, FileDown } from 'lucide-react'
 import { adminApi } from '../../lib/api'
 import { exportTableToPdf } from '../../lib/pdfExport'
 import { saveBlob } from '../../lib/download'
@@ -152,17 +152,8 @@ export function AdminPaymentsPage() {
   ] : []
 
   return (
-    <div className="bg-gray-950 p-4 sm:p-6 rounded-3xl">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex items-center gap-3 mb-6">
-          <Link to="/admin/portal" className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition">
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold font-display text-white">Payment Center</h1>
-            <p className="text-gray-400 text-sm mt-1">Real Cashfree orders and payments</p>
-          </div>
-        </div>
+    <AdminShell width="max-w-6xl">
+      <AdminPageHeader title="Payment Center" subtitle="Real Cashfree orders and payments" />
 
         {statCards.length > 0 && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
@@ -340,7 +331,6 @@ export function AdminPaymentsPage() {
             Next <ChevronRight className="w-4 h-4" />
           </button>
         </div>
-      </div>
-    </div>
+    </AdminShell>
   )
 }

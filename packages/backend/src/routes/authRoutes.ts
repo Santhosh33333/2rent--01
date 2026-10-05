@@ -13,7 +13,14 @@ router.post(
   authRateLimiter,
   [
     body("email").isEmail().normalizeEmail().withMessage("Valid email is required"),
-    body("phone").isMobilePhone("any").withMessage("Valid phone is required"),
+    // Shape only. The rule for what a valid Indian number is lives in
+    // services/phoneNumber and is applied in the controller, because
+    // `validateRequest` answers any failure with a bare "Validation failed." and
+    // never forwards the per-field message - so a strict validator here would
+    // reject `+91 98200 12345` (validator.js does not tolerate the spaces) while
+    // telling the user nothing. The upper bound stops an unbounded string
+    // reaching the database.
+    body("phone").isString().trim().isLength({ min: 1, max: 20 }).withMessage("Mobile number is required"),
     body("password").isLength({ min: 8 }).withMessage("Password must be at least 8 characters"),
     body("fullName").notEmpty().withMessage("Full name is required"),
     body("dateOfBirth").isISO8601().withMessage("Valid date of birth is required"),
@@ -34,19 +41,67 @@ router.post(
   authController.register
 );
 
+/**
+ * A sign-in identifier is EITHER an email address OR a phone number.
+ *
+ * This used to be `isEmail()` on whatever arrived in the `email` field, so a
+ * ten-digit number was rejected 422 VALIDATION_ERROR as a malformed address and
+ * never reached the controller that knows how to resolve it. That made phone
+ * sign-in unreachable however the UI offered it - and it stays live for any
+ * client that posts the legacy `{ email, password }` shape, such as an APK built
+ * before the `identifier` field existed.
+ *
+ * Shape-only on purpose. The real rules (exactly ten digits, an Indian mobile
+ * prefix, no sample-number runs) belong to the parser, which the controller owns;
+ * this check only rejects a value that is neither an address nor a number.
+ */
+const isSignInIdentifier = (v: string): boolean =>
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) || v.replace(/\D/g, "").length >= 10;
+
 router.post(
   "/login",
   authRateLimiter,
-  [body("email").isEmail().withMessage("Valid email is required"), body("password").notEmpty().withMessage("Password is required")],
+  [
+    // `identifier` is what the controller actually reads
+    // (`identifier || email || phone`), and it is validated as an opaque string
+    // precisely so a number is never format-checked as an address.
+    body("identifier").optional().isString().trim().isLength({ min: 3, max: 100 }),
+    // `email` and `phone` stay optional: requiring both locked out phone-only
+    // sign-in, and an absent value must not count as a failure.
+    body("email")
+      .optional()
+      .isString()
+      .trim()
+      .custom(isSignInIdentifier)
+      .withMessage("Enter a valid email address, or sign in with your 10-digit mobile number"),
+    body("phone").optional().isString().trim().isLength({ min: 3, max: 20 }),
+    body("password").notEmpty().withMessage("Password is required"),
+  ],
   validateRequest,
   authController.login
 );
 
 // Phone OTP Login (Firebase)
+//
+// Shape-only validation, deliberately. `isMobilePhone("any")` is a strict E.164
+// check that runs BEFORE the controller's tolerant `phoneLookupCandidates`
+// lookup, so a member who typed their number the way it is stored (`+91…`) or
+// with spaces was rejected 422 VALIDATION_ERROR before any lookup could happen,
+// and the specific "that number isn't registered" answer never reached them.
+// The real rules (ten digits, valid Indian prefix, no sample runs) all live in
+// the parser, which the controller owns on purpose.
+const phoneShape = [
+  body("phone")
+    .isString()
+    .trim()
+    .isLength({ min: 10, max: 20 })
+    .withMessage("Enter your 10-digit mobile number"),
+];
+
 router.post(
   "/phone/send-otp",
   otpSendLimiter,
-  [body("phone").isMobilePhone("any").withMessage("Valid phone is required")],
+  phoneShape,
   validateRequest,
   authController.sendPhoneOTP
 );
@@ -54,7 +109,7 @@ router.post(
 router.post(
   "/phone/verify-otp",
   otpVerifyLimiter,
-  [body("phone").isMobilePhone("any").withMessage("Valid phone is required"), body("otp").isLength({ min: 6, max: 6 }).withMessage("6-digit OTP is required")],
+  [...phoneShape, body("otp").isLength({ min: 6, max: 6 }).withMessage("6-digit OTP is required")],
   validateRequest,
   authController.verifyPhoneOTP
 );

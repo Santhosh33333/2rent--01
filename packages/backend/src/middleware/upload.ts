@@ -53,3 +53,24 @@ export const uploadFields = multer({
 export function getUploadUrl(filename: string): string {
   return `/uploads/${filename}`;
 }
+
+/**
+ * Bank statements: read into memory, never persisted.
+ *
+ * Deliberately NOT the blob storage the image uploads use. A statement lists
+ * every transaction the business received, including the ones that are not
+ * theirs yet and the names attached to them. Reconciliation needs the rows once
+ * and keeps its own parsed copy; keeping the original file would mean holding
+ * that data forever behind an admin URL for no benefit.
+ *
+ * `memoryStorage` is safe at this size because `limits.fileSize` caps it, and
+ * the alternative - streaming to a temp file - would put the same bytes on disk
+ * anyway, which is the thing being avoided here.
+ */
+export const statementUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: env.MAX_FILE_SIZE,
+    files: 1,
+  },
+});

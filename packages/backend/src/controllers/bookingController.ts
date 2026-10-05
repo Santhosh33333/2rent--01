@@ -8,6 +8,7 @@ import * as partnerMatching from "../services/partnerMatchingEngine"
 import {
     createGatewayOrder,
     isGatewayConfigured,
+  gatewayUnavailableReason,
     verifyGatewayPayment,
   buildOrderId,
   PaymentVerificationError,
@@ -318,7 +319,24 @@ export async function initiatePayment(req: AuthedRequest, res: Response): Promis
 
     const amount = booking.estimatedAmount ?? 0
 
-    if (!isGatewayConfigured()) {
+    // This path creates a charge, so it follows the payment mode switch - unlike
+    // verification, refusing here only stops money being taken. A booking in
+    // PAYMENT_PENDING can always be settled manually: this booking already has
+    // its own UPI reference/proof flow, so the response points at that instead of
+    // returning a bare 503 the client cannot act on.
+    const unavailable = await gatewayUnavailableReason()
+    if (unavailable) {
+      if (unavailable === "switched_off") {
+        sendError(
+          res,
+          "Online payment is switched off. Pay using the UPI QR and submit the reference.",
+          503,
+          "MANUAL_UPI_ONLY",
+          undefined,
+          { upiDetailsEndpoint: `/bookings/${booking.id}/upi-details` }
+        )
+        return
+      }
       sendError(res, "Payments are not configured on this server.", 503, "PAYMENT_NOT_CONFIGURED")
       return
     }

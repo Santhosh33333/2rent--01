@@ -80,8 +80,8 @@ export function VerificationPage() {
             { name: 'Selfie Verification', status: selfie ? 'verified' : 'not-started', link: '/verification/step3', ...stepMeta['Selfie Verification'], rejectionReason: status === 'REJECTED' ? data.rejectionReason : undefined },
             { name: 'Address Proof', status: addressProof ? 'verified' : 'not-started', link: '/verification/step4', ...stepMeta['Address Proof'], rejectionReason: status === 'REJECTED' ? data.rejectionReason : undefined },
             { name: 'Emergency Contact', status: emergencyContact ? 'verified' : 'not-started', link: '/verification/step5', ...stepMeta['Emergency Contact'] },
-            { name: 'Review & Submit', status: status === 'SUBMITTED' || status === 'VERIFIED' ? 'verified' : (personalDetails && govId && selfie && addressProof && emergencyContact) ? 'pending' : 'not-started', link: '/verification/step6', ...stepMeta['Address Proof'] },
-            { name: 'Admin Verification', status: status === 'VERIFIED' ? 'verified' : status === 'REJECTED' ? 'rejected' : 'pending', ...stepMeta['Address Proof'] },
+            { name: 'Review & Submit', status: status === 'SUBMITTED' || status === 'VERIFIED' ? 'verified' : (personalDetails && govId && selfie && addressProof && emergencyContact) ? 'pending' : 'not-started', link: '/verification/step6', ...stepMeta['Review & Submit'] },
+            { name: 'Admin Verification', status: status === 'VERIFIED' ? 'verified' : status === 'REJECTED' ? 'rejected' : 'pending', ...stepMeta['Admin Verification'] },
           ])
           // While awaiting admin review, poll so an approval reflects without
           // the user refreshing.

@@ -20,21 +20,8 @@ import { Link } from 'react-router-dom';
 import { CalendarDays, MapPin, Users, Radio, ArrowRight, Globe } from 'lucide-react';
 import { api } from '../../lib/api';
 
-interface LandingEvent {
-  id: string;
-  title: string;
-  category?: string | null;
-  startTime: string;
-  endTime?: string | null;
-  location?: string | null;
-  attendeeCount?: number | null;
-  capacity?: number | null;
-  price?: number | null;
-  currency?: string | null;
-  isOnline?: boolean;
-  isVerified?: boolean;
-  isLive?: boolean;
-}
+import type { LandingEvent } from './types';
+import { readEventItems } from './types';
 
 type State =
   | { status: 'loading' }
@@ -146,13 +133,7 @@ export function EventsSection() {
         timeout: 5000,
       })
       .then((res) => {
-        const payload = res.data?.data;
-        const events: LandingEvent[] = Array.isArray(payload?.items)
-          ? payload.items
-          : Array.isArray(payload)
-          ? payload
-          : [];
-        setState({ status: 'ready', events });
+        setState({ status: 'ready', events: readEventItems(res.data) });
       })
       .catch((err) => {
         // A 401 here means the deployment is still running a backend without the

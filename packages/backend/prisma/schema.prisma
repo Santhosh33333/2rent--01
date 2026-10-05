@@ -24,6 +24,12 @@ model User {
   bio                            String?
   city                           String?
   country                        String?
+  /// Optional, one-time, self-supplied position used only to rank discovery
+  /// results by distance. Never returned by any endpoint - discovery exposes an
+  /// approximate distance band, not coordinates. Null simply means "distance is
+  /// not rankable for this account", which is a supported state, not an error.
+  latitude                       Float?
+  longitude                      Float?
   status                         String    @default("ACTIVE")
   suspendedUntil                 DateTime?
   suspensionReason               String?
@@ -51,6 +57,7 @@ lastLoginAt                   DateTime?
   walkingPartner                 WalkingPartner?
   partner                        Partner?
   wallet                         Wallet?
+  preferences                    UserPreferences?
   loginHistory                   LoginHistory[]
   devices                        Device[]
   sessions                       Session[]
@@ -69,6 +76,7 @@ lastLoginAt                   DateTime?
   communityPollVotes             CommunityPollVote[]
   events                         Event[]              @relation("EventOrganizer")
   eventAttendances               EventAttendee[]      @relation("EventAttendeeUser")
+  eventShares                    EventShare[]         @relation("EventShareUser")
   sentMessages                   Message[]            @relation("MessageSender")
   receivedMessages               Message[]            @relation("MessageReceiver")
   eventGroupMessages             EventGroupMessage[]  @relation("EventGroupSender")
@@ -109,6 +117,15 @@ lastLoginAt                   DateTime?
   paymentOrders                  PaymentOrder[]
   creditLedgers                  CreditLedger[]
   topupRequests                  TopupRequest[]
+  bankStatementsUploaded         BankStatement[]       @relation("BankStatementUploadedBy")
+  bankStatementsApplied          BankStatement[]       @relation("BankStatementAppliedBy")
+  bankStatementDecisions         BankStatementRow[]    @relation("BankStatementRowDecidedBy")
+  // Event escrow: money staked on an event, and money owed for events this
+  // account organized. Two separate relations because both sides point at User
+  // and Prisma needs distinct names to disambiguate them.
+  eventEscrowsPaid               EventEscrow[]         @relation("EventEscrowPayer")
+  eventEscrowsEarned             EventEscrow[]         @relation("EventEscrowOrganizer")
+  eventReportsFiled              EventReport[]         @relation("EventReportFiledBy")
   movieWatchlist                 MovieWatchlist[]
   supportTickets                 SupportTicket[]        @relation("SupportRequester")
   supportTicketsAssigned         SupportTicket[]        @relation("SupportAssignee")
@@ -126,6 +143,9 @@ supportMessages                SupportMessage[]
   @@index([role])
   @@index([city])
   @@index([clerkId])
+  /// Composite so discovery can narrow to a bounding box before scoring, rather
+  /// than comparing every ACTIVE user row on latitude alone.
+  @@index([latitude, longitude])
 }
 
 // ============================================================
@@ -142,6 +162,17 @@ model Verification {
   // KYC record, and requireKycVerified already reads that row.
   trialEndsAt              DateTime?
   personalDetails          Json?
+  // The user's OWN mobile number, re-entered during KYC step 1 and required by
+  // the backend to be the same number as User.phone.
+  //
+  // Why a column rather than another key inside `personalDetails`: this value is
+  // compared server-side on every submission and is the audit record of what the
+  // user declared about their identity. Buried in JSON it would be unqueryable,
+  // and it would be silently rewritten every time step 1 was re-saved.
+  //
+  // Stored in the same E.164 form as User.phone (+91XXXXXXXXXX) so the comparison
+  // is a plain string equality between two canonical values.
+  confirmedPhone           String?
   selfieUrl                String?
   govIdUrl                 String?
   govIdType                String?
@@ -628,6 +659,234 @@ model TopupRequest {
 }
 
 // ============================================================
+// DISCOVERY PREFERENCES
+// ============================================================
+//
+// Discovery filters existed in the request layer (minAge/maxAge/gender/city on
+// GET /dating/discover) but there was nowhere to store what a user actually
+// wants. So every page had to send the filters explicitly, and DiscoverPage sent
+// an empty object, which made the filters look broken while the backend was in
+// fact behaving correctly for "no preferences expressed".
+//
+// UserPreferences is 1:1 with User rather than a row per setting because these
+// values are read together on every discovery query and written together from
+// one form. A key/value table would mean one query per preference and no way to
+// make "save all" atomic.
+//
+// interests and languages are String[] because they are flat sets queried with
+// overlap (&) and Postgres indexes arrays natively. lifestyle is a JSON object
+// keyed by category ({activity:[...], food:[...]}) because its options only
+// mean anything relative to their category - "vegetarian" is a food answer and
+// "very social" is a social one, and a flat array could not tell you which.
+//
+// The defaults below are deliberately permissive (age 18-100, no interests, no
+// languages) so a profile with no saved preferences still receives results.
+// "No preferences" must never mean "no results".
+
+model UserPreferences {
+  userId String @id
+
+  /// Discovery radius in km. 0 or the sentinel 100000 means "anywhere", which is
+  /// why the UI offers an explicit Anywhere option rather than a huge number.
+  distanceKm Int @default(50)
+
+  ageMin Int @default(18)
+  ageMax Int @default(100)
+
+  /// Canonical lowercase values, never display labels. "travel" not "Travel",
+  /// so a label rename in the admin panel cannot silently orphan saved data.
+  interests String[] @default([])
+  languages String[] @default([])
+
+  /// {category: [value]} e.g. {"activity":["active"],"food":["vegetarian"]}
+  lifestyle String @default("{}")
+
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// The catalogue behind the preference UI, in the database rather than in the
+// frontend, so an admin can add an interest or a lifestyle answer without a
+// deploy. Without this the option list would be a hard-coded const on the client
+// and every new option would need a release.
+//
+// Uniqueness includes category because lifestyle values are only unique within
+// their category: "none" is a valid answer under Smoking, Drinking and Pets, and
+// collapsing them into one row would make the UI show a single "None" chip in the
+// wrong place.
+model PreferenceOption {
+  id String @id @default(uuid())
+
+  /// INTEREST | LANGUAGE | LIFESTYLE
+  kind String
+
+  /// LIFESTYLE only: social | activity | schedule | food | pets | travel.
+  /// Empty string for the flat kinds (INTEREST, LANGUAGE) rather than null.
+  ///
+  /// Non-nullable on purpose. Postgres treats NULLs as distinct inside a unique
+  /// index, so a nullable category would let "travel" be inserted twice with two
+  /// NULL categories and the uniqueness constraint would never fire - which is
+  /// also exactly the column Prisma cannot build a compound-unique selector over,
+  /// making the upsert impossible to express. A sentinel removes both problems.
+  category String @default("")
+
+  /// Canonical stored value. Lowercase, underscore-separated, stable across
+  /// relabelling. This is what UserPreferences holds.
+  value String
+
+  /// What the user sees. Safe to change at any time.
+  displayLabel String
+
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([kind, category, value])
+  @@index([kind, isActive, sortOrder])
+}
+
+// ============================================================
+// BANK STATEMENT RECONCILIATION
+// ============================================================
+//
+// Manual UPI means a human reads a bank statement and types a verdict per
+// request. That does not survive a busy evening: the queue grows, the credit
+// gets late, and the admin starts approving from the screenshot alone.
+//
+// So the statement is uploaded instead, and each credit line is matched back to
+// the request that claimed it - by UTR, and only when the amount agrees
+// exactly. A statement is kept as its own row set rather than applied and
+// discarded, because when an admin asks six weeks later "why did this person
+// get credited twice", the answer has to be a query, not a memory.
+//
+// Two tables, and the split is deliberate: the statement is the upload (a file,
+// a period, totals) and the row is the decision about one line of it. Rows
+// outlive the verdict being interesting, so matchStatus is stored rather than
+// recomputed on read.
+
+model BankStatement {
+  id       String @id @default(uuid())
+  fileName String
+  /// Bytes, kept so the admin can tell two same-named exports apart.
+  byteSize Int    @default(0)
+  /// sha256 of the file. Re-uploading the same export is a no-op rather than a
+  /// second pass over lines that are already settled.
+  fileHash String
+
+  periodFrom DateTime?
+  periodTo   DateTime?
+
+  rowCount       Int @default(0)
+  matchedCount   Int @default(0)
+  creditedCount  Int @default(0)
+  unmatchedCount Int @default(0)
+  /// Money in the file that reconciliation declined to act on, for any reason.
+  /// An admin should be able to see that this number is zero, and if it is not,
+  /// that every rupee of it has a named row below.
+  skippedAmount Decimal @default(0)
+
+  /// UPLOADED -> PREVIEWED -> APPLIED. APPLIED is terminal and is what stops a
+  /// second click from crediting the same line twice.
+  status String @default("UPLOADED")
+
+  /// Which CSV column carried which role, as JSON. Statements from different
+  /// banks name the same column half a dozen ways, so the mapping is detected,
+  /// shown to the admin, and stored with the result.
+  columnMap String?
+  /// Non-fatal parse problems (unknown column names, unparseable amounts) as a
+  /// JSON array. Recorded instead of thrown: a bank export is not clean input,
+  /// and refusing the whole file because six rows have odd dates would be worse
+  /// than uploading it and flagging those six.
+  warnings String?
+
+  uploadedById String?
+  appliedById  String?
+  appliedAt    DateTime?
+  createdAt    DateTime @default(now())
+
+  uploadedBy User?           @relation("BankStatementUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+  appliedBy  User?           @relation("BankStatementAppliedBy", fields: [appliedById], references: [id], onDelete: SetNull)
+  rows       BankStatementRow[]
+
+  @@unique([fileHash])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model BankStatementRow {
+  id          String @id @default(uuid())
+  statementId String
+
+  /// 1-based line in the file, so an admin reading the CSV can find the row
+  /// without trusting the UI to have ordered it the same way.
+  lineNo Int
+
+  /// Exactly what the file said, kept verbatim. The normalised value is derived;
+  /// when a match fails, the raw text is the only way to see why.
+  rawReference String
+  rawAmount    String?
+  /// Reference as matched: trimmed, inner whitespace collapsed, upper-cased.
+  referenceNorm String
+  rawDate      String?
+
+  amount  Decimal?
+  txnDate DateTime?
+
+  /// Whether this line is money coming in. A statement also lists the payouts
+  /// and fees; crediting those would mint money. Only inbound lines are eligible.
+  inbound Boolean @default(true)
+
+  /// MATCHED | UNMATCHED | AMOUNT_MISMATCH | ALREADY_SETTLED | DUPLICATE_IN_FILE
+  /// | NO_REFERENCE | UNPARSEABLE_AMOUNT
+  matchStatus String @default("UNMATCHED")
+  /// Human-readable explanation, shown next to the row.
+  matchReason String?
+
+  /// TOPUP | UPI_PAYMENT - which kind of request this line settled.
+  matchedType   String?
+  matchedId     String?
+  matchedAmount Decimal?
+  matchedUserId String?
+
+  /// Set only once the wallet was actually moved. Distinct from matchStatus:
+  /// a row can be MATCHED and still uncredited if the apply step failed.
+  creditedAt   DateTime?
+  creditedById String?
+
+  // ---- A human's verdict on a line the matcher could not settle -------------
+  //
+  // Kept apart from `matchReason` on purpose. matchReason is a machine fact
+  // ("no top-up claims this reference"); this is a human judgement, and it is
+  // the only thing that makes a manually approved credit defensible when someone
+  // asks about it months later. `service.recordRowDecision` refuses to write it
+  // without a comment, because an unexplained approval in a money flow is
+  // indistinguishable from a mistake.
+  //
+  // Null until an admin decides. A row with no decision and no match is what the
+  // unmatched queue is built from.
+  adminComment String?
+  decidedById  String?
+  decidedAt    DateTime?
+  /// CREDITED | REJECTED | IGNORED - what the admin concluded, not the parser.
+  decidedStatus String?
+
+  /// The whole original row as JSON, for disputes.
+  rawJson String?
+  createdAt DateTime @default(now())
+
+  statement BankStatement @relation(fields: [statementId], references: [id], onDelete: Cascade)
+  decidedBy  User?    @relation("BankStatementRowDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+
+  @@index([statementId, matchStatus])
+  @@index([referenceNorm])
+  @@index([matchedType, matchedId])
+  @@index([decidedById])
+}
+
+// ============================================================
 // COMMUNITIES & EVENTS
 // ============================================================
 
@@ -814,6 +1073,18 @@ model Event {
   privacy       String    @default("PUBLIC") // PUBLIC, PRIVATE
   price         Float?
   currency      String    @default("INR")
+  // OPEN until the organizer closes the collection. Distinct from the derived
+  // "outstanding == 0", because an organizer may stop chasing the last person.
+  paymentStatus String    @default("OPEN")
+  paidAt        DateTime?
+  // --- Escrow settlement ---------------------------------------------------
+  // PENDING  nothing due yet (event has not finished)
+  // IN_DISPUTE an open report froze the release
+  // RELEASED  paid out to the organizer after the dispute window closed clean
+  // REFUNDED  an admin found the event fake and paid everyone back
+  // Separate from `paymentStatus`, which only means "collection closed".
+  settlementStatus String    @default("PENDING")
+  settledAt        DateTime?
   startTime     DateTime
   endTime       DateTime?
   timezone      String?
@@ -828,7 +1099,10 @@ model Event {
 
     organizer User            @relation("EventOrganizer", fields: [organizerId], references: [id], onDelete: Cascade)
     attendees EventAttendee[]
+  shares   EventShare[]
     groupMessages EventGroupMessage[]
+    escrows EventEscrow[]
+    reports EventReport[]
 
     @@index([organizerId])
     @@index([status, startTime])
@@ -842,6 +1116,40 @@ model Event {
     @@index([price])
     @@index([organizerType])
     @@index([latitude, longitude])
+}
+
+model EventShare {
+  id        String    @id @default(uuid())
+  eventId   String
+  userId    String
+  // What THIS attendee owes. Decimal, not Float: the per-person price is
+  // advisory display data on `Event.price`, but the amount actually charged and
+  // the amount already collected must not drift by a rounding error.
+  amount    Decimal   @db.Decimal(12, 2)
+  // PENDING | PAID | WAIVED
+  status    String    @default("PENDING")
+  // WALLET (paid inside the app) or UPI (paid to the organizer's UPI id
+  // directly). A UPI payment is a claim until the organizer confirms it landed,
+  // so it is never recorded as collected on the attendee's word alone.
+  method    String    @default("WALLET")
+  // The UPI transaction reference the payer quoted, for the organizer to match.
+  methodRef String?
+  // SELF, or the id of the person who covered this share on someone else's
+  // behalf. Kept so "who actually paid" stays answerable after a group settle.
+  paidBy    String?
+  paidAt    DateTime?
+  // Set when the organizer changes the per-person price after this share was
+  // created, so the UI can show that the ask moved.
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation("EventShareUser", fields: [userId], references: [id], onDelete: Cascade)
+  escrow EventEscrow?
+
+  @@unique([eventId, userId])
+  @@index([eventId])
+  @@index([userId])
 }
 
 model EventAttendee {
@@ -858,6 +1166,110 @@ model EventAttendee {
 
   @@unique([eventId, userId])
   @@index([eventId])
+}
+
+// ============================================================
+// EVENT FEE ESCROW
+//
+// Why this exists: `payMyShare` used to debit the payer and stop there. The
+// money left the wallet, a Transaction row recorded it, and NOTHING ever
+// credited the organizer. There was no settle path at all, so an attendee's
+// fee simply vanished. That is the bug this escrow exists to fix.
+//
+// `Wallet.heldBalance` already existed for prepaid call billing with exactly
+// the semantics needed here: money stays in `balance` (the payer still owns it,
+// so it stays visible and refundable) but is reserved and therefore not
+// spendable, because available = balance - heldBalance. Reusing it rather than
+// adding a second "escrow balance" keeps ONE definition of spendable money in
+// the app instead of two that can disagree.
+//
+// A per-hold ledger row is still required, because `heldBalance` is a single
+// number shared with call billing: without a row per hold there is no way to
+// know which rupees to release on a refund, and a partial refund would free
+// the wrong money.
+// ============================================================
+
+model EventEscrow {
+  id      String @id @default(uuid())
+  eventId String
+  // One escrow per share. This unique index is also the idempotency guard: a
+  // double tap or a retried request loses the insert race and settles once.
+  eventShareId String @unique
+  payerId      String
+  organizerId  String
+  amount       Decimal @db.Decimal(12, 2)
+  // Platform cut, held back FROM the organizer's payout rather than added on
+  // top, so the payer is never charged more than the share they were quoted.
+  platformFee Decimal @default(0) @db.Decimal(12, 2)
+  // amount - platformFee, denormalised so retuning the fee later cannot
+  // retroactively change what an already-held payout was worth.
+  organizerPayout Decimal @db.Decimal(12, 2)
+
+  // HELD -> RELEASED (organizer paid)
+  //       -> REFUNDED (payer made whole)
+  //       -> DISPUTED (a report froze it; an admin then decides)
+  status String @default("HELD")
+
+  heldAt DateTime @default(now())
+  // Event end + the dispute window, resolved to a fixed instant at hold time so
+  // the deadline cannot drift when the constant is retuned for future events.
+  releaseEligibleAt DateTime
+  releasedAt        DateTime?
+  refundedAt        DateTime?
+  // Admin who made the call, plus a note the payer is shown by email. A
+  // decision with no note is not permitted: "your money was returned" is not
+  // an answer to "why did you take my money for an event that never happened".
+  decidedById  String?
+  decisionNote String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  event      Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventShare EventShare @relation(fields: [eventShareId], references: [id], onDelete: Cascade)
+  payer      User       @relation("EventEscrowPayer", fields: [payerId], references: [id], onDelete: Cascade)
+  organizer  User       @relation("EventEscrowOrganizer", fields: [organizerId], references: [id], onDelete: Cascade)
+  // Reports that name this specific held fee.
+  reports    EventReport[]
+
+  @@index([eventId, status])
+  @@index([payerId])
+  @@index([organizerId])
+  // The sweep that auto-releases unresolved escrows scans on exactly this pair.
+  @@index([status, releaseEligibleAt])
+}
+
+// A report that an event was fake, misleading, or never happened.
+//
+// Separate from `Report`, which is user-against-user: its `target` is a User
+// foreign key and cannot even name an event. This one freezes escrow, so it
+// carries its own lifecycle and its own resolution fields.
+model EventReport {
+  id          String  @id @default(uuid())
+  eventId     String
+  reporterId  String
+  // Optional: a payer disputing their own held fee. A report about the event as
+  // a whole does not tie to one escrow.
+  escrowId    String?
+  // NO_SHOW | FAKE_EVENT | MISLEADING_DETAILS | UNSAFE | OTHER
+  reason      String
+  description String?
+  // OPEN -> REFUNDED | RELEASED | DISMISSED
+  status      String @default("OPEN")
+
+  resolutionNote String?
+  resolvedById   String?
+  resolvedAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  event    Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  reporter User         @relation("EventReportFiledBy", fields: [reporterId], references: [id], onDelete: Cascade)
+  escrow   EventEscrow? @relation(fields: [escrowId], references: [id], onDelete: SetNull)
+
+  @@index([eventId, status])
+  @@index([status])
+  @@index([reporterId])
 }
 
 // ============================================================

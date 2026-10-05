@@ -73,7 +73,7 @@ function haversineKm(aLat: number, aLon: number, bLat: number, bLon: number): nu
 
 /**
  * Nearby available partners. Privacy-first: callers learn a rounded
- * distance ("2.4 km away") and the partner's city â€” NEVER the partner's
+ * distance ("2.4 km away") and the partner's city — NEVER the partner's
  * exact coordinates. Distances use the partner's declared service-area
  * position, not live GPS.
  *

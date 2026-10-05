@@ -116,7 +116,12 @@ export function UpiQrPanel({
       {data.upiUri ? (
         <div className="flex flex-col items-center gap-2">
           <div className="bg-white p-3 rounded-2xl shadow-sm border border-surface-200 dark:border-surface-700">
-            <QRCodeSVG ref={svgRef} value={data.upiUri} size={176} level="M" marginSize={0} />
+            {/* `includeMargin` is the qrcode.react v3 prop (the package pins
+                ^3.2.0). v4 renamed it to `marginSize`; using the v4 name
+                against the v3 types is a hard type error, and at runtime the
+                unknown prop is silently dropped, so the QR would gain a quiet
+                border the layout never asked for. */}
+            <QRCodeSVG ref={svgRef} value={data.upiUri} size={176} level="M" includeMargin={false} />
           </div>
           <div className="flex items-center gap-1.5 text-xs text-surface-500">
             <Clock className="w-3.5 h-3.5" />

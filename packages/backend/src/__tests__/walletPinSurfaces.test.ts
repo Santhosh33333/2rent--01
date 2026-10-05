@@ -88,20 +88,32 @@ describe('withdrawal is reachable from the partner surface', () => {
     // The prefill from the earnings/wallet hand-off must only ever be a number.
     expect(form).toMatch(/Number\.isFinite\(suggested\) && suggested > 0/);
   });
+it('keeps the partner earnings counter in step with payouts', () => {
+  // `PartnerEarnings.withdrawableBalance` only ever incremented, so the
+  // dashboard's "Available to withdraw" grew forever and disagreed with the
+  // wallet balance the withdrawal gate actually validates.
+  //
+  // Read from withdrawalService rather than adminController: the settlement was
+  // extracted so the admin endpoint and the agent's admin_approve_withdrawal
+  // tool share one implementation. The invariant is unchanged, so the assertion
+  // moves with the code rather than being deleted.
+  const service = readBackend('services/withdrawalService.ts');
+  const start = service.indexOf('export async function approveWithdrawalRequest');
+  const body = service.slice(start, start + 4000);
+  expect(start).toBeGreaterThan(-1);
+  expect(body).toMatch(/partnerEarnings\.update/);
+  expect(body).toMatch(/Math\.max\(0,\s*remaining\)/);
+  // A `{ decrement }` that goes negative is rejected by Postgres, and catching
+  // that inside an interactive transaction aborts the whole approval.
+  expect(body).not.toMatch(/withdrawableBalance:\s*\{\s*decrement/);
+  expect(body).not.toMatch(/partnerEarnings\.updateMany\([^)]*catch/);
 
-  it('keeps the partner earnings counter in step with payouts', () => {    // `PartnerEarnings.withdrawableBalance` only ever incremented, so the
-    // dashboard's "Available to withdraw" grew forever and disagreed with the
-    // wallet balance the withdrawal gate actually validates.
-    const admin = readBackend('controllers/adminController.ts');
-    const start = admin.indexOf('export async function approveWithdrawal');
-    const body = admin.slice(start, start + 4000);
-    expect(body).toMatch(/partnerEarnings\.update/);
-    expect(body).toMatch(/Math\.max\(0,\s*remaining\)/);
-    // A `{ decrement }` that goes negative is rejected by Postgres, and catching
-    // that inside an interactive transaction aborts the whole approval.
-    expect(body).not.toMatch(/withdrawableBalance:\s*\{\s*decrement/);
-    expect(body).not.toMatch(/partnerEarnings\.updateMany\([^)]*catch/);
-  });
+  // The controller must delegate rather than keep its own copy, or the two
+  // money paths drift apart again.
+  const admin = readBackend('controllers/adminController.ts');
+  expect(admin).toMatch(/approveWithdrawalRequest\(id,\s*req\.user!\.userId\)/);
+  expect(admin).toMatch(/rejectWithdrawalRequest\(id,\s*req\.user!\.userId,\s*reason\)/);
+});
 });
 
 describe('app-lock PIN accepts the length it was set up with', () => {

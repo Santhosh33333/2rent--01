@@ -13,6 +13,31 @@ function getDashboardForUser(user: any): string {
   return dashboardForRole(resolveLandingRole(user))
 }
 
+/**
+ * Reduce a typed phone number to the ten digits the server resolves an account
+ * by. Mirrors `toTenDigits` in KycStep1PersonalDetails on purpose: the two
+ * forms must agree on what "+91 98765 43210" means, and a browser that
+ * normalised one way while the server normalised the other produced the
+ * `9171211569` bug.
+ */
+function toTenDigits(input: string): string {
+  let digits = String(input ?? '').replace(/\D/g, '')
+  if (digits.length > 10 && digits.startsWith('91')) digits = digits.slice(2)
+  else if (digits.length === 11 && digits.startsWith('0')) digits = digits.slice(1)
+  return digits.slice(0, 10)
+}
+
+/**
+ * Wrong-typing tolerance on the phone form.
+ *
+ * Deliberately NOT a lockout. Locking on three tries lets anyone who knows a
+ * member's number lock them out by typing it three times, which is a worse
+ * failure than a password guess. Instead the count is a countdown that ends in
+ * a route to a channel that actually works - and since no SMS provider is
+ * configured, that channel is email, not phone OTP.
+ */
+const PHONE_TRIES = 3
+
 export function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -22,7 +47,10 @@ export function LoginPage() {
   const [apiError, setApiError] = useState<string | null>(null)
   const [googleReady, setGoogleReady] = useState(false)
   const [loginMode, setLoginMode] = useState<'email' | 'phone'>('email')
+  const [phoneMode, setPhoneMode] = useState<'password' | 'otp'>('password')
   const [phone, setPhone] = useState('')
+  const [phoneTriesLeft, setPhoneTriesLeft] = useState(PHONE_TRIES)
+  const [smsAvailable, setSmsAvailable] = useState(false)
   const [otpSent, setOtpSent] = useState(false)
   const [otp, setOtp] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -34,15 +62,22 @@ export function LoginPage() {
   const [emailCodeAvailable, setEmailCodeAvailable] = useState(true)
 
   useEffect(() => {
-    // Hide the email-code option when the server cannot send mail, so users
-    // never tap into a dead end (password + phone paths always work).
+    // Hide any code option the server cannot actually fulfil, so users never tap
+    // into a dead end. This is not cosmetic: with no SMS provider configured
+    // (SMS_PROVIDER=none) "Send OTP" on the phone form always fails, so the
+    // phone tab leads with the password instead of offering a button that
+    // cannot work.
     api
       .get('/auth/otp/channels')
       .then((res) => {
         const d = res.data?.data || res.data
         if (d && typeof d.email === 'boolean') setEmailCodeAvailable(d.email)
+        if (d && typeof d.sms === 'boolean') setSmsAvailable(d.sms)
       })
-      .catch(() => {})
+      .catch(() => {
+        // Unreachable probe: assume the channel works rather than hiding a
+        // legitimate option. The server is still the authority - it will refuse.
+      })
   }, [])
 
   useEffect(() => {
@@ -121,14 +156,61 @@ export function LoginPage() {
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault()
+    const digits = toTenDigits(phone)
+    if (digits.length !== 10) {
+      setApiError('Enter your 10-digit mobile number.')
+      return
+    }
     setLoading(true)
     setApiError(null)
     try {
-      await api.post('/auth/phone/send-otp', { phone })
+      await api.post('/auth/phone/send-otp', { phone: digits })
       setOtpSent(true)
       toast.success('OTP sent to your phone')
     } catch (err: unknown) {
       setApiError(getErrorMessage(err, 'Failed to send OTP'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handlePhoneLogin = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    const digits = toTenDigits(phone)
+    if (digits.length !== 10) {
+      setApiError('Enter your 10-digit mobile number.')
+      return
+    }
+    setLoading(true)
+    setApiError(null)
+    const formData = new FormData(e.currentTarget)
+    const password = String(formData.get('phone-password') || '')
+
+    try {
+      // Sends `identifier`, not `email`, so the number is never format-checked
+      // as an address on the way in.
+      await login(digits, password)
+      toast.success('Welcome back!')
+    } catch (err: unknown) {
+      const nextTries = phoneTriesLeft - 1
+      setPhoneTriesLeft(nextTries)
+      const serverMessage = getErrorMessage(err, '')
+      // The server deliberately answers "Invalid credentials." for both a wrong
+      // number and a wrong password, and that has to stay that way - naming
+      // which one was wrong would tell anyone whether a number is registered.
+      // But on a form with two inputs, that generic text tells the person
+      // nothing about what to fix, so it is reworded here WITHOUT revealing
+      // which field was at fault. Any other message (a rate limit, an inactive
+      // account) is passed through untouched, because those are actionable and
+      // must not be blurred into "did not match".
+      const isGeneric = !serverMessage || /invalid credentials/i.test(serverMessage)
+      setApiError(
+        isGeneric
+          ? nextTries > 0
+            ? `That phone number and password did not match. ${nextTries} ${nextTries === 1 ? 'try' : 'tries'} left.`
+            : 'That phone number and password did not match.'
+          : serverMessage
+      )
     } finally {
       setLoading(false)
     }
@@ -271,7 +353,8 @@ export function LoginPage() {
             </p>
           </div>
 
-          <div className="glass-elevated p-5 sm:p-8">
+          <div className="prism-card prism-ring p-5 sm:p-8">
+            <div className="prism-sweep animate-prism-sweep" aria-hidden />
             <button
               onClick={handleGoogleClick}
               disabled={googleLoading}
@@ -311,7 +394,7 @@ export function LoginPage() {
               </button>
               <button
                 type="button"
-                onClick={() => { setLoginMode('phone'); setApiError(null); setOtpSent(false); setPhone(''); setOtp(''); }}
+                onClick={() => { setLoginMode('phone'); setApiError(null); setOtpSent(false); setPhone(''); setOtp(''); setPhoneTriesLeft(PHONE_TRIES); setPhoneMode('password'); }}
                 className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${
                   loginMode === 'phone'
                     ? 'bg-primary-500 text-white'
@@ -514,6 +597,164 @@ export function LoginPage() {
               </button>
             </form>
               )
+            ) : (
+            /* ---- Phone tab ----
+               Password is the default because it is the only path that works
+               today: no SMS provider is configured, so phone OTP cannot deliver
+               a code. The OTP form is still reachable when /auth/otp/channels
+               reports SMS available, so switching provider turns it back on
+               with no code change. */
+            phoneMode === 'password' ? (
+              phoneTriesLeft <= 0 ? (
+                /* Three wrong tries. Not a lockout - a route to a channel that
+                   works. Nothing here reveals whether the number is registered,
+                   because that would let anyone probe for members. */
+                <div className="space-y-5">
+                  <div className="rounded-2xl bg-primary-50 dark:bg-primary-500/10 border border-primary-200 dark:border-primary-500/20 px-4 py-3">
+                    <p className="text-sm font-semibold text-surface-800 dark:text-surface-100">
+                      That didn't work. Let's get you in another way.
+                    </p>
+                    <p className="text-sm text-surface-600 dark:text-surface-300 mt-1">
+                      Check the number for a typo, or sign in with the email on your account.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => { setLoginMode('email'); setApiError(null) }}
+                    className="btn-gradient w-full btn-lg group"
+                  >
+                    <span className="flex items-center justify-center gap-2">
+                      <Mail className="w-4 h-4" />
+                      Sign in with email
+                      <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setPhoneTriesLeft(PHONE_TRIES); setPhone(''); setApiError(null) }}
+                    className="w-full text-sm text-surface-500 dark:text-surface-400 hover:text-primary-500 transition-colors"
+                  >
+                    Try a different number
+                  </button>
+                  <Link
+                    to="/forgot-password"
+                    className="block w-full text-sm text-center text-surface-500 dark:text-surface-400 hover:text-primary-500 transition-colors"
+                  >
+                    Forgot your password?
+                  </Link>
+                </div>
+              ) : (
+                <form onSubmit={handlePhoneLogin} className="space-y-5">
+                  <div>
+                    <label htmlFor="phone" className="label">Phone number</label>
+                    <div className="flex">
+                      <span
+                        className="inline-flex items-center px-3 rounded-l-xl border border-r-0 border-surface-300 dark:border-surface-700 bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 text-sm font-semibold select-none"
+                        aria-hidden
+                      >
+                        +91
+                      </span>
+                      <input
+                        name="phone"
+                        type="tel"
+                        id="phone"
+                        className="input rounded-l-none"
+                        placeholder="98765 43210"
+                        inputMode="numeric"
+                        autoComplete="tel-national"
+                        maxLength={20}
+                        value={toTenDigits(phone)}
+                        onChange={e => {
+                          // Re-normalising on every keystroke is what stops
+                          // "+91" pasted into the field becoming "9171211569".
+                          setPhone(toTenDigits(e.target.value))
+                          setApiError(null)
+                          // A corrected digit deserves a fresh set of tries.
+                          if (phoneTriesLeft < PHONE_TRIES) setPhoneTriesLeft(PHONE_TRIES)
+                        }}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label htmlFor="phone-password" className="label mb-0">Password</label>
+                      <Link
+                        to="/forgot-password"
+                        className="text-xs font-medium text-primary-600 dark:text-primary-400 hover:text-primary-500 transition-colors"
+                      >
+                        Forgot password?
+                      </Link>
+                    </div>
+                    <div className="relative">
+                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 shrink-0 pointer-events-none text-surface-400" />
+                      <input
+                        name="phone-password"
+                        type={showPassword ? 'text' : 'password'}
+                        id="phone-password"
+                        className="input pl-11 pr-11"
+                        placeholder="Enter your password"
+                        autoComplete="current-password"
+                        required
+                      />
+                      <button
+                        type="button"
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        onClick={() => setShowPassword(v => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-surface-400 hover:text-surface-600 dark:hover:text-surface-200 transition-colors"
+                      >
+                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {apiError && (
+                    <div className="rounded-2xl bg-danger-50 dark:bg-danger-500/10 border border-danger-200 dark:border-danger-500/20 px-4 py-3 animate-scale-in">
+                      <p className="text-sm text-danger-600 dark:text-danger-400">{apiError}</p>
+                    </div>
+                  )}
+
+                  {phoneTriesLeft < PHONE_TRIES && (
+                    <p className="text-xs text-center text-surface-500 dark:text-surface-400">
+                      {phoneTriesLeft} {phoneTriesLeft === 1 ? 'try' : 'tries'} left before we suggest another way in.
+                    </p>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={loading || toTenDigits(phone).length !== 10}
+                    className="btn-gradient w-full btn-lg group"
+                  >
+                    {loading ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                        Signing in...
+                      </span>
+                    ) : (
+                      <span className="flex items-center justify-center gap-2">
+                        Sign in
+                        <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                      </span>
+                    )}
+                  </button>
+
+                  {smsAvailable ? (
+                    <button
+                      type="button"
+                      onClick={() => { setPhoneMode('otp'); setApiError(null) }}
+                      className="w-full text-sm text-surface-500 dark:text-surface-400 hover:text-primary-500 transition-colors"
+                    >
+                      Sign in with a one-time code instead
+                    </button>
+                  ) : (
+                    <p className="text-xs text-center text-surface-400">
+                      Text-message sign-in isn't available yet — password sign-in works normally.
+                    </p>
+                  )}
+                </form>
+              )
             ) : !otpSent ? (
             <form onSubmit={handleSendOtp} className="space-y-5">
               <div>
@@ -525,10 +766,12 @@ export function LoginPage() {
                     type="tel"
                     id="phone"
                     className="input pl-11"
-                    placeholder="+91 98765 43210"
-                    autoComplete="tel"
-                    value={phone}
-                    onChange={e => setPhone(e.target.value)}
+                    placeholder="98765 43210"
+                    inputMode="numeric"
+                    autoComplete="tel-national"
+                    maxLength={20}
+                    value={toTenDigits(phone)}
+                    onChange={e => { setPhone(toTenDigits(e.target.value)); setApiError(null) }}
                     required
                   />
                 </div>
@@ -556,6 +799,13 @@ export function LoginPage() {
                     <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   </span>
                 )}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setPhoneMode('password'); setApiError(null) }}
+                className="w-full text-sm text-surface-500 dark:text-surface-400 hover:text-primary-500 transition-colors"
+              >
+                Use your password instead
               </button>
             </form>
             ) : (
@@ -610,9 +860,15 @@ export function LoginPage() {
               >
                 Use a different phone number
               </button>
+              <button
+                type="button"
+                onClick={() => { setOtpSent(false); setOtp(''); setPhoneMode('password'); setApiError(null) }}
+                className="w-full text-sm text-surface-500 dark:text-surface-400 hover:text-primary-500 transition-colors"
+              >
+                Use your password instead
+              </button>
             </form>
-            )}
-
+            ))}
           </div>
 
           <p className="mt-8 text-center text-sm text-surface-500 dark:text-surface-400">

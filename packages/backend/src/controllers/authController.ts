@@ -1,4 +1,4 @@
-﻿import { Request, Response } from "express";
+import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import { v4 as uuidv4 } from "uuid";
 import { createHash, createPublicKey, verify as cryptoVerify } from "crypto";
@@ -9,6 +9,11 @@ import { recordConsent } from "../services/legalConsentService";
 import { CONSENT_REQUIREMENTS } from "../legal/documents";
 import { generateAccessToken, generateRefreshToken, generateImpersonationAccessToken, verifyRefreshToken } from "../utils/jwt";
 import { generateOTP } from "../utils/otp";
+import {
+  normaliseIndianPhone,
+  phoneLookupCandidates,
+  phoneErrorBody,
+} from "../services/phoneNumber";
 import { issueOtp, verifyOtp, consumeOtp, maskIdentifier, isOtpDevEchoOnly } from "../services/otpService";
 import {
   PHONE_VERIFICATION_ENABLED,
@@ -222,10 +227,18 @@ export async function register(req: Request, res: Response): Promise<void> {
       sendError(res, "Invalid email format.", 400, "VALIDATION_ERROR");
       return;
     }
-    if (phone && !/^\+?[\d\s\-()]{7,15}$/.test(phone)) {
-      sendError(res, "Invalid phone format.", 400, "VALIDATION_ERROR");
+    // Canonicalised once, here, and then used for every subsequent phone
+    // operation. Storing whatever the client happened to send is what created
+    // the original inconsistency: `9876543210` and `+919876543210` became two
+    // different accounts that both looked legitimate, and login - an exact
+    // string match - could only ever reach one of them.
+    const parsedPhone = normaliseIndianPhone(phone);
+    if (!parsedPhone.ok) {
+      const { message, code } = phoneErrorBody(parsedPhone);
+      sendError(res, message, 400, code);
       return;
     }
+    const canonicalPhone = parsedPhone.e164;
     if (!password || password.length < 6) {
       sendError(res, "Password must be at least 6 characters.", 400, "VALIDATION_ERROR");
       return;
@@ -267,8 +280,13 @@ export async function register(req: Request, res: Response): Promise<void> {
     // was proven server-side — trust the row, never a client boolean. The
     // proof is consumed inside the transaction so it can't be replayed.
     const [existing, verifiedProof, passwordHash] = await Promise.all([
+      // The duplicate check must consider every equivalent spelling of the
+      // number, not just the canonical one. Matching only `+919876543210` would
+      // let someone register `9876543210` and quietly take a second account on a
+      // number that already has an owner - the duplicate would then be invisible
+      // to every later lookup that used the canonical form.
       prisma.user.findFirst({
-        where: { OR: [{ email }, { phone }] },
+        where: { OR: [{ email }, { phone: { in: phoneLookupCandidates(canonicalPhone) } }] },
       }),
       prisma.otpCode.findFirst({
         where: {
@@ -291,7 +309,7 @@ export async function register(req: Request, res: Response): Promise<void> {
       const u = await tx.user.create({
         data: {
           email,
-          phone,
+          phone: canonicalPhone,
           passwordHash,
           fullName,
           dateOfBirth: new Date(dateOfBirth || "2000-01-01"),
@@ -452,7 +470,15 @@ export async function login(req: Request, res: Response): Promise<void> {
       return;
     }
     const user = await prisma.user.findFirst({
-      where: { OR: [{ email: loginIdentifier }, { phone: loginIdentifier }] },
+      // Was an exact string match on `phone`, which meant an account stored as
+      // `+919876543210` could only be reached by typing all thirteen characters
+      // including the country code. Nobody does that, so phone login appeared
+      // broken for every real account. `phoneLookupCandidates` supplies the
+      // equivalent spellings - ten digits, +91, a leading zero, spaces - so the
+      // number a person actually types resolves the account.
+      where: {
+        OR: [{ email: loginIdentifier }, { phone: { in: phoneLookupCandidates(loginIdentifier) } }],
+      },
     });
     if (!user) {
       sendError(res, "Invalid credentials.", 401, "INVALID_CREDENTIALS");
@@ -584,13 +610,20 @@ export async function login(req: Request, res: Response): Promise<void> {
 export async function sendPhoneOTP(req: Request, res: Response): Promise<void> {
   try {
     const { phone } = req.body;
+    // The OTP row is keyed on the identifier string, so the send step and the
+    // verify step must agree on ONE spelling. `normalizeIdentifier("SMS", ...)`
+    // only strips non-digits, so "9876543210" and "+91 98765 43210" used to
+    // become two different rows and the code could never be found. Resolving to
+    // the canonical form first also means the code is issued against the same
+    // spelling the account is actually stored under.
+    const canonical = phoneLookupCandidates(phone)[0] || String(phone || "").trim();
     // Always deliver through the DB-backed OTP service. Nothing is reported
     // as sent unless the SMS provider accepts the message — previously this
     // returned "OTP sent" without any delivery whenever Firebase was
     // initialized, which made phone login never complete.
     const r = await issueOtp({
       channel: "SMS",
-      identifier: phone,
+      identifier: canonical,
       purpose: "LOGIN",
       ip: getClientIp(req),
       userAgent: req.headers["user-agent"],
@@ -611,52 +644,56 @@ export async function sendPhoneOTP(req: Request, res: Response): Promise<void> {
 export async function verifyPhoneOTP(req: Request, res: Response): Promise<void> {
   try {
     const { phone, otp } = req.body;
+    // Same canonicalisation as the send step, for the same reason: the row is
+    // keyed on this string, so both steps must produce the identical value.
+    const canonical = phoneLookupCandidates(phone)[0] || String(phone || "").trim();
     // Always verify through the DB-backed OTP service (purpose-bound LOGIN
     // code). The previous Firebase client-SDK branch made phone OTP login
     // fail with USE_CLIENT_SDK even though the web/mobile clients have no
     // Firebase SDK — phone login could never complete.
-    const v = await verifyOtp({ channel: "SMS", identifier: phone, purpose: "LOGIN", code: otp });
+    const v = await verifyOtp({ channel: "SMS", identifier: canonical, purpose: "LOGIN", code: otp });
     if (!v.ok) {
       sendError(res, v.error || "Invalid or expired OTP.", 400, "INVALID_OTP");
       return;
     }
 
-    const placeholderEmail = `${phone.replace(/\D/g, '')}@phone.placeholder`;
-    const passwordHash = await bcrypt.hash(generateOTP(32), env.BCRYPT_SALT_ROUNDS);
-    // A code read off the server console is not proof of handset control, so
-    // the login still works but the number stays unverified.
+    // A code read off the server console is not proof of handset control, so a
+    // successful sign-in still leaves the number unverified.
     const proofOfControl = !isOtpDevEchoOnly();
-    let user = await prisma.user.findUnique({ where: { phone } });
+
+    // Look the account up the same tolerant way `login` does. This used to be an
+    // exact `findUnique({ phone })`, so a member who typed the ten digits of a
+    // number stored as `+919876543210` matched nothing — and because the code
+    // below used to CREATE an account on a miss, that typo silently registered a
+    // second, empty account for the same real person, under a different spelling
+    // of their own number. `phoneLookupCandidates` resolves whichever spelling
+    // the row actually uses.
+    const user = await prisma.user.findFirst({
+      where: { phone: { in: phoneLookupCandidates(phone) } },
+    });
+
+    // Signing in must never mint an account. Accounts are created by /register,
+    // which collects consent, identity and terms; this path created a user with
+    // the name "Phone User", a `@phone.placeholder` address and no wallet or KYC
+    // behind a working password nobody chose. An unknown number now gets the same
+    // honest answer as any other unknown sign-in: no such account, go register.
     if (!user) {
-      try {
-        user = await prisma.user.create({
-          data: {
-            phone,
-            email: placeholderEmail,
-            passwordHash,
-            fullName: "Phone User",
-            dateOfBirth: new Date("2000-01-01"),
-            gender: "OTHER",
-            mobileVerified: proofOfControl,
-          },
-        });
-        await prisma.wallet.create({ data: { userId: user.id } });
-      } catch (createErr: any) {
-        // Unique constraint violation = concurrent create won. Retry find.
-        if (createErr.code === 'P2002') {
-          user = await prisma.user.findUnique({ where: { phone } });
-        } else {
-          throw createErr;
-        }
-      }
-    } else {
-      // Only ever move false -> true. Never clear an existing verified state.
-      await prisma.user.update({ where: { id: user.id }, data: { mobileVerified: user.mobileVerified || proofOfControl } });
+      sendError(
+        res,
+        "No account uses this number. Create one to get started.",
+        404,
+        "ACCOUNT_NOT_FOUND_FOR_PHONE"
+      );
+      return;
+    }
+    if (user.status !== "ACTIVE") {
+      sendError(res, "Account is not active.", 403, "ACCOUNT_INACTIVE");
+      return;
     }
 
-    if (!user) {
-      sendError(res, "Failed to create or find user.", 500, "INTERNAL_ERROR");
-      return;
+    // Only ever move false -> true. Never clear an existing verified state.
+    if (proofOfControl && !user.mobileVerified) {
+      await prisma.user.update({ where: { id: user.id }, data: { mobileVerified: true } });
     }
 
     const { accessToken, refreshToken } = await createUserSession(user.id, req);
@@ -933,7 +970,7 @@ const accessToken = payload.impersonatorId
       ? generateImpersonationAccessToken({ userId: user.id, email: user.email }, payload.impersonatorId)
       : generateAccessToken({ userId: user.id, email: user.email });
     const newRefreshToken = generateRefreshToken(user.id, payload.impersonatorId);
-    // Sliding idle window (≤7 fresh days) capped by the absolute session age:
+    // Sliding idle window (=7 fresh days) capped by the absolute session age:
     // the session can never extend past 30 days from when it was created.
     const hardExpiry = session.createdAt.getTime() + SESSION_HARD_TTL_MS;
     const nextExpiry = Math.min(Date.now() + SESSION_IDLE_TTL_MS, hardExpiry);

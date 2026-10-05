@@ -40,6 +40,22 @@ export async function swipe(req: AuthedRequest, res: Response): Promise<void> {
       result.match ? "It's a match!" : undefined,
     );
   } catch (error) {
+    // A request costs money, so "you cannot afford it" is a distinct outcome
+    // from "something broke". 402 Payment Required says exactly that, and the
+    // required/available figures let the client show what to top up rather than
+    // a bare failure. Checked before the string codes below because this error
+    // carries a message a user should read rather than a machine code.
+    if (error instanceof datingService.InsufficientDatingBalanceError) {
+      // The 4th parameter of sendError is `error` and the 5th is `extra`; the
+      // figures go in `extra` because the 4th slot before it (_data) is
+      // discarded by the helper, so passing them there would lose them silently.
+      sendError(res, error.message, 402, error.code, undefined, {
+        required: error.required,
+        available: error.available,
+        currency: "INR",
+      });
+      return;
+    }
     const code = error instanceof Error ? error.message : "SWIPE_FAILED";
     if (code === "INVALID_TARGET") {
       sendError(res, "Invalid target.", 400, code);
@@ -66,17 +82,28 @@ export async function discover(req: AuthedRequest, res: Response): Promise<void>
     }
 
     const { minAge, maxAge, city, gender, limit } = req.query;
-    const num = (v: unknown) => (v === undefined ? undefined : Number(v));
 
-    const results = await datingService.discover(userId, {
+    // Number() accepts anything, so "abc" becomes NaN and -5 becomes a real bound.
+    // The route already restricts these to integers in range, but the service is
+    // also called from the agent tools and tests, so the coercion is made explicit
+    // here rather than assumed. An unparseable value becomes undefined, which means
+    // "no opinion" - the saved preference then applies instead of a NaN filter that
+    // would match nobody.
+    const num = (v: unknown): number | undefined => {
+      if (v === undefined || v === null || v === "") return undefined;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : undefined;
+    };
+
+    const discovered = await datingService.discover(userId, {
       minAge: num(minAge),
       maxAge: num(maxAge),
-      city: city as string | undefined,
-      gender: gender as string | undefined,
+      city: typeof city === "string" && city.trim() ? city.trim() : undefined,
+      gender: typeof gender === "string" && gender.trim() ? gender.trim() : undefined,
       limit: num(limit),
     });
 
-    sendSuccess(res, { results, count: results.length });
+    sendSuccess(res, discovered);
   } catch {
     sendError(res, "Could not load discovery.", 500, "DISCOVERY_FAILED");
   }

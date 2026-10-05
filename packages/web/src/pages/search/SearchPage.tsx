@@ -281,10 +281,10 @@ export function SearchPage() {
                     <a
                       key={`${result.type}-${result.id}`}
                       href={result.link}
-                      className="glass-card p-4 flex items-start gap-4 group hover:-translate-y-0.5 transition-all duration-300 block"
+                      className="prism-card prism-ring p-4 flex items-start gap-4 group transition-all duration-300 block hover:shadow-card-hover"
                     >
                       {/* Icon */}
-                      <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-surface-100 dark:bg-surface-800 flex items-center justify-center text-surface-600 dark:text-surface-400 group-hover:scale-110 transition-transform">
+                      <div className="flex-shrink-0 w-12 h-12 rounded-xl prism-chip flex items-center justify-center text-surface-600 dark:text-surface-300 group-hover:scale-110 transition-transform">
                         {result.imageUrl ? (
                           <img src={assetUrl(result.imageUrl) || ''} alt={result.title} className="w-full h-full rounded-xl object-cover" />
                         ) : (

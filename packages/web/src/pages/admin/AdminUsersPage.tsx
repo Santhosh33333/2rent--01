@@ -1,7 +1,8 @@
-﻿import { getErrorMessage } from '../../lib/error'
+import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Search, ChevronLeft, ChevronRight, Ban, Unlock, Trash2, Loader2, X, FileDown, Crown, UserMinus, Eye, Phone, PencilLine, CheckSquare, Square, ShieldAlert } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { AdminPageHeader, AdminShell } from '../../components/admin/AdminPageHeader'
+import { Search, ChevronLeft, ChevronRight, Ban, Unlock, Trash2, Loader2, X, FileDown, Crown, UserMinus, Eye, Phone, PencilLine, CheckSquare, Square, ShieldAlert } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { adminApi } from '../../lib/api'
 import { exportTableToPdf } from '../../lib/pdfExport'
@@ -289,17 +290,12 @@ export function AdminUsersPage() {
   }
 
   return (
-    <div className="bg-gray-950 p-4 sm:p-6 rounded-3xl">
-      <div className="max-w-5xl mx-auto">
-        <div className="flex items-center gap-3 mb-6">
-          <Link to="/admin/portal" className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition">
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold font-display text-white">Users</h1>
-            <p className="text-gray-400 text-sm mt-1">Manage user accounts</p>
-          </div>
-          <button
+    <AdminShell>
+      <AdminPageHeader
+        title="Users"
+        subtitle="Manage user accounts"
+        actions=
+          {<button
             onClick={() =>
               exportTableToPdf({
                 title: 'Users',
@@ -318,11 +314,11 @@ export function AdminUsersPage() {
               })
             }
             disabled={users.length === 0}
-            className="ml-auto inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-gray-300 hover:text-white text-sm transition"
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-gray-300 hover:text-white text-sm transition"
           >
             <FileDown className="w-4 h-4" /> PDF
-          </button>
-        </div>
+          </button>}
+      />
 
         <div className="flex flex-col sm:flex-row gap-3 mb-6">
           <form onSubmit={handleSearch} className="flex gap-2 flex-1">
@@ -806,7 +802,6 @@ export function AdminUsersPage() {
             </div>
           </div>
         )}
-      </div>
-    </div>
+      </AdminShell>
   )
 }

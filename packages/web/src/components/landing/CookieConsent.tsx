@@ -91,11 +91,6 @@ export function useConsent() {
     const stored = readStoredConsent();
     setRecord(stored);
     setDecided(stored !== null);
-
-    // The footer's "cookie settings" link can reopen the panel later.
-    const onOpen = () => setDecided(false);
-    window.addEventListener('nabri:open-consent', onOpen);
-    return () => window.removeEventListener('nabri:open-consent', onOpen);
   }, []);
 
   /** Persist a decision and mark the session as decided in one step. */
@@ -104,12 +99,24 @@ export function useConsent() {
     setDecided(true);
   }, []);
 
-  return { record, decided, decide, reopen: () => setDecided(false) };
+  return { record, decided, decide };
 }
 
 export function CookieConsent() {
   const { decided, decide } = useConsent();
-  const [open, setOpen] = useState(false);
+  /**
+   * `prefsOpen` and `bannerVisible` are deliberately separate.
+   *
+   * These were one `open` flag, which meant the first-visit timer flipped it and
+   * rendered the preferences MODAL over the whole page - the banner underneath
+   * was unreachable. A visitor arriving for the first time saw a dialog instead
+   * of the product.
+   *
+   * Now the first visit shows only the fixed bottom banner, which does not cover
+   * anything, and the modal opens exclusively when somebody asks for it.
+   */
+  const [prefsOpen, setPrefsOpen] = useState(false);
+  const [bannerVisible, setBannerVisible] = useState(false);
   const [prefs, setPrefs] = useState<Record<ConsentCategory, boolean>>({
     necessary: true,
     functional: false,
@@ -119,31 +126,46 @@ export function CookieConsent() {
 
   useEffect(() => {
     if (decided) return;
-    // Delay so the panel does not compete with the hero on first paint.
-    const timer = window.setTimeout(() => setOpen(true), 900);
+    // Delay so the banner does not compete with the hero on first paint.
+    const timer = window.setTimeout(() => setBannerVisible(true), 900);
     return () => window.clearTimeout(timer);
   }, [decided]);
 
+  // The footer's "cookie settings" control asks for the preferences panel. It
+  // must not reset `decided`: reopening the panel does not un-consent anybody,
+  // and treating it as a fresh decision would re-show the first-visit banner to
+  // someone who had already answered it.
+  useEffect(() => {
+    const onOpen = () => setPrefsOpen(true);
+    window.addEventListener('nabri:open-consent', onOpen);
+    return () => window.removeEventListener('nabri:open-consent', onOpen);
+  }, []);
+
+  const close = useCallback(() => {
+    setBannerVisible(false);
+    setPrefsOpen(false);
+  }, []);
+
   const acceptAll = useCallback(() => {
     decide({ necessary: true, functional: true, analytics: true, marketing: true });
-    setOpen(false);
-  }, [decide]);
+    close();
+  }, [decide, close]);
 
   const rejectOptional = useCallback(() => {
     decide({ necessary: true, functional: false, analytics: false, marketing: false });
-    setOpen(false);
-  }, [decide]);
+    close();
+  }, [decide, close]);
 
   const savePreferences = useCallback(() => {
     decide({ ...prefs, necessary: true });
-    setOpen(false);
-  }, [decide, prefs]);
+    close();
+  }, [decide, prefs, close]);
 
-  if (decided && !open) return null;
+  if (decided && !prefsOpen) return null;
 
   return (
     <>
-      {open && !decided && (
+      {bannerVisible && !decided && (
         <div
           className="nb-cookie"
           role="region"
@@ -163,7 +185,13 @@ export function CookieConsent() {
               {/* Pointed at /cookies, which had no route, so a visitor who
                   followed the cookie policy link landed on a blank page. The
                   data section of the public legal page covers what we store. */}
-              <Link to="/legal#data" style={{ color: 'var(--nb-blue)' }}>
+              {/* Underlined as well as coloured. This link sits inside a sentence, so
+                WCAG 1.4.1 applies: colour alone may not be what distinguishes
+                it from the surrounding text. */}
+              <Link
+                to="/legal#data"
+                style={{ color: 'var(--nb-blue)', textDecoration: 'underline' }}
+              >
                 Read the cookie policy
               </Link>
               .
@@ -172,7 +200,7 @@ export function CookieConsent() {
               <button
                 type="button"
                 className="nb-btn nb-btn--secondary nb-btn--sm"
-                onClick={() => setOpen(true)}
+                onClick={() => setPrefsOpen(true)}
               >
                 Personalize Choices
               </button>
@@ -195,12 +223,12 @@ export function CookieConsent() {
         </div>
       )}
 
-      {open && (
+      {prefsOpen && (
         <div
           className="nb-modal__backdrop"
           role="presentation"
           onClick={(event) => {
-            if (event.target === event.currentTarget) setOpen(false);
+            if (event.target === event.currentTarget) setPrefsOpen(false);
           }}
         >
           <div
@@ -225,7 +253,7 @@ export function CookieConsent() {
                 className="nb-btn nb-btn--ghost"
                 style={{ minHeight: 36, padding: 6, width: 36 }}
                 aria-label="Close preferences"
-                onClick={() => setOpen(false)}
+                onClick={() => setPrefsOpen(false)}
               >
                 <X size={18} />
               </button>

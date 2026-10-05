@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { ArrowLeft, Send, AlertTriangle, CheckCircle2, XCircle, FlaskConical } from 'lucide-react'
+import { AdminPageHeader, AdminShell } from '../../components/admin/AdminPageHeader'
+import { Send, AlertTriangle, CheckCircle2, XCircle, FlaskConical } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { adminApi } from '../../lib/api'
 import { getErrorMessage } from '../../lib/error'
@@ -74,17 +74,11 @@ export function AdminEmailBroadcastPage() {
   const canSend = subject.trim().length > 0 && body.trim().length > 0
 
   return (
-    <div className="bg-gray-950 p-4 sm:p-6 rounded-3xl">
-      <div className="max-w-3xl mx-auto">
-        <div className="flex items-center gap-3 mb-6">
-          <Link to="/admin/portal" className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition">
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold font-display text-white">Email All Users</h1>
-            <p className="text-gray-400 text-sm mt-1">Send one email to every user on the platform in a single click</p>
-          </div>
-        </div>
+    <AdminShell width="max-w-3xl">
+      <AdminPageHeader
+        title="Email All Users"
+        subtitle="Send one email to every user on the platform in a single click"
+      />
 
         {status?.configured ? (
           <div className="flex items-start gap-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 p-4 mb-4">
@@ -221,8 +215,7 @@ export function AdminEmailBroadcastPage() {
             <AlertTriangle className="w-4 h-4 mt-px shrink-0" />
             <p>This sends a real email to every recipient's inbox immediately. Use a clear subject and avoid sending twice. Admins are usually NOT in the recipient list (only Users + Partners) — use the test box to check your own inbox first.</p>
           </div>
-        </div>
-      </div>
-    </div>
+          </div>
+    </AdminShell>
   )
 }

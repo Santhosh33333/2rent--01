@@ -20,6 +20,11 @@
  */
 import { useEffect } from 'react';
 import { setPageMeta } from '../../lib/seo';
+// This page renders inside the landing `.nb` wrapper and reads --nb-bg/--nb-ink,
+// but landing.css was only imported by LandingPage. Without it the tokens were
+// undefined, so every `var(--nb-ink)` fell back to the inline light default and
+// dark mode painted near-white text on a white card at 1.18:1.
+import '../../styles/landing.css';
 
 const SUPPORT_EMAIL = 'nabri.support@gmail.com';
 const FOUNDER_EMAIL = 'founder_nabri@zohomail.in';

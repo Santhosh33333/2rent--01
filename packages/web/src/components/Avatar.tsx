@@ -50,10 +50,17 @@ export function Avatar({ src, name, className = '', textClassName = 'text-sm' }:
   const base = 'rounded-full overflow-hidden shrink-0 select-none'
   const box = `${base} ${className}`
 
+  // Initials sit on this gradient in `text-white`. It used to end at
+  // `to-accent-300`, which is a FIXED lime (#d2f53c) in the Tailwind config
+  // rather than part of the runtime `--c-*` accent ramp - so two things were
+  // wrong at once: white on that lime measures 1.25:1, and the second stop
+  // ignored `data-accent`, so the chip stayed lime on every accent theme.
+  // Ending on primary-700 keeps the two-tone look, follows the chosen accent,
+  // and clears AA (500 is 4.76:1 and 700 is 5.02:1 in the worst accent, navy).
   if (!resolved || failed) {
     return (
       <div
-        className={`${box} bg-gradient-to-br from-primary-500 to-accent-300 flex items-center justify-center text-white font-bold ${textClassName}`}
+        className={`${box} bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center text-white font-bold ${textClassName}`}
         aria-hidden="true"
       >
         {initialsOf(name)}

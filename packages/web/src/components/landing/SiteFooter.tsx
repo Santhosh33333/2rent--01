@@ -63,6 +63,28 @@ const COLUMNS = [
     },
   ] as const;
 
+/**
+ * Reopens the privacy preferences panel.
+ *
+ * A consent banner that cannot be reopened after the first visit is not a
+ * consent mechanism, it is a one-time gate. Every regulation that requires
+ * consent also requires it to be withdrawable, and there was previously no
+ * control anywhere that did this - the event listener existed with nothing
+ * dispatching it.
+ */
+function CookieSettingsButton() {
+  return (
+    <button
+      type="button"
+      className="nb-footer__link"
+      style={{ background: 'none', border: 0, padding: 0, cursor: 'pointer', font: 'inherit' }}
+      onClick={() => window.dispatchEvent(new CustomEvent('nabri:open-consent'))}
+    >
+      Cookie settings
+    </button>
+  );
+}
+
 export function SiteFooter() {
   const env = import.meta.env as unknown as Record<string, string | undefined>;
   const social = SOCIAL_ENV.map((entry) => ({ ...entry, href: env[entry.key] })).filter(
@@ -146,7 +168,11 @@ export function SiteFooter() {
               stated in the footer bar of every public page, not only on /legal.
               Two addresses are published: the support desk for all support,
               complaint and privacy mail, and the founder as direct contact. */}
-          <p style={{ margin: 0, fontSize: 13, color: 'var(--nb-ink-faint)' }}>
+          {/* --nb-ink-soft, not --nb-ink-faint. This bar sits on --nb-bg-soft
+              (#f4f2ef) rather than on the page white, and ink-faint lands at
+              4.36:1 there — under the 4.5 that 13px body text needs. ink-soft
+              measures 5.13:1 on the same background. */}
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--nb-ink-soft)' }}>
             Nabri is a technology platform. Legal name: Nabri. Support, complaints and
             privacy requests:{' '}
             <a
@@ -164,7 +190,8 @@ export function SiteFooter() {
             >
               founder_nabri@zohomail.in
             </a>
-            . &copy; 2026 Nabri. All rights reserved.
+            . &copy; 2026 Nabri. All rights reserved.{' '}
+            <CookieSettingsButton />
           </p>
       </div>
 

@@ -113,6 +113,34 @@ api.interceptors.response.use(
       url.includes('/auth/google') ||
       url.includes('/auth/phone')
 
+    // --- one retry for transient failures ---------------------------------
+    // The production API is on Render's free tier, which spins the instance
+    // down when idle. Waking it measured 32.6s end to end on a cold hit, and
+    // during that window the proxy answers 502/503/504 or the socket simply
+    // fails. On a phone that is the difference between a page that loads and a
+    // page that dies, because a rejected read that a page did not guard takes
+    // the render down and the app-level ErrorBoundary takes over.
+    //
+    // Deliberately restricted to GET. A retried POST can duplicate a real
+    // write - a booking, a payment order, a wallet debit - and no amount of
+    // "it is probably fine" makes that acceptable. Reads are safe to repeat.
+    const method = String(originalRequest.method || 'get').toLowerCase()
+    const isTransient =
+      // No response at all: DNS, offline, connection reset, TLS failure.
+      (!error.response && Boolean(error.request)) ||
+      status === 502 ||
+      status === 503 ||
+      status === 504
+    // A cancelled request is the caller aborting on purpose (route change,
+    // component unmount). Retrying it would resurrect work nobody wants.
+    const wasCancelled = error.code === 'ERR_CANCELED' || axios.isCancel?.(error)
+
+    if (method === 'get' && isTransient && !wasCancelled && !originalRequest._transientRetry) {
+      originalRequest._transientRetry = true
+      await new Promise((resolve) => setTimeout(resolve, 1200))
+      return api(originalRequest)
+    }
+
     // Legal consent gate. The server refuses booking / partner-apply with 403 +
     // LEGAL_CONSENT_REQUIRED and names the missing documents. Rather than
     // surfacing a raw error, send the user to sign and return them to the page
@@ -270,6 +298,30 @@ export const adminApi = {
   getTopupRequests: (params?: PaginationParams) => api.get('/admin/topup-requests', { params }),
   verifyTopupRequest: (id: string, data: { action: 'VERIFY' | 'REJECT' | 'REQUEST_INFO'; note?: string }) =>
     api.post(`/admin/topup-requests/${id}/verify`, data),
+  // ---- Bank statement reconciliation --------------------------------------
+  // `uploadStatement` posts the file as multipart form-data, which is why it
+  // does not reuse `api.post`'s JSON default: setting Content-Type by hand there
+  // would strip the multipart boundary the server needs to parse it.
+  uploadStatement: (file: File) => {
+    const form = new FormData()
+    form.append('statement', file)
+    return api.post('/admin/bank-statements', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+  },
+  getBankStatements: (params?: PaginationParams) => api.get('/admin/bank-statements', { params }),
+  getBankStatement: (id: string) => api.get(`/admin/bank-statements/${id}`),
+  getUnresolvedStatementRows: (params?: PaginationParams) => api.get('/admin/bank-statements/unresolved', { params }),
+  applyBankStatement: (id: string, note?: string) => api.post(`/admin/bank-statements/${id}/apply`, { note }),
+  rematchBankStatement: (id: string) => api.post(`/admin/bank-statements/${id}/rematch`),
+  decideStatementRow: (
+    rowId: string,
+    data: {
+      decision: 'CREDIT' | 'REJECT' | 'IGNORE'
+      comment: string
+      matchedType?: 'TOPUP' | 'UPI_PAYMENT'
+      matchedId?: string
+      amountMismatchAccepted?: boolean
+    },
+  ) => api.post(`/admin/bank-statements/rows/${rowId}/decision`, data),
   getUpiConfig: () => api.get('/admin/settings/upi'),
   setUpiConfig: (data: { upiId: string; accountName?: string; qrUrl?: string }) => api.put('/admin/settings/upi', data),
   // Platform settings (dynamic pricing config, e.g. PLATFORM_FEE_PERCENT)

@@ -1,7 +1,7 @@
 import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
-import { ArrowLeft, ChevronLeft, ChevronRight, ShieldAlert, Check } from 'lucide-react'
+import { AdminPageHeader, AdminShell } from '../../components/admin/AdminPageHeader'
+import { ChevronLeft, ChevronRight, ShieldAlert, Check } from 'lucide-react'
 import { adminApi } from '../../lib/api'
 
 interface ChatReportRow {
@@ -80,18 +80,11 @@ export function AdminChatReportsPage() {
   }
 
   return (
-    <div className="bg-gray-950 p-4 sm:p-6 rounded-3xl">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex items-center gap-3 mb-6">
-          <Link to="/admin/portal" className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition">
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold font-display text-white">Chat Reports</h1>
-            <p className="text-gray-400 text-sm mt-1">Messaging safety reports &amp; moderation</p>
-          </div>
-        </div>
-
+    <AdminShell width="max-w-4xl">
+        <AdminPageHeader
+        title="Chat Reports"
+        subtitle="Messaging safety reports &amp; moderation"
+/>
         <div className="mb-6">
           <div className="flex gap-2">
             {[['ALL', 'All'], ['PENDING', 'Pending'], ['REVIEWED', 'Reviewed'], ['ACTIONED', 'Actioned'], ['DISMISSED', 'Dismissed']].map(([s, label]) => (
@@ -181,8 +174,7 @@ export function AdminChatReportsPage() {
             </div>
           </>
         )}
-      </div>
-    </div>
+    </AdminShell>
   )
 }
 

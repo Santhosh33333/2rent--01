@@ -41,7 +41,26 @@ function NearbyPartners() {
       }
       const res = await api.get('/discovery/nearby-partners', { params })
       const data = res.data?.data || res.data
-      setPartners(Array.isArray(data?.partners) ? data.partners : [])
+      const list: NearbyPartner[] = Array.isArray(data?.partners) ? data.partners : []
+      /**
+       * Dedupe before storing, by person rather than by row.
+       *
+       * `Partner.userId` is unique, so a correct response cannot repeat a
+       * person - which is exactly why seeing one twice means the list, not the
+       * schema, is at fault (a join that fans out, or an overlapping radius
+       * window). Deduplicating on `id` would let the same person through twice
+       * under two partner rows, so `userId` is the key, and `id` is the
+       * fallback for rows that predate it.
+       */
+      const seen = new Set<string>()
+      setPartners(
+        list.filter((p) => {
+          const key = p.userId || p.id
+          if (seen.has(key)) return false
+          seen.add(key)
+          return true
+        }),
+      )
     } catch (err) {
       setError(getErrorMessage(err, 'Could not load nearby partners'))
     } finally {
@@ -128,7 +147,7 @@ function NearbyPartners() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {partners.map((p) => (
-            <div key={p.id} className="flex items-center gap-3 rounded-2xl border border-surface-200 p-3 dark:border-surface-700">
+            <div key={p.userId || p.id} className="flex items-center gap-3 rounded-2xl border border-surface-200 p-3 dark:border-surface-700">
               <Avatar src={p.avatarUrl} name={p.name} className="w-12 h-12 rounded-2xl" textClassName="text-base" />
               <div className="flex-1 min-w-0">
                 <p className="font-semibold truncate">{p.name}</p>
@@ -170,6 +189,9 @@ function NearbyPartners() {
 
 export function DiscoveryHubPage() {
   const [query, setQuery] = useState('')
+  // Reorder tools start closed: with them open this page showed every category
+  // twice - once with the up/down handles, once as a card.
+  const [reorderOpen, setReorderOpen] = useState(false)
   const [customOrder, setCustomOrder] = useState<DiscoveryCategoryKey[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEY)
     if (saved) {
@@ -246,42 +268,63 @@ export function DiscoveryHubPage() {
       </div>
 
       <div className="rounded-3xl border border-surface-200 bg-white p-4 shadow-sm dark:border-surface-800 dark:bg-surface-900">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setReorderOpen((v) => !v)}
+          aria-expanded={reorderOpen}
+          className="mb-4 flex w-full items-center justify-between gap-3 text-left"
+        >
+          <span className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-violet-500" />
-            <h2 className="font-semibold">Customize category order</h2>
-          </div>
-          <span className="text-xs text-surface-500">Pinned first</span>
-        </div>
+            <span className="font-semibold">Customize category order</span>
+          </span>
+          <span className="flex items-center gap-2 text-xs text-surface-500">
+            {reorderOpen ? 'Hide' : 'Show'}
+            <ChevronRight className={`w-4 h-4 transition-transform ${reorderOpen ? 'rotate-90' : ''}`} />
+          </span>
+        </button>
 
-        <div className="space-y-2">
-          {filteredCategories.map((category) => (
-            <div key={category.key} className="flex items-center gap-3 rounded-2xl border border-surface-200 bg-surface-50 p-3 dark:border-surface-700 dark:bg-surface-800/60">
-              <GripVertical className="w-4 h-4 text-surface-400" />
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <category.icon className="w-4 h-4 text-primary-500" />
-                  <span className="font-medium">{category.label}</span>
+        {/*
+          Collapsed by default.
+          This panel and the category grid below render the same set from the
+          same `filteredCategories`, so with both open every category appeared
+          twice in a row - the reorder controls and a card, same label, same
+          summary, one directly above the other. The grid is the page's actual
+          content; the reorder tools are a power-user setting, so they now start
+          closed and the duplication is gone without removing the feature.
+        */}
+        {reorderOpen && (
+          <div className="space-y-2">
+            {filteredCategories.map((category) => (
+              <div key={category.key} className="flex items-center gap-3 rounded-2xl border border-surface-200 bg-surface-50 p-3 dark:border-surface-700 dark:bg-surface-800/60">
+                <GripVertical className="w-4 h-4 text-surface-400" />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <category.icon className="w-4 h-4 text-primary-500" />
+                    <span className="font-medium">{category.label}</span>
+                  </div>
+                  <p className="mt-1 text-xs text-surface-500">{category.summary}</p>
                 </div>
-                <p className="mt-1 text-xs text-surface-500">{category.summary}</p>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => moveCategory(customOrder.indexOf(category.key), -1)} className="rounded-lg bg-surface-100 px-2 py-1 text-xs dark:bg-surface-700">↑</button>
+                  <button onClick={() => moveCategory(customOrder.indexOf(category.key), 1)} className="rounded-lg bg-surface-100 px-2 py-1 text-xs dark:bg-surface-700">↓</button>
+                  <Link to={`/discover/${category.key}`} className="ml-2 inline-flex items-center gap-1 rounded-lg bg-primary-600 px-2.5 py-1.5 text-xs font-medium text-white">
+                    Open <ArrowRight className="w-3 h-3" />
+                  </Link>
+                </div>
               </div>
-              <div className="flex items-center gap-1">
-                <button onClick={() => moveCategory(customOrder.indexOf(category.key), -1)} className="rounded-lg bg-surface-100 px-2 py-1 text-xs dark:bg-surface-700">↑</button>
-                <button onClick={() => moveCategory(customOrder.indexOf(category.key), 1)} className="rounded-lg bg-surface-100 px-2 py-1 text-xs dark:bg-surface-700">↓</button>
-                <Link to={`/discover/${category.key}`} className="ml-2 inline-flex items-center gap-1 rounded-lg bg-primary-600 px-2.5 py-1.5 text-xs font-medium text-white">
-                  Open <ArrowRight className="w-3 h-3" />
-                </Link>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {filteredCategories.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-surface-300 p-6 text-center text-sm text-surface-500">
-            No category matches this search.
+            ))}
           </div>
         )}
       </div>
+
+      {/* Empty state belongs to the page, not to the reorder panel - it has to
+          stay visible when the panel is closed, which is the default. */}
+      {filteredCategories.length === 0 && (
+        <div className="rounded-2xl border border-dashed border-surface-300 p-6 text-center text-sm text-surface-500">
+          No category matches this search.
+        </div>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {filteredCategories.map((category) => (

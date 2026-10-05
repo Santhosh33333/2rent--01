@@ -9,8 +9,24 @@ export function validateRequest(req: Request, res: Response, next: NextFunction)
       field: "param" in e ? e.param : "field" in e ? e.field : "unknown",
       message: e.msg,
     }));
-    sendError(res, "Validation failed.", 422, "VALIDATION_ERROR");
     res.locals.validationErrors = formatted;
+
+    // Name the problem instead of announcing that validation happened. Every
+    // client in this app reads `message` and shows it, so the bare
+    // "Validation failed." was the entire user-visible result - the per-field
+    // reasons were computed one line above and then discarded. An admin who
+    // typed no comment was told "Validation failed." rather than that a comment
+    // is what is missing, which is the one thing they needed to know.
+    const first = formatted[0]?.message?.trim() || "Validation failed.";
+    const extraProblems = formatted.length - 1;
+    const summary =
+      extraProblems > 0
+        ? `${first} (and ${extraProblems} more problem${extraProblems > 1 ? "s" : ""})`
+        : first;
+
+    // The full list travels in `extra.errors` so a client can highlight the
+    // offending fields rather than only printing prose.
+    sendError(res, summary, 422, "VALIDATION_ERROR", undefined, { errors: formatted });
     return;
   }
   next();

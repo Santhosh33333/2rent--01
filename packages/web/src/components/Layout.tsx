@@ -3,7 +3,7 @@ import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
 import { 
   Home, User, Wallet, Users, Sun, Moon, Menu, X, Bell, 
   MapPin, LogOut, Calendar, Settings, Shield, Info, LayoutDashboard, 
-  ClipboardList, Search, QrCode, MoreHorizontal, Send, LifeBuoy 
+  ClipboardList, Search, QrCode, Send, LifeBuoy 
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { ImpersonationBanner } from './ImpersonationBanner';
@@ -23,6 +23,10 @@ import {
 } from '../lib/ads';
 import { motion, AnimatePresence } from 'motion/react';
 import { ReConsentBanner } from './legal/ReConsentBanner';
+import { AppTabBar } from './navigation/AppTabBar';
+import { MoreSheet } from './navigation/MoreSheet';
+import { AgentLauncher } from './agent/AgentLauncher';
+import { NavGroupList, groupsForRole } from './navigation/NavGroupList';
 
 function UnreadBadge() {
   const [count, setCount] = useState(0);
@@ -103,6 +107,7 @@ export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [adsReady, setAdsReady] = useState(false);
   const [bannerUp, setBannerUp] = useState(false);
 
@@ -116,9 +121,6 @@ export function Layout() {
         { to: '/admin/admins', icon: User, label: 'Admin Accounts' },
         { to: '/admin/audit-logs', icon: ClipboardList, label: 'Audit Logs' },
       ] : [];
-
-  const bottomNavItems = navItems.length > 5 ? navItems.slice(0, 4) : navItems;
-  const hasMoreNav = navItems.length > 5;
 
   useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
   useEffect(() => subscribeAdsState((state) => setAdsReady(state.canRequestAds)), []);
@@ -202,6 +204,13 @@ export function Layout() {
             <button onClick={toggleTheme} className="p-2 rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 transition">
               {theme === 'dark' ? <Sun className="w-5 h-5 text-yellow-500" /> : <Moon className="w-5 h-5 text-surface-600" />}
             </button>
+            <Link
+              to="/wallet"
+              aria-label="Wallet"
+              className="p-2 rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 transition"
+            >
+              <Wallet className="w-5 h-5" />
+            </Link>
             <Link to="/notifications" className="p-2 rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 transition relative">
               <Bell className="w-5 h-5" />
               <UnreadBadge />
@@ -244,34 +253,47 @@ export function Layout() {
                   shrinks, long nav lists overflow, and the Sign Out button is
                   pushed off-screen where it cannot be scrolled to. */}
               <nav className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-6 pr-1 -mr-2">
-                <div>
-                  <p className="px-3 text-[10px] font-black uppercase tracking-widest text-surface-400 mb-3">Main Menu</p>
-                  <div className="space-y-1">
-                    {navItems.map(({ to, icon: Icon, label }) => (
-                      <Link
-                        key={to} to={to}
-                        className={`flex items-center gap-3 px-3 py-3 rounded-2xl text-sm transition-all ${location.pathname === to ? 'bg-primary-500 text-white shadow-md shadow-primary-500/20' : 'text-surface-600 dark:text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-800'}`}
-                      >
-                        <Icon className="w-4 h-4" /> {label}
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-
-                {superAdminNav.length > 0 && (
-                  <div>
-                    <p className="px-3 text-[10px] font-black uppercase tracking-widest text-primary-500 mb-3">Super Admin</p>
-                    <div className="space-y-1">
-                      {superAdminNav.map(({ to, icon: Icon, label }) => (
-                        <Link
-                          key={to} to={to}
-                          className={`flex items-center gap-3 px-3 py-3 rounded-2xl text-sm transition-all ${location.pathname === to ? 'bg-primary-500 text-white shadow-md shadow-primary-500/20' : 'text-surface-600 dark:text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-800'}`}
-                        >
-                          <Icon className="w-4 h-4" /> {label}
-                        </Link>
-                      ))}
+                {/* Admins keep their own console list; everyone else renders the
+                    same shared groups as the More sheet, so the drawer and the
+                    dock cannot teach different navigation. */}
+                {isAdminTierRole(activeRole) ? (
+                  <>
+                    <div>
+                      <p className="px-3 text-[10px] font-black uppercase tracking-widest text-surface-400 mb-3">Main Menu</p>
+                      <div className="space-y-1">
+                        {navItems.map(({ to, icon: Icon, label }) => (
+                          <Link
+                            key={to} to={to}
+                            className={`flex items-center gap-3 px-3 py-3 rounded-2xl text-sm transition-all ${location.pathname === to ? 'bg-primary-500 text-white shadow-md shadow-primary-500/20' : 'text-surface-600 dark:text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-800'}`}
+                          >
+                            <Icon className="w-4 h-4" /> {label}
+                          </Link>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+
+                    {superAdminNav.length > 0 && (
+                      <div>
+                        <p className="px-3 text-[10px] font-black uppercase tracking-widest text-primary-500 mb-3">Super Admin</p>
+                        <div className="space-y-1">
+                          {superAdminNav.map(({ to, icon: Icon, label }) => (
+                            <Link
+                              key={to} to={to}
+                              className={`flex items-center gap-3 px-3 py-3 rounded-2xl text-sm transition-all ${location.pathname === to ? 'bg-primary-500 text-white shadow-md shadow-primary-500/20' : 'text-surface-600 dark:text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-800'}`}
+                            >
+                              <Icon className="w-4 h-4" /> {label}
+                            </Link>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <NavGroupList
+                    groups={groupsForRole(activeRole)}
+                    onNavigate={() => setSidebarOpen(false)}
+                    variant="drawer"
+                  />
                 )}
 
                 <div>
@@ -309,34 +331,26 @@ export function Layout() {
         </div>
       </main>
 
-      {/* Floating Bottom Dock (Mobile) */}
-      <nav className="fixed bottom-6 inset-x-0 z-40 px-6 lg:hidden">
-        <motion.div 
-          initial={{ y: 100 }} animate={{ y: 0 }}
-          className="max-w-md mx-auto h-16 px-3 rounded-full bg-surface-50/80 dark:bg-surface-900/80 backdrop-blur-2xl border border-surface-200/50 dark:border-surface-800/50 shadow-2xl shadow-black/10 flex items-center justify-around"
-        >
-          {bottomNavItems.map(({ to, icon: Icon, label }) => {
-            const isActive = location.pathname === to || location.pathname.startsWith(`${to}/`);
-            return (
-              <Link
-                key={to} to={to}
-                className={`flex flex-col items-center justify-center gap-1 rounded-full transition-all w-14 h-14 ${isActive ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/40 scale-110' : 'text-surface-400 dark:text-surface-500 hover:bg-surface-100 dark:hover:bg-surface-800'}`}
-              >
-                <Icon className="w-5 h-5" />
-                <span className="text-[9px] font-bold uppercase tracking-tighter">{label}</span>
-              </Link>
-            );
-          })}
-          {hasMoreNav && (
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="flex items-center justify-center w-14 h-14 rounded-full text-surface-400 dark:text-surface-500 hover:bg-surface-100 dark:hover:bg-surface-800 transition-all"
-            >
-              <MoreHorizontal className="w-5 h-5" />
-            </button>
-          )}
-        </motion.div>
-      </nav>
+{/* Primary tab bar. The five tabs are declared in navigation/tabs.ts and
+          shared with the More sheet, so the dock can no longer silently drop
+          destinations based on array length.
+
+          Admin-tier accounts navigate through the admin drawer instead. They are
+          a separate surface with their own information architecture, so the
+          consumer dock and its More sheet are withheld from them; otherwise an
+          admin who lands on /admin/dashboard would see two competing navigation
+          systems at once. */}
+      {!isAdminTierRole(activeRole) && (
+        <>
+          <AppTabBar onOpenMore={() => setMoreOpen(true)} />
+          <MoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} activeRole={activeRole} />
+        </>
+      )}
+
+      {/* Floating assistant. Withheld from admin tiers for the same reason the
+          consumer dock is: admins work in a separate surface, and the assistant
+          exposes account and booking data that does not belong there. */}
+      {!isAdminTierRole(activeRole) && <AgentLauncher />}
     </div>
   );
 }

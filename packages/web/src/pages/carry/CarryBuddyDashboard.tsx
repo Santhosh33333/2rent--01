@@ -133,10 +133,18 @@ export function CarryBuddyDashboard() {
   return (
     <div className="space-y-6 sm:space-y-8">
       <AnimatedPage>
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-500 via-orange-500 to-amber-600 p-6 sm:p-8 text-white shadow-xl shadow-amber-500/20">
-          <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2230%22%20height%3D%2230%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cdefs%3E%3Cpattern%20id%3D%22g%22%20width%3D%2230%22%20height%3D%2230%22%20patternUnits%3D%22userSpaceOnUse%22%3E%3Ccircle%20cx%3D%2215%22%20cy%3D%2215%22%20r%3D%221%22%20fill%3D%22rgba(255,255,255,0.08)%22/%3E%3C/pattern%3E%3C/defs%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22url(%23g)%22/%3E%3C/svg%3E')] opacity-50" />
-          <div className="absolute -top-20 -right-20 w-60 h-60 bg-white/10 rounded-full blur-3xl" />
+        {/* amber-800 rather than amber-500/600: the white heading and the
+            `text-white/70` greeting sat at 2.8:1 and 3.28:1 on the old ramp.
+            Even pure white only reached 3.71:1 because the decorative dot
+            pattern and the blurred white blob lighten whatever is beneath them,
+            so the surface had to move rather than the text. 800 clears 4.5:1
+            with the softened overlays below. */}
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-800 via-orange-800 to-amber-900 p-6 sm:p-8 text-white shadow-xl shadow-amber-900/30">
+          <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2230%22%20height%3D%2230%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cdefs%3E%3Cpattern%20id%3D%22g%22%20width%3D%2230%22%20height%3D%2230%22%20patternUnits%3D%22userSpaceOnUse%22%3E%3Ccircle%20cx%3D%2215%22%20cy%3D%2215%22%20r%3D%221%22%20fill%3D%22rgba(255,255,255,0.05)%22/%3E%3C/pattern%3E%3C/defs%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22url(%23g)%22/%3E%3C/svg%3E')] opacity-50" />
+          <div className="absolute -top-20 -right-20 w-60 h-60 bg-white/6 rounded-full blur-3xl" />
           <div className="absolute -bottom-20 -left-20 w-60 h-60 bg-orange-500/20 rounded-full blur-3xl" />
+          <div className="prism-aurora animate-prism-drift opacity-50" aria-hidden />
+          <div className="prism-sweep animate-prism-sweep" aria-hidden />
 
           <div className="relative z-10">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -147,7 +155,7 @@ export function CarryBuddyDashboard() {
                     CarryBuddy Partner
                   </span>
                 </div>
-                <p className="text-white/70 text-sm font-medium mb-1">{getGreeting()}</p>
+                <p className="text-white text-sm font-medium mb-1">{getGreeting()}</p>
                 <h1 className="text-2xl sm:text-3xl font-bold font-display tracking-tight">{userName}</h1>
               </div>
               <div className="flex items-center gap-3">

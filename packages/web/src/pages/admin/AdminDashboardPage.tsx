@@ -1,7 +1,7 @@
 import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
-import { ArrowLeft, Users, Handshake, CalendarCheck, Wallet, ShieldCheck, Banknote, FileDown } from 'lucide-react'
+import { AdminPageHeader, AdminShell } from '../../components/admin/AdminPageHeader'
+import { Users, Handshake, CalendarCheck, Wallet, ShieldCheck, Banknote, FileDown } from 'lucide-react'
 import { adminApi } from '../../lib/api'
 import { exportTableToPdf } from '../../lib/pdfExport'
 
@@ -40,38 +40,25 @@ export function AdminDashboardPage() {
 
   if (loading) {
     return (
-      <div className="bg-gray-950 p-4 sm:p-6 rounded-3xl">
-        <div className="max-w-5xl mx-auto">
-          <div className="flex items-center gap-3 mb-8">
-            <Link to="/admin/portal" className="p-2 rounded-lg bg-gray-800 text-gray-400">
-              <ArrowLeft className="w-5 h-5" />
-            </Link>
-            <h1 className="text-2xl font-bold font-display text-white">Dashboard</h1>
-          </div>
-          <div className="text-center py-20">
-            <div className="w-8 h-8 rounded-full border-2 border-gray-700 border-t-blue-500 animate-spin mx-auto" />
-            <p className="text-gray-400 mt-4">Loading dashboard...</p>
-          </div>
+      <AdminShell>
+        <AdminPageHeader title="Dashboard" />
+        <div className="text-center py-20">
+          <div className="w-8 h-8 rounded-full border-2 border-gray-700 border-t-blue-500 animate-spin mx-auto" />
+          <p className="text-gray-400 mt-4">Loading dashboard...</p>
         </div>
-      </div>
+      </AdminShell>
     )
   }
 
+
   if (error) {
     return (
-      <div className="bg-gray-950 p-4 sm:p-6 rounded-3xl">
-        <div className="max-w-5xl mx-auto">
-          <div className="flex items-center gap-3 mb-8">
-            <Link to="/admin/portal" className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition">
-              <ArrowLeft className="w-5 h-5" />
-            </Link>
-            <h1 className="text-2xl font-bold font-display text-white">Dashboard</h1>
-          </div>
-          <div className="bg-red-900/20 border border-red-800 text-red-300 p-4 rounded-xl text-center">
-            {error}
-          </div>
+      <AdminShell>
+        <AdminPageHeader title="Dashboard" />
+        <div className="bg-red-900/20 border border-red-800 text-red-300 p-4 rounded-xl text-center">
+          {error}
         </div>
-      </div>
+      </AdminShell>
     )
   }
 
@@ -116,24 +103,19 @@ export function AdminDashboardPage() {
   }
 
   return (
-    <div className="bg-gray-950 p-4 sm:p-6 rounded-3xl">
-      <div className="max-w-5xl mx-auto">
-        <div className="flex items-center gap-3 mb-8">
-          <Link to="/admin/portal" className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition">
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold font-display text-white">Dashboard</h1>
-            <p className="text-gray-400 text-sm mt-1">Platform overview & analytics</p>
-          </div>
+    <AdminShell>
+      <AdminPageHeader
+        title="Dashboard"
+        subtitle="Platform overview & analytics"
+        actions={
           <button
             onClick={downloadPdf}
-            className="ml-auto inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-sm transition"
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-sm transition"
           >
             <FileDown className="w-4 h-4" /> PDF
           </button>
-        </div>
-
+        }
+      />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {stats.map((stat) => (
             <div key={stat.label} className="bg-gray-800 p-5 rounded-xl">
@@ -147,8 +129,7 @@ export function AdminDashboardPage() {
               {stat.sub && <p className="text-gray-500 text-xs mt-1">{stat.sub}</p>}
             </div>
           ))}
-        </div>
       </div>
-    </div>
+    </AdminShell>
   )
 }
