@@ -29,6 +29,7 @@ import { useAuth } from '../../lib/auth';
 import { setPageMeta } from '../../lib/seo';
 import { SiteHeader } from './components/SiteHeader';
 import { SiteFooter } from './components/SiteFooter';
+import { MusicToggle } from './components/MusicToggle';
 import { HeroSection } from './sections/HeroSection';
 import {
   CommunitySection,
@@ -218,6 +219,16 @@ export function LandingPage() {
       </a>
 
       <SiteHeader userName={userName} signedIn={signedIn} plans={plans.data?.plans ?? []} />
+
+      {/*
+        Love songs as ambience, in the visitor's language. A fixed control in the
+        corner rather than a bare autoplay attempt, for two reasons: every
+        browser blocks audible autoplay without a gesture, and background music
+        that starts on its own is hostile on a landing page. Renders nothing at
+        all while the catalogue is empty, so it does not advertise a feature
+        that cannot play.
+      */}
+      <MusicToggle variant="floating" label="background music" />
 
       <main id="nb-main">
         <HeroSection events={events} plans={plans.data?.plans ?? []} signedIn={signedIn} />

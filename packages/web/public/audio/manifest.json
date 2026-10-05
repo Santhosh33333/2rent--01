@@ -1,0 +1,27 @@
+{
+  "_comment": [
+    "THE SONG CATALOGUE. Read public/audio/README.md before adding anything.",
+    "",
+    "This file ships EMPTY on purpose. Every track here is a real audio file that",
+    "someone holds the rights to, and this repository does not contain any yet.",
+    "Nothing is listed that does not exist on disk, and the player renders an",
+    "honest 'no music added yet' state rather than naming songs that cannot play.",
+    "",
+    "To add music:",
+    "  1. Put the file in this folder, e.g. /audio/ta-love-01.mp3",
+    "  2. Add an object below.",
+    "",
+    "Each object:",
+    "  id       unique, stable, lowercase. Changing it resets shuffle history.",
+    "  title    the real name of the track. Never invented.",
+    "  artist   the real performer or composer. Omit for unattributed audio.",
+    "  language BCP-47 primary subtag, e.g. 'ta' or 'en'. Drives language matching.",
+    "  mood     free-form tag. 'love' is what the love-song filter looks for.",
+    "  src      path relative to the site root, e.g. '/audio/ta-love-01.mp3'.",
+    "           Must be under /audio/ with an audio extension. Absolute and",
+    "           protocol-relative URLs are rejected on purpose - see README.md.",
+    "  credit   who to attribute. Required by a CC BY or similar licence.",
+    "  license  the licence you can point at, e.g. 'CC BY 4.0', 'CC0'."
+  ],
+  "tracks": []
+}

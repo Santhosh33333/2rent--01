@@ -4,7 +4,7 @@ import {
   Calendar, MapPin, Users, ArrowLeft, Loader2, AlertTriangle,
   Clock, CheckCircle, XCircle, Sparkles,
   MapPinned, Share2, Radio, Video, Globe, Ticket, ShieldCheck, X, Navigation,
-  Film, ExternalLink,
+  Film, ExternalLink, Music2,
 } from 'lucide-react'
 import { format, formatDistanceToNowStrict } from 'date-fns'
 import toast from 'react-hot-toast'
@@ -15,6 +15,7 @@ import { directionsUrl } from '../../lib/maps'
 import { openExternalUrl } from '../../lib/externalLink'
 import { EventChat } from '../../components/events/EventChat'
 import { EventCostSheet } from '../../components/events/EventCostSheet'
+import { MusicToggle } from '../landing/components/MusicToggle'
 
 interface EventDetail {
   id: string
@@ -457,6 +458,18 @@ export function EventDetailPage() {
               <EventCostSheet eventId={event.id} isOrganizer={event.isOrganizer === true} />
             </div>
           )}
+
+          {/* Love songs for the room. Same shared player as the landing page and
+              a dating match, so this never plays on top of music already running
+              elsewhere. It renders nothing until a catalogue exists - see
+              lib/songLibrary.ts for why the repository ships with no tracks. */}
+          <div className="mt-6 flex items-center justify-between gap-3 flex-wrap">
+            <h2 className="text-sm font-semibold text-surface-900 dark:text-white flex items-center gap-1.5">
+              <Music2 className="w-4 h-4 text-primary-500" aria-hidden="true" />
+              Music for this event
+            </h2>
+            <MusicToggle variant="inline" label="event music" />
+          </div>
 
           {/* Organizer */}
           {event.organizer && (

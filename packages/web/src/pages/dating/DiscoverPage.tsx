@@ -17,6 +17,7 @@ import {
 } from './datingApi'
 import { Tilt } from '../../components/motion/Tilt'
 import { assetUrl } from '../../lib/api'
+import { MatchSongPrompt } from '../landing/components/MusicToggle'
 
 /**
  * Swipe discovery.
@@ -553,6 +554,14 @@ export function DiscoverPage() {
                 />
               </motion.div>
             ) : null}
+            {/*
+              A love song for the moment, offered rather than played. Every
+              browser blocks audible autoplay without a gesture, so a match that
+              fired audio on arrival would either be silently rejected or would
+              need to bypass the rule. A tap is honest and works everywhere.
+              Renders nothing when the catalogue has no track in this language.
+            */}
+            <MatchSongPrompt />
             <div className="flex flex-col gap-3">
               <button
                 type="button"

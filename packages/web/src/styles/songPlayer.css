@@ -1,0 +1,183 @@
+/* ==================================================================== *
+ * SONG PLAYER CONTROLS
+ *
+ * Imported from main.tsx, not from any page, and that placement is the whole
+ * point of this file.
+ *
+ * The control is used on four surfaces that live in four different parts of the
+ * tree: the public landing page, a dating match dialog, an event page, and the
+ * music page. When these rules sat in pages/landing/landing.css - which only
+ * the landing page imports - the same component rendered unstyled everywhere
+ * else. A stylesheet next to the component cannot drift from its consumers the
+ * way a page-scoped one can.
+ *
+ * Two appearances, because the surfaces are not alike:
+ *
+ *   - `floating` sits over the landing page's moving video backdrop, so it has
+ *     to be dark glass with white text to stay legible and to keep its contrast
+ *     ratio against footage that changes frame to frame.
+ *   - `inline` sits inside ordinary app pages, which are light or dark by the
+ *     .dark class, so it follows the app theme instead of the landing page's.
+ *
+ * The landing page's --nb-* tokens are deliberately NOT used here. They are
+ * scoped to the .nb wrapper, so on any other page var(--nb-line) resolves to
+ * nothing and the declaration is dropped at computed-value time - which is
+ * exactly the kind of failure that looks like it worked.
+ * ==================================================================== */
+
+.nb-music {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font: inherit;
+}
+
+.nb-music-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.25s ease, transform 0.25s ease, border-color 0.25s ease;
+}
+
+.nb-music-btn:active {
+  transform: scale(0.97);
+}
+
+.nb-music-btn svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+/* Present when a track is loaded. The pressed state is carried by aria-pressed
+   as well as the icon, so it survives a screen reader. */
+.nb-music-btn[aria-pressed='true'] {
+  border-color: rgba(255, 45, 135, 0.55);
+}
+
+.nb-music-btn--icon {
+  padding: 10px;
+}
+
+.nb-music-label {
+  max-width: 22ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------- floating (landing page) */
+
+.nb-music--floating {
+  position: fixed;
+  right: clamp(16px, 3vw, 32px);
+  bottom: clamp(16px, 3vw, 32px);
+  z-index: 40;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: calc(100vw - 32px);
+}
+
+/* Bottom-right rather than top-right: the site header already owns the top of
+   the viewport, and a second floating cluster there collides with the sign-in
+   and download buttons at every width below 900px. */
+
+/* Opaque enough to stay legible over moving video. Glass tint alone let the
+   footage show through and dropped the label below 4.5:1. */
+.nb-music--floating .nb-music-btn {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(10, 13, 36, 0.82);
+  backdrop-filter: blur(12px);
+  color: #fff;
+}
+
+.nb-music--floating .nb-music-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.nb-music-note {
+  flex-basis: 100%;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(10, 13, 36, 0.92);
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 12px;
+  max-width: 34ch;
+}
+
+/* --------------------------------------- inline (ordinary app pages, light/dark) */
+
+.nb-music--inline .nb-music-btn {
+  border-color: rgba(0, 0, 0, 0.12);
+  background: rgba(255, 255, 255, 0.92);
+  color: #18181b;
+}
+
+.nb-music--inline .nb-music-btn:hover {
+  background: #f4f4f5;
+}
+
+.dark .nb-music--inline .nb-music-btn {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(39, 39, 42, 0.92);
+  color: #fafafa;
+}
+
+.dark .nb-music--inline .nb-music-btn:hover {
+  background: rgba(63, 63, 70, 0.95);
+}
+
+/* ---------------------------------------------------- dating match dialog */
+
+/* The match dialog is bg-slate-950/95, so this stays dark in both themes -
+   a light pill on a near-black dialog would be the odd one out. */
+.nb-match-song {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 45, 135, 0.45);
+  background: rgba(255, 45, 135, 0.12);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.25s ease, transform 0.25s ease;
+}
+
+.nb-match-song:hover {
+  background: rgba(255, 45, 135, 0.2);
+}
+
+.nb-match-song:active {
+  transform: scale(0.97);
+}
+
+.nb-match-song svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+/* ------------------------------------------------------------------ helpers */
+
+/* Narrow phones: the floating pill would cover the footer's last row, and the
+   track name is the least useful part of it there. */
+@media (max-width: 560px) {
+  .nb-music--floating .nb-music-label {
+    display: none;
+  }
+
+  .nb-music--floating .nb-music-btn {
+    padding: 12px;
+  }
+}

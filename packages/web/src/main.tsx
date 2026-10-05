@@ -8,6 +8,10 @@ import { RoleProvider } from './lib/roleContext'
 import { App } from './App'
 import { initializeAds } from './lib/ads'
 import './styles/globals.css'
+// The song controls are used on the landing page, a dating match, an event page
+// and the music page. Loading the sheet here rather than per page is what keeps
+// the same component from rendering unstyled on any of them.
+import './styles/songPlayer.css'
 
 declare global {
   interface Window {

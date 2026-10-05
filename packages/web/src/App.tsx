@@ -7,6 +7,7 @@ import { ErrorBoundary } from './components/ErrorBoundary'
 import { AppErrorFallback } from './components/AppErrorFallback'
 import { ThemeProvider } from './lib/themeContext'
 import { AppLockProvider, useAppLock } from './lib/appLock'
+import { SongPlayerProvider } from './lib/songPlayer'
 import { LockScreen } from './components/LockScreen'
 import CallOverlay from './components/CallOverlay'
 import { UpdateNotice } from './components/UpdateNotice'
@@ -136,6 +137,7 @@ const PartnerPerformancePage = lazy(() => import('./pages/partner/PartnerPerform
 const SearchPage = lazy(() => import('./pages/search/SearchPage').then(m => ({ default: m.SearchPage })))
 const SportsPage = lazy(() => import('./pages/sports/SportsPage').then(m => ({ default: m.SportsPage })))
 const MoviesPage = lazy(() => import('./pages/movies/MoviesPage').then(m => ({ default: m.MoviesPage })))
+const MusicPage = lazy(() => import('./pages/music/MusicPage').then(m => ({ default: m.MusicPage })))
 const AiAssistantPage = lazy(() => import('./pages/ai/AiAssistantPage').then(m => ({ default: m.AiAssistantPage })))
 const SosAlertPage = lazy(() => import('./pages/sos/SosAlertPage').then(m => ({ default: m.SosAlertPage })))
 
@@ -160,6 +162,13 @@ export function App() {
         <UpdateNotice />
         <Suspense fallback={<LoadingSpinner />}>
           <AppLockProvider>
+            {/*
+              One audio element for the whole app. It wraps Routes rather than
+              living inside a layout so the landing page - which is outside
+              Layout - shares the same player as a dating match. Two providers
+              would mean two audio elements playing over each other.
+            */}
+            <SongPlayerProvider>
             <Routes>
           {/* Public marketing site. */}
         <Route path="/" element={<LandingPage />} />
@@ -227,6 +236,10 @@ export function App() {
               <Route path="/discover/:categoryKey" element={<DiscoveryCategoryRoute />} />
               <Route path="/sports" element={<SportsPage />} />
               <Route path="/movies" element={<MoviesPage />} />
+              {/* Same shared player as the landing page and a dating match - the
+                  provider sits above Routes, so this page is a control surface
+                  for audio that already exists rather than a second player. */}
+              <Route path="/music" element={<MusicPage />} />
               <Route path="/ai" element={<AiAssistantPage />} />
 
               {/* New Booking System */}
@@ -337,6 +350,7 @@ export function App() {
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+            </SongPlayerProvider>
             <LockOverlay />
             <CallOverlay />
           </AppLockProvider>
