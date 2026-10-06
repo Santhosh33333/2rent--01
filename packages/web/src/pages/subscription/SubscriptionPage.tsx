@@ -9,8 +9,9 @@ import {
   type SubscriptionPlan,
   type MySubscription,
   type AccessStatus,
+  type SubscriptionUpiDetails,
 } from "../../lib/subscriptions";
-import { getCashfree, isSandbox } from "../../lib/cashfree";
+import { UpiQrPanel } from "../../components/UpiQrPanel";
 
 export function SubscriptionPage() {
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
@@ -20,6 +21,17 @@ export function SubscriptionPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  // The payment the wallet could not cover. Held here rather than derived from
+  // the subscribe response so a reload can recover the QR: the amount owed lives
+  // on the server, and a page refresh must not strand the user with a request they
+  // have no way to pay.
+  const [pending, setPending] = useState<{ paymentId: string; amount: number; planName: string } | null>(null);
+  const [qr, setQr] = useState<SubscriptionUpiDetails | null>(null);
+  const [qrError, setQrError] = useState<string | null>(null);
+  const [qrLoading, setQrLoading] = useState(false);
+  const [reference, setReference] = useState("");
+  const [referenceBusy, setReferenceBusy] = useState(false);
 
   const loggedIn = Boolean(localStorage.getItem("token"));
 
@@ -37,7 +49,22 @@ export function SubscriptionPage() {
           subscriptionsApi.getMe(),
           subscriptionsApi.getAccess(),
         ]);
-        if (meRes.status === "fulfilled") setMine(meRes.value.data.data);
+        if (meRes.status === "fulfilled") {
+          const me = meRes.value.data.data;
+          setMine(me);
+          // Recover an outstanding payment from the server rather than from local
+          // state, so a reload still shows the QR instead of a plan that silently
+          // never activates.
+          setPending(
+            me.pendingPayment
+              ? {
+                  paymentId: me.pendingPayment.id,
+                  amount: me.pendingPayment.amount,
+                  planName: me.plan?.name ?? "your plan",
+                }
+              : null,
+          );
+        }
         if (accessRes.status === "fulfilled") setAccess(accessRes.value.data.data);
       } else {
         setMine(null);
@@ -50,9 +77,62 @@ export function SubscriptionPage() {
     }
   }, [loggedIn]);
 
+  /**
+   * Fetch the QR for a pending payment.
+   *
+   * Always called on demand rather than only from the subscribe response, because
+   * the earlier bug was exactly this data being unavailable: the panel rendered
+   * blank with no QR, no UPI ID and no message, and UPI is the only rail left.
+   */
+  const loadQr = useCallback(async (paymentId: string) => {
+    setQrLoading(true);
+    setQrError(null);
+    try {
+      const res = await subscriptionsApi.getPaymentUpiDetails(paymentId);
+      const details = res.data.data;
+      if (!details.payable) {
+        setQr(null);
+        setQrError(
+          `This payment is already ${String(details.status).toLowerCase()}. Your subscription page will refresh once it is confirmed.`,
+        );
+        return;
+      }
+      setQr(details);
+    } catch (err: any) {
+      setQr(null);
+      // The server distinguishes these, and so should the user: "you are signed
+      // out" and "no UPI configured" need very different actions.
+      const status = err?.response?.status;
+      const code = err?.response?.data?.code;
+      const serverMessage = err?.response?.data?.message;
+      setQrError(
+        status === 401
+          ? "Your session has expired. Please sign in again to see the payment QR."
+          : status === 403
+            ? "That payment is not yours."
+            : code === "UPI_NOT_CONFIGURED"
+              ? "UPI is not set up on our side yet. Please top up your wallet instead, or contact support."
+              : typeof serverMessage === "string" && serverMessage.trim()
+                ? serverMessage
+                : "Could not load the payment QR. Check your connection and try again.",
+      );
+    } finally {
+      setQrLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (pending) void loadQr(pending.paymentId);
+    else {
+      setQr(null);
+      setQrError(null);
+      setReference("");
+    }
+  }, [pending, loadQr]);
 
   const subscribe = async (plan: SubscriptionPlan) => {
     if (!loggedIn) {
@@ -61,29 +141,66 @@ export function SubscriptionPage() {
     }
     setBusy(plan.code);
     setError(null);
+    setNotice(null);
     try {
       const { data } = await subscriptionsApi.subscribe(plan.code);
-      const sessionId = data.data.subscriptionSessionId;
-      if (!sessionId) {
-        setError("Payment session could not be created. Contact support if this persists.");
+
+      // The server collected it. Either it came out of the wallet - plan already
+      // live - or the wallet was short and a payment request is open. These need
+      // opposite next steps, which is why the branch is on the server's answer
+      // rather than assuming "payment started, we're done".
+      if (data.data.source === "WALLET") {
+        setPending(null);
+        setNotice(
+          `${formatPrice(data.data.amount, data.data.plan.currency)} taken from your wallet. ${plan.name} is active.`,
+        );
+        await load();
         return;
       }
-      const cashfree = await getCashfree();
-      const result = await cashfree.subscriptionsCheckout({
-        subsSessionId: sessionId,
-        redirectTarget: "_modal",
+
+      if (!data.data.paymentId) {
+        setError("The payment could not be started. Please contact support.");
+        return;
+      }
+      setPending({
+        paymentId: data.data.paymentId,
+        amount: data.data.amount,
+        planName: data.data.plan.name,
       });
-      if (result?.error) {
-        setError("Payment could not be started. Please try again.");
-        return;
-      }
-      // Entitlement arrives via webhook, not from this response.
-      setNotice("Payment received. Your plan activates once the bank confirms the mandate.");
-      await load();
-    } catch (err) {
-      setError("Something went wrong starting your subscription.");
+    } catch (err: any) {
+      setPending(null);
+      // Prefer the server's own reason. It distinguishes "you already have this
+      // plan" from a plan problem and a network blip, and collapsing all of them
+      // into one sentence is what made this look like the button did nothing.
+      const serverMessage = err?.response?.data?.message;
+      setError(
+        typeof serverMessage === "string" && serverMessage.trim()
+          ? serverMessage
+          : "Something went wrong starting your subscription.",
+      );
     } finally {
       setBusy(null);
+    }
+  };
+
+  const submitReference = async () => {
+    if (!pending) return;
+    setReferenceBusy(true);
+    setQrError(null);
+    try {
+      await subscriptionsApi.submitPaymentReference(pending.paymentId, reference.trim());
+      setNotice("Reference received. We are checking it against our bank statement now.");
+      setReference("");
+      await load();
+    } catch (err: any) {
+      const serverMessage = err?.response?.data?.message;
+      setQrError(
+        typeof serverMessage === "string" && serverMessage.trim()
+          ? serverMessage
+          : "Could not save that reference. Please try again.",
+      );
+    } finally {
+      setReferenceBusy(false);
     }
   };
 
@@ -115,7 +232,7 @@ export function SubscriptionPage() {
             Prices are set by Nabri and shown exactly as configured.
           </p>
           <span className="mt-3 inline-block rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-400">
-            {isSandbox() ? "Sandbox mode" : "Live billing"}
+            Wallet or UPI
           </span>
         </header>
 
@@ -128,6 +245,100 @@ export function SubscriptionPage() {
           <div className="mt-6 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
             {notice}
           </div>
+        )}
+
+        {pending && (
+          <section className="mt-8 rounded-2xl border border-amber-500/40 bg-amber-500/5 p-6">
+            <h2 className="text-sm font-medium text-amber-200">
+              Pay {formatPrice(pending.amount, "INR")} for {pending.planName}
+            </h2>
+            <p className="mt-2 text-sm text-slate-300">
+              Your wallet balance was not enough, so this plan is waiting on a manual
+              payment. Scan the QR below, then enter the UTR from your bank app so we
+              can match it. Your plan activates once we confirm the payment.
+            </p>
+
+            {qrError && (
+              <div className="mt-4 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+                <p>{qrError}</p>
+                {qr && (
+                  <button
+                    onClick={() => void loadQr(pending.paymentId)}
+                    disabled={qrLoading}
+                    className="mt-2 rounded-full border border-rose-400/60 px-4 py-1.5 text-xs font-medium hover:bg-rose-500/20 disabled:opacity-40"
+                  >
+                    {qrLoading ? "Retrying…" : "Try again"}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {qrLoading && !qr && (
+              <p className="mt-4 text-sm text-slate-400">Loading your payment QR…</p>
+            )}
+
+            {qr?.payable && qr.upiId && (
+              <div className="mt-5 space-y-4">
+                <div className="flex justify-center">
+                  <UpiQrPanel
+                    refreshUrl={`/subscriptions/payments/${pending.paymentId}/upi-details`}
+                    amount={qr.amount ?? pending.amount}
+                    data={{
+                      upiId: qr.upiId,
+                      accountName: qr.accountName,
+                      upiUri: qr.upiUri,
+                      qrUrl: qr.qrUrl,
+                      qrReference: qr.qrReference,
+                      qrExpiresAt: qr.qrExpiresAt,
+                      qrExpiresInSeconds: qr.qrExpiresInSeconds,
+                      payable: qr.payable,
+                      amount: qr.amount ?? pending.amount,
+                    }}
+                    onData={(next) => setQr((prev) => ({ ...(prev as SubscriptionUpiDetails), ...next }) as SubscriptionUpiDetails)}
+                  />
+                </div>
+
+                {qr.qrReference && (
+                  <p className="text-center text-xs text-slate-500">
+                    Reference on the QR:{" "}
+                    <span className="font-mono text-slate-300">{qr.qrReference}</span>
+                  </p>
+                )}
+
+                <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+                  <label htmlFor="upi-reference" className="block text-sm text-slate-300">
+                    Enter the UTR / reference from your bank app
+                  </label>
+                  <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                    <input
+                      id="upi-reference"
+                      value={reference}
+                      onChange={(e) => setReference(e.target.value)}
+                      placeholder="e.g. 412345678901"
+                      className="flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:border-sky-500 focus:outline-none"
+                    />
+                    <button
+                      onClick={submitReference}
+                      disabled={referenceBusy || reference.trim().length < 6}
+                      className="rounded-full bg-white px-5 py-2 text-sm font-medium text-slate-900 hover:bg-slate-200 disabled:opacity-40"
+                    >
+                      {referenceBusy ? "Sending…" : "Submit reference"}
+                    </button>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500">
+                    {qr.referenceNumber
+                      ? `Reference submitted: ${qr.referenceNumber}. We will email you when it is confirmed.`
+                      : "At least 6 characters. We match this against the bank statement before your plan activates."}
+                  </p>
+                </div>
+
+                <p className="text-xs text-slate-500">
+                  Prefer to have us take it automatically? Top up your wallet and the next
+                  renewal comes straight out of it.
+                </p>
+              </div>
+            )}
+          </section>
         )}
 
         {access && (
@@ -288,8 +499,9 @@ export function SubscriptionPage() {
 
         <section className="mt-10 space-y-2 text-sm text-slate-500">
           <p>· Prices are shown in INR and include any configured discount.</p>
-          <p>· Your trial does not auto-charge unless you subscribe after it ends.</p>
-          <p>· Payment is processed securely by Cashfree. We never see card details.</p>
+          <p>· If your wallet balance covers the price, the plan starts instantly.</p>
+          <p>· Otherwise you pay by UPI against our QR, and we email you once it is confirmed.</p>
+          <p>· Renewals are taken from your wallet when there is balance; otherwise we email you a payment QR rather than cancelling you.</p>
         </section>
       </div>
     </div>

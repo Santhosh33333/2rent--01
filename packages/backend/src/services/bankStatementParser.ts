@@ -99,19 +99,39 @@ export interface ParseResult {
 /**
  * Clean a column heading before it is matched against the role patterns.
  *
- * Banks punctuate their headings, and the punctuation lands exactly where the
- * patterns were anchored. Slice prints "REF NO." and Axis prints "Ref No." -
- * both with a trailing full stop - and `^ref\s*(no|number)?$` could not match
- * either, so the only column holding a reference was invisible and the file was
- * rejected for having "no UTR column" while the reference sat right there in the
- * preview. Trimming the punctuation is what makes those exports readable.
+ * Banks decorate their headings, and the decoration lands exactly where the
+ * patterns were anchored. Three real cases forced this to grow:
  *
- * Only leading/trailing marks are removed. Punctuation *inside* a heading is
+ * - A trailing full stop. Slice prints "REF NO." and Axis prints "Ref No.", and
+ *   `^ref\s*(no|number)?$` could not match either - so the only column holding a
+ *   reference was invisible and the file was rejected for having "no UTR column"
+ *   while the reference sat right there in the preview.
+ * - A currency marker or a bracketed qualifier. "AMOUNT (INR)", "Amount Rs",
+ *   "AMOUNT ₹" and "AMOUNT (RS.)" are all the amount column, but `^amount$` is
+ *   anchored at both ends so every one of them failed. A statement laid out as
+ *   DATE / DETAILS / REF NO. / AMOUNT / BALANCE was then rejected for having "no
+ *   amount column" while the amount column was printed in capitals four columns
+ *   wide - and the error told the admin to add a column they already had.
+ * - Zero-width characters, which survive a PDF's glyph extraction and hide
+ *   nothing but break every anchored pattern.
+ *
+ * Only leading/trailing decoration is removed. Punctuation *inside* a heading is
  * meaningful ("a/c no." is not "a/c"), and rewriting it would let an unrelated
  * column claim a role it does not have.
  */
 function normaliseHeading(value: string): string {
   return String(value ?? "")
+    // Zero-width and BOM characters are invisible but survive PDF extraction.
+    .replace(/[\u200B-\u200D\u2060\uFEFF]/g, "")
+    // A trailing bracketed qualifier: "AMOUNT (INR)", "REF NO. (SYSTEM)".
+    // Removed before the punctuation trim so the closing bracket does not have to
+    // be in the leading/trailing character class as well.
+    .replace(/\s*[[({][^\])}]*[\])}]\s*$/, "")
+    // A trailing or leading currency marker or code, with or without a dot.
+    .replace(/\s*(?:rs\.?|inr|usd|₹|\$)\s*$/i, "")
+    .replace(/^(?:rs\.?|inr|usd|₹|\$)\s*/i, "")
+    // A trailing "*" or "%", which banks use to mark derived columns.
+    .replace(/\s*[%*]\s*$/, "")
     .replace(/^[\s._#:;,\-/\\]+/, "")
     .replace(/[\s._#:;,\-/\\]+$/, "")
     .replace(/\s+/g, " ")
@@ -138,7 +158,16 @@ const ROLE_PATTERNS: Array<{ role: ColumnRole; re: RegExp }> = [
   { role: "direction", re: /\b(dr\s*\/?\s*cr|cr\s*\/?\s*dr|txn\s*type|transaction\s*type|debit\s*\/?\s*credit|type)\s*$/i },
   { role: "debit", re: /debit|withdrawal|paid\s*out|money\s*out|^dr\b/i },
   { role: "credit", re: /credit|deposit|paid\s*in|money\s*in|^cr\b/i },
-  { role: "amount", re: /transaction\s*amount|^amount$|^amt$|\bvalue\b|txn\s*amt/i },
+  // Amount. Anchored at the start so a "Value Date" column - which is a date,
+  // not money - cannot claim the money slot, with an explicit lookahead for the
+  // same reason: `value` alone means the amount, `value date` does not, and the
+  // two differ only by what follows.
+  //
+  // `^amount\b` rather than `^amount$` so "Amount (INR)", "Amount in INR" and
+  // "Total Amount" all still land here. The qualifier stripping happens in
+  // normaliseHeading, but anchoring on the word itself is what makes this robust
+  // to a decoration the cleaner has not been taught yet.
+  { role: "amount", re: /^(?:txn|transaction|total|net|grand)?\s*(?:amount|amt|value)\b(?!\s*date)/i },
   { role: "balance", re: /balance/i },
   { role: "date", re: /date|time|posting|value\s*date/i },
   { role: "narration", re: /narration|description|particulars|remarks|details|payer|payee/i },
@@ -502,6 +531,196 @@ export interface ParseOptions {
 }
 
 /**
+ * Recover the money column from the DATA when the heading matcher found none.
+ *
+ * The fallback exists because heading matching is a heuristic and banks keep
+ * inventing headings. Once it fails, the values themselves are still evidence: in
+ * every merchant-bank layout the amount sits immediately right of the reference,
+ * and the running balance sits further right still.
+ *
+ * The rules, and why each is there:
+ *
+ * - Right of the reference column only. A numeric column to the LEFT is a running
+ *   balance or a sequence number, never the amount.
+ * - Not a balance. A running balance is a single candidate that is perfectly
+ *   numeric, and picking it would credit somebody's account total against a
+ *   payment request.
+ * - Every filled cell is a number, so a narration column that holds prose is not
+ *   mistaken for money.
+ *
+ * Two candidates are not a failure but a different question, answered separately.
+ * See `resolveDebitCreditPair`.
+ */
+function recoverAmountColumn(
+  matrix: string[][],
+  headers: string[],
+  fallbackScore: number,
+): { headerIndex: number; headers: string[]; map: ColumnMap } | null {
+  if (fallbackScore <= 0) return null;
+
+  const map = detectMapping(headers);
+  const reference = map.reference;
+  if (reference === undefined) return null;
+  if (map.amount !== undefined || map.credit !== undefined || map.debit !== undefined) return null;
+
+  // Where the data starts: the header row itself is not data, and `matrix` holds
+  // the rows in order, so the first row after the matching header is the first row
+  // worth measuring.
+  let headerIndex = -1;
+  for (let i = 0; i < Math.min(matrix.length, 400); i += 1) {
+    const row = matrix[i].map((c) => String(c ?? "").trim());
+    if (row.length === headers.length && row.every((c, j) => c === (headers[j] ?? ""))) {
+      headerIndex = i;
+      break;
+    }
+  }
+  if (headerIndex === -1) return null;
+
+  const dataRows = matrix.slice(headerIndex + 1, headerIndex + 201);
+  if (dataRows.length < 2) return null;
+
+  const width = headers.length;
+  const columns: Array<{ index: number; filled: number; numeric: number }> = [];
+  for (let col = reference + 1; col < width; col += 1) {
+    if (/balance/i.test(normaliseHeading(headers[col] ?? ""))) continue;
+    let filled = 0;
+    let numeric = 0;
+    for (const row of dataRows) {
+      const cell = String(row[col] ?? "").trim();
+      if (!cell) continue;
+      filled += 1;
+      if (parseAmount(cell) !== null) numeric += 1;
+    }
+    if (filled > 0) columns.push({ index: col, filled, numeric });
+  }
+
+  // Two tiers, and the distinction matters more than it looks.
+  //
+  // A debit/credit pair is sparse by nature: in any ten transactions perhaps three
+  // are credits and two are debits, so each half is filled only a few times. One
+  // "mostly numeric" test therefore admits the credit column and rejects the debit
+  // column, and the single-column rule below would adopt the credit column as THE
+  // amount - importing the income and silently dropping every outbound line. So any
+  // column with a single filled cell that is a number counts as a candidate here,
+  // and the extra evidence each candidate must clear is carried by whichever branch
+  // ends up claiming it.
+  const anyNumber = columns.filter((c) => c.numeric === c.filled);
+  const mostlyNumber = columns.filter((c) => c.filled >= 2 && c.numeric / c.filled >= 0.6);
+
+  if (anyNumber.length === 1 && mostlyNumber.length === 1) {
+    const column = anyNumber[0].index;
+    const balance = findBalanceColumn(headers, column, map);
+    // One money column, and the balance says money LEAVES by it. Adopting that as
+    // the amount would import every payout as income, so it is refused. "Unknown"
+    // still passes: with no balance to argue from, one unambiguous money column is
+    // the best reading available, and refusing a file we can read helps nobody.
+    if (balance !== null) {
+      const direction = witnessDirection(dataRows, column, balance);
+      if (direction === "debit" || direction === "conflict") return null;
+    }
+    return { headerIndex, headers, map: { ...map, amount: column } };
+  }
+
+  if (anyNumber.length !== 2) return null;
+
+  // Two money columns beside the reference: the merchant-bank debit/credit pair.
+  // Reading the direction from the HEADINGS is a guess, and guessing wrong means an
+  // outbound payout is credited to a wallet as if it were income. The running
+  // balance is independent evidence, so it alone is allowed to decide.
+  const [left, right] = [anyNumber[0].index, anyNumber[1].index];
+  const balance = findBalanceColumn(headers, Math.max(left, right), map);
+  if (balance === null) return null;
+
+  const leftVote = witnessDirection(dataRows, left, balance);
+  const rightVote = witnessDirection(dataRows, right, balance);
+  if (leftVote === "conflict" || rightVote === "conflict") return null;
+
+  let credit: number | null = null;
+  if (leftVote === "credit") credit = left;
+  if (rightVote === "credit") {
+    // Both halves showing money arriving means this is not a running balance, so
+    // nothing here can be trusted to label either column.
+    if (credit !== null) return null;
+    credit = right;
+  }
+  // Neither half was ever shown to receive money, so neither may be called income.
+  if (credit === null) return null;
+
+  return {
+    headerIndex,
+    headers,
+    map: { ...map, credit, debit: credit === left ? right : left, balance },
+  };
+}
+
+/**
+ * The running balance column, as long as it is not one of the amount columns.
+ *
+ * It has to sit to the RIGHT of the money. A balance column to the left of the
+ * amounts is an opening balance, and measuring a transaction against it would
+ * prove nothing.
+ */
+function findBalanceColumn(headers: string[], after: number, map: ColumnMap): number | null {
+  if (map.balance !== undefined && map.balance > after) return map.balance;
+  const found = headers.findIndex(
+    (_, i) => i > after && /balance/i.test(normaliseHeading(headers[i] ?? "")),
+  );
+  return found === -1 ? null : found;
+}
+
+/**
+ * Ask the running balance which way money moved through one money column.
+ *
+ * A transaction's figure has to equal the movement in the balance from the row
+ * above, to the paisa, and the sign of that movement is the answer: balance up
+ * means the figure is money in, balance down means money out. Column order is never
+ * consulted, so a bank that prints Credit before Debit and a bank that prints Debit
+ * before Credit both come out right.
+ *
+ * Rows that do not reconcile exactly are skipped rather than treated as evidence.
+ * Statements carry fees, interest and refunds that move the balance by an amount
+ * that is not the figure in this column, and one of those must not throw away the
+ * transactions either side of it.
+ *
+ * Returns:
+ * - "credit" or "debit" when the balance agreed with at least one row and never
+ *   disagreed with any other.
+ * - "conflict" when two rows disagree, which means the premise is wrong.
+ * - null when the balance could not speak: there is nothing to compare against (the
+ *   first data row has no row above it, so a column whose only figure sits there
+ *   can never be witnessed), or no movement matched at all. That is an absence of
+ *   evidence rather than evidence of absence, and the caller decides what an
+ *   absence is worth.
+ */
+function witnessDirection(
+  dataRows: string[][],
+  column: number,
+  balance: number,
+): "credit" | "debit" | "conflict" | null {
+  let vote: "credit" | "debit" | null = null;
+
+  for (let i = 1; i < dataRows.length; i += 1) {
+    const figure = parseAmount(String(dataRows[i][column] ?? "").trim());
+    if (figure === null) continue;
+    const previous = parseAmount(String(dataRows[i - 1][balance] ?? "").trim());
+    const current = parseAmount(String(dataRows[i][balance] ?? "").trim());
+    if (previous === null || current === null) continue;
+
+    const delta = Number((current - previous).toFixed(2));
+    if (delta === 0) continue;
+    // Compared in paise, because a float representation of 0.1 must never fail a
+    // money equality test.
+    if (Math.abs(Math.round(delta * 100)) !== Math.abs(Math.round(figure * 100))) continue;
+
+    const thisVote = delta > 0 ? "credit" : "debit";
+    if (vote && vote !== thisVote) return "conflict";
+    vote = thisVote;
+  }
+
+  return vote;
+}
+
+/**
  * Parse a statement file into candidate credit lines.
  *
  * A malformed file throws with the reason, because there is nothing useful to
@@ -548,7 +767,16 @@ export function parseBankStatement(text: string, opts: ParseOptions = {}): Parse
   // So each plausible row is scored by what it actually maps, and the first one
   // that identifies a transaction AND an amount wins. A row that cannot do both
   // is describing a summary block, not the table.
-  const scanLimit = Math.min(matrix.length, 25);
+  // How far down the file the header may sit.
+  //
+  // A merchant-bank workbook puts an account-summary block above the table -
+  // holder, address, IFSC, MICR, branch, opening and closing balance - and that
+  // block runs to thirty lines or more on some exports. At the previous limit of
+  // 25 the header row was never even examined, so a perfectly good statement was
+  // rejected with "No header row could be found" and the admin had nothing to act
+  // on. Bounded so a file that is not a statement at all still cannot be walked
+  // in full.
+  const scanLimit = Math.min(matrix.length, 400);
   let headerIndex = -1;
   let headers: string[] = [];
   let map: ColumnMap = {};
@@ -579,6 +807,23 @@ export function parseBankStatement(text: string, opts: ParseOptions = {}): Parse
   }
 
   if (headerIndex === -1) {
+    // Last attempt before giving up: a reference column was found but no money
+    // column was recognised. Rather than reject the file on a heading match, look
+    // at what the DATA actually holds and recover the amount column by position.
+    //
+    // Deliberately conservative. It requires EXACTLY ONE numeric column to the
+    // right of the reference that is not a running balance, because in every
+    // merchant-bank layout the money column sits next to the reference and a
+    // balance column sits to its right. Two numeric candidates means a debit/credit
+    // pair, which cannot be told apart without trusting the heading, so that case
+    // is left to fail honestly rather than guessed at - guessing which of a pair is
+    // the credit is exactly how a wallet gets credited for the wrong figure.
+    const recovered = recoverAmountColumn(matrix, fallbackHeaders, fallbackScore);
+    if (recovered) {
+      headerIndex = recovered.headerIndex;
+      headers = recovered.headers;
+      map = recovered.map;
+    } else {
     if (fallbackScore <= 0) {
       throw new Error(
         "No header row could be found. The first row must name the columns, including the UTR/reference and the amount.",
@@ -612,6 +857,20 @@ export function parseBankStatement(text: string, opts: ParseOptions = {}): Parse
     });
 
     if (refishHeading && !hasAmountRole) {
+      // Split "you have no money column" from "you have one we could not read".
+      // They look identical from here and need opposite actions: adding a column
+      // the export already has changes nothing and leaves the admin stuck in a
+      // loop, which is exactly what happened twice on real Slice exports before
+      // this was separated out.
+      const amountishHeading = fallbackHeaders.find((h) =>
+        /\b(amount|amt|value|value\s*date|inr|rs\.?|rupee)\b/i.test(normaliseHeading(h)),
+      );
+      if (amountishHeading) {
+        throw new Error(
+          `${tail}Found a column labelled "${amountishHeading}" that holds the amount, but the heading was not ` +
+            "recognised. Rename it to 'Amount' and upload again.",
+        );
+      }
       throw new Error(
         `${tail}No amount column was found next to the reference column. Add a 'Credit', 'Debit' or 'Amount' column.`,
       );
@@ -625,6 +884,7 @@ export function parseBankStatement(text: string, opts: ParseOptions = {}): Parse
     throw new Error(
       `${tail}No UTR or reference column was found. Rename the column to something like 'UTR No' or 'Reference' and upload again.`,
     );
+    }
   }
 
   if (headerIndex > 0) {

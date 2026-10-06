@@ -15,10 +15,11 @@ export default function UpiPay() {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['upi-details', id],
     queryFn: () => get<any>(`/bookings/${id}/upi-details`),
     enabled: !!id,
+    retry: 1,
   });
   const d = (data?.data ?? {}) as any;
 
@@ -32,9 +33,15 @@ export default function UpiPay() {
     onError: (e) => setError(errorMessage(e)),
   });
 
-  const upiLink = d.upiId
-    ? `upi://pay?pa=${encodeURIComponent(d.upiId)}&pn=${encodeURIComponent(d.accountName || 'RentBuddy')}&am=${d.amount}&tn=${encodeURIComponent(d.referenceNote || id)}`
-    : '';
+  // The server mints the intent URI and rotates its transaction reference every
+  // hour; that reference is what an admin matches a bank line against, so the
+  // QR must encode the server's URI. Building a second URI here produced a QR
+  // paying with no `tr` at all, which could never be tied to this hour's bucket.
+  // The local build is kept only for an older backend that sends no upiUri.
+  const upiLink = d.upiUri
+    || (d.upiId
+      ? `upi://pay?pa=${encodeURIComponent(d.upiId)}&pn=${encodeURIComponent(d.accountName || 'RentBuddy')}&am=${d.amount}&tn=${encodeURIComponent(d.referenceNote || id)}`
+      : '');
 
   return (
     <Screen>
@@ -44,6 +51,16 @@ export default function UpiPay() {
       </Text>
 
       {isLoading ? <Text style={styles.sub}>Loading…</Text> : null}
+      {isError ? (
+        // Without this the page showed "Loading…" forever and then an empty QR
+        // card, so a failed fetch was indistinguishable from an unconfigured
+        // admin. A retry matters most here: most failures are a stale token or
+        // a dropped connection, and the payment is still waiting to be made.
+        <Card>
+          <Text style={styles.sub}>Could not load the payment QR.</Text>
+          <Button label="Retry" onPress={() => { void refetch(); }} />
+        </Card>
+      ) : null}
       {error ? <Alert message={error} tone="error" /> : null}
       {done ? <Alert message="Reference submitted. Awaiting admin verification." tone="success" /> : null}
 
@@ -64,6 +81,12 @@ export default function UpiPay() {
         <Text style={styles.value}>₹{Number(d.amount ?? 0).toFixed(2)}</Text>
         <Text style={styles.label}>Note / Reference tag</Text>
         <Text style={styles.value}>{d.referenceNote}</Text>
+        {d.qrReference ? (
+          <>
+            <Text style={styles.label}>Reference inside this QR</Text>
+            <Text style={styles.value}>{d.qrReference}</Text>
+          </>
+        ) : null}
       </Card>
 
       <TextInput

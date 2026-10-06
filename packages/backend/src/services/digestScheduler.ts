@@ -16,6 +16,7 @@
  * artefacts read by people in one timezone, so "this month" should mean their
  * month, not UTC's.
  */
+import { prisma } from "../config/database";
 import {
   DIGEST_ROLES,
   buildDigestSections,
@@ -70,16 +71,10 @@ function taxRoles(): DigestRole[] {
 /**
  * Periods already attempted, keyed by the period's own key.
  *
- * Marked BEFORE sending, not after. If the process dies mid-send the period is
- * still consumed, and a partial report is better than a duplicate one.
- *
- * This is in-memory on purpose. The old comment claimed a `DailyDigestRun` table
- * guarded this; nothing persisted it, so a redeploy between midnight and the
- * send re-sent the day's digest. Being honest about the guarantee matters more
- * than the guarantee being pretty: a durable marker needs a table, and a table
- * that does not exist in production makes the scheduler throw every midnight.
- * The real-world consequence is narrow and documented - a deploy inside the
- * one-hour send window can re-send that period.
+ * In-memory, and kept in step with the DigestRun table rather than replacing it.
+ * It is what stops the same process retrying for the rest of the hour, and it
+ * keeps working when the database cannot be reached - the durable claim below is
+ * the guarantee across instances and restarts; this is the cheap local guard.
  */
 const runMarkers = new Set<string>();
 
@@ -96,6 +91,65 @@ export function resetRunMarkers(): void {
   runMarkers.clear();
 }
 
+/** Rows older than this can never describe a period that is due again. */
+const PRUNE_AFTER_DAYS = 400;
+
+/**
+ * Claims a period for sending, durably.
+ *
+ * The INSERT is the claim. Two instances reaching the same midnight both try it,
+ * the unique constraint on (period, windowKey) lets exactly one through, and the
+ * loser is told by a constraint violation instead of by a SELECT that said "not
+ * sent yet". A read-then-write guard is a race by construction: both instances
+ * can read "not sent" before either writes.
+ *
+ * Returns true for exactly one caller per period.
+ *
+ * Degrades to the in-memory guard if the table is missing or the database is
+ * unreachable. That is deliberate: a report scheduler that throws because a table
+ * has not migrated yet stops every report silently, and a duplicate monthly email
+ * is a smaller problem than no monthly email at all. The failure is logged loudly
+ * because it means the cross-instance guarantee is not in force.
+ */
+async function claimPeriod(period: ReportPeriod, window: ReportWindow): Promise<boolean> {
+  const id = `${period}|${window.key}`;
+  if (runMarkers.has(id)) return false;
+  // Marked before the INSERT is awaited, not after. claimPeriod is async, and the
+  // next 60-second tick arrives while the database is still being asked; without
+  // this the same monthly report is queued twice on 1 January.
+  runMarkers.add(id);
+
+  try {
+    await prisma.digestRun.create({
+      data: { period, windowKey: window.key },
+    });
+    await pruneOldRuns();
+    return true;
+  } catch (err: any) {
+    // P2002 = unique violation: another instance already claimed this period.
+    if (err?.code === "P2002") {
+      console.log(`[REPORT] ${period} ${window.label}: already claimed by another instance - not sending again.`);
+      return false;
+    }
+    console.error(
+      `[REPORT] ${period}: durable claim unavailable (${err?.code ?? "unknown"}: ${err?.message ?? err})` +
+        " - falling back to the in-process guard, so a restart may re-send this period.",
+    );
+    return true;
+  }
+}
+
+/** Drops claim rows old enough that no period can match them again. */
+async function pruneOldRuns(): Promise<void> {
+  try {
+    const cutoff = new Date(Date.now() - PRUNE_AFTER_DAYS * 86_400_000);
+    await prisma.digestRun.deleteMany({ where: { claimedAt: { lt: cutoff } } });
+  } catch {
+    // Housekeeping only. Its absence cannot cause a duplicate report, so it is
+    // not worth a log line every day.
+  }
+}
+
 /** The one predicate the tick uses, exposed so it can be tested directly. */
 export function isDue(period: ReportPeriod, now: Date): boolean {
   const sched = SCHEDULES.find((s) => s.period === period);
@@ -107,6 +161,11 @@ export function isDue(period: ReportPeriod, now: Date): boolean {
 /** Every cadence not yet sent for its current period. */
 export function pendingPeriods(now = new Date()): ReportPeriod[] {
   return SCHEDULES.map((s) => s.period).filter((p) => isDue(p, now));
+}
+
+/** Exposed for tests: whether this process has already sent a period. */
+export function periodIsClaimed(period: ReportPeriod, now: Date): boolean {
+  return hasRun(period, periodWindow(period, now));
 }
 
 /** Which sections a cadence contains. */
@@ -143,7 +202,11 @@ async function recipientsFor(period: ReportPeriod): Promise<Map<DigestRole, stri
  */
 export async function runReport(period: ReportPeriod, now = new Date()): Promise<void> {
   const window = periodWindow(period, now);
-  markRun(period, window);
+
+  // Claimed before anything is built. The claim is what makes this once-per-period
+  // across instances and restarts, and a claim that is never taken is a report
+  // that is never sent - the wrong failure to risk.
+  if (!(await claimPeriod(period, window))) return;
 
   try {
     const sections = await sectionsForPeriod(period, window, now);
@@ -186,9 +249,9 @@ export function startDigestScheduler(): void {
     const now = new Date();
     const due = pendingPeriods(now);
     if (!due.length) return;
-    // Marked here rather than inside runReport: between deciding a period is due
-    // and awaiting the previous one, the next 60-second tick runs again. Without
-    // this the same monthly report is queued twice on 1 January.
+    // Serialised through one chain so the cadences of a single tick do not run
+    // their report builds concurrently, and marked synchronously here so the next
+    // tick does not queue the same period a second time while this one runs.
     for (const period of due) markRun(period, periodWindow(period, now));
     chain = chain.then(async () => {
       for (const period of due) {

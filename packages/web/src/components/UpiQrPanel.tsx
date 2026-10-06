@@ -6,6 +6,8 @@ import { saveBlob, svgToPngBlob } from '../lib/download'
 import toast from 'react-hot-toast'
 
 export interface UpiQrData {
+  /** False once the request is settled; the server stops offering a QR. */
+  payable?: boolean
   upiId: string
   accountName?: string | null
   upiUri?: string | null
@@ -35,12 +37,19 @@ function formatCountdown(totalSeconds: number): string {
  * without the customer doing anything.
  */
 export function UpiQrPanel({
-  bookingId,
+  refreshUrl,
   amount,
   data,
   onData,
 }: {
-  bookingId: string
+  /**
+   * Endpoint that returns the current QR for whatever is being paid. An explicit
+   * URL rather than an id because the panel serves two callers that live behind
+   * different paths (a booking and a subscription payment), and rebuilding the URL
+   * from a guessed shape here would couple this presentational component to two
+   * unrelated API namespaces.
+   */
+  refreshUrl: string
   amount: number
   data: UpiQrData | null
   onData: (next: UpiQrData) => void
@@ -67,8 +76,16 @@ export function UpiQrPanel({
     if (refreshing) return
     setRefreshing(true)
     try {
-      const res = await api.get(`/bookings/${bookingId}/upi-details`)
+      const res = await api.get(refreshUrl)
       const next = (res.data?.data || res.data) as UpiQrData
+      // The server answers `payable: false` once the request is settled. Refreshing
+      // into that state must not blank the panel out or re-offer a QR the user
+      // could still scan and lose money on, so it is simply ignored here; the
+      // caller re-reads the payment status instead.
+      if (next?.payable === false) {
+        toast.success('This payment is already settled.')
+        return
+      }
       if (next?.upiUri) {
         onData(next)
         toast.success('New payment QR generated.')
@@ -78,7 +95,7 @@ export function UpiQrPanel({
     } finally {
       setRefreshing(false)
     }
-  }, [bookingId, onData, refreshing])
+  }, [refreshUrl, onData, refreshing])
 
   /** Save the visible QR as a PNG - works in the app too, via the Share sheet. */
   const downloadQr = useCallback(async () => {

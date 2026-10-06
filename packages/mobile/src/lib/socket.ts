@@ -36,7 +36,13 @@ export function getSocket(): Socket {
   authFailed = false;
   socket = io(SOCKET_URL, {
     auth: { token },
-    transports: ['websocket'],
+    // Transports are deliberately NOT pinned to 'websocket'. The server accepts
+    // both, but forcing the client straight to a WebSocket means one blocked or
+    // stalled upgrade on a mobile network fails the connection outright with no
+    // fallback - and every realtime feature rides this socket, so chat stopped
+    // receiving messages and calls never rang while the rest of the app looked
+    // healthy. Left to the client default, the handshake starts on polling and
+    // upgrades in the background, so a failed upgrade degrades instead of dying.
     reconnection: true,
     reconnectionAttempts: 5,
     reconnectionDelay: 1500,

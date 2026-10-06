@@ -14,6 +14,7 @@ import { isDemoEmail, DEMO_WALLET_CEILING } from "../utils/demo";
 import { moneyTransaction } from "../utils/db";
 import { invalidateConfigCache } from "../services/pricingEngine";
 import { settleTopupRequest, AlreadySettledError } from "../services/topupSettlement";
+import * as subscriptionBilling from "../services/subscriptionBillingService";
 // Aliased: both services export an AlreadySettledError and they are different
 // classes for different claims. Collapsing them into one import would make
 // `instanceof` accept a top-up error where a UPI error was meant.
@@ -2768,6 +2769,143 @@ export async function refillDemoWallet(req: AuthedRequest, res: Response): Promi
   } catch (err) {
     console.error("refillDemoWallet error:", err);
     sendError(res, "Failed to refill demo wallet.", 500, "INTERNAL_ERROR");
+  }
+}
+
+// ============================================================================
+// SUBSCRIPTION PAYMENT REVIEW — list + verify (activates the plan).
+//
+// Separate from the top-up queue on purpose. The money here does NOT go to the
+// wallet, it buys a billing period, so it must never share a settle path with a
+// top-up: crediting a wallet for money already spent on a plan would let one
+// payment buy both.
+// ============================================================================
+
+export async function listSubscriptionPayments(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const status = typeof req.query.status === "string" ? req.query.status : "VERIFICATION_PENDING";
+    const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
+    const items = await prisma.subscriptionPayment.findMany({
+      where: { status },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      include: { plan: { select: { name: true, code: true } } },
+    });
+    const userIds = Array.from(new Set(items.map((i) => i.userId)));
+    const users = userIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, fullName: true, email: true, phone: true },
+        })
+      : [];
+    const byId = new Map(users.map((u) => [u.id, u]));
+    sendSuccess(
+      res,
+      { items: items.map((i) => ({ ...i, user: byId.get(i.userId) ?? null })), total: items.length },
+      "Subscription payments retrieved.",
+    );
+  } catch (err) {
+    sendError(res, "Failed to list subscription payments.", 500, "INTERNAL_ERROR");
+  }
+}
+
+export async function verifySubscriptionPayment(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const { action, note } = req.body; // VERIFY | REJECT | REQUEST_INFO
+    const row = await prisma.subscriptionPayment.findUnique({
+      where: { id },
+      include: { plan: { select: { name: true } } },
+    });
+    if (!row) {
+      sendError(res, "Subscription payment not found.", 404, "NOT_FOUND");
+      return;
+    }
+    if ((action === "REJECT" || action === "REQUEST_INFO") && !String(note || "").trim()) {
+      sendError(res, "A note is required so the user knows why.", 400, "NOTE_REQUIRED");
+      return;
+    }
+
+    if (action === "VERIFY") {
+      // A UTR already used by a top-up or a booking payment is almost always a
+      // pasted-by-mistake reference. Checked before settling, because the column
+      // only guards uniqueness within this one table.
+      if (row.referenceNumber) {
+        const clash = await prisma.topupRequest.findFirst({
+          where: { referenceNumber: row.referenceNumber },
+          select: { id: true },
+        });
+        const bookingClash = await prisma.upiPayment.findFirst({
+          where: { referenceNumber: row.referenceNumber },
+          select: { id: true },
+        });
+        if (clash || bookingClash) {
+          sendError(
+            res,
+            "That reference is already recorded against another payment. Check the bank statement and enter the correct UTR.",
+            409,
+            "REFERENCE_ALREADY_USED",
+          );
+          return;
+        }
+      }
+
+      const settled = await subscriptionBilling.settleSubscriptionPayment({
+        paymentId: id,
+        adminUserId: req.user!.userId,
+        note,
+      });
+      if (settled.alreadySettled) {
+        // Two admins, or one retrying after a dropped connection. Say so rather
+        // than reporting a fresh success for money that was already applied.
+        sendSuccess(
+          res,
+          { status: settled.status, alreadySettled: true },
+          `Already ${String(settled.status).toLowerCase()}. Nothing changed.`,
+        );
+        return;
+      }
+      sendSuccess(res, { status: "VERIFIED" }, `Payment verified. ${row.plan.name} is now active.`);
+      return;
+    }
+
+    if (action === "REJECT") {
+      const changed = await prisma.subscriptionPayment.updateMany({
+        where: { id, status: "VERIFICATION_PENDING" },
+        data: { status: "REJECTED", verifiedByAdminId: req.user!.userId, verificationNote: note },
+      });
+      if (changed.count === 1) {
+        await prisma.notification.create({
+          data: {
+            userId: row.userId,
+            title: "Subscription payment rejected",
+            body: `Your ${row.plan.name} payment was not accepted. ${note}`.trim(),
+            data: JSON.stringify({ kind: "SUBSCRIPTION_PAYMENT_REJECTED", subscriptionPaymentId: id }),
+          },
+        });
+      }
+      sendSuccess(res, { status: "REJECTED" }, "Subscription payment rejected.");
+      return;
+    }
+
+    if (action === "REQUEST_INFO") {
+      await prisma.subscriptionPayment.update({ where: { id }, data: { status: "REQUEST_INFO", verificationNote: note } });
+      await prisma.notification.create({
+        data: {
+          userId: row.userId,
+          title: "More info needed",
+          body: `We need more information for your ${row.plan.name} payment. ${note}`.trim(),
+          data: JSON.stringify({ kind: "SUBSCRIPTION_PAYMENT_INFO", subscriptionPaymentId: id }),
+        },
+      });
+      sendSuccess(res, { status: "REQUEST_INFO" }, "Information requested.");
+      return;
+    }
+
+    sendError(res, "Action must be VERIFY, REJECT or REQUEST_INFO.", 400, "VALIDATION_ERROR");
+  } catch (err) {
+    console.error("verifySubscriptionPayment error:", err);
+    sendError(res, "Failed to verify subscription payment.", 500, "INTERNAL_ERROR");
   }
 }
 

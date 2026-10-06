@@ -27,6 +27,20 @@ router.post(
   subscriptionController.subscribe,
 );
 
+// The QR for a subscription payment raised by the wallet-short path. Kept off the
+// subscribe response on purpose: the amount owed lives on the payment row, so a
+// page reload can recover the QR instead of stranding the user with no way to pay.
+router.get("/payments/:id/upi-details", subscriptionController.getSubscriptionUpiDetails);
+
+// The UTR the user read off their bank app. Stored for the admin to match, but it
+// never activates the plan on its own.
+router.post(
+  "/payments/:id/reference",
+  [body("referenceNumber").notEmpty().withMessage("Reference is required").isString()],
+  validateRequest,
+  subscriptionController.submitSubscriptionReference,
+);
+
 router.post(
   "/cancel",
   [body("reason").optional().isString().trim().isLength({ max: 500 })],

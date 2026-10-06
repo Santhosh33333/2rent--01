@@ -815,6 +815,134 @@ export async function sendWithdrawalPaidEmail(email: string, name: string, d: Wi
   );
 }
 
+// ============================================================================
+// SUBSCRIPTION
+// ============================================================================
+
+export interface SubscriptionEmailData {
+  planName: string;
+  amount: number;
+  currency?: string;
+  /** How the period was paid for. */
+  method: "wallet" | "upi";
+  /** "activated" for the first paid period, "renewed" for a later one. */
+  kind: "activated" | "renewed";
+  periodStart: string;
+  periodEnd: string;
+  nextBillingAt?: string | null;
+  walletBalance?: number | null;
+  /** UTR, for a UPI payment. Omitted for a wallet charge. */
+  referenceNumber?: string | null;
+}
+
+function subscriptionRows(d: SubscriptionEmailData): Array<[string, string]> {
+  const fmt = (v: string) => {
+    const date = new Date(v);
+    return Number.isNaN(date.getTime())
+      ? v
+      : date.toLocaleString("en-IN", { dateStyle: "long", timeStyle: "short" });
+  };
+  const rows: Array<[string, string]> = [
+    ["Plan", d.planName],
+    [`Amount ${d.kind === "renewed" ? "charged" : "paid"}`, rupee(d.amount)],
+    ["Paid with", d.method === "wallet" ? "Nabri wallet balance" : "UPI (manual transfer)"],
+    ["Period starts", fmt(d.periodStart)],
+    ["Period ends", fmt(d.periodEnd)],
+  ];
+  if (d.method === "upi" && d.referenceNumber) {
+    rows.push(["UTR / reference", d.referenceNumber]);
+  }
+  if (d.method === "wallet" && typeof d.walletBalance === "number") {
+    rows.push(["Wallet balance left", rupee(d.walletBalance)]);
+  }
+  if (d.nextBillingAt) {
+    rows.push(["Next renewal", fmt(d.nextBillingAt)]);
+  }
+  return rows;
+}
+
+/**
+ * Confirms a subscription payment landed.
+ *
+ * Sent for both the initial purchase and every renewal, because the only proof a
+ * user has that their plan is live is this message - there is no gateway
+ * receipt, and the dashboard alone cannot be trusted to be looked at.
+ */
+export async function sendSubscriptionEmail(
+  email: string,
+  name: string,
+  d: SubscriptionEmailData,
+): Promise<EmailResult> {
+  const rowsHtml = subscriptionRows(d)
+    .map(
+      ([k, v]) =>
+        `<tr><td style="padding:10px 14px;border-top:1px solid #EFE8DC;font-size:13px;color:#6B6558">${escHtml(k)}</td><td style="padding:10px 14px;border-top:1px solid #EFE8DC;font-size:13px;color:#1C1917;font-weight:600;text-align:right">${escHtml(String(v))}</td></tr>`,
+    )
+    .join("");
+  const renewed = d.kind === "renewed";
+  const bodyHtml =
+    `<p style="margin:0 0 14px">Hi ${escHtml(name)},</p>` +
+    `<p style="margin:0 0 14px">Your payment of <strong>${rupee(d.amount)}</strong> for <strong>${escHtml(d.planName)}</strong> has been received, so your plan is ${renewed ? "<strong>renewed</strong>" : "<strong>active</strong>"}.</p>` +
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #EFE8DC;border-radius:14px;overflow:hidden;margin:0 0 20px"><tr><td style="background:#FBF7EF;padding:12px 14px;font-size:12px;color:#0D378B;font-weight:800;letter-spacing:1px">NABRI · SUBSCRIPTION ${renewed ? "RENEWED" : "CONFIRMED"}</td></tr>${rowsHtml}</table>` +
+    (d.nextBillingAt
+      ? `<p style="margin:0 0 14px">Your next renewal is scheduled for ${escHtml(d.nextBillingAt)}. We will take it from your wallet if there is enough balance, and otherwise email you a payment link before anything is due.</p>`
+      : `<p style="margin:0 0 14px">You can cancel any time from your subscription page and you keep access until the end of the period you just paid for.</p>`);
+  return sendEmail(
+    email,
+    `${renewed ? "Subscription renewed" : "Subscription active"} · ${escHtml(d.planName)} · ${rupee(d.amount)}`,
+    renderEmail({
+      supportEmail: env.SUPPORT_EMAIL,
+      title: renewed
+        ? `${d.planName} renewed until ${new Date(d.periodEnd).toLocaleDateString("en-IN", { dateStyle: "long" })}`
+        : `${d.planName} is now active`,
+      kicker: renewed ? "Payment received" : "Subscription confirmed",
+      bodyHtml,
+      ctaText: "View subscription",
+      ctaUrl: `${WEB_ORIGIN}/subscription`,
+      note: "Need help? Reply to this email and we'll get back to you.",
+    }),
+    `Hi ${name}, your ${d.planName} payment of ${rupee(d.amount)} was received and your plan is ${renewed ? "renewed" : "active"}.`,
+  );
+}
+
+/**
+ * Tells the user their renewal could not be taken from the wallet and asks them
+ * to pay. The plan is left in PAST_DUE, so this is the notice that has to reach
+ * them before access lapses.
+ */
+export async function sendSubscriptionPaymentRequiredEmail(
+  email: string,
+  name: string,
+  d: Omit<SubscriptionEmailData, "method" | "kind">,
+): Promise<EmailResult> {
+  const rowsHtml = subscriptionRows({ ...d, method: "upi", kind: "activated" })
+    .filter(([k]) => k !== "Paid with")
+    .map(
+      ([k, v]) =>
+        `<tr><td style="padding:10px 14px;border-top:1px solid #EFE8DC;font-size:13px;color:#6B6558">${escHtml(k)}</td><td style="padding:10px 14px;border-top:1px solid #EFE8DC;font-size:13px;color:#1C1917;font-weight:600;text-align:right">${escHtml(String(v))}</td></tr>`,
+    )
+    .join("");
+  const bodyHtml =
+    `<p style="margin:0 0 14px">Hi ${escHtml(name)},</p>` +
+    `<p style="margin:0 0 14px">We could not take <strong>${rupee(d.amount)}</strong> from your Nabri wallet for your <strong>${escHtml(d.planName)}</strong> renewal, because the balance was short.</p>` +
+    `<p style="margin:0 0 14px">Your plan is <strong>on hold</strong>. Open your subscription page and pay by UPI to keep it running — your access continues in the meantime.</p>` +
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #EFE8DC;border-radius:14px;overflow:hidden;margin:0 0 20px"><tr><td style="background:#FBF7EF;padding:12px 14px;font-size:12px;color:#B45309;font-weight:800;letter-spacing:1px">NABRI · ACTION NEEDED</td></tr>${rowsHtml}</table>`;
+  return sendEmail(
+    email,
+    `Action needed · ${rupee(d.amount)} due for ${d.planName}`,
+    renderEmail({
+      supportEmail: env.SUPPORT_EMAIL,
+      title: `Your ${d.planName} renewal needs a payment`,
+      kicker: "Payment required",
+      bodyHtml,
+      ctaText: "Pay and keep my plan",
+      ctaUrl: `${WEB_ORIGIN}/subscription`,
+      note: "Top up your wallet first if you'd rather we collect this automatically next time.",
+    }),
+    `Hi ${name}, we could not collect ${rupee(d.amount)} for your ${d.planName} renewal from your wallet. Your plan is on hold until you pay by UPI.`,
+  );
+}
+
 /** Withdrawal rejected — the held amount is returned to the wallet. */
 export async function sendWithdrawalRejectedEmail(email: string, name: string, d: WithdrawalEmailData): Promise<EmailResult> {
   const processed = d.processedAt ? new Date(d.processedAt).toLocaleString("en-IN", { dateStyle: "long", timeStyle: "short" }) : "";

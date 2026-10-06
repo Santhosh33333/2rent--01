@@ -73,6 +73,15 @@ vi.mock("../config/database", () => ({
     // Manual UPI is the only collection route left, so its pending money has to
     // appear in the money figures or the wallet float reads higher than it is.
     upiPayment: { findMany: vi.fn() },
+    // The durable run marker. Claimed by INSERT-as-claim, so a second instance
+    // losing the race gets P2002 rather than a duplicate mail. Without this in
+    // the mock, claimPeriod() takes its "table missing" fallback and the tests
+    // below would silently assert the in-memory behaviour instead of the real one.
+    digestRun: { create: vi.fn(), deleteMany: vi.fn() },
+    // The digest does not read subscriptions, but `healthy()` walks every key of
+    // this mock and calls findMany on each, so the key has to be a real model
+    // mock here too. Adding it to the object without that is what broke the walk.
+    subscriptionPayment: { findMany: vi.fn() },
     // The tax report reads the configured rate from here rather than inventing one.
     pricingConfig: { findMany: vi.fn(), findFirst: vi.fn() },
   },
@@ -103,7 +112,11 @@ const SECTIONS: DigestSection[] = [
 
 const healthy = () => {
   for (const model of Object.keys(prisma as unknown as Record<string, unknown>)) {
-    (prisma as any)[model].findMany.mockResolvedValue([]);
+    const m = (prisma as any)[model];
+    // Not every key on this mock is a Prisma model: a couple are plain values or
+    // helpers (the scheduler's run-marker store), and calling findMany on those
+    // threw. Only mock a findMany that actually exists.
+    if (typeof m?.findMany === "function") m.findMany.mockResolvedValue([]);
   }
   (prisma as any).pricingConfig.findFirst.mockResolvedValue(null);
 };

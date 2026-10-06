@@ -13,6 +13,7 @@ import { processTimeoutBookings, sendUpcomingReminders } from "./services/bookin
 import { runReengagementSweep } from "./services/emailService";
 import { startMovieCatalogSync, stopMovieCatalogSync } from "./services/movieCatalogSync";
 import { sweepReleasableEscrows } from "./services/eventEscrowService";
+import { sweepDueSubscriptions } from "./services/subscriptionBillingService";
 import { startDigestScheduler, stopDigestScheduler } from "./services/digestScheduler";
 import { ensureLegalDocumentsSeeded } from "./services/legalConsentService";
 
@@ -36,6 +37,40 @@ function startTimeoutSweeper(): void {
     );
   }, TIMEOUT_SWEEP_INTERVAL_MS);
   timeoutSweeper.unref?.();
+}
+
+// Hourly. Subscription renewal boundaries are per-plan (the end of the period
+// the user paid for), not a wall-clock moment, so this only has to be finer than
+// "often enough that a lapse is noticed"; the sweep is idempotent because each
+// subscription is claimed with a guarded update before it is charged.
+const SUBSCRIPTION_SWEEP_INTERVAL_MS = 60 * 60 * 1000;
+let subscriptionSweeper: ReturnType<typeof setInterval> | null = null;
+
+function startSubscriptionSweeper(): void {
+  // Renews subscriptions whose paid period has ended: takes the price from the
+  // wallet when it is there, and otherwise opens a manual-UPI request and emails
+  // the user rather than silently cancelling them.
+  subscriptionSweeper = setInterval(() => {
+    sweepDueSubscriptions()
+      .then((r) => {
+        if (r.renewed > 0 || r.pastDue > 0 || r.failed > 0) {
+          console.log(
+            `[SUBSCRIPTION] renewal sweep: ${r.renewed} renewed, ${r.pastDue} need payment, ${r.awaitingPayment} awaiting verification, ${r.failed} failed (scanned ${r.scanned})`,
+          );
+        }
+      })
+      .catch((err) => console.error("[SUBSCRIPTION] Sweeper run failed:", err));
+  }, SUBSCRIPTION_SWEEP_INTERVAL_MS);
+  subscriptionSweeper.unref?.();
+  // Collect anything already due at boot rather than waiting an hour - after a
+  // restart or a deploy, a period that ended overnight must not sit uncollected.
+  sweepDueSubscriptions()
+    .then((r) => {
+      if (r.renewed > 0 || r.pastDue > 0 || r.failed > 0) {
+        console.log(`[SUBSCRIPTION] boot sweep: ${r.renewed} renewed, ${r.pastDue} need payment, ${r.failed} failed`);
+      }
+    })
+    .catch((err) => console.error("[SUBSCRIPTION] Boot sweep failed:", err));
 }
 
 function startEscrowSweeper(): void {
@@ -450,6 +485,9 @@ startReengagementSweeper();
   // clean. Also runs once at boot so anything overdue after a deploy is not left
   // sitting until the next tick.
   startEscrowSweeper();
+  // Subscription renewals: charged from the wallet when the balance covers it,
+  // otherwise the user is emailed a payment request instead of being cancelled.
+  startSubscriptionSweeper();
   // Film catalogue is pushed, not pulled: a release has to be on the shelf
   // before its release day, which a request-driven cache cannot guarantee.
   startMovieCatalogSync();
@@ -483,6 +521,9 @@ if (reengagementSweeper) {
     }
     stopMovieCatalogSync();
     stopDigestScheduler();
+    if (subscriptionSweeper) {
+      clearInterval(subscriptionSweeper);
+    }
     server.close(() => {
       console.log("HTTP server closed.");
     });

@@ -78,6 +78,19 @@ router.put(
   validateRequest,
   adminController.setUpiConfig
 );
+// Subscription payments collected by manual UPI. Same gate as every other money
+// decision (PAYMENTS/APPROVE): verifying one activates a plan, so it must not be
+// reachable from a read-only payments role.
+router.get("/payments/subscriptions", paymentsView, adminController.listSubscriptionPayments);
+router.post(
+  "/payments/subscriptions/:id/verify",
+  requireSectionAction("PAYMENTS", "APPROVE"),
+  [body("action").isIn(["VERIFY", "REJECT", "REQUEST_INFO"]), body("note").optional().isString()],
+  sanitizeInput,
+  validateRequest,
+  adminController.verifySubscriptionPayment
+);
+
 router.get("/users", users, adminController.getUsers);
 router.get("/users/:id", users, adminController.getUserById);
 router.put("/users/:id/status", usersEdit, [body("status").isIn(["ACTIVE", "SUSPENDED", "BANNED", "DEACTIVATED"])], validateRequest, adminController.updateUserStatus);

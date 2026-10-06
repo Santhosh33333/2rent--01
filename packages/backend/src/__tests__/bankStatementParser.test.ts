@@ -297,6 +297,281 @@ describe("parseBankStatement", () => {
     expect(() => parseBankStatement(csv)).toThrow(/amount column/i);
   });
 
+/**
+ * Regression cover for a bank PDF that was rejected outright while printing its
+ * amount column in capitals.
+ *
+ * The reported layout was DATE / DETAILS / REF NO. / AMOUNT / BALANCE, lifted
+ * from a PDF rather than a CSV, so the heading carried whatever decoration the
+ * bank's own typesetting put on it. `^amount$` is anchored at both ends, so a
+ * heading like "AMOUNT (INR)" or "Amount Rs" failed to match, no amount column was
+ * found - and the error told the admin to add a column the export already had.
+ * Adding it changes nothing and the file fails identically, which is a dead end
+ * for someone trying to reconcile yesterday's credits.
+ */
+describe("decorated amount headings", () => {
+  const rows = [
+    "06/10/2026,UPI-Credit-RAJU,412345678901,500.00,15000.00",
+    "06/10/2026,UPI-Debit-SHOP,412345678902,-120.00,14880.00",
+  ];
+
+  it("reads the amount from every decoration banks print on the heading", () => {
+    const headings = ["AMOUNT", "AMOUNT (INR)", "Amount Rs", "Amount (Rs.)", "AMOUNT ₹", "Txn Amount", "Total Amount"];
+    for (const heading of headings) {
+      const csv = [
+        `DATE,DETAILS,REF NO.,${heading},BALANCE`,
+        ...rows,
+      ].join("\n");
+      const parsed = parseBankStatement(csv);
+      const credit = parsed.rows.find((r) => r.rawReference === "412345678901")!;
+      expect(credit.amount, `heading: ${heading}`).toBe(500);
+      expect(credit.inbound, `heading: ${heading}`).toBe(true);
+    }
+  });
+
+  it("still marks a negative amount outbound rather than crediting it", () => {
+    const csv = ["DATE,DETAILS,REF NO.,AMOUNT (INR),BALANCE", ...rows].join("\n");
+    const parsed = parseBankStatement(csv);
+    const debit = parsed.rows.find((r) => r.rawReference === "412345678902")!;
+    // The sign is preserved, not normalised away: it is the only thing that says
+    // this line is money leaving rather than arriving.
+    expect(debit.amount).toBe(-120);
+    expect(debit.inbound).toBe(false);
+    expect(debit.matchStatus).toBe("OUTBOUND");
+  });
+
+  it("does not let a 'Value Date' column take the money slot", () => {
+    // "Value Date" is a date. Reading it as the amount would credit a running
+    // total against somebody's payment request.
+    const csv = [
+      "DATE,DETAILS,REF NO.,VALUE DATE,AMOUNT",
+      "06/10/2026,UPI,412345678901,06/10/2026,500.00",
+    ].join("\n");
+    const parsed = parseBankStatement(csv);
+    expect(parsed.columnMap.amount).toBe(4);
+    expect(parsed.rows[0].amount).toBe(500);
+  });
+
+  it("names the unreadable amount column instead of asking for a new one", () => {
+    // A decoration the matcher still cannot read must produce actionable advice.
+    // The previous message said "add a Credit, Debit or Amount column" for a file
+    // that already had one, which sends the admin in a circle.
+    const csv = [
+      "DATE,DETAILS,REF NO.,NET PAYABLE CONSIDERATION,BALANCE",
+      "06/10/2026,UPI,412345678901,500.00,15000.00",
+    ].join("\n");
+    expect(() => parseBankStatement(csv)).toThrow(/no amount column/i);
+  });
+
+  it("finds the header below a long account-summary block", () => {
+    // Merchant-bank workbooks put 30+ summary rows above the table. At the old
+    // 25-row scan window the header was never examined and a valid statement was
+    // rejected with nothing actionable in the message.
+    const preamble: string[] = [];
+    for (let i = 0; i < 30; i += 1) preamble.push(`Account Summary Field ${i},Value ${i},`);
+    const csv = [
+      ...preamble,
+      "DATE,DETAILS,REF NO.,AMOUNT,BALANCE",
+      "06/10/2026,UPI,412345678901,500.00,15000.00",
+    ].join("\n");
+    const parsed = parseBankStatement(csv);
+    expect(parsed.columnMap.amount).toBe(3);
+    expect(parsed.rows[0].amount).toBe(500);
+  });
+});
+
+/**
+ * Heading matching is a heuristic, so when it fails the VALUES are used instead.
+ *
+ * These are the guards that matter more than the recovery itself: the recovery
+ * reads a numeric column, and picking the wrong one credits a wallet for the wrong
+ * figure. Every "refuses to guess" case here is a bug that would otherwise ship.
+ */
+describe("recovering the amount column from the data", () => {
+  const data = [
+    "06/10/2026,UPI-Credit-RAJU,412345678901,500.00,15000.00",
+    "07/10/2026,UPI-Credit-SITA,412345678903,250.00,15250.00",
+  ];
+
+  it("takes the only numeric column right of the reference", () => {
+    // "NET PAYABLE CONSIDERATION" is not a heading anyone could pattern-match, but
+    // the values give it away and there is exactly one candidate.
+    const csv = ["DATE,DETAILS,REF NO.,NET PAYABLE CONSIDERATION,BALANCE", ...data].join("\n");
+    const parsed = parseBankStatement(csv);
+    expect(parsed.columnMap.amount).toBe(3);
+    expect(parsed.rows.map((r) => r.amount)).toEqual([500, 250]);
+  });
+
+  it("never takes the running balance", () => {
+    // The balance is the strongest numeric candidate in the row, so the only thing
+    // keeping it out is that its heading says balance.
+    const csv = ["DATE,DETAILS,REF NO.,SETTLEMENT FIGURE,BALANCE", ...data].join("\n");
+    const parsed = parseBankStatement(csv);
+    expect(parsed.columnMap.amount).toBe(3);
+    expect(parsed.rows[0].amount).toBe(500);
+    expect(parsed.rows[0].amount).not.toBe(15000);
+  });
+
+  it("refuses to choose between a debit and a credit column", () => {
+    // Two numeric columns next to the reference with NO balance column to witness
+    // the direction. Picking one from position is a coin flip on whether a real
+    // payment gets credited or an outbound line is treated as income, so this must
+    // fail loudly instead.
+    const csv = [
+      "DATE,DETAILS,REF NO.,OUTWARD SETTLEMENT,INWARD SETTLEMENT",
+      "06/10/2026,UPI,412345678901,120.00,",
+      "07/10/2026,UPI,412345678903,,500.00",
+    ].join("\n");
+    expect(() => parseBankStatement(csv)).toThrow(/amount column/i);
+  });
+
+  it("reads the direction off the balance, whichever side of the table it is on", () => {
+    // This file prints the payout on the LEFT and the receipt on the RIGHT, the
+    // opposite order to the one above, and the balance proves which is which.
+    // Reading the pair by column position instead of by the balance would swap them
+    // and credit a payout as income, so the recovery has to ignore order entirely.
+    const csv = [
+      "DATE,DETAILS,REF NO.,LEFT SETTLEMENT,RIGHT SETTLEMENT,BALANCE",
+      "06/10/2026,UPI-Debit-SHOP,412345678901,120.00,,10000.00",
+      "07/10/2026,UPI-Credit-RAJU,412345678902,,500.00,10500.00",
+      "08/10/2026,UPI-Debit-SHOP,412345678903,80.00,,10420.00",
+    ].join("\n");
+    const parsed = parseBankStatement(csv);
+    expect(parsed.columnMap.debit).toBe(3);
+    expect(parsed.columnMap.credit).toBe(4);
+
+    const credit = parsed.rows.find((r) => r.rawReference === "412345678902")!;
+    const debit = parsed.rows.find((r) => r.rawReference === "412345678901")!;
+    expect(credit.amount).toBe(500);
+    expect(credit.inbound).toBe(true);
+    // The dangerous case: an outbound line must never be offered for crediting.
+    expect(debit.amount).toBe(120);
+    expect(debit.inbound).toBe(false);
+    expect(debit.matchStatus).toBe("OUTBOUND");
+  });
+
+  it("refuses the pair when neither half is ever shown receiving money", () => {
+    // Balance movements that match neither column to the penny, so nothing here can
+    // be called income. The honest answer is to refuse, because the alternative -
+    // assuming - is how an outbound payout becomes a credit.
+    const csv = [
+      "DATE,DETAILS,REF NO.,LEFT SETTLEMENT,RIGHT SETTLEMENT,BALANCE",
+      "06/10/2026,UPI,412345678901,500.00,,10000.00",
+      "07/10/2026,UPI,412345678902,,250.00,10999.00",
+    ].join("\n");
+    expect(() => parseBankStatement(csv)).toThrow(/amount column/i);
+  });
+
+  it("refuses the pair when both halves look like income", () => {
+    // Two money columns, and the balance RISES by whichever figure is filled. A
+    // real debit/credit split cannot do that, so this is not a running balance and
+    // neither column can be trusted to mean what it claims. One of the two is a
+    // payout being read as income, so the file is refused.
+    const csv = [
+      "DATE,DETAILS,REF NO.,LEFT SETTLEMENT,RIGHT SETTLEMENT,BALANCE",
+      "06/10/2026,UPI,412345678901,500.00,,10000.00",
+      "07/10/2026,UPI,412345678902,300.00,,10300.00",
+      "08/10/2026,UPI,412345678903,,250.00,10550.00",
+    ].join("\n");
+    expect(() => parseBankStatement(csv)).toThrow(/amount column/i);
+  });
+
+  it("refuses a single money column that the balance shows money leaving by", () => {
+    // One numeric column, but every row it holds drops the balance by exactly that
+    // figure. It is the payout column. Adopting it as the amount would import every
+    // payout as income, so the file is refused even though there is only one
+    // candidate and no pair to be unsure about.
+    const csv = [
+      "DATE,DETAILS,REF NO.,SETTLEMENT FIGURE,BALANCE",
+      "06/10/2026,UPI-Debit-SHOP,412345678901,120.00,10000.00",
+      "07/10/2026,UPI-Debit-SHOP,412345678902,250.00,9750.00",
+      "08/10/2026,UPI-Debit-SHOP,412345678903,300.00,9450.00",
+    ].join("\n");
+    expect(() => parseBankStatement(csv)).toThrow(/amount column/i);
+  });
+
+  it("skips rows that do not reconcile instead of failing the file", () => {
+    // Real statements carry lines with no transaction amount at all - an interest
+    // accrual, a standing-instruction note, a returned mandate - and those lines
+    // move the balance without matching either money column. One of them must not
+    // throw away the transactions either side of it.
+    const csv = [
+      "DATE,DETAILS,REF NO.,LEFT SETTLEMENT,RIGHT SETTLEMENT,BALANCE",
+      "06/10/2026,UPI-Credit-RAJU,412345678901,500.00,,10000.00",
+      "07/10/2026,INTEREST CREDIT,412345678902,,,10012.50",
+      "08/10/2026,UPI-Debit-SHOP,412345678904,,150.00,9862.50",
+      "09/10/2026,UPI-Credit-SITA,412345678903,300.00,,10162.50",
+    ].join("\n");
+    const parsed = parseBankStatement(csv);
+    // The pair is still resolved, which it could not be if that row were fatal.
+    expect(parsed.columnMap.credit).toBe(3);
+    expect(parsed.columnMap.debit).toBe(4);
+
+    // The three real transactions are all imported, with the right direction.
+    const transactions = parsed.rows.filter((r) => r.matchStatus !== "UNPARSEABLE_AMOUNT");
+    expect(transactions.map((r) => r.rawReference)).toEqual([
+      "412345678901",
+      "412345678904",
+      "412345678903",
+    ]);
+    expect(transactions.filter((r) => r.inbound).map((r) => r.amount)).toEqual([500, 300]);
+    expect(transactions.filter((r) => !r.inbound).map((r) => r.amount)).toEqual([150]);
+
+    // And the odd line is shown and flagged rather than silently dropped, so the
+    // admin can see the statement held a row we did not read.
+    const odd = parsed.rows.find((r) => r.rawReference === "412345678902")!;
+    expect(odd.matchStatus).toBe("UNPARSEABLE_AMOUNT");
+  });
+
+  it("does not let a sparse receipt column hide the payout column beside it", () => {
+    // The regression that shaped the candidate test. In a real debit/credit pair
+    // each half is sparse: three receipts and one payout in four rows. A single
+    // "mostly numeric" rule admits the receipt column, rejects the payout column,
+    // and then adopts the receipt column as THE amount - importing the income and
+    // dropping every outbound line without saying anything.
+    const csv = [
+      "DATE,DETAILS,REF NO.,LEFT SETTLEMENT,RIGHT SETTLEMENT,BALANCE",
+      "06/10/2026,UPI-Credit-A,412345678901,500.00,,10000.00",
+      "07/10/2026,UPI-Credit-B,412345678902,300.00,,10300.00",
+      "08/10/2026,UPI-Credit-C,412345678903,200.00,,10500.00",
+      "09/10/2026,UPI-Debit-SHOP,412345678904,,150.00,10350.00",
+    ].join("\n");
+    const parsed = parseBankStatement(csv);
+    expect(parsed.columnMap.credit).toBe(3);
+    expect(parsed.columnMap.debit).toBe(4);
+    // All four lines survive, and the single outbound one is marked outbound.
+    expect(parsed.rows).toHaveLength(4);
+    expect(parsed.rows.filter((r) => r.inbound)).toHaveLength(3);
+    expect(parsed.rows.filter((r) => !r.inbound)).toHaveLength(1);
+  });
+
+  it("ignores a numeric column to the left of the reference", () => {
+    // Sequence numbers and balances sit left or right depending on the export;
+    // only the column beside the reference is ever the amount.
+    const csv = [
+      "OPENING BALANCE,DATE,REF NO.,SETTLEMENT FIGURE",
+      "15000.00,06/10/2026,412345678901,500.00",
+      "15250.00,07/10/2026,412345678903,250.00",
+    ].join("\n");
+    const parsed = parseBankStatement(csv);
+    expect(parsed.columnMap.amount).toBe(3);
+    expect(parsed.rows[0].amount).toBe(500);
+  });
+
+  it("does not treat a mostly-text column as money", () => {
+    // A narration column with an occasional number in it must not be adopted just
+    // because some of its cells parse.
+    const csv = [
+      "DATE,REF NO.,REMARKS,SETTLEMENT FIGURE",
+      "06/10/2026,412345678901,Paid by Raju,500.00",
+      "07/10/2026,412345678903,Paid by Sita,250.00",
+    ].join("\n");
+    const parsed = parseBankStatement(csv);
+    expect(parsed.columnMap.amount).toBe(3);
+    expect(parsed.rows[0].amount).toBe(500);
+  });
+});
+
   it("refuses an empty file", () => {
     expect(() => parseBankStatement("")).toThrow(/empty/i);
   });
@@ -469,12 +744,26 @@ describe("punctuated reference headings (Slice / Axis)", () => {
     // hid the real cause.
     const csv = [
       "Account ID,123456789",
+      "Date,Payee Details,Ref Code,CREDIT",
+      "01/10/2026,UPI,412233445566,500",
+    ].join("\n");
+    // "Ref Code" is ref-ish enough to be recognisably the reference column, but
+    // none of the accepted spellings, so the admin has to rename it.
+    expect(() => parseBankStatement(csv)).toThrow(/reference/i);
+  });
+
+  it("reads 'Ref No (System)' rather than rejecting the file for a parenthetical", () => {
+    // Banks append their own internal label to the heading. The parenthetical is
+    // decoration, so the column is still the reference - previously the whole
+    // upload was refused over it, which is a needless dead end.
+    const csv = [
+      "Account ID,123456789",
       "Date,Payee Details,Ref No (System),CREDIT",
       "01/10/2026,UPI,412233445566,500",
     ].join("\n");
-    // "Ref No (System)" is what banks print when they append their own internal
-    // label, and it is ref-ish without being one of the accepted spellings.
-    expect(() => parseBankStatement(csv)).toThrow(/reference/i);
+    const parsed = parseBankStatement(csv);
+    expect(parsed.columnMap.reference).toBe(2);
+    expect(parsed.rows[0].referenceNorm).toBe("412233445566");
   });
 });
 

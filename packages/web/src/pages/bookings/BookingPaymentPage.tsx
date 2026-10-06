@@ -1,5 +1,5 @@
 ﻿import { getErrorMessage } from '../../lib/error'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   Banknote, CheckCircle, XCircle, Loader2, ArrowLeft,
@@ -56,11 +56,57 @@ export function BookingPaymentPage() {
   const [done, setDone] = useState(false)
   const [doneType, setDoneType] = useState<'ONLINE' | 'CASH' | 'UPI_MANUAL' | null>(null)
   const [upiInfo, setUpiInfo] = useState<UpiDetails | null>(null)
+  // The UPI panel used to swallow every failure, so a dead fetch and an
+  // unconfigured admin looked identical: the whole block below renders nothing.
+  // These two states let the page say which of those it is, and retry.
+  const [upiError, setUpiError] = useState<string | null>(null)
+  const [upiLoading, setUpiLoading] = useState(false)
   const [upiRef, setUpiRef] = useState('')
   const [upiSubmitting, setUpiSubmitting] = useState(false)
   const [proofFile, setProofFile] = useState<File | null>(null)
   const [proofPreview, setProofPreview] = useState<string | null>(null)
   const [proofUploading, setProofUploading] = useState(false)
+
+  /**
+   * Fetch the UPI details for this booking.
+   *
+   * Every failure mode used to end in `.catch(() => {})`, which left `upiInfo`
+   * null and the whole UPI block rendering nothing at all. Each cause needs a
+   * different next step from the user, so they are told apart by status code
+   * instead of being collapsed into silence.
+   */
+  const loadUpi = useCallback(async () => {
+    if (!id) return
+    setUpiLoading(true)
+    setUpiError(null)
+    try {
+      const res = await api.get(`/bookings/${id}/upi-details`)
+      const u = (res.data?.data || res.data) as UpiDetails | undefined
+      if (u?.upiId) {
+        setUpiInfo(u)
+      } else {
+        setUpiError('UPI is not configured by the admin yet.')
+      }
+    } catch (err: any) {
+      const status = err?.response?.status
+      const code = err?.response?.data?.error
+      if (status === 401 || code === 'INVALID_TOKEN') {
+        setUpiError('Your session has expired. Sign in again to load the payment QR.')
+      } else if (status === 403) {
+        setUpiError('You cannot view this booking’s payment details.')
+      } else if (status === 404) {
+        setUpiError('Booking not found.')
+      } else if (status === 503 || code === 'UPI_NOT_CONFIGURED') {
+        setUpiError('UPI is not configured by the admin yet.')
+      } else if (!err?.response) {
+        setUpiError('Could not reach the server. Check your connection and retry.')
+      } else {
+        setUpiError(getErrorMessage(err) || 'The payment QR could not be loaded. Please retry.')
+      }
+    } finally {
+      setUpiLoading(false)
+    }
+  }, [id])
 
   useEffect(() => {
     if (!id) return
@@ -78,24 +124,18 @@ export function BookingPaymentPage() {
         if (d?.paymentStatus === 'REJECTED') {
           // Admin rejected the reference — let the user submit a new one.
           setSelected('UPI_MANUAL')
-          try {
-            const u = await api.get(`/bookings/${id}/upi-details`)
-            const info = u.data?.data || u.data
-            if (info?.upiId) setUpiInfo(info)
-          } catch {}
+          void loadUpi()
           toast.error('Your previous UPI reference was rejected. Please pay again and submit the new reference.')
         }
       })
       .catch(() => toast.error('Failed to load booking'))
       .finally(() => setLoading(false))
     // Manual UPI is offered only when the admin configured it (else hidden).
-    api.get(`/bookings/${id}/upi-details`)
-      .then((res) => {
-        const u = res.data?.data || res.data
-        if (u?.upiId) setUpiInfo(u)
-      })
-      .catch(() => {})
-  }, [id])
+    // Runs even when the booking fetch above failed: the two are independent,
+    // and losing the QR because the booking request errored was a real way to
+    // end up staring at a blank payment panel.
+    void loadUpi()
+  }, [id, loadUpi])
 
   const pickProof = (file: File | undefined) => {
     if (!file) return
@@ -324,6 +364,56 @@ export function BookingPaymentPage() {
             </button>
           )}
 
+          {/* When the details could not be loaded the option is still offered, so
+              selecting it explains why instead of leaving the page looking like
+              UPI does not exist. Hiding it was the bug: UPI is the only online
+              method, so a dropped /upi-details call removed online payment from
+              the page completely and silently. */}
+          {!upiInfo && (
+            <button
+              onClick={() => {
+                setSelected('UPI_MANUAL')
+                void loadUpi()
+              }}
+              className={`relative w-full mt-3 p-4 rounded-2xl border-2 text-left transition-all duration-200 ${selected === 'UPI_MANUAL' ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/10 shadow-lg shadow-sky-500/10' : 'border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-900 hover:border-sky-300'}`}
+            >
+              {selected === 'UPI_MANUAL' && <div className="absolute top-2.5 right-2.5 w-5 h-5 rounded-full bg-sky-500 flex items-center justify-center"><CheckCircle className="w-3.5 h-3.5 text-white" /></div>}
+              <p className="font-bold text-surface-900 dark:text-white text-sm">Pay to UPI ID</p>
+              <p className="text-xs text-surface-500 mt-1">
+                {upiLoading ? 'Loading the payment QR…' : 'Tap to load the payment QR and our UPI ID.'}
+              </p>
+            </button>
+          )}
+
+          {selected === 'UPI_MANUAL' && !upiInfo && (
+            // Previously this whole block sat behind `&& upiInfo`, so a failed
+            // fetch rendered nothing at all — no QR, no UPI ID, no message.
+            <div className="mt-3 p-4 rounded-2xl bg-surface-50 dark:bg-surface-800/50 border border-surface-200 dark:border-surface-700 space-y-3">
+              <div className="flex items-start gap-2 text-sm">
+                {upiLoading ? (
+                  <Loader2 className="w-4 h-4 mt-0.5 animate-spin text-surface-500" />
+                ) : (
+                  <XCircle className="w-4 h-4 mt-0.5 text-red-500" />
+                )}
+                <div>
+                  <p className="font-medium text-surface-900 dark:text-white">
+                    {upiLoading ? 'Loading payment QR…' : 'Payment QR unavailable'}
+                  </p>
+                  <p className="text-surface-500 mt-0.5">{upiError}</p>
+                </div>
+              </div>
+              {!upiLoading && (
+                <button
+                  onClick={() => void loadUpi()}
+                  disabled={upiLoading}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-sky-600 dark:text-sky-400 hover:underline disabled:opacity-50"
+                >
+                  Try again
+                </button>
+              )}
+            </div>
+          )}
+
           {selected === 'UPI_MANUAL' && upiInfo && (
             <div className="mt-3 p-4 rounded-2xl bg-surface-50 dark:bg-surface-800/50 border border-surface-200 dark:border-surface-700 space-y-3">
               <div className="flex justify-between text-sm">
@@ -342,7 +432,7 @@ export function BookingPaymentPage() {
               </div>
               {id && (
                 <UpiQrPanel
-                  bookingId={id}
+                  refreshUrl={`/bookings/${id}/upi-details`}
                   amount={amount}
                   data={upiInfo}
                   onData={(next) => setUpiInfo(next as UpiDetails)}

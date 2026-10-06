@@ -138,6 +138,7 @@ supportMessages                SupportMessage[]
   matchesAsA                     Match[]              @relation("MatchUserA")
   matchesAsB                     Match[]              @relation("MatchUserB")
   subscriptions                  Subscription[]
+  subscriptionPayments          SubscriptionPayment[]
 
   @@index([status])
   @@index([role])
@@ -2735,6 +2736,7 @@ model SubscriptionPlan {
   updatedAt     DateTime @updatedAt
 
   subscriptions Subscription[]
+  payments      SubscriptionPayment[]
 
   @@index([isActive, displayOrder])
 }
@@ -2744,11 +2746,18 @@ model Subscription {
   subscriptionId       String    @unique
   userId               String
   planId               String
-  // INITIALIZED | PENDING | ACTIVE | ON_HOLD | PAUSED | CUSTOMER_PAUSED
-  // | COMPLETED | CUSTOMER_CANCELLED | EXPIRED | CANCELLED
+  // INITIALIZED | PENDING | ACTIVE | PAST_DUE | ON_HOLD | PAUSED
+  // | CUSTOMER_PAUSED | COMPLETED | CUSTOMER_CANCELLED | EXPIRED | CANCELLED
   status               String    @default("INITIALIZED")
   // INITIALIZED | PENDING | SUCCESS | FAILED
   authorizationStatus  String    @default("PENDING")
+  // Whether the renewal sweeper should try to collect at nextBillingAt. False
+  // means the plan lapses there instead of being charged, so nobody is ever
+  // billed by surprise after deciding not to auto-renew.
+  autoRenew            Boolean   @default(true)
+  // The date the current collection attempt failed to collect. Kept separate
+  // from status so the admin queue can show what is owed and since when.
+  pastDueAt            DateTime?
   trialEndsAt          DateTime?
   nextBillingAt        DateTime?
   startedAt            DateTime?
@@ -2759,8 +2768,92 @@ model Subscription {
 
   user User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   plan SubscriptionPlan @relation(fields: [planId], references: [id])
+  // The manual-UPI collection requests raised against this subscription. One
+  // live row at a time; a renewal replaces the previous attempt's row.
+  payment SubscriptionPayment?
 
   @@index([userId, status])
   @@index([status, nextBillingAt])
+  @@index([autoRenew, status, nextBillingAt])
 }
 
+/// A manual-UPI collection request for a subscription.
+///
+/// There is no gateway mandate any more, so a plan is paid for from the wallet
+/// when the balance covers it and otherwise by paying the platform QR
+/// externally. This row is that second path: it holds the amount owed for one
+/// billing period until an admin verifies the UTR, and only then does the plan
+/// activate. Deliberately NOT a TopupRequest - that credits a wallet, whereas
+/// this money buys the plan period itself and is never spendable balance.
+model SubscriptionPayment {
+  id             String  @id @default(uuid())
+  subscriptionId String  @unique
+  userId         String
+  planId         String
+  amount         Decimal @db.Decimal(10, 2)
+  currency       String  @default("INR")
+  /// The period this payment buys. Retained after settlement so a renewal can
+  /// never be mistaken for the purchase that preceded it.
+  periodStart    DateTime
+  periodEnd      DateTime
+  /// UTR / bank reference. Unique, and checked in code against TopupRequest and
+  /// UpiPayment too, so one bank line can never settle two requests.
+  referenceNumber String? @unique
+  proofImageUrl   String?
+  status          String  @default("VERIFICATION_PENDING")
+  verifiedByAdminId String?
+  verificationNote  String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  subscription Subscription      @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Denormalised from the subscription so the admin queue can name the plan
+  // without a second query, and so the row still says what it paid for after the
+  // plan is renamed.
+  plan         SubscriptionPlan  @relation(fields: [planId], references: [id])
+
+  @@index([status])
+  @@index([userId])
+  // No index on planId: nothing filters by plan. The admin queue filters by
+  // status, and the user-facing lookup is by subscriptionId, which already
+  // carries a unique index.
+}
+
+
+// ============================================================
+// ADMIN REPORT RUN MARKERS
+// ============================================================
+//
+// One row per report period that has been claimed for sending. Exists so a report
+// cannot go out twice for the same period.
+//
+// The seven report cadences (daily, weekly, monthly, quarterly, yearly,
+// next-month, tax) used to be guarded by an in-process Set. That is enough for a
+// single instance and useless for the real deployment: the process restarts on
+// every deploy and Render runs more than one instance, so a deploy landing inside
+// the one-hour send window sent that day's digest a second time, and two
+// instances reaching the same midnight each sent their own copy.
+//
+// The guard is the unique constraint on (period, windowKey), not a read-then-
+// write. A SELECT followed by an INSERT is a race by construction - both
+// instances can read "not sent" and both insert. Making the INSERT itself the
+// claim means the database arbitrates, and the loser is told so by a constraint
+// violation rather than by a hopeful check.
+//
+// `windowKey` is the period's own identity (its start and end boundaries), not
+// the calendar date the run happened on, so a manual re-run for the same period
+// is recognised as a duplicate rather than treated as new.
+model DigestRun {
+  id        String   @id @default(uuid())
+  period    String
+  windowKey String
+  // When the claim was made. Kept for the prune below, not for reporting: the
+  // row is a lock, not a record of a successful send. A claim that then fails to
+  // send still consumes its period, which is deliberate - a partial report is
+  // better than a duplicate one.
+  claimedAt DateTime @default(now())
+
+  @@unique([period, windowKey])
+  @@index([claimedAt])
+}
