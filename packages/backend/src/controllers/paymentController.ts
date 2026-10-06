@@ -879,9 +879,14 @@ export async function getMyAccess(req: AuthedRequest, res: Response): Promise<vo
       }),
     ]);
 
+    // Stated in these words because it is what the subscription screen shows
+    // next to the cancel button: cancelling is always allowed and always stops
+    // future billing, but settling a payment does not make it recoverable. The
+    // second sentence keeps the other half of the promise - paid-through time is
+    // not forfeited by leaving.
     const refundPolicy =
-      "A settled payment grants access for the configured window. A full refund " +
-      "revokes access and reverses the wallet credit that payment created.";
+      "Payments are not refundable once settled. You can cancel at any time: " +
+      "billing stops, and you keep access until the end of the period you already paid for.";
 
     // Admins are entitled by role with no window, so Infinity must not be
     // rendered as an absurd day count.

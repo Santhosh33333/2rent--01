@@ -31,8 +31,8 @@ import { getTrialSettings } from "./trialAccessService";
  * The plan's own value is still returned as planTrialDays, so an admin can see
  * that the column exists and is no longer what is being advertised.
  */
-export async function getActivePlans() {
-  const [plans, trial] = await Promise.all([
+export async function getActivePlans(userId?: string) {
+  const [plans, trial, everSubscribed] = await Promise.all([
     prisma.subscriptionPlan.findMany({
       where: { isActive: true },
       orderBy: { displayOrder: "asc" },
@@ -42,6 +42,8 @@ export async function getActivePlans() {
         name: true,
         durationDays: true,
         price: true,
+        listPrice: true,
+        offerPrice: true,
         currency: true,
         trialDays: true,
         isActive: true,
@@ -50,13 +52,79 @@ export async function getActivePlans() {
       },
     }),
     getTrialSettings(),
+    userId ? hasEverSubscribed(userId) : Promise.resolve(false),
   ]);
 
-  return plans.map((plan) => ({
-    ...plan,
-    planTrialDays: plan.trialDays,
-    trialDays: trial.days,
-  }));
+  return plans.map((plan) => {
+    // An offer is a new-customer price, so it is offered only to an account that
+    // has never held a subscription. With no session - this route is deliberately
+    // public so the paywall renders before login - the visitor is treated as a
+    // prospective new account, which is what the pricing screen is advertising to.
+    // The server still decides again at purchase; this only controls the drawing.
+    const eligibleForOffer = !everSubscribed && plan.offerPrice !== null;
+
+    return {
+      ...plan,
+      planTrialDays: plan.trialDays,
+      trialDays: trial.days,
+      /** What this viewer pays for the first period. */
+      effectivePrice: eligibleForOffer ? (plan.offerPrice as number) : plan.price,
+      eligibleForOffer,
+      /**
+       * The struck-through anchor. Deliberately null whenever there is no offer
+       * in play: showing a "was" price to someone paying the ordinary price
+       * claims a discount they are not being given.
+       */
+      listPrice: eligibleForOffer ? plan.listPrice : null,
+    };
+  });
+}
+
+/**
+ * Whether this account has ever held a subscription.
+ *
+ * Decided by history rather than by what is currently active, because a
+ * subscriber who cancelled still had their intro period. Keying the offer off
+ * current status would hand the new-user price to anyone patient enough to
+ * cancel first, which is the whole discount leaking.
+ *
+ * Any subscription row counts, including a failed or abandoned one: a false
+ * negative costs a user a ticket, a false positive gives away money that was
+ * never meant to be discounted.
+ */
+export async function hasEverSubscribed(userId: string): Promise<boolean> {
+  const count = await prisma.subscription.count({ where: { userId } });
+  return count > 0;
+}
+
+export interface FirstPeriodPrice {
+  /** What is actually charged for this period. */
+  amount: number;
+  /** Struck-through price to draw beside it, or null when no offer applies. */
+  listPrice: number | null;
+  /** True when the new-user price was used. */
+  offerApplied: boolean;
+}
+
+/**
+ * The price of a subscription's first period for one specific account.
+ *
+ * Kept as its own function because the number has to be decided in exactly one
+ * place and read in two: the pricing screen draws it, and `subscribe` charges
+ * it. Renewals deliberately do not come through here - by the time the renewal
+ * sweep runs, the account has a subscription, so it is no longer a first period.
+ */
+export async function resolveFirstPeriodPrice(
+  plan: { price: number; listPrice: number | null; offerPrice: number | null },
+  userId: string,
+): Promise<FirstPeriodPrice> {
+  if (plan.offerPrice === null) {
+    return { amount: plan.price, listPrice: null, offerApplied: false };
+  }
+  if (await hasEverSubscribed(userId)) {
+    return { amount: plan.price, listPrice: null, offerApplied: false };
+  }
+  return { amount: plan.offerPrice, listPrice: plan.listPrice, offerApplied: true };
 }
 
 export async function getPlanByCode(code: string) {

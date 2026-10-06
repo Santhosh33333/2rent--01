@@ -37,9 +37,12 @@ function fail(res: Response, error: unknown, fallback: string) {
 }
 
 /** GET /subscriptions/plans - the only pricing source the frontend may read. */
-export async function listPlans(_req: AuthedRequest, res: Response): Promise<void> {
+export async function listPlans(req: AuthedRequest, res: Response): Promise<void> {
   try {
-    const plans = await subscriptionService.getActivePlans();
+    // The route sits above authenticateToken so the paywall renders before
+    // login, which means req.user is often absent. getActivePlans treats that
+    // as a prospective new account; passing a session lets it answer for real.
+    const plans = await subscriptionService.getActivePlans(req.user?.userId);
     sendSuccess(res, { plans });
   } catch {
     sendError(res, "Could not load plans.", 500, "PLANS_FAILED");
@@ -105,6 +108,12 @@ export async function subscribe(req: AuthedRequest, res: Response): Promise<void
       return;
     }
 
+    // Resolved before the row below exists, not after. This account holding a
+    // subscription is exactly what ends its eligibility for the new-user price,
+    // so checking afterwards would read its own write and always answer
+    // "returning" - charging first-timers the ordinary rate forever.
+    const pricing = await subscriptionService.resolveFirstPeriodPrice(plan, userId);
+
     const subscription = await prisma.subscription.create({
       data: {
         // Kept for the legacy unique column and for the reference the admin queue
@@ -121,7 +130,10 @@ export async function subscribe(req: AuthedRequest, res: Response): Promise<void
       userId,
       subscriptionId: subscription.id,
       planId: plan.id,
-      amount: plan.price,
+      // What this account was quoted for its first period, which the pricing
+      // screen drew before they tapped subscribe. Renewals never come through
+      // here: by then the subscription exists, so it is no longer a first period.
+      amount: pricing.amount,
       planDays: plan.durationDays,
       planName: plan.name,
       kind: "activated",
@@ -132,7 +144,8 @@ export async function subscribe(req: AuthedRequest, res: Response): Promise<void
         res,
         {
           source: "WALLET",
-          plan: { code: plan.code, name: plan.name, price: plan.price, currency: plan.currency },
+          plan: { code: plan.code, name: plan.name, price: pricing.amount, currency: plan.currency },
+          offerApplied: pricing.offerApplied,
           amount: collected.amount,
           periodStart: collected.periodStart,
           periodEnd: collected.periodEnd,
@@ -148,7 +161,8 @@ export async function subscribe(req: AuthedRequest, res: Response): Promise<void
       res,
       {
         source: "UPI",
-        plan: { code: plan.code, name: plan.name, price: plan.price, currency: plan.currency },
+        plan: { code: plan.code, name: plan.name, price: pricing.amount, currency: plan.currency },
+        offerApplied: pricing.offerApplied,
         amount: collected.amount,
         periodStart: collected.periodStart,
         periodEnd: collected.periodEnd,

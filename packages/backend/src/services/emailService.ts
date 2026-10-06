@@ -884,9 +884,14 @@ export async function sendSubscriptionEmail(
     `<p style="margin:0 0 14px">Hi ${escHtml(name)},</p>` +
     `<p style="margin:0 0 14px">Your payment of <strong>${rupee(d.amount)}</strong> for <strong>${escHtml(d.planName)}</strong> has been received, so your plan is ${renewed ? "<strong>renewed</strong>" : "<strong>active</strong>"}.</p>` +
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #EFE8DC;border-radius:14px;overflow:hidden;margin:0 0 20px"><tr><td style="background:#FBF7EF;padding:12px 14px;font-size:12px;color:#0D378B;font-weight:800;letter-spacing:1px">NABRI · SUBSCRIPTION ${renewed ? "RENEWED" : "CONFIRMED"}</td></tr>${rowsHtml}</table>` +
+    // The cancellation terms are sent on every subscription email rather than
+    // only the first one, so a renewal receipt states them too. Both halves
+    // matter: leaving is always free and always stops billing, and the money
+    // already taken is not coming back.
+    `<p style="margin:0 0 14px">You can cancel any time from your subscription page. Billing then stops and you keep access until the end of the period you already paid for; payments already made are not refunded.</p>` +
     (d.nextBillingAt
       ? `<p style="margin:0 0 14px">Your next renewal is scheduled for ${escHtml(d.nextBillingAt)}. We will take it from your wallet if there is enough balance, and otherwise email you a payment link before anything is due.</p>`
-      : `<p style="margin:0 0 14px">You can cancel any time from your subscription page and you keep access until the end of the period you just paid for.</p>`);
+      : "");
   return sendEmail(
     email,
     `${renewed ? "Subscription renewed" : "Subscription active"} · ${escHtml(d.planName)} · ${rupee(d.amount)}`,

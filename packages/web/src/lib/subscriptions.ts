@@ -12,7 +12,28 @@ export interface SubscriptionPlan {
   code: string;
   name: string;
   durationDays: number;
+  /** What a subscriber pays for a period once any intro pricing is over. */
   price: number;
+  /**
+   * What this viewer actually pays for the first period.
+   *
+   * Read this rather than `price` when drawing the headline figure: it carries
+   * the new-user price for an eligible account and falls back to `price`
+   * everywhere else. Optional only so a page served by an older API still
+   * renders instead of crashing on `undefined.toFixed`.
+   */
+  effectivePrice?: number;
+  /**
+   * The struck-through "was" price, resolved on the server.
+   *
+   * Null unless this viewer is really getting the discount, so the UI cannot
+   * draw a strike-through against a price someone is not being charged.
+   */
+  listPrice?: number | null;
+  /** Raw configured new-user price, whether or not this viewer qualifies for it. */
+  offerPrice?: number | null;
+  /** True when `effectivePrice` is the new-user price. */
+  eligibleForOffer?: boolean;
   currency: string;
   trialDays: number;
   isActive: boolean;

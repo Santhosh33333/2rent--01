@@ -2724,7 +2724,16 @@ model SubscriptionPlan {
   code          String   @unique
   name          String
   description   String?
+  /// What a subscriber pays for a period once any intro pricing is over.
   price         Float
+  /// The struck-through "was" price on the pricing screen. Null means no offer
+  /// is advertised for this plan - the honest default until an admin sets one,
+  /// because a discount the product cannot grant must not be drawn.
+  listPrice     Float?
+  /// First-period price for an account that has never held a subscription.
+  /// Null disables the new-user offer entirely; renewals never see it, because
+  /// a renewal is by definition no longer a first period.
+  offerPrice    Float?
   currency      String   @default("INR")
   durationDays  Int
   trialDays     Int      @default(0)

@@ -441,6 +441,14 @@ export function SubscriptionPage() {
           <section className="mt-10 grid gap-5 sm:grid-cols-2">
             {plans.map((plan) => {
               const isYearly = billingLabel(plan) === "year";
+              // effectivePrice carries the new-user price for an account that
+              // qualifies; `price` is what it renews at, which is why it appears
+              // only in the line underneath rather than as the headline.
+              const price = plan.effectivePrice ?? plan.price;
+              // The server has already decided whether this viewer gets the
+              // discount, so a null here means there is nothing to strike
+              // through - never a "was" price drawn against what they pay.
+              const strike = plan.eligibleForOffer ? plan.listPrice ?? null : null;
               return (
                 <div
                   key={plan.code}
@@ -459,12 +467,26 @@ export function SubscriptionPage() {
                     )}
                   </div>
 
-                  <p className="mt-3 text-3xl font-semibold">
-                    {formatPrice(plan.price, plan.currency)}
-                    <span className="text-base font-normal text-slate-400">
-                      /{billingLabel(plan)}
-                    </span>
-                  </p>
+                  <div className="mt-3 flex items-baseline gap-2">
+                    {strike !== null && (
+                      <span className="text-lg font-normal text-slate-500 line-through">
+                        {formatPrice(strike, plan.currency)}
+                      </span>
+                    )}
+                    <p className="text-3xl font-semibold">
+                      {formatPrice(price, plan.currency)}
+                      <span className="text-base font-normal text-slate-400">
+                        /{billingLabel(plan)}
+                      </span>
+                    </p>
+                  </div>
+
+                  {plan.eligibleForOffer && (
+                    <p className="mt-2 text-sm text-emerald-300">
+                      New-subscriber price. {formatPrice(plan.price, plan.currency)}/
+                      {billingLabel(plan)} from your first renewal.
+                    </p>
+                  )}
 
                   {plan.trialDays > 0 && (
                     <p className="mt-2 text-sm text-amber-300">
@@ -473,7 +495,8 @@ export function SubscriptionPage() {
                   )}
 
                   <p className="mt-3 text-xs text-slate-500">
-                    Billed every {plan.durationDays} days. Cancel anytime.
+                    Billed every {plan.durationDays} days. Cancel anytime —
+                    payments already made are not refunded.
                   </p>
 
                   <button

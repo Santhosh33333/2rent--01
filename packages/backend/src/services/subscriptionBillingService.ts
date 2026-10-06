@@ -391,6 +391,10 @@ export async function sweepDueSubscriptions(now: Date = new Date()): Promise<Swe
         userId: sub.userId,
         subscriptionId: sub.id,
         planId: sub.planId,
+        // Always the ordinary price. A renewal runs against a subscription that
+        // already exists, so the account has by definition had one before and a
+        // first-period offer cannot apply - the new-user price is decided in
+        // resolveFirstPeriodPrice at purchase time and never resurfaces here.
         amount: sub.plan.price,
         planDays: sub.plan.durationDays,
         planName: sub.plan.name,

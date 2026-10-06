@@ -63,6 +63,8 @@ export async function updatePlan(req: AuthedRequest, res: Response): Promise<voi
       name,
       description,
       price,
+      listPrice,
+      offerPrice,
       currency,
       durationDays,
       trialDays,
@@ -107,6 +109,30 @@ export async function updatePlan(req: AuthedRequest, res: Response): Promise<voi
     if (name !== undefined) data.name = String(name).trim();
     if (description !== undefined) data.description = description === null ? null : String(description);
     if (price !== undefined) data.price = round2(Number(price));
+    if (listPrice !== undefined) {
+      if (listPrice === null) {
+        data.listPrice = null;
+      } else {
+        const parsed = Number(listPrice);
+        if (!Number.isFinite(parsed) || parsed <= 0) {
+          sendError(res, "List price must be a positive number, or null to clear it.", 400, "INVALID_LIST_PRICE");
+          return;
+        }
+        data.listPrice = round2(parsed);
+      }
+    }
+    if (offerPrice !== undefined) {
+      if (offerPrice === null) {
+        data.offerPrice = null;
+      } else {
+        const parsed = Number(offerPrice);
+        if (!Number.isFinite(parsed) || parsed <= 0) {
+          sendError(res, "Offer price must be a positive number, or null to clear it.", 400, "INVALID_OFFER_PRICE");
+          return;
+        }
+        data.offerPrice = round2(parsed);
+      }
+    }
     if (currency !== undefined) data.currency = String(currency).toUpperCase();
     if (durationDays !== undefined) data.durationDays = Number(durationDays);
     if (trialDays !== undefined) data.trialDays = Number(trialDays);
@@ -115,6 +141,33 @@ export async function updatePlan(req: AuthedRequest, res: Response): Promise<voi
 
     if (Object.keys(data).length === 0) {
       sendError(res, "No changes supplied.", 400, "NO_CHANGES");
+      return;
+    }
+
+    // These two columns are a relationship to `price`, not two independent
+    // numbers, so neither can be accepted without looking at what the third will
+    // be after this write. A "was" price at or below what someone actually pays
+    // is not a discount, and an "offer" at or above the ordinary price is the
+    // ordinary price wearing a label. Either one would draw a claim on the
+    // pricing screen the product does not honour, so both are refused rather
+    // than rendered.
+    const finalPrice = data.price !== undefined ? Number(data.price) : existing.price;
+    const finalList =
+      data.listPrice !== undefined ? ((data.listPrice as number | null) ?? null) : existing.listPrice ?? null;
+    const finalOffer =
+      data.offerPrice !== undefined ? ((data.offerPrice as number | null) ?? null) : existing.offerPrice ?? null;
+
+    if (finalList !== null && finalList <= finalPrice) {
+      sendError(
+        res,
+        "List price must be higher than the regular price it is struck through against.",
+        400,
+        "INVALID_LIST_PRICE",
+      );
+      return;
+    }
+    if (finalOffer !== null && finalOffer >= finalPrice) {
+      sendError(res, "Offer price must be lower than the regular price.", 400, "INVALID_OFFER_PRICE");
       return;
     }
 
@@ -130,6 +183,8 @@ export async function updatePlan(req: AuthedRequest, res: Response): Promise<voi
       oldValue: {
         name: existing.name,
         price: existing.price,
+        listPrice: existing.listPrice,
+        offerPrice: existing.offerPrice,
         currency: existing.currency,
         trialDays: existing.trialDays,
         durationDays: existing.durationDays,
@@ -152,7 +207,8 @@ export async function updatePlan(req: AuthedRequest, res: Response): Promise<voi
  */
 export async function createPlan(req: AuthedRequest, res: Response): Promise<void> {
   try {
-    const { code, name, price, currency, durationDays, trialDays, displayOrder } = req.body ?? {};
+    const { code, name, price, listPrice, offerPrice, currency, durationDays, trialDays, displayOrder } =
+      req.body ?? {};
 
     if (!code || !String(code).trim()) {
       sendError(res, "Plan code is required.", 400, "CODE_REQUIRED");
@@ -173,6 +229,33 @@ export async function createPlan(req: AuthedRequest, res: Response): Promise<voi
       return;
     }
 
+    // Same relationship as in updatePlan: both optional prices are checked
+    // against the regular one before anything is written, so a plan cannot be
+    // created advertising a discount it does not have.
+    const parsedList = listPrice === undefined || listPrice === null ? null : Number(listPrice);
+    if (parsedList !== null && (!Number.isFinite(parsedList) || parsedList <= 0)) {
+      sendError(res, "List price must be a positive number, or null.", 400, "INVALID_LIST_PRICE");
+      return;
+    }
+    const parsedOffer = offerPrice === undefined || offerPrice === null ? null : Number(offerPrice);
+    if (parsedOffer !== null && (!Number.isFinite(parsedOffer) || parsedOffer <= 0)) {
+      sendError(res, "Offer price must be a positive number, or null.", 400, "INVALID_OFFER_PRICE");
+      return;
+    }
+    if (parsedList !== null && parsedList <= parsedPrice) {
+      sendError(
+        res,
+        "List price must be higher than the regular price it is struck through against.",
+        400,
+        "INVALID_LIST_PRICE",
+      );
+      return;
+    }
+    if (parsedOffer !== null && parsedOffer >= parsedPrice) {
+      sendError(res, "Offer price must be lower than the regular price.", 400, "INVALID_OFFER_PRICE");
+      return;
+    }
+
     const normalizedCode = String(code).trim().toLowerCase();
     const dupe = await prisma.subscriptionPlan.findUnique({ where: { code: normalizedCode } });
     if (dupe) {
@@ -185,6 +268,8 @@ export async function createPlan(req: AuthedRequest, res: Response): Promise<voi
         code: normalizedCode,
         name: String(name).trim(),
         price: round2(parsedPrice),
+        listPrice: parsedList === null ? null : round2(parsedList),
+        offerPrice: parsedOffer === null ? null : round2(parsedOffer),
         currency: currency ? String(currency).toUpperCase() : "INR",
         durationDays: parsedDuration,
         trialDays: trialDays === undefined ? 0 : Number(trialDays),
