@@ -39,6 +39,10 @@ const envSchema = z.object({
   // Uploads
   UPLOAD_DIR: z.string().default("uploads"),
   MAX_FILE_SIZE: z.string().default("5242880").transform(Number),
+  // Videos are far bigger than photos; default 25 MB. Both land in the same
+  // Postgres blob store — the only durable storage available. No adaptive/
+  // CDN pipeline exists, so keep clips short.
+  MAX_VIDEO_SIZE: z.string().default("26214400").transform(Number),
 
   // Admin seeding
   ADMIN_EMAIL: z.string().optional(),

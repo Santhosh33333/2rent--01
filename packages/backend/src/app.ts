@@ -24,6 +24,7 @@ import walkingPartnerRoutes from "./routes/walkingPartnerRoutes";
 import walletRoutes from "./routes/walletRoutes";
 import walkingRequestRoutes from "./routes/walkingRequestRoutes";
 import communityRoutes from "./routes/communityRoutes";
+import socialRoutes from "./routes/socialRoutes";
 import eventRoutes from "./routes/eventRoutes";
 import publicEventRoutes from "./routes/publicEventRoutes";
 import publicMovieRoutes from "./routes/publicMovieRoutes";
@@ -312,6 +313,7 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
   app.use("/api/walking-partner", walkingPartnerRoutes);
   app.use("/api/walking-requests", walkingRequestRoutes);
   app.use("/api/communities", communityRoutes);
+  app.use("/api/posts", socialRoutes);
   app.use("/api/events", eventRoutes);
   // Anonymous read-only event feed for the public website. Mounted separately
   // from /api/events because that router is behind auth + KYC, which made every

@@ -72,6 +72,13 @@ lastLoginAt                   DateTime?
   ownedCommunities               Community[]          @relation("CommunityOwner")
   communityPosts                 CommunityPost[]
   communityComments              CommunityComment[]
+  posts                          Post[]
+  postComments                   PostComment[]
+  postLikes                      PostLike[]          @relation("FeedsPostLike")
+  postSaves                      PostSave[]         @relation("FeedsPostSave")
+  postReports                    PostReport[]       @relation("FeedsPostReport")
+  giftsSent                      Gift[]             @relation("GiftSender")
+  giftsReceived                  Gift[]             @relation("GiftRecipient")
   communityPolls                 CommunityPoll[]
   communityPollVotes             CommunityPollVote[]
   events                         Event[]              @relation("EventOrganizer")
@@ -1563,6 +1570,141 @@ model ChatReport {
 // ============================================================
 // SAFETY
 // ============================================================
+
+// ============================================================================
+// SOCIAL FEED — GLOBAL POSTS
+// ============================================================================
+// Top-level posts with their own visibility model. Distinct from
+// CommunityPost, which lives inside a walled community; these live on the
+// global feed. A post is never required to have media (a TEXT post), but a
+// post with neither content nor media is rejected by the controller.
+// `type` is validated server-side: TEXT | PHOTO | VIDEO | QUESTION.
+// `status` is a soft-state column so moderation can hide without deleting —
+// every public read filters `status: "ACTIVE"`.
+
+model Post {
+  id           String    @id @default(uuid())
+  authorId     String
+  type         String    @default("TEXT")
+  content      String?
+  imageUrl     String?
+  videoUrl     String?
+  visibility   String    @default("PUBLIC") // PUBLIC | FOLLOWERS | PRIVATE
+  status       String    @default("ACTIVE") // ACTIVE | HIDDEN | REMOVED
+  locationArea String?
+  scheduledAt  DateTime? // reserved for scheduled posts; always null for now
+  publishedAt  DateTime? // set on publish (immediately today)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  author   User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  comments PostComment[]
+  likes    PostLike[]
+  saves    PostSave[]
+  reports  PostReport[]
+  gifts    Gift[]
+
+  @@index([authorId])
+  @@index([status, visibility, createdAt])
+  @@index([createdAt])
+}
+
+// Comments support one level of reply via parentId (a reply can itself have
+// replies, but the API only surfaces top-level + direct replies to keep the
+// payload small — matching "Do not load thousands of comments at once").
+model PostComment {
+  id        String   @id @default(uuid())
+  postId    String
+  authorId  String
+  parentId  String?
+  content   String
+  status    String   @default("ACTIVE")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  post    Post          @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author  User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parent  PostComment?  @relation("FeedsCommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies PostComment[] @relation("FeedsCommentReplies")
+
+  @@index([postId, createdAt])
+  @@index([parentId])
+}
+
+// A like on a feed post. `type` is the reaction slot (LIKE today; LOVE/HAHA/
+// WOW/... later) just like the dating Like model — the UI is kept simple until
+// reactions are switched on via a feature flag, but the column exists now.
+model PostLike {
+  id        String   @id @default(uuid())
+  postId    String
+  userId    String
+  type      String   @default("LIKE")
+  createdAt DateTime @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation("FeedsPostLike", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@index([userId])
+}
+
+// Saved posts land in the Saved center later; the row is unique per user.
+model PostSave {
+  id        String   @id @default(uuid())
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation("FeedsPostSave", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+}
+
+// Post reports live in their own table with a real FK to the post. The
+// generic Report model is NOT reused here: its baseline migration hard-foreign-
+// keys targetId to User.id, which the community reporting code stuffs post IDs
+// into — reusing it for feed posts would repeat that landmine. Reviews happen
+// in the admin moderation queue via status columns.
+model PostReport {
+  id          String   @id @default(uuid())
+  postId      String
+  reporterId  String
+  reason      String
+  description String?
+  status      String   @default("PENDING") // PENDING | REVIEWED | DISMISSED | ACTIONED
+  createdAt   DateTime @default(now())
+
+  post     Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  reporter User @relation("FeedsPostReport", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@index([status])
+}
+
+// A gift is a wallet transfer tied to a post: it debits the sender's wallet,
+// credits the post author's wallet, and records one ledger row on each side.
+// referenceId is unique so a retried request can be recognised as already
+// done instead of charging twice. Money is never created — the amount moves
+// atomically between two existing balances inside one transaction.
+model Gift {
+  id          String   @id @default(uuid())
+  postId      String
+  senderId    String
+  recipientId String
+  amount      Decimal  @db.Decimal(10, 2)
+  currency    String   @default("INR")
+  referenceId String   @unique
+  createdAt   DateTime @default(now())
+
+  post      Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  sender    User @relation("GiftSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient User @relation("GiftRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@index([recipientId, createdAt])
+  @@index([senderId, createdAt])
+}
 
 model Report {
   id          String    @id @default(uuid())

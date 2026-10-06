@@ -26,6 +26,28 @@ export const upload = multer({
   },
 });
 
+// Video uploads for feed posts. Same Postgres blob store as images; the only
+// difference is the filter and a larger size cap. Adaptive/compressed/CDN
+// delivery does not exist yet — the client is told the video is stored as-is.
+const videoFilter = (_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+  const allowed = /mp4|mov|m4v|webm/;
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (allowed.test(ext) && /^video\//.test(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error("Only video files are allowed (mp4, mov, m4v, webm)."));
+  }
+};
+
+export const videoUpload = multer({
+  storage: blobStorageEngine("public"),
+  fileFilter: videoFilter,
+  limits: {
+    fileSize: env.MAX_VIDEO_SIZE,
+    files: 1,
+  },
+});
+
 // KYC documents live under uploads/private and are only served through the
 // authenticated access guard in middleware/fileAccess.ts — never publicly.
 export const privateUpload = multer({

@@ -1,4 +1,4 @@
-import { Response } from "express";
+import { Request, Response } from "express";
 import { prisma } from "../config/database";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
@@ -89,6 +89,26 @@ export async function updateAppSetting(req: AuthedRequest, res: Response): Promi
 // ============================================================================
 // FEATURE FLAGS
 // ============================================================================
+
+/**
+ * Anonymous-readable flag catalogue for client-side gating (the mobile app and
+ * web need to know, before login, whether a module is switched on). Returns
+ * only `key`, `isEnabled` and `rolloutPercentage` — never internal fields.
+ * Enabled flags only: a module that is OFF is simply absent, which is the
+ * honest signal to hide it rather than show it disabled.
+ */
+export async function getPublicFeatureFlags(_req: Request, res: Response): Promise<void> {
+  try {
+    const flags = await prisma.featureFlag.findMany({
+      where: { isEnabled: true },
+      select: { key: true, isEnabled: true, rolloutPercentage: true },
+      orderBy: { key: "asc" },
+    });
+    sendSuccess(res, flags, "Feature flags retrieved.");
+  } catch (err) {
+    sendError(res, "Failed to retrieve feature flags.", 500, "INTERNAL_ERROR");
+  }
+}
 
 export async function getFeatureFlags(_req: AuthedRequest, res: Response): Promise<void> {
   try {
