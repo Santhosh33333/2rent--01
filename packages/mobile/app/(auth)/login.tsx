@@ -5,6 +5,7 @@ import { Screen, Title, Subtitle, Button, TextField, Alert } from '../../src/lib
 import { Colors } from '../../src/design-system/tokens/colors';
 import { post, errorMessage } from '../../src/lib/api';
 import { tokenStore } from '../../src/lib/storage';
+import { flushStashedReferralCode } from '../../src/lib/referral';
 import { useAuthStore, AuthUser } from '../../src/shared/store/authStore';
 
 export default function Login() {
@@ -54,6 +55,11 @@ export default function Login() {
         mobileVerified: u.mobileVerified ?? false,
       };
       setUser(mapped);
+      // A code parked at signup - which can end before a token exists - is
+      // redeemed on the first authenticated session that follows. Not awaited:
+      // a slow referral endpoint must never delay signing in, and if it fails
+      // the code stays parked for the next attempt.
+      void flushStashedReferralCode();
       router.replace('/(tabs)');
     } catch (err) {
       setError(errorMessage(err, 'Login failed.'));

@@ -5,6 +5,11 @@ import { Screen, Title, Subtitle, Button, TextField, Alert } from '../../src/lib
 import { Colors } from '../../src/design-system/tokens/colors';
 import { post, errorMessage } from '../../src/lib/api';
 import { tokenStore } from '../../src/lib/storage';
+import {
+  normalizeReferralCode,
+  stashReferralCode,
+  flushStashedReferralCode,
+} from '../../src/lib/referral';
 import { useAuthStore, AuthUser } from '../../src/shared/store/authStore';
 
 export default function Signup() {
@@ -17,6 +22,10 @@ export default function Signup() {
   const [password, setPassword] = useState('');
   const [dob, setDob] = useState('');
   const [gender, setGender] = useState<'MALE' | 'FEMALE' | 'OTHER'>('MALE');
+  // A shared invite arrives as rentbuddy:///(auth)/signup?ref=RB-XXXXXXXX.
+  // Prefilled so the code the friend already tapped through to is never
+  // retyped; left editable so a mistyped one can be corrected on device.
+  const [referralCode, setReferralCode] = useState(() => normalizeReferralCode(params.ref ?? ''));
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
@@ -26,6 +35,13 @@ export default function Signup() {
     setError('');
     if (!fullName || !email || !phone || !password || !dob) {
       setError('All fields are required.');
+      return;
+    }
+    const normalizedReferral = normalizeReferralCode(referralCode);
+    if (referralCode.trim() && !normalizedReferral) {
+      // Rejected before the account exists, so a broken link reads as a broken
+      // link instead of as a reward that silently never arrives afterwards.
+      setError('That referral code looks wrong. It should look like RB-1234ABCD.');
       return;
     }
     setLoading(true);
@@ -43,6 +59,11 @@ export default function Signup() {
         return;
       }
       const u = res.data?.user;
+      // The account exists from here on. Park the code first: this screen can
+      // return with no token (email verification still pending), and
+      // /referrals/apply is authenticated, so without the stash that code would
+      // be dropped on the floor while the user did everything right.
+      if (normalizedReferral) stashReferralCode(normalizedReferral);
       if (res.data?.accessToken && u) {
         tokenStore.setTokens(res.data.accessToken, res.data.refreshToken);
         const mapped: AuthUser = {
@@ -64,6 +85,10 @@ export default function Signup() {
           mobileVerified: u.mobileVerified ?? false,
         };
         setUser(mapped);
+        // A token exists now, so the code parked above can be redeemed here
+        // rather than waiting for a later login. Awaited because navigation
+        // away from this screen is the last point it is guaranteed foreground.
+        if (normalizedReferral) await flushStashedReferralCode();
         router.replace('/(tabs)');
         return;
       }
@@ -106,6 +131,7 @@ export default function Signup() {
         ))}
       </View>
 
+      <TextField placeholder="Referral code (optional)" value={referralCode} onChangeText={setReferralCode} autoCapitalize="characters" />
       <Button label="Create account" onPress={submit} loading={loading} />
       <TouchableOpacity style={styles.row} onPress={() => router.push({ pathname: '/(auth)/login', params: { type: accountType } })}>
         <Text style={styles.link}>Already have an account? Sign in</Text>

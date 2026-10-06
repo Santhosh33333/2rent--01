@@ -1,6 +1,6 @@
-import { getErrorMessage } from '../../lib/error'
+import { getErrorMessage, getErrorDetail } from '../../lib/error'
 import { useState, useEffect, useRef } from 'react'
-import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -86,6 +86,26 @@ type RegisterForm = z.infer<typeof registerSchema>
 
 type OtpStatus = 'idle' | 'sending' | 'sent' | 'verifying' | 'verified' | 'error'
 
+const REFERRAL_CODE = /^RB-[0-9A-F]{8}$/
+
+/**
+ * Reads the code carried by an invite link.
+ *
+ * The share button on the referral card emits /register?ref=RB-XXXXXXXX, and
+ * nothing here used to read it - this was the only auth page that ignored its
+ * query params - so every shared link opened an empty form and the friend had
+ * to retype a code they had already tapped through to. The referral table
+ * holding zero rows after shipping that button is the visible half of it.
+ *
+ * Only a code in the shape the server accepts is prefilled: a malformed link
+ * presented as a valid code would fail at the end of signup, where the failure
+ * reads as the user's typo rather than as the link's problem.
+ */
+function referralCodeFromSearch(params: URLSearchParams): string {
+  const raw = (params.get('ref') ?? '').trim().toUpperCase()
+  return REFERRAL_CODE.test(raw) ? raw : ''
+}
+
 const steps = [
   { id: 1, title: 'Account Type', subtitle: 'Choose how you want to use Nabri' },
   { id: 2, title: 'Personal Info', subtitle: 'Your name and email' },
@@ -117,9 +137,16 @@ export function RegisterPage() {
     navigate(role === 'USER' ? '/profile/complete' : role === 'PARTNER' ? '/partner/dashboard' : '/admin/dashboard', { replace: true })
   }, [user, authLoading, navigate])
 
+  const [searchParams] = useSearchParams()
+  const referralFromLink = referralCodeFromSearch(searchParams)
+
   const { register, handleSubmit, watch, trigger, setValue, formState: { errors } } = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
     mode: 'onChange',
+    // Set as a default rather than written in an effect so the value is in
+    // place before the first render of step 2, rather than appearing a beat
+    // after the user arrives on it.
+    defaultValues: { referralCode: referralFromLink },
   })
 
   const emailValue = watch('email')
@@ -235,25 +262,33 @@ export function RegisterPage() {
           signatureValue: data.name,
         },
       })
-// If the user signed up with a valid referral code, link them as soon as
+      // If the user signed up with a valid referral code, link them as soon as
       // the account exists. The account is already created by this point, so a
       // failed apply must not fail registration. It used to be swallowed
       // outright, which made a typo'd or already-used code indistinguishable
       // from a working one - the user silently lost the reward. The code is now
       // parked so ReferralCard can offer a retry.
       if (isReferral) {
-        const code = data.referralCode!.trim()
+        const code = data.referralCode!.trim().toUpperCase()
         try {
           await api.post('/referrals/apply', { code })
           toast.success('Referral code applied!')
-        } catch {
-          stashPendingReferralCode(code)
-          toast("You're signed up, but that referral code didn't apply — you can retry it from your profile.", {
-            icon: '⚠️',
-            duration: 6000,
-          })
+        } catch (err) {
+          // ALREADY_REFERRED means this account already has a code, so a retry
+          // would answer identically forever. Parking it would leave a banner
+          // promising a retry that cannot succeed; only genuinely transient
+          // failures earn one.
+          if (getErrorDetail(err) === 'ALREADY_REFERRED') {
+            toast('Your account has already used a referral code.', { icon: 'ℹ️', duration: 5000 })
+          } else {
+            stashPendingReferralCode(code)
+            toast("You're signed up, but that referral code didn't apply — you can retry it from your profile.", {
+              icon: '⚠️',
+              duration: 6000,
+            })
+          }
         }
-}
+      }
       toast.success('Registration successful!')
       const userId = result?.userId || user?.id
       if (userId) {

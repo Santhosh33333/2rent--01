@@ -22,12 +22,17 @@ async function readBonusConfig(key: string, fallback: number): Promise<number> {
 export async function getMyReferralProfile(req: AuthedRequest, res: Response): Promise<void> {
   try {
     const userId = req.user!.userId;
-    const [invited, completed] = await Promise.all([
+    const [invited, completed, redeemed] = await Promise.all([
       prisma.referral.count({ where: { referrerId: userId } }),
       prisma.referral.count({ where: { referrerId: userId, rewardClaimed: true } }),
+      prisma.referral.findUnique({ where: { referredId: userId }, select: { code: true } }),
     ]);
     sendSuccess(res, {
       code: deriveCode(userId),
+      // Whether this account has already redeemed somebody else's code. Without
+      // it the card would keep offering an input that can only ever answer
+      // ALREADY_REFERRED - a dead end dressed up as a feature.
+      referredByCode: redeemed?.code ?? null,
       stats: { invited, completed },
     }, "Referral profile retrieved.");
   } catch (err) {

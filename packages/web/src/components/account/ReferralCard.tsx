@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Copy, Gift, Check, Users, Sparkles, TriangleAlert } from 'lucide-react'
 import { api } from '../../lib/api'
 import { Tilt } from '../motion/Tilt'
-import { getErrorMessage } from '../../lib/error'
+import { getErrorMessage, getErrorDetail } from '../../lib/error'
 
 /**
  * Where a code typed at registration is parked when it could not be applied, so
@@ -43,6 +43,10 @@ export function clearPendingReferralCode(): void {
 
 interface ReferralProfile {
   code: string
+  // The code this account redeemed, or null if it has none. Decides whether the
+  // "enter a code" input is offered at all - offering it to an account that has
+  // already redeemed one only ever produces ALREADY_REFERRED.
+  referredByCode: string | null
   stats: { invited: number; completed: number }
 }
 
@@ -56,12 +60,20 @@ const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [pendingCode, setPendingCode] = useState<string | null>(null)
   const [applying, setApplying] = useState(false)
+  const [manualCode, setManualCode] = useState('')
+  const [applyingManual, setApplyingManual] = useState(false)
+  const [manualNote, setManualNote] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
       const res = await api.get('/referrals/me')
       const d = res.data?.data
-      if (d?.code) setProfile({ code: d.code, stats: d.stats ?? { invited: 0, completed: 0 } })
+      if (d?.code)
+        setProfile({
+          code: d.code,
+          referredByCode: d.referredByCode ?? null,
+          stats: d.stats ?? { invited: 0, completed: 0 },
+        })
     } catch {
       setError('Could not load your referral code.')
     } finally {
@@ -90,9 +102,56 @@ const [error, setError] = useState<string | null>(null)
       // The referrer's count is unchanged, but re-read so nothing is stale.
       await load()
     } catch (err: unknown) {
+      if (getErrorDetail(err) === 'ALREADY_REFERRED') {
+        // The account already has a code: drop the parked copy rather than
+        // leaving a retry button that can never succeed, and re-read so the
+        // input below closes itself.
+        clearPendingReferralCode()
+        setPendingCode(null)
+        await load()
+        setError('Your account has already used a referral code.')
+        return
+      }
       setError(getErrorMessage(err) || 'That code still cannot be applied.')
     } finally {
       setApplying(false)
+    }
+  }
+
+  /**
+   * Apply a code typed here.
+   *
+   * Until now there was no way to enter a code after sign-up. The only input
+   * lived on the registration form, and the only other affordance was the retry
+   * banner, which appears solely when registration parked a failure - so anyone
+   * who signed up without a code could never add one. That is the other half of
+   * why the referral table had never held a row.
+   */
+  const applyManual = async () => {
+    const code = manualCode.trim().toUpperCase()
+    if (!code || applyingManual) return
+    setApplyingManual(true)
+    setError(null)
+    setManualNote(null)
+    try {
+      await api.post('/referrals/apply', { code })
+      clearPendingReferralCode()
+      setPendingCode(null)
+      setManualCode('')
+      setManualNote('Code applied. Rewards unlock after your first completed booking.')
+      await load()
+    } catch (err: unknown) {
+      if (getErrorDetail(err) === 'ALREADY_REFERRED') {
+        clearPendingReferralCode()
+        setPendingCode(null)
+        setManualCode('')
+        await load()
+        setError('Your account has already used a referral code.')
+      } else {
+        setError(getErrorMessage(err) || 'That code cannot be applied.')
+      }
+    } finally {
+      setApplyingManual(false)
     }
   }
 
@@ -210,6 +269,61 @@ const [error, setError] = useState<string | null>(null)
               <p className="font-display text-xl font-bold text-surface-900 dark:text-white">{completed}</p>
             </div>
           </div>
+
+          {/* What this account redeemed, if anything. Shown as a fact rather
+              than an input so the field below only ever appears to accounts
+              that can still use it. */}
+          {profile.referredByCode && (
+            <p className="mb-4 rounded-2xl bg-white/60 px-3.5 py-2.5 text-xs text-surface-600 dark:bg-surface-800/40 dark:text-surface-400">
+              You joined with code{' '}
+              <span className="font-mono font-bold text-surface-900 dark:text-white">
+                {profile.referredByCode}
+              </span>
+            </p>
+          )}
+
+          {!profile.referredByCode && (
+            <div className="mb-4 rounded-2xl border border-surface-200 p-3.5 dark:border-surface-700">
+              <label
+                htmlFor="friendCode"
+                className="text-[11px] font-semibold uppercase tracking-wider text-surface-500 dark:text-surface-400"
+              >
+                Have a friend's code?
+              </label>
+              <div className="mt-2 flex gap-2">
+                <input
+                  id="friendCode"
+                  type="text"
+                  value={manualCode}
+                  onChange={(e) => setManualCode(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      void applyManual()
+                    }
+                  }}
+                  placeholder="RB-XXXXXXXX"
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="input uppercase"
+                />
+                <button
+                  type="button"
+                  onClick={() => void applyManual()}
+                  disabled={applyingManual || !manualCode.trim()}
+                  className="shrink-0 rounded-xl bg-surface-900 px-4 text-xs font-semibold text-white transition active:scale-95 disabled:opacity-50 dark:bg-white dark:text-surface-900"
+                >
+                  {applyingManual ? 'Applying…' : 'Apply'}
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-surface-500">
+                One code per account. Rewards unlock after your first completed booking.
+              </p>
+              {manualNote && (
+                <p className="mt-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">{manualNote}</p>
+              )}
+            </div>
+          )}
 
           {pendingCode && (
             <div className="mb-4 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3.5">
