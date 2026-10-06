@@ -440,6 +440,49 @@ export const paymentsApi = {
   getConfig: () => api.get('/payments/config'),
 }
 
+// Global social feed (/api/posts). No KYC gate on the server, same as the
+// mobile client: posting, commenting, liking and gifting work for every
+// authenticated account.
+export const postApi = {
+  feed: (params?: PaginationParams) => api.get('/posts', { params }),
+  get: (id: string) => api.get(`/posts/${id}`),
+  remove: (id: string) => api.delete(`/posts/${id}`),
+  create: (data: { content?: string; imageUrl?: string | null; videoUrl?: string | null; visibility: string }) =>
+    api.post('/posts', data),
+  // Multipart blobs land in Postgres; the response carries a relative
+  // /uploads/... URL that is then attached to the post.
+  uploadImage: (file: File) => {
+    const form = new FormData();
+    form.append('image', file);
+    return api.post('/posts/image', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
+    });
+  },
+  uploadVideo: (file: File) => {
+    const form = new FormData();
+    form.append('video', file);
+    return api.post('/posts/video', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 180000,
+    });
+  },
+  toggleLike: (id: string) => api.post(`/posts/${id}/like`),
+  toggleSave: (id: string) => api.post(`/posts/${id}/save`),
+  comments: (id: string, params?: PaginationParams) => api.get(`/posts/${id}/comments`, { params }),
+  replies: (id: string, commentId: string, params?: PaginationParams) =>
+    api.get(`/posts/${id}/comments/${commentId}/replies`, { params }),
+  addComment: (id: string, data: { content: string; parentId?: string | null }) =>
+    api.post(`/posts/${id}/comments`, data),
+  deleteComment: (id: string, commentId: string) => api.delete(`/posts/${id}/comments/${commentId}`),
+  report: (id: string, data: { reason: string; description?: string }) =>
+    api.post(`/posts/${id}/report`, data),
+  // referenceId is the idempotency key: retries of the same gift succeed once.
+  gift: (id: string, data: { amount: number; referenceId: string }) =>
+    api.post(`/posts/${id}/gift`, data),
+  gifts: (id: string) => api.get(`/posts/${id}/gifts`),
+}
+
 export type SupportTicketStatus = 'OPEN' | 'IN_PROGRESS' | 'WAITING_ON_USER' | 'RESOLVED' | 'CLOSED'
 export type SupportPriority = 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT'
 export const SUPPORT_CATEGORIES = [

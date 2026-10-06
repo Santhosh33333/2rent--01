@@ -21,6 +21,7 @@ import {
   ClipboardList,
   MapPin,
   Package,
+  Rss,
 } from "lucide-react";
 
 /**
@@ -64,6 +65,7 @@ export const USER_MORE: NavGroup[] = [
   {
     title: "My activity",
     items: [
+      { to: "/feed", label: "Feed", icon: Rss, matchPrefix: "/feed" },
       { to: "/bookings", label: "Bookings", icon: Calendar, matchPrefix: "/bookings" },
       { to: "/communities", label: "Communities", icon: Users, matchPrefix: "/communities" },
       { to: "/wallet", label: "Wallet", icon: Wallet, matchPrefix: "/wallet" },

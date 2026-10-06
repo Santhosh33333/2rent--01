@@ -10,12 +10,23 @@ const webRoot = dirname(fileURLToPath(import.meta.url))
 // The installable APK must reach the browser, but bundling it inside the built
 // web assets makes every subsequent APK embed the previous one (sizes balloon
 // each rebuild). Copy it into dist only at the end of a build instead.
-const apkSource = resolve(webRoot, 'apk/nabri.apk')
+//
+// Source resolution:
+//   1. The conventional path packages/web/apk/nabri.apk (what a build env that
+//      has the binary installed / copied in would use).
+//   2. The Capacitor release output when it exists locally — this repo's own
+//      signed app, so `vite build` on a dev machine ships the real APK without
+//      requiring anyone to copy a 24 MB binary around.
+// `*.apk` is gitignored, so a fresh clone — and every CI/Vercel deploy without
+// the file — never has either and gets the loud warning + NOT CONFIGURED UI.
+const apkCandidates = [
+  resolve(webRoot, 'apk/nabri.apk'),
+  resolve(webRoot, 'android/app/build/outputs/apk/release/app-release.apk'),
+]
+const apkSource = apkCandidates.find((p) => existsSync(p)) ?? apkCandidates[0]
 
 // Read at config time so the bundle can be told the truth about whether a
-// download will actually be there. `*.apk` is gitignored, so a fresh clone —
-// and every CI/Vercel deploy — never has this file unless someone puts it
-// there first.
+// download will actually be there when the page renders.
 const apkStats = existsSync(apkSource) ? statSync(apkSource) : null
 const apkAvailable = apkStats !== null
 // Rounded to 1dp so the page can show a real figure instead of a guess.
@@ -33,11 +44,14 @@ const apkPlugin = {
       console.warn(
         [
           '',
-          '[copy-apk] WARNING: packages/web/apk/nabri.apk was not found.',
+          '[copy-apk] WARNING: no APK found to ship.',
+          '  Checked: packages/web/apk/nabri.apk and',
+          '           packages/web/android/app/build/outputs/apk/release/app-release.apk',
           '  /download/nabri.apk will NOT be served by this deploy.',
           '  The site will render "NOT CONFIGURED" instead of a dead download link.',
-          '  To enable downloads, place an APK at packages/web/apk/nabri.apk before building',
-          '  (it is gitignored, so it must be supplied by the build environment).',
+          '  To enable downloads, run the Capacitor build (yarn android:release) or',
+          '  place an APK at packages/web/apk/nabri.apk before building — both are',
+          '  gitignored, so they must be present in the build environment.',
           '',
         ].join('\n'),
       )
@@ -46,7 +60,7 @@ const apkPlugin = {
     const to = resolve(webRoot, 'dist/download/nabri.apk')
     mkdirSync(resolve(webRoot, 'dist/download'), { recursive: true })
     copyFileSync(apkSource, to)
-    console.log(`[copy-apk] apk/nabri.apk -> dist/download/nabri.apk (${apkSizeMb} MB)`)
+    console.log(`[copy-apk] ${apkSource.replace(webRoot + '/', '')} -> dist/download/nabri.apk (${apkSizeMb} MB)`)
   },
 }
 

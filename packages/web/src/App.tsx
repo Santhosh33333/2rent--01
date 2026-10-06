@@ -118,6 +118,9 @@ const WithdrawalPage = lazy(() => import('./pages/wallet/WithdrawalPage').then(m
 
 // New pages
 const HomePage = lazy(() => import('./pages/home/HomePage').then(m => ({ default: m.HomePage })))
+const FeedPage = lazy(() => import('./pages/feed/FeedPage').then(m => ({ default: m.FeedPage })))
+const NewPostPage = lazy(() => import('./pages/feed/NewPostPage').then(m => ({ default: m.NewPostPage })))
+const PostDetailPage = lazy(() => import('./pages/feed/PostDetailPage').then(m => ({ default: m.PostDetailPage })))
 const DiscoverPage = lazy(() => import('./pages/discovery/DiscoveryHubPage').then(m => ({ default: m.DiscoveryHubPage })))
 const DatingDiscoverPage = lazy(() => import('./pages/dating/DiscoverPage').then(m => ({ default: m.DiscoverPage })))
 const PreferencesPage = lazy(() => import('./pages/PreferencesPage').then(m => ({ default: m.PreferencesPage })))
@@ -226,6 +229,9 @@ export function App() {
               <Route path="/wallet" element={<WalletPage />} />
               {/* New Home & Discovery */}
               <Route path="/home" element={<HomePage />} />
+              <Route path="/feed" element={<FeedPage />} />
+              <Route path="/feed/new" element={<NewPostPage />} />
+              <Route path="/feed/:id" element={<PostDetailPage />} />
               <Route path="/discover" element={<DiscoverPage />} />
         <Route path="/dating" element={<DatingDiscoverPage />} />
         {/* Sits next to /dating rather than under /settings/privacy: this decides who
