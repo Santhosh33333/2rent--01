@@ -1,55 +1,18 @@
 import { prisma } from "../config/database";
-import { createSubscription, createPlan, cancelSubscription, changePlan } from "./cashfreeSubscriptionGateway";
-import { isGatewayLive } from "./paymentProvider";
 import { getTrialSettings } from "./trialAccessService";
 
 /**
  * Subscription pricing is admin-configurable, never hardcoded in the frontend.
  * Prices are stored in paise-safe rupees as Float to match the rest of the
- * pricing models, but every amount sent to Cashfree is integer rupees.
+ * pricing models.
+ *
+ * The gateway mirror that used to sit here is gone. Pushing a plan to Cashfree
+ * only existed so the hosted checkout SDK had a server-side definition to
+ * subscribe against, and with the gateway retired nothing reads one. Keeping it
+ * would have meant a plan edit still calling a provider whose credentials are no
+ * longer deployed - slow, and failing in a way the admin could not act on, for a
+ * write whose result nothing consumed.
  */
-
-export type BillingInterval = "MONTH" | "YEAR";
-
-export interface PlanInput {
-  planId: string;
-  planName: string;
-  amount: number;
-  interval: BillingInterval;
-  trialDays?: number;
-  maxAmount?: number;
-}
-
-const VALID_INTERVALS: BillingInterval[] = ["MONTH", "YEAR"];
-
-function toRupees(value: number): number {
-  return Math.round(Number(value));
-}
-
-/**
- * Mirrors a plan to Cashfree so recurring billing has a server-side definition.
- * Cashfree keeps its own copy; ours stays the source of truth for display.
- */
-export async function syncPlanToGateway(input: PlanInput) {
-  if (!VALID_INTERVALS.includes(input.interval)) {
-    throw new Error("INVALID_INTERVAL");
-  }
-  const amount = toRupees(input.amount);
-  if (amount <= 0) {
-    throw new Error("INVALID_AMOUNT");
-  }
-
-  return createPlan({
-    planId: input.planId,
-    planName: input.planName,
-    planType: "PERIODIC",
-    planCurrency: "INR",
-    planRecurringAmount: amount,
-    planMaxAmount: toRupees(input.maxAmount ?? amount),
-    planIntervals: 1,
-    planIntervalType: input.interval,
-  });
-}
 
 /**
  * Active plans for the pricing screen and the landing pages.
@@ -102,58 +65,6 @@ export async function getPlanByCode(code: string) {
   });
   if (!plan) throw new Error("PLAN_NOT_FOUND");
   return plan;
-}
-
-export interface StartSubscriptionInput {
-  userId: string;
-  planCode: string;
-  email: string;
-  phone: string;
-  fullName: string;
-}
-
-/**
- * Start a subscription. Cashfree returns a `subscription_session_id` for the
- * hosted checkout SDK; until the mandate is authorized the subscription stays
- * INITIALIZED and grants nothing.
- */
-export async function startSubscription(input: StartSubscriptionInput) {
-  // Subscriptions run through the hosted gateway only - a recurring plan needs a
-  // mandate, which a one-off UPI transfer cannot create. So unlike bookings there
-  // is no manual fallback here, and the check has to come first: without it this
-  // made a live HTTP call to a provider whose credentials are no longer deployed,
-  // which is slow, logs a stack trace on every attempt, and reaches the browser
-  // as a generic failure the user cannot act on. Failing here says what is
-  // actually true: there is no rail to take this payment on.
-  if (!(await isGatewayLive())) {
-    throw new Error("SUBSCRIPTIONS_UNAVAILABLE");
-  }
-
-  const plan = await getPlanByCode(input.planCode);
-
-  const result = await createSubscription({
-    subscriptionId: `nabri_sub_${input.userId.slice(0, 8)}_${Date.now()}`,
-    customerEmail: input.email,
-    customerPhone: input.phone,
-    customerName: input.fullName,
-    planId: plan.gatewayPlanId ?? plan.code,
-  });
-
-  await prisma.subscription.create({
-    data: {
-      subscriptionId: result.subscriptionId,
-      userId: input.userId,
-      planId: plan.id,
-      status: result.status ?? "INITIALIZED",
-      authorizationStatus: "PENDING",
-    },
-  });
-
-  return {
-    subscriptionId: result.subscriptionId,
-    subscriptionSessionId: result.subscriptionSessionId,
-    plan: { code: plan.code, name: plan.name, price: plan.price, currency: plan.currency },
-  };
 }
 
 /**

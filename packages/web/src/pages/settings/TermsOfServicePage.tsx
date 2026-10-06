@@ -43,7 +43,7 @@ export function TermsOfServicePage() {
 
             <section>
               <h2 className="text-lg font-bold font-display text-surface-900 dark:text-white mb-3">4. Bookings & Payments</h2>
-              <p className="text-sm leading-relaxed">All bookings are subject to availability and partner acceptance. Payments are processed through Cashfree. Wallet top-ups are non-refundable once used for bookings. Cancellations follow the cancellation policy displayed during booking creation.</p>
+              <p className="text-sm leading-relaxed">All bookings are subject to availability and partner acceptance. Payments are made by UPI to the account shown at checkout; a booking or plan is activated once we confirm the payment against our bank statement. Wallet top-ups are non-refundable once used for bookings. Cancellations follow the cancellation policy displayed during booking creation.</p>
             </section>
 
             <section>

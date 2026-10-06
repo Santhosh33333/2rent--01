@@ -153,7 +153,7 @@ export function AdminPaymentsPage() {
 
   return (
     <AdminShell width="max-w-6xl">
-      <AdminPageHeader title="Payment Center" subtitle="Real Cashfree orders and payments" />
+      <AdminPageHeader title="Payment Center" subtitle="Gateway order history. Cashfree is retired - new money arrives via the UPI queue beside this." />
 
         {statCards.length > 0 && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
@@ -244,7 +244,7 @@ export function AdminPaymentsPage() {
           <div className="py-16 text-center">
             <CreditCard className="w-12 h-12 mx-auto text-gray-700 mb-3" />
             <p className="text-gray-400">No payments yet.</p>
-            <p className="text-gray-600 text-sm mt-1">Records appear here the moment a real Cashfree order is created.</p>
+            <p className="text-gray-600 text-sm mt-1">Nothing new lands here: Cashfree is retired, so these are the orders it created before the switch. Settle current payments from the UPI queue and bank reconciliation.</p>
           </div>
         ) : (
           <div className="space-y-3">

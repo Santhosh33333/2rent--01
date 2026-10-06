@@ -287,7 +287,8 @@ export const adminApi = {
     api.post('/admin/email/broadcast', { ...data, audience: data.audience || 'ALL' }),
   getEmailStatus: () => api.get('/admin/email/status'),
   sendTestEmail: (to: string) => api.post('/admin/email/test', { to }),
-  // Payment Center (real Cashfree order/payment ledger)
+  // Payment Center (historical order ledger; Cashfree is retired, so these rows
+  // are the record of what the gateway used to do rather than a live rail)
   getPayments: (params?: PaginationParams) => api.get('/admin/payments', { params }),
   getPaymentStats: () => api.get('/admin/payments/stats'),
   // Manual UPI verification (temporary flow for personal UPI accounts)
@@ -417,35 +418,7 @@ export const walletApi = {
   cancelWithdrawal: (id: string) => api.delete(`/wallet/withdraw/${id}`),
 }
 
-export interface CreatedPaymentOrder {
-  provider: string
-  orderId: string
-  amount: number
-  currency: string
-  /**
-   * A hosted link when the server could build one. Current Cashfree API
-   * versions answer Create Order with a session rather than a link, so
-   * `paymentSessionId` is the handle the checkout SDK needs and is the field
-   * the top-up page actually depends on.
-   */
-  paymentUrl?: string
-  paymentSessionId?: string
-}
-
 export const paymentsApi = {
-  /**
-   * Create a Cashfree order. The response carries no way to pay by itself: the
-   * caller must open checkout with `paymentSessionId` (or follow
-   * `paymentUrl` when the server managed to build one).
-   */
-  createOrder: (amount: number) =>
-    api.post('/payments/create-order', { amount }, { timeout: 90000 }),
-  /**
-   * Ask the server to settle an order. This reads the authoritative state from
-   * Cashfree; the browser's return from checkout is never treated as proof.
-   */
-  verify: (orderId: string) =>
-    api.post('/payments/verify', { orderId }, { timeout: 60000 }),
   /**
    * Which rail is live, plus the platform UPI details needed to pay manually.
    *

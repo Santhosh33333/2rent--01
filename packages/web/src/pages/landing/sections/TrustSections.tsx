@@ -139,7 +139,7 @@ export function DownloadSection({ plans, signedIn }: DownloadProps) {
  * Each maps to something the codebase actually does rather than to an
  * aspiration: there is a six-step KYC route, a six-role role system, a
  * neighbourhood-level location policy enforced in the public controllers, and
- * a Cashfree-backed wallet with a real withdrawal flow. A trust row of
+ * a UPI-funded wallet with a real withdrawal flow. A trust row of
  * adjectives ("Safe & Verified", "Real People") says nothing; this one names
  * the mechanism.
  */

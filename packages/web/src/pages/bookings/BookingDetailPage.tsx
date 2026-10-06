@@ -458,14 +458,25 @@ export function BookingDetailPage() {
                   {booking.paymentStatus}
                 </span>
               </div>
-              {booking.paymentMethod && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-surface-500">Payment Method</span>
-                  <span className={`font-semibold px-2 py-0.5 rounded-full text-xs ${booking.paymentMethod === 'ONLINE' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
-                    {booking.paymentMethod === 'ONLINE' ? 'Online (Cashfree)' : booking.paymentMethod === 'UPI_MANUAL' ? 'UPI manual' : 'Cash to Partner'}
-                  </span>
-                </div>
-              )}
+              {booking.paymentMethod && (() => {
+                // "ONLINE" is the retired gateway's value and still sits on every
+                // booking created before the switch. The server resolves it to
+                // UPI_MANUAL for anything new, so a row that says ONLINE was paid
+                // by UPI QR and an admin verified the reference - labelling it
+                // "Online (Cashfree)" told users their money had gone somewhere it
+                // never went. Same mapping the server applies, so old and new rows
+                // read identically.
+                const method = booking.paymentMethod === 'CASH' ? 'CASH' : 'UPI_MANUAL';
+                const label = method === 'CASH' ? 'Cash to Partner' : 'UPI';
+                return (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-surface-500">Payment Method</span>
+                    <span className={`font-semibold px-2 py-0.5 rounded-full text-xs ${method === 'UPI_MANUAL' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
+                      {label}
+                    </span>
+                  </div>
+                );
+              })()}
               {booking.paymentId && (
                 <div className="flex justify-between text-sm">
                   <span className="text-surface-500">Payment ID</span>

@@ -21,9 +21,12 @@ export interface BookingCreateInput {
 }
 
 /**
- * Payment verification payload. Cashfree is the only gateway, so the order id is
- * all the client can meaningfully contribute: settlement is decided server-side
- * from Cashfree's own response, never from what this payload claims.
+ * Payment verification payload for the retired gateway path.
+ *
+ * Kept because the endpoint and its signature checks still exist server-side, but
+ * no client calls it: money is taken against the platform UPI QR and settled from
+ * the reference an admin verifies. `orderId` is all a client could meaningfully
+ * contribute even on that path, because settlement was always decided server-side.
  */
 export interface BookingVerifyPayment {
   orderId: string

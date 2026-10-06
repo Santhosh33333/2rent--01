@@ -1,11 +1,17 @@
 /**
- * Cashfree is the only payment gateway, and this file makes that stay true.
+ * No payment gateway is wired in, and this file makes that stay true.
  *
- * Razorpay was not switched off, it was removed: no route, no service, no
- * columns, no credentials. Each test below pins one of those surfaces, because
- * a half-retired gateway is the worst state to be in. A stale webhook route
- * still verifies nothing but still accepts POSTs, and a leftover column plus a
- * fallback branch is how a settlement gets written twice.
+ * Cashfree is now retired in its turn, after Razorpay before it. Neither was
+ * switched off; both were removed from the reachable surface. Each test below
+ * pins one of those surfaces, because a half-retired gateway is the worst state
+ * to be in. A stale webhook route still verifies nothing but still accepts
+ * POSTs, and a leftover column plus a fallback branch is how a settlement gets
+ * written twice.
+ *
+ * The webhook route and the gateway columns stay, deliberately: historical orders
+ * and refunds reference them. What is pinned here is that nothing can *start* a
+ * new charge, and that no client or document still tells a payer their money is
+ * going somewhere it is not.
  *
  * These assertions are structural (against source and schema text) rather than
  * behavioural, on purpose: the failure being prevented is a *reintroduction*,
@@ -168,12 +174,26 @@ describe("no retired gateway survives anywhere it could be reached from", () => 
     }
   });
 
-  it("tells the payer which gateway actually takes their money", () => {
-    // Leaving the old name in the terms or on the receipt is not cosmetic: it
-    // is the name on the statement the payer will check against.
-    expect(read(join(REPO, "packages/web/src/pages/settings/TermsOfServicePage.tsx"))).toMatch(
-      /Cashfree/
-    );
-    expect(read(join(REPO, "packages/backend/src/app.ts"))).toMatch(/Cashfree/);
+  it("tells the payer which rail actually takes their money", () => {
+    // Leaving a retired processor's name in the terms is not cosmetic: it is the
+    // name the payer will look for on their statement and query against. Cashfree
+    // took nothing after the switch, so naming it there describes a payment that
+    // never happened.
+    //
+    // Asserted as "names UPI and does not name Cashfree" rather than the reverse,
+    // because the failure being prevented is the legal text and the privacy
+    // disclosure drifting from what the server actually does. Both are documents a
+    // user relies on when something has gone wrong with a payment.
+    const terms = read(join(REPO, "packages/web/src/pages/settings/TermsOfServicePage.tsx"));
+    expect(terms).toMatch(/UPI/);
+    expect(code(terms)).not.toMatch(/Cashfree/);
+
+    const privacy = read(join(REPO, "packages/backend/src/app.ts"));
+    expect(privacy).toMatch(/UPI/);
+    // The disclosure must describe the UPI reference it now stores. Claiming to
+    // withhold card numbers while naming a gateway that is gone would be true by
+    // accident and misleading about what is actually retained.
+    expect(privacy).toMatch(/reference/i);
+    expect(code(privacy)).not.toMatch(/Cashfree/);
   });
 });

@@ -123,29 +123,27 @@ services:
       # omission would only be noticed by users not receiving notifications.
       - key: FIREBASE_SERVICE_ACCOUNT
         sync: false
-      # Cashfree credentials for the PG migration.
+      # Cashfree is RETIRED. Payments are collected manually against the platform
+      # UPI QR and credited once an admin verifies the UTR against the bank
+      # statement, and subscriptions come from the wallet with a UPI fallback. No
+      # gateway credential is needed to take money.
       #
-      # sync: false for the same reason as REDIS_URL above: these are set by
-      # hand in the dashboard, and a Blueprint sync would overwrite them. They
-      # are declared anyway so a new service provisioned from this file knows
-      # which variables it needs instead of booting without them.
+      # These keys are deliberately absent rather than blank. Setting them to ""
+      # would read as configured-but-empty and would keep the retired dependency
+      # alive in the config surface; leaving them unset is what makes
+      # isGatewayConfigured() false and keeps online checkout genuinely off.
       #
-      # CASHFREE_SECRET_KEY is deliberately NOT a distinct webhook secret:
-      # Cashfree signs inbound webhooks with this same PG secret key. When keys
-      # are rotated, signature verification must use the OLDEST active key pair,
-      # because that is the one Cashfree signs with.
-      - key: CASHFREE_APP_ID
-        sync: false
-      - key: CASHFREE_SECRET_KEY
-        sync: false
-      # Which gateway handles live payments. Cashfree only.
-      - key: PAYMENT_PROVIDER
-        value: cashfree
-      # Cashfree runs test and production on separate hosts with separate
-      # credentials, and each rejects keys issued for the other. Keep this in
-      # step with whichever keys are set above.
-      - key: CASHFREE_API_ENV
-        value: production
+      # Deleting them here does not remove them from the running service. Remove
+      # them in the Render dashboard as well, or a Blueprint sync will keep
+      # writing them back on the next deploy.
+      #
+      # CASHFREE_SECRET_KEY also authenticates inbound webhooks, so rotation
+      # means updating the webhook route's verification at the same time - it is
+      # the key Cashfree signs with, not a distinct webhook secret.
+      #
+      # The platform UPI VPA is not an env var. It lives in the pricingConfig
+      # table under the keys UPI_ID, UPI_ACCOUNT_NAME and UPI_QR_URL, and is
+      # editable from the admin panel, so it can be corrected without a deploy.
     # The liveness route is mounted at the root ("/health"), not under /api -
     # everything under /api sits behind auth middleware and answers 401 here,
     # which would fail every deploy's health check.

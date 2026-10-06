@@ -21,7 +21,9 @@ vi.hoisted(() => {
   process.env.JWT_SECRET = "test_jwt_secret_32chars_minimum_2026!";
   process.env.ADMIN_EMAIL = "test@test.com";
   process.env.ADMIN_PASSWORD = "TestPass123!";
-  process.env.PAYMENT_PROVIDER = "cashfree";
+  // Placeholder keys are the production reality, not a test convenience. No
+  // PAYMENT_PROVIDER is set because nothing reads it any more - the retired
+  // gateway's provider name was hard-coded the moment Cashfree was dropped.
   process.env.CASHFREE_APP_ID = "cashfree_app_id_placeholder";
   process.env.CASHFREE_SECRET_KEY = "cashfree_secret_key_placeholder";
 });

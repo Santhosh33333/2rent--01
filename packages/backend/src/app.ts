@@ -244,7 +244,7 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
       <li><strong>Profile details:</strong> city, bio, profile photo, and optional verification documents needed to become a partner (e.g. government ID, address proof).</li>
       <li><strong>Location:</strong> your device location is used to match you with nearby partners and to allow partners to provide services. You can disable location at any time through your device settings.</li>
       <li><strong>Usage data:</strong> booking and chat history, wallet transactions, service requests, and app interaction data used to operate and improve the service.</li>
-      <li><strong>Payment data:</strong> payments are processed by our payment provider (Cashfree). We do not store full card numbers.</li>
+      <li><strong>Payment data:</strong> payments are made by UPI transfer to the account shown at checkout. We store the amount, the UPI reference (UTR) you or an admin submits, and the resulting transaction record. We never see or store card numbers, because no card details pass through our servers.</li>
       <li><strong>Authentication data:</strong> sign-in providers (e.g. Google) may share a profile identifier so we can recognise you across logins.</li>
     </ul>
   </section>

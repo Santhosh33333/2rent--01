@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, Linking, Pressable, Alert as RNAlert } from 'react-native';
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Screen, Title, Card, Button, Alert } from '../../src/lib/ui';
@@ -9,9 +9,37 @@ import { useBookingRealtime } from '../../src/hooks/useBookingRealtime';
 import { useCallSignaling } from '../../src/hooks/useCallSignaling';
 import { emitSos } from '../../src/lib/socket';
 import { CallModal } from '../../src/components/CallModal';
-// Cashfree hosts its own checkout, so the app opens a browser session against
-// the payment URL the backend returns rather than embedding a payment SDK.
 import * as WebBrowser from 'expo-web-browser';
+
+/**
+ * True when the server refused to take an online payment because only manual UPI
+ * is available.
+ *
+ * This is the single signal that tells the app where the money has to go now. It
+ * is read defensively from every shape the failure can arrive in - the axios error
+ * envelope, a raw `error` string, and a nested `description` - because the whole
+ * point of handling it is that the payer is one tap away from a dead end. Missing
+ * one of these shapes means a payment the user could have completed is shown to
+ * them as a failure.
+ */
+function isManualUpiOnly(err: unknown): boolean {
+  const code = String(
+    (err as any)?.response?.data?.error ??
+      (err as any)?.error?.code ??
+      (err as any)?.code ??
+      ''
+  ).toUpperCase();
+  if (code === 'MANUAL_UPI_ONLY') return true;
+
+  // Some rejections surface only as prose, so fall back to the message. Matched on
+  // the code and the phrase together rather than on "upi" alone, which would also
+  // match UPI_NOT_CONFIGURED - a real fault the admin must fix, not an instruction
+  // to open a QR that cannot be paid.
+  const message = String(
+    (err as any)?.response?.data?.message ?? (err as any)?.error?.description ?? ''
+  ).toLowerCase();
+  return message.includes('manual_upi_only') || (message.includes('upi') && message.includes('switched off'));
+}
 
 export default function BookingDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -43,6 +71,12 @@ export default function BookingDetail() {
     onError: (e) => setError(errorMessage(e)),
   });
 
+  const goToManualUpi = useCallback(() => {
+    if (!id) return;
+    setPaying(false);
+    router.push(`/upi/${id}`);
+  }, [id, router]);
+
   const startPay = async () => {
     try {
       setPaying(true);
@@ -50,21 +84,34 @@ export default function BookingDetail() {
       const res = await post<any>(`/bookings/${id}/pay`, {});
       const order = res.data ?? {};
 
-      // Cashfree hosts checkout, so the app opens it and then asks the server
-      // what actually happened. Nothing about the return trip is treated as
-      // proof of payment: settlement is decided from Cashfree's own response.
+      // Cashfree is retired, so this endpoint no longer hands back a checkout URL
+      // to open. The only rail left is the platform UPI QR with an admin verifying
+      // the reference. Treating a response that carries no URL as a dead end left
+      // the payer having tapped Pay and been shown nothing to act on, so a missing
+      // URL routes to the same screen that settles a manual booking.
       if (!order.paymentUrl) {
-        setError('Payment could not be started. Please try again.');
+        goToManualUpi();
         return;
       }
+
       const result = await WebBrowser.openBrowserAsync(order.paymentUrl);
       if (result.type === 'cancel' || result.type === 'dismiss') {
         setError('Payment cancelled.');
         return;
       }
+      // Nothing about the return trip is treated as proof of payment; the server
+      // decides what actually happened.
       await post(`/bookings/${id}/verify-payment`, { orderId: order.orderId });
       qc.invalidateQueries({ queryKey: ['booking', id] });
     } catch (e: any) {
+      // The server answers the retired gateway with a 503 MANUAL_UPI_ONLY, which
+      // is not a failure - it is the instruction to pay against the QR. Surfacing
+      // that as an error would leave the payer on a booking screen with no way to
+      // pay at all, so it is followed like the message asks.
+      if (isManualUpiOnly(e)) {
+        goToManualUpi();
+        return;
+      }
       if (e?.error?.description) setError(e.error.description);
       else setError(errorMessage(e));
     } finally {

@@ -23,7 +23,10 @@ vi.hoisted(() => {
   process.env.JWT_SECRET = "test_jwt_secret_32chars_minimum_2026!";
   process.env.ADMIN_EMAIL = "test@test.com";
   process.env.ADMIN_PASSWORD = "TestPass123!";
-  process.env.PAYMENT_PROVIDER = "cashfree";
+  // Real-looking keys so the gateway branch is reachable in this file. It covers
+  // the retired order path, which is off in production - see the note on line
+  // ~164. PAYMENT_PROVIDER is gone because nothing reads it: the provider name is
+  // hard-coded now that Cashfree is the only gateway the schema ever held.
   process.env.CASHFREE_APP_ID = "test_app_id";
   process.env.CASHFREE_SECRET_KEY = "test_secret_key";
 

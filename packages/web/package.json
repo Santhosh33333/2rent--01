@@ -33,7 +33,6 @@
     "@capacitor/share": "^8.0.2",
     "@capacitor/splash-screen": "^8.0.2",
     "@capacitor/status-bar": "^8.0.3",
-    "@cashfreepayments/cashfree-js": "^1.0.7",
     "@hookform/resolvers": "^3.9.1",
     "@react-three/drei": "^9.122.0",
     "@react-three/fiber": "^8.18.0",
