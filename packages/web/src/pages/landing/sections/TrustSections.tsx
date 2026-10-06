@@ -23,6 +23,11 @@
  * ships an Android APK, so that is the only download offered, and the badge
  * says APK. The APK is copied into `dist/download/` by a Vite plugin at the
  * end of every build, which is the path the button points at.
+ *
+ * Note that `*.apk` is gitignored, so a build may well have no APK at all -
+ * the plugin warns and `__APK_AVAILABLE__` stays false. These buttons check
+ * that flag and fall back to the browser app rather than advertise a download
+ * this deploy cannot serve.
  */
 import { Link } from 'react-router-dom';
 import { ArrowRight, Download, ShieldCheck, Sparkles, Store, Users, Wallet } from 'lucide-react';
@@ -66,9 +71,18 @@ export function DownloadSection({ plans, signedIn }: DownloadProps) {
           </p>
 
           <div className="nb-btns" style={{ justifyContent: 'center' }}>
-            <a className="nb-btn nb-btn--lg" href="/download/nabri.apk" download>
-              <Download aria-hidden="true" /> Download the Android app
-            </a>
+            {__APK_AVAILABLE__ ? (
+              <a className="nb-btn nb-btn--lg" href="/download/nabri.apk" download>
+                <Download aria-hidden="true" /> Download the Android app
+              </a>
+            ) : (
+              // This deploy has no APK to serve. Pointing at it anyway gives
+              // the visitor a dead button, which is worse than offering the
+              // web app they can actually open.
+              <Link className="nb-btn nb-btn--lg" to="/account-type">
+                <Download aria-hidden="true" /> Use Nabri in your browser
+              </Link>
+            )}
             {signedIn ? (
               <Link className="nb-btn nb-btn--ghost nb-btn--lg" to="/home">
                 Open Nabri <ArrowRight aria-hidden="true" />
@@ -103,13 +117,25 @@ export function DownloadSection({ plans, signedIn }: DownloadProps) {
           {/* Only real destinations. The reference offered App Store and Google
               Play badges whose URLs were empty strings. */}
           <div className="nb-stores">
-            <a className="nb-store" href="/download/nabri.apk" download>
-              <Store aria-hidden="true" />
-              <span>
-                Android APK
-                <strong>Direct download</strong>
-              </span>
-            </a>
+            {__APK_AVAILABLE__ ? (
+              <a className="nb-store" href="/download/nabri.apk" download>
+                <Store aria-hidden="true" />
+                <span>
+                  Android APK
+                  <strong>Direct download</strong>
+                </span>
+              </a>
+            ) : (
+              // Same tile, but not a link: there is no file behind this
+              // deploy's /download/nabri.apk, so it says so instead of 404ing.
+              <div className="nb-store" aria-disabled="true">
+                <Store aria-hidden="true" />
+                <span>
+                  Android APK
+                  <strong>Not configured</strong>
+                </span>
+              </div>
+            )}
             <Link className="nb-store" to="/account-type">
               <Download aria-hidden="true" />
               <span>
