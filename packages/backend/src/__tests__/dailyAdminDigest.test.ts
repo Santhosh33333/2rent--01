@@ -861,12 +861,16 @@ describe("scheduler", () => {
     expect(pendingPeriods(new Date(2026, 9, 1, 0, 5)).sort()).toEqual(["DAILY", "MONTHLY", "QUARTERLY"]);
   });
 
-  it("puts the tax table in the long-period mails but not the daily one", async () => {
+  it("puts the tax table in the weekly, monthly and long-period mails but not the daily one", async () => {
     const { sectionsForPeriod } = await load();
     const now = new Date(2026, 9, 1, 0, 5);
     healthy();
     expect((await sectionsForPeriod("DAILY", periodWindow("DAILY", now), now)).map((s) => s.title))
       .not.toContain("Tax and statutory");
+    // Weekly carries it because the weekend mail is the one asked for as "full
+    // data": a week a finance admin cannot reconcile GST against is a summary.
+    expect((await sectionsForPeriod("WEEKLY", periodWindow("WEEKLY", now), now)).map((s) => s.title))
+      .toContain("Tax and statutory");
     expect((await sectionsForPeriod("MONTHLY", periodWindow("MONTHLY", now), now)).map((s) => s.title))
       .toContain("Tax and statutory");
     expect((await sectionsForPeriod("NEXT_MONTH", periodWindow("NEXT_MONTH", now), now)).map((s) => s.title))

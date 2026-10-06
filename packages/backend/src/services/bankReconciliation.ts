@@ -866,7 +866,7 @@ export async function recordRowDecision(params: {
     });
   }
 
-  await creditClaim({
+  const settled = await creditClaim({
     kind,
     claimId,
     userId: claim.userId,
@@ -875,6 +875,15 @@ export async function recordRowDecision(params: {
     actorId,
     note: `Bank statement reconciliation: ${commentText}`,
   });
+  if (!settled) {
+    // The status check above rules out every case except a lost race, and this
+    // path must not go on to record itself as the credit when it made none.
+    throw new ReconciliationError(
+      "CLAIM_NOT_PENDING",
+      "That claim was just verified by someone else, so nothing was credited here.",
+      409,
+    );
+  }
 
   await prisma.bankStatementRow.update({
     where: { id: rowId },
@@ -901,6 +910,12 @@ export async function recordRowDecision(params: {
 /**
  * One credit path for both services, so "reconciliation credited a wallet" is
  * the same code whether the line was matched by machine or by a person.
+ *
+ * Returns false when the conditional claim was already taken - another admin
+ * verified the same payment between the caller's status read and this update.
+ * The money is where it should be either way, exactly once, so a false is not
+ * an error; it is a "not by me", and the caller needs that distinction to avoid
+ * stamping its own actor id on a credit it did not make.
  */
 async function creditClaim(args: {
   kind: "TOPUP" | "UPI_PAYMENT";
@@ -910,7 +925,7 @@ async function creditClaim(args: {
   referenceNumber?: string;
   actorId: string;
   note: string;
-}): Promise<void> {
+}): Promise<boolean> {
   try {
     if (args.kind === "TOPUP") {
       await settleTopupRequest(
@@ -932,11 +947,10 @@ async function creditClaim(args: {
         args.note,
       );
     }
+    return true;
   } catch (err) {
     if (err instanceof TopupAlreadySettledError || err instanceof UpiAlreadySettledError) {
-      // Someone verified it in the browser while this file sat in the queue.
-      // Not an error: the money is where it should be, exactly once.
-      return;
+      return false;
     }
     throw err;
   }
@@ -1009,7 +1023,7 @@ async function creditMatchedRows(opts: {
     }
 
     try {
-      await creditClaim({
+      const settled = await creditClaim({
         kind: row.matchedType as "TOPUP" | "UPI_PAYMENT",
         claimId: row.matchedId,
         userId: claim.userId,
@@ -1019,11 +1033,27 @@ async function creditMatchedRows(opts: {
         actorId,
         note: opts.note?.trim() || `Bank statement ${fileName}`,
       });
-      await prisma.bankStatementRow.update({
-        where: { id: row.id },
-        data: { creditedAt: new Date(), creditedById: actorId },
-      });
-      credited += 1;
+      if (settled) {
+        await prisma.bankStatementRow.update({
+          where: { id: row.id },
+          data: { creditedAt: new Date(), creditedById: actorId },
+        });
+        credited += 1;
+      } else {
+        // Lost the race: someone verified this claim between the status read
+        // above and the conditional update inside creditClaim. The money is
+        // already in the wallet, so this must not be reported as a failure for
+        // an admin to retry - but it is also not this actor's credit, and
+        // writing their id on the row would make the trail claim otherwise.
+        alreadySettled += 1;
+        await prisma.bankStatementRow.update({
+          where: { id: row.id },
+          data: {
+            matchStatus: "ALREADY_SETTLED",
+            matchReason: "Settled by another admin while this statement was open.",
+          },
+        });
+      }
     } catch (err) {
       // One bad line must not abandon the rest, and it must not be silent.
       failed.push({
@@ -1210,8 +1240,21 @@ async function rematchStoredRows(statement: RematchableStatement): Promise<numbe
   // The candidate references come from the stored rows, not the file: the bytes
   // are gone by design (a statement is not kept), and the stored rows are what
   // the admin was shown.
+  //
+  // ALREADY_SETTLED is excluded as well as MATCHED, and that exclusion is the
+  // whole reason this pass is safe to run unattended. That verdict never writes
+  // creditedAt, so a row it lands on still looks pending to a filter that only
+  // checked creditedAt - and re-evaluating it would push it back to MATCHED on
+  // one pass, settle it again on the next, and repeat until the statement
+  // expires. Clicking Rematch twice hid this; a scheduler does not.
   const pending = statement.rows.filter(
-    (r) => r.matchStatus !== "MATCHED" && !r.creditedAt && !r.decidedAt && r.inbound && keysFor(r).length > 0,
+    (r) =>
+      r.matchStatus !== "MATCHED" &&
+      r.matchStatus !== "ALREADY_SETTLED" &&
+      !r.creditedAt &&
+      !r.decidedAt &&
+      r.inbound &&
+      keysFor(r).length > 0,
   );
   if (pending.length === 0) return 0;
 
