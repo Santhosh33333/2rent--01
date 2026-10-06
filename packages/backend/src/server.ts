@@ -453,7 +453,9 @@ startReengagementSweeper();
   // Film catalogue is pushed, not pulled: a release has to be on the shelf
   // before its release day, which a request-driven cache cannot guarantee.
   startMovieCatalogSync();
-  // Midnight ops digest, one role-scoped email per configured admin role.
+  // Admin report emails: daily, weekly, monthly, quarterly, yearly, next-month
+  // outlook and tax. One role-scoped mail each, except super admin who gets a
+  // single combined mail carrying every section.
   startDigestScheduler();
 
   // Publish version 1 of any legal document that has no current row. Idempotent

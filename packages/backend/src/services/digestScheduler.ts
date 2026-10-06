@@ -1,101 +1,201 @@
 /**
- * Midnight scheduler for the daily admin digest.
+ * Scheduler for the admin report emails.
  *
  * WHY A MINUTE POLL AND NOT "SLEEP UNTIL MIDNIGHT": the process restarts on
  * every deploy and Render cycles instances. A timer set for 00:00 is lost on
  * redeploy, and a long setInterval drifts. Polling once a minute and comparing
- * the current hour against a per-day marker survives both, and costs one cheap
- * comparison a minute.
+ * the current clock against each period's boundary survives both, and costs one
+ * cheap comparison a minute.
  *
- * The day is keyed in the SERVER's local time on purpose: the digest is an
- * operations artefact read by people in one timezone, so "today" should mean
- * their today, not UTC's.
+ * WHY ONE POLL FOR SEVEN CADENCES: every schedule here is "the hour after a
+ * calendar boundary". Deriving each period's due moment from that boundary (see
+ * isPeriodDue) means adding a cadence is a table entry, not a new timer, and a
+ * monthly report can never drift out of step with the daily one.
+ *
+ * The boundaries are SERVER-LOCAL on purpose: the reports are operations
+ * artefacts read by people in one timezone, so "this month" should mean their
+ * month, not UTC's.
  */
 import {
   DIGEST_ROLES,
   buildDigestSections,
+  buildOutlookSections,
+  buildTaxSections,
   recipientsForRole,
   sendDigestForRole,
+  taxRows,
   type DigestRole,
+  type DigestSection,
 } from "./dailyAdminDigest";
+import {
+  isPeriodDue,
+  periodWindow,
+  periodTitle,
+  type ReportPeriod,
+  type ReportWindow,
+} from "./reportPeriods";
 
 const TICK_MS = 60_000;
 
-/** Set once the digest for "today" has been attempted, so a restart cannot resend. */
-let lastRunDay = "";
-let timer: ReturnType<typeof setInterval> | null = null;
+/**
+ * When each cadence fires, in local hours.
+ *
+ * The hours are staggered on purpose. On 1 January at 00:00 the daily, weekly,
+ * monthly, quarterly and yearly reports are all due at once; the outlook waits an
+ * hour so it is built after the monthly figures are out, and the tax report waits
+ * two. Running seven heavy report builds in the same tick is how a background job
+ * becomes the thing that times out the API.
+ */
+const SCHEDULES: Array<{ period: ReportPeriod; hour: number }> = [
+  { period: "DAILY", hour: 0 },
+  { period: "WEEKLY", hour: 0 },
+  { period: "MONTHLY", hour: 0 },
+  { period: "QUARTERLY", hour: 0 },
+  { period: "YEARLY", hour: 0 },
+  { period: "NEXT_MONTH", hour: 1 },
+  { period: "TAX", hour: 2 },
+];
 
-function localDayKey(d = new Date()): string {
-  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-}
+/** Roles that get the standalone tax mail. Everyone else gets tax inside their own report. */
+const DEFAULT_TAX_ROLES: DigestRole[] = ["SUPER_ADMIN", "FINANCE_ADMIN", "FINANCE"];
 
-export function digestHasRunToday(now = new Date()): boolean {
-  return lastRunDay === localDayKey(now);
-}
-
-/** Exposed for tests: lets a run be forced for a specific date. */
-export function markDigestRun(dayKey: string): void {
-  lastRunDay = dayKey;
-}
-
-export function shouldRunNow(now = new Date(), hour = 0): boolean {
-  return now.getHours() === hour && !digestHasRunToday(now);
+function taxRoles(): DigestRole[] {
+  const override = (process.env.TAX_REPORT_ROLES ?? "")
+    .split(",")
+    .map((r) => r.trim())
+    .filter(Boolean) as DigestRole[];
+  return override.length ? override : DEFAULT_TAX_ROLES;
 }
 
 /**
- * Builds and sends the digest. Never throws: a scheduler that dies takes every
+ * Periods already attempted, keyed by the period's own key.
+ *
+ * Marked BEFORE sending, not after. If the process dies mid-send the period is
+ * still consumed, and a partial report is better than a duplicate one.
+ *
+ * This is in-memory on purpose. The old comment claimed a `DailyDigestRun` table
+ * guarded this; nothing persisted it, so a redeploy between midnight and the
+ * send re-sent the day's digest. Being honest about the guarantee matters more
+ * than the guarantee being pretty: a durable marker needs a table, and a table
+ * that does not exist in production makes the scheduler throw every midnight.
+ * The real-world consequence is narrow and documented - a deploy inside the
+ * one-hour send window can re-send that period.
+ */
+const runMarkers = new Set<string>();
+
+export function hasRun(period: ReportPeriod, window: ReportWindow): boolean {
+  return runMarkers.has(`${period}|${window.key}`);
+}
+
+export function markRun(period: ReportPeriod, window: ReportWindow): void {
+  runMarkers.add(`${period}|${window.key}`);
+}
+
+/** Exposed for tests: clears every marker so each case starts from a cold boot. */
+export function resetRunMarkers(): void {
+  runMarkers.clear();
+}
+
+/** The one predicate the tick uses, exposed so it can be tested directly. */
+export function isDue(period: ReportPeriod, now: Date): boolean {
+  const sched = SCHEDULES.find((s) => s.period === period);
+  if (!sched) return false;
+  if (!isPeriodDue(period, now, sched.hour)) return false;
+  return !hasRun(period, periodWindow(period, now));
+}
+
+/** Every cadence not yet sent for its current period. */
+export function pendingPeriods(now = new Date()): ReportPeriod[] {
+  return SCHEDULES.map((s) => s.period).filter((p) => isDue(p, now));
+}
+
+/** Which sections a cadence contains. */
+export async function sectionsForPeriod(
+  period: ReportPeriod,
+  window: ReportWindow,
+  now = new Date(),
+): Promise<DigestSection[]> {
+  if (period === "TAX") return buildTaxSections(window);
+
+  const standard = await buildDigestSections(window);
+  if (period === "NEXT_MONTH") return [...standard, ...(await buildOutlookSections(window, now))];
+
+  // The longer periods carry the tax table too. Super admin receives one
+  // combined mail, so "all reports end to end" has to include the tax bases in
+  // that same mail rather than splitting them into a second inbox.
+  if (period === "MONTHLY" || period === "QUARTERLY" || period === "YEARLY") {
+    return [...standard, { title: "Tax and statutory", rows: await taxRows(window) }];
+  }
+  return standard;
+}
+
+/** Recipients for a cadence: tax goes only to the tax roles, everything else to all. */
+async function recipientsFor(period: ReportPeriod): Promise<Map<DigestRole, string[]>> {
+  const roles = period === "TAX" ? taxRoles() : [...DIGEST_ROLES];
+  const out = new Map<DigestRole, string[]>();
+  for (const role of roles) out.set(role, await recipientsForRole(role));
+  return out;
+}
+
+/**
+ * Builds and sends one cadence. Never throws: a scheduler that dies takes every
  * other background job with it.
  */
-export async function runDailyDigest(now = new Date()): Promise<void> {
-  const windowEnd = now;
-  const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-
-  // Marked before sending, not after. If the process dies mid-send the day is
-  // still consumed, and a partial digest is better than a duplicate one.
-  markDigestRun(localDayKey(now));
+export async function runReport(period: ReportPeriod, now = new Date()): Promise<void> {
+  const window = periodWindow(period, now);
+  markRun(period, window);
 
   try {
-    const sections = await buildDigestSections(since);
-    const roles: DigestRole[] = [...DIGEST_ROLES];
+    const sections = await sectionsForPeriod(period, window, now);
+    const recipients = await recipientsFor(period);
 
     let anyRecipient = false;
-    const results: Array<{
-      role: DigestRole;
-      attempted: number;
-      sent: number;
-      skipped: boolean;
-      error?: string;
-    }> = [];
-    for (const role of roles) {
-      const recipients = recipientsForRole(role);
-      if (recipients.length) anyRecipient = true;
-      results.push(await sendDigestForRole(role, recipients, sections, windowEnd));
+    for (const [role, addrs] of recipients) {
+      if (addrs.length) anyRecipient = true;
+      const res = await sendDigestForRole(role, addrs, sections, window);
+      if (res.skipped) continue;
+      if (res.error) console.error(`[REPORT] ${period} ${role}: ${res.sent}/${res.attempted} sent - ${res.error}`);
+      else console.log(`[REPORT] ${period} ${role}: ${res.sent}/${res.attempted} sent`);
     }
 
     if (!anyRecipient) {
       console.log(
-        "[DIGEST] No DIGEST_EMAIL_<ROLE> recipients configured - built the digest but sent nothing.",
+        `[REPORT] ${periodTitle(period)} (${window.label}): no recipients configured - built the report but sent nothing.`,
       );
-      return;
-    }
-
-    for (const r of results) {
-      if (r.skipped) continue;
-      if (r.error) console.error(`[DIGEST] ${r.role}: ${r.sent}/${r.attempted} sent - ${r.error}`);
-      else console.log(`[DIGEST] ${r.role}: ${r.sent}/${r.attempted} sent`);
     }
   } catch (err) {
-    console.error("[DIGEST] run failed:", (err as Error)?.message ?? err);
+    console.error(`[REPORT] ${period} run failed:`, (err as Error)?.message ?? err);
   }
 }
+
+/**
+ * The daily digest. Thin wrapper over runReport so the existing daily entry
+ * point and its call sites keep working.
+ */
+export async function runDailyDigest(now = new Date()): Promise<void> {
+  await runReport("DAILY", now);
+}
+
+let timer: ReturnType<typeof setInterval> | null = null;
+/** Serialises the cadences of one tick so their report builds do not compete. */
+let chain: Promise<unknown> = Promise.resolve();
 
 export function startDigestScheduler(): void {
   if (timer) return;
   timer = setInterval(() => {
-    if (shouldRunNow()) {
-      console.log("[DIGEST] midnight reached - sending daily digest");
-      void runDailyDigest();
-    }
+    const now = new Date();
+    const due = pendingPeriods(now);
+    if (!due.length) return;
+    // Marked here rather than inside runReport: between deciding a period is due
+    // and awaiting the previous one, the next 60-second tick runs again. Without
+    // this the same monthly report is queued twice on 1 January.
+    for (const period of due) markRun(period, periodWindow(period, now));
+    chain = chain.then(async () => {
+      for (const period of due) {
+        console.log(`[REPORT] ${periodTitle(period)} is due - sending`);
+        await runReport(period, now);
+      }
+    });
   }, TICK_MS);
   timer.unref?.();
 }

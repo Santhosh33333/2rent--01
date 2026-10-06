@@ -8,6 +8,7 @@
  */
 import type { DigestSection, DigestRole } from "./dailyAdminDigest";
 import { sectionsForRole } from "./dailyAdminDigest";
+import { localDateStamp, periodTitle, type ReportWindow } from "./reportPeriods";
 
 /**
  * Fold the digest's few non-ASCII characters down to ASCII.
@@ -76,15 +77,22 @@ function csvCell(value: string): string {
 export function buildDigestCsv(
   role: DigestRole,
   sections: DigestSection[],
-  windowEnd: Date,
+  window: ReportWindow,
 ): string {
   const wanted = sectionsForRole(role);
   const shown = sections.filter((s) => wanted.includes(s.title));
 
   const lines: string[] = [];
+  lines.push(["Report", periodTitle(window.period)].map(csvCell).join(","));
   lines.push(["Role", role].map(csvCell).join(","));
-  lines.push(["Window end (UTC)", windowEnd.toISOString()].map(csvCell).join(","));
-  lines.push(["Sections", wanted.join(" | ")].map(csvCell).join(","));
+  // Both boundaries, in full ISO, so a downloaded file is reconcilable against
+  // the ledger without anyone having to remember what "this month" meant.
+  lines.push(["Window start (inclusive)", window.since.toISOString()].map(csvCell).join(","));
+  lines.push(["Window end (exclusive)", window.until.toISOString()].map(csvCell).join(","));
+  // Only the sections actually present, not the role's whole wishlist: the daily
+  // mail has no tax rows, so listing "Tax and statutory" in its header would
+  // suggest the file contains a return that it does not.
+  lines.push(["Sections", shown.map((s) => s.title).join(" | ") || "none"].map(csvCell).join(","));
   lines.push("");
   lines.push(["Section", "Metric", "Value"].map(csvCell).join(","));
 
@@ -103,6 +111,15 @@ export function buildDigestCsv(
   return lines.join("\r\n") + "\r\n";
 }
 
-export function digestCsvFilename(role: DigestRole, windowEnd: Date): string {
-  return `nabri-digest-${role.toLowerCase()}-${windowEnd.toISOString().slice(0, 10)}.csv`;
+/**
+ * Names the file after the role, the period and the window it covers.
+ *
+ * The period label is folded to ASCII and squeezed, so a monthly file is
+ * `nabri-digest-super_admin-monthly-2026-09.csv` rather than something with
+ * spaces or a rupee sign in it that a finance admin has to rename before it can
+ * be attached to a return.
+ */
+export function digestCsvFilename(role: DigestRole, window: ReportWindow): string {
+  const period = window.period.toLowerCase();
+  return `nabri-digest-${role.toLowerCase()}-${period}-${localDateStamp(window.since)}.csv`;
 }
