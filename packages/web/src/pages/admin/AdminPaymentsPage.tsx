@@ -36,6 +36,26 @@ interface PaymentRow {
   booking?: { id: string; serviceType: string; status: string; paymentStatus?: string } | null
 }
 
+/**
+ * A subscription payment awaiting review.
+ *
+ * Deliberately not merged into `PaymentRow`: that list is retired gateway
+ * history and is read-only, while this one is a live queue where acting on a
+ * row activates a plan. Same amount field, completely different consequence.
+ */
+interface SubscriptionPaymentRow {
+  id: string
+  amount: number
+  currency: string
+  status: string
+  referenceNumber?: string | null
+  periodStart: string
+  periodEnd: string
+  createdAt: string
+  plan?: { name: string; code: string } | null
+  user?: { id: string; fullName?: string; email: string; phone?: string | null } | null
+}
+
 const STATUS_BADGE: Record<string, string> = {
   CREATED: 'bg-blue-900/40 text-blue-300',
   AUTHORIZED: 'bg-indigo-900/40 text-indigo-300',
@@ -56,6 +76,58 @@ export function AdminPaymentsPage() {
   const [stats, setStats] = useState<PaymentStats | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [downloading, setDownloading] = useState(false)
+
+  // ---- Subscription payment queue -----------------------------------------
+  const [subRows, setSubRows] = useState<SubscriptionPaymentRow[]>([])
+  const [subLoading, setSubLoading] = useState(true)
+  const [subError, setSubError] = useState('')
+  const [subActing, setSubActing] = useState<string | null>(null)
+  // Reject and request-info both require a reason, so they collect one inline
+  // rather than in a modal: the row stays visible while the admin types, which
+  // is what makes "is this the right payment?" answerable.
+  const [noteFor, setNoteFor] = useState<{ id: string; action: 'REJECT' | 'REQUEST_INFO' } | null>(null)
+  const [noteText, setNoteText] = useState('')
+
+  const loadSubscriptions = async () => {
+    setSubLoading(true)
+    setSubError('')
+    try {
+      const params: any = { status: 'VERIFICATION_PENDING', limit: 20 }
+      const res = await adminApi.getSubscriptionPayments(params)
+      const d = res.data?.data || res.data
+      setSubRows(Array.isArray(d?.items) ? d.items : [])
+    } catch (err: unknown) {
+      setSubError(getErrorMessage(err, 'Failed to load subscription payments'))
+    } finally {
+      setSubLoading(false)
+    }
+  }
+
+  const actOnSubscription = async (
+    id: string,
+    action: 'VERIFY' | 'REJECT' | 'REQUEST_INFO',
+    note?: string,
+  ) => {
+    setSubActing(id)
+    try {
+      const res = await adminApi.verifySubscriptionPayment(id, { action, note })
+      const body = res.data || {}
+      const message = body.message || (action === 'VERIFY'
+        ? 'Payment verified and the plan is now active.'
+        : 'Payment updated.')
+      if (body.data?.alreadySettled) toast(message)
+      else toast.success(message)
+      setNoteFor(null)
+      setNoteText('')
+      await loadSubscriptions()
+    } catch (err: unknown) {
+      // The server refuses a reference already used elsewhere with 409
+      // REFERENCE_ALREADY_USED; getErrorMessage carries that message through.
+      toast.error(getErrorMessage(err, 'Could not update this payment'))
+    } finally {
+      setSubActing(null)
+    }
+  }
 
   const inr = (n: number) => `₹${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
 
@@ -86,6 +158,14 @@ export function AdminPaymentsPage() {
       .catch(() => { /* stats are supplementary */ })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, statusFilter, typeFilter])
+
+  // Loaded once, independently of the ledger's filters: pagination and status
+  // filters below apply to the gateway history, and re-querying the queue when
+  // an admin pages through retired orders would be a request nobody asked for.
+  useEffect(() => {
+    loadSubscriptions()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const csvEscape = (v: unknown) => {
     const s = v === null || v === undefined ? '' : String(v)
@@ -153,7 +233,145 @@ export function AdminPaymentsPage() {
 
   return (
     <AdminShell width="max-w-6xl">
-      <AdminPageHeader title="Payment Center" subtitle="Gateway order history. Cashfree is retired - new money arrives via the UPI queue beside this." />
+      <AdminPageHeader title="Payment Center" subtitle="Subscription payments waiting on you are at the top. Below them: gateway order history - Cashfree is retired, so those rows are the record of what it did." />
+
+        {/* Subscription queue first, on purpose. It is the only part of this page
+            that is actionable: verifying one of these rows activates a plan and
+            sends the confirmation mail, so it must not sit below seven stat
+            cards and a paginated history of orders nobody can act on. */}
+        <section className="mb-8 rounded-2xl bg-gray-800/60 border border-emerald-800/40 overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-4 border-b border-gray-700/60">
+            <div>
+              <h2 className="text-white font-semibold flex items-center gap-2">
+                <Wallet className="w-4 h-4 text-emerald-400" />
+                Subscription payments awaiting verification
+                {subRows.length > 0 && (
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-900/60 text-emerald-300 text-[11px] font-bold">
+                    {subRows.length}
+                  </span>
+                )}
+              </h2>
+              <p className="text-gray-500 text-xs mt-0.5">
+                Verifying activates the plan and emails the user. This money buys a billing period - it is never credited to a wallet.
+              </p>
+            </div>
+            <button
+              onClick={loadSubscriptions}
+              disabled={subLoading}
+              className="px-3 py-1.5 rounded-lg bg-gray-900 border border-gray-700 text-gray-300 text-xs hover:bg-gray-700 disabled:opacity-50 transition self-start"
+            >
+              {subLoading ? 'Loading…' : 'Refresh'}
+            </button>
+          </div>
+
+          {subError && (
+            <div className="px-5 py-3 bg-red-900/20 border-b border-red-900/40 text-red-300 text-sm">{subError}</div>
+          )}
+
+          {subLoading ? (
+            <div className="px-5 py-8 text-center text-gray-500 text-sm">Loading subscription payments…</div>
+          ) : subRows.length === 0 ? (
+            <div className="px-5 py-8 text-center text-gray-500 text-sm">
+              Nothing waiting. A payment submitted through the UPI flow appears here within a second.
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-700/50">
+              {subRows.map((p) => {
+                const busy = subActing === p.id
+                return (
+                  <div key={p.id} className="px-5 py-4">
+                    <div className="flex flex-col xl:flex-row xl:items-start gap-4">
+                      <div className="w-11 h-11 shrink-0 rounded-xl bg-emerald-900/40 border border-emerald-700/40 flex items-center justify-center font-bold text-emerald-300">
+                        ₹{Number(p.amount).toLocaleString('en-IN')}
+                      </div>
+                      <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-x-6 gap-y-2 text-sm">
+                        <div className="min-w-0">
+                          <p className="text-gray-500 text-[11px] uppercase tracking-wide">User</p>
+                          <p className="text-gray-200 truncate">{p.user?.fullName || p.user?.email || '—'}</p>
+                          <p className="text-gray-500 text-xs truncate">{p.user?.email}</p>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-gray-500 text-[11px] uppercase tracking-wide">Plan</p>
+                          <p className="text-gray-200 truncate">{p.plan?.name || '—'}</p>
+                          <p className="text-gray-500 text-xs">
+                            {new Date(p.periodStart).toLocaleDateString('en-IN')} →{' '}
+                            {new Date(p.periodEnd).toLocaleDateString('en-IN')}
+                          </p>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-gray-500 text-[11px] uppercase tracking-wide">UTR / Reference</p>
+                          <p className="font-mono text-gray-200 break-all">{p.referenceNumber || 'Not submitted yet'}</p>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-gray-500 text-[11px] uppercase tracking-wide">Submitted</p>
+                          <p className="text-gray-200">{new Date(p.createdAt).toLocaleString('en-IN')}</p>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2 shrink-0">
+                        <button
+                          onClick={() => actOnSubscription(p.id, 'VERIFY')}
+                          disabled={busy || !p.referenceNumber}
+                          title={!p.referenceNumber ? 'No reference submitted yet - there is nothing to check against the bank.' : 'Activate the plan'}
+                          className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-xs font-semibold transition"
+                        >
+                          {busy ? 'Working…' : 'Verify'}
+                        </button>
+                        <button
+                          onClick={() => { setNoteFor({ id: p.id, action: 'REQUEST_INFO' }); setNoteText('') }}
+                          disabled={busy}
+                          className="px-3 py-1.5 rounded-lg bg-gray-900 border border-gray-700 text-gray-300 hover:bg-gray-700 disabled:opacity-40 text-xs font-semibold transition"
+                        >
+                          Request info
+                        </button>
+                        <button
+                          onClick={() => { setNoteFor({ id: p.id, action: 'REJECT' }); setNoteText('') }}
+                          disabled={busy}
+                          className="px-3 py-1.5 rounded-lg bg-red-900/60 border border-red-800/60 text-red-300 hover:bg-red-900 disabled:opacity-40 text-xs font-semibold transition"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+
+                    {noteFor?.id === p.id && (
+                      <div className="mt-3 rounded-xl bg-gray-950/70 border border-gray-700/60 p-3">
+                        <label className="block text-gray-400 text-xs font-semibold uppercase tracking-wide mb-1.5">
+                          {noteFor.action === 'REJECT' ? 'Why is this being rejected?' : 'What does the user need to send?'}
+                        </label>
+                        <textarea
+                          value={noteText}
+                          onChange={(e) => setNoteText(e.target.value)}
+                          rows={2}
+                          autoFocus
+                          placeholder={noteFor.action === 'REJECT'
+                            ? 'e.g. The UTR does not appear in the statement.'
+                            : 'e.g. Send a screenshot of the debit with the UTR visible.'}
+                          className="w-full rounded-lg bg-gray-900 border border-gray-700 text-white text-sm p-2.5 placeholder:text-gray-600 focus:border-emerald-500 focus:outline-none resize-none"
+                        />
+                        <div className="flex gap-2 mt-2">
+                          <button
+                            onClick={() => actOnSubscription(p.id, noteFor.action, noteText.trim())}
+                            disabled={busy || noteText.trim().length < 5}
+                            className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-xs font-semibold transition"
+                          >
+                            Send
+                          </button>
+                          <button
+                            onClick={() => { setNoteFor(null); setNoteText('') }}
+                            disabled={busy}
+                            className="px-3 py-1.5 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 disabled:opacity-40 text-xs font-semibold transition"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </section>
 
         {statCards.length > 0 && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">

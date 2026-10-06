@@ -291,6 +291,16 @@ export const adminApi = {
   // are the record of what the gateway used to do rather than a live rail)
   getPayments: (params?: PaginationParams) => api.get('/admin/payments', { params }),
   getPaymentStats: () => api.get('/admin/payments/stats'),
+  // Subscription payments collected by manual UPI. Separate from `getPayments`
+  // on purpose: the money buys a billing period and never touches a wallet, so
+  // folding it into the gateway order ledger would make one payment look like
+  // two. This queue was unreachable from the UI for a while - the endpoint
+  // existed and nothing called it, which is why subscription payments appeared
+  // to vanish.
+  getSubscriptionPayments: (params?: PaginationParams) =>
+    api.get('/admin/payments/subscriptions', { params }),
+  verifySubscriptionPayment: (id: string, data: { action: 'VERIFY' | 'REJECT' | 'REQUEST_INFO'; note?: string }) =>
+    api.post(`/admin/payments/subscriptions/${id}/verify`, data),
   // Manual UPI verification (temporary flow for personal UPI accounts)
   getUpiPayments: (params?: PaginationParams) => api.get('/admin/payments/upi', { params }),
   verifyUpiPayment: (id: string, data: { action: 'VERIFY' | 'REJECT' | 'REQUEST_INFO'; note?: string }) =>

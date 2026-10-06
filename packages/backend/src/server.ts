@@ -15,6 +15,7 @@ import { startMovieCatalogSync, stopMovieCatalogSync } from "./services/movieCat
 import { sweepReleasableEscrows } from "./services/eventEscrowService";
 import { sweepDueSubscriptions } from "./services/subscriptionBillingService";
 import { startDigestScheduler, stopDigestScheduler } from "./services/digestScheduler";
+import { startReconciliationSweeper, stopReconciliationSweeper } from "./services/reconciliationSweeper";
 import { ensureLegalDocumentsSeeded } from "./services/legalConsentService";
 
 const TIMEOUT_SWEEP_INTERVAL_MS = 30_000;
@@ -495,6 +496,10 @@ startReengagementSweeper();
   // outlook and tax. One role-scoped mail each, except super admin who gets a
   // single combined mail carrying every section.
   startDigestScheduler();
+  // Bank statement reconciliation: re-matches uploaded statements every minute
+  // so a UTR pasted after the upload still finds its line, auto-approves only
+  // what the matcher already approved, and expires statements after 24 hours.
+  startReconciliationSweeper();
 
   // Publish version 1 of any legal document that has no current row. Idempotent
   // and never overwrites existing wording, so it is safe on every boot.
@@ -521,6 +526,7 @@ if (reengagementSweeper) {
     }
     stopMovieCatalogSync();
     stopDigestScheduler();
+    stopReconciliationSweeper();
     if (subscriptionSweeper) {
       clearInterval(subscriptionSweeper);
     }

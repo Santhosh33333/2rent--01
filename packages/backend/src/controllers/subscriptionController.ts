@@ -5,6 +5,7 @@ import { prisma } from "../config/database";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
 import { buildHourlyQr } from "../services/upiQr";
+import { findReferenceConflict, referenceConflictMessage } from "../services/referenceUniqueness";
 
 function fail(res: Response, error: unknown, fallback: string) {
   const code = error instanceof Error ? error.message : "";
@@ -313,18 +314,13 @@ export async function submitSubscriptionReference(req: AuthedRequest, res: Respo
     }
 
     // Checked before storing because the unique index only guards this one table,
-    // and one bank line must never settle two requests.
-    const [topupClash, upiClash] = await Promise.all([
-      prisma.topupRequest.findFirst({ where: { referenceNumber }, select: { id: true } }),
-      prisma.upiPayment.findFirst({ where: { referenceNumber }, select: { id: true } }),
-    ]);
-    if (topupClash || upiClash) {
-      sendError(
-        res,
-        "That reference is already recorded against another payment.",
-        409,
-        "REFERENCE_ALREADY_USED",
-      );
+    // and one bank line must never settle two requests. `excludeId` is this row:
+    // re-submitting the reference it already holds is not a clash, and without
+    // the exclusion a user correcting nothing would be told their own UTR was
+    // taken.
+    const conflict = await findReferenceConflict(referenceNumber, { excludeId: id });
+    if (conflict) {
+      sendError(res, referenceConflictMessage(conflict), 409, "REFERENCE_ALREADY_USED");
       return;
     }
 

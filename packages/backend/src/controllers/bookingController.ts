@@ -21,6 +21,7 @@ import { dispatchBooking, onBookingClaimed } from "../services/dispatchService"
 import { ensureConversation } from "./messageController"
 import { SERVICE_KEYS, getServiceDef } from "../services/serviceCatalog"
 import { logBookingTransition } from "../services/bookingLogService"
+import { findReferenceConflict, referenceConflictMessage } from "../services/referenceUniqueness"
 import { sendBookingInvoiceEmail, sendBookingCompletionEmails } from "../services/emailService"
 import { notifyBookingStatusChange } from "./notificationController"
 import { moneyTransaction, shortTransaction } from "../utils/db"
@@ -785,18 +786,18 @@ export async function submitUpiReference(req: AuthedRequest, res: Response): Pro
       return;
     }
 
-    // The duplicate-reference check and the wallet lookup do not depend on each
-    // other, so they are fetched together. Every query here costs a full network
-    // round trip to the database, which is the dominant cost of this endpoint.
-    const [duplicate, wallet] = await Promise.all([
-      // Prevent the same reference being reused for another booking (fraud guard).
-      prisma.upiPayment.findFirst({
-        where: { referenceNumber, status: { in: ["VERIFICATION_PENDING", "VERIFIED", "REQUEST_INFO"] } },
-      }),
+    // The reference check and the wallet lookup do not depend on each other, so
+    // they are fetched together. Every query here costs a full network round trip
+    // to the database, which is the dominant cost of this endpoint.
+    const [conflict, wallet] = await Promise.all([
+      // One UTR, one payment - across bookings, top-ups and subscriptions alike.
+      // This path previously checked only UpiPayment, so it accepted a reference
+      // a top-up had already settled.
+      findReferenceConflict(referenceNumber),
       prisma.wallet.findUnique({ where: { userId: req.user!.userId } }),
     ]);
-    if (duplicate) {
-      sendError(res, "This reference number is already used for another booking.", 409, "DUPLICATE_REFERENCE");
+    if (conflict) {
+      sendError(res, referenceConflictMessage(conflict), 409, "DUPLICATE_REFERENCE");
       return;
     }
 

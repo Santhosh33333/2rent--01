@@ -957,40 +957,35 @@ export interface ApplyResult {
 }
 
 /**
- * Credit every line the matcher approved. One transaction per line, not one for
- * the file.
+ * Credits every MATCHED, uncredited row handed to it.
  *
- * That is deliberate. Each credit is a conditional claim on its own payment, so
- * the only thing a batch transaction would add is the ability to lose a hundred
- * good credits because the hundred-and-first line had a dead foreign key. A
- * partial apply with a per-line reason is recoverable; an all-or-nothing apply
+ * Shared by the admin's Apply button and by the background sweeper. The sharing
+ * is the point: if automatic approval had its own crediting loop, then the rule
+ * a human approves by clicking Apply and the rule the scheduler applies at
+ * 01:00 would be two different rules, and the admin would be approving code they
+ * cannot see. One loop, one behaviour, one place to audit.
+ *
+ * Returns rather than throws, because one dead claim must not abandon the rest -
+ * a partial apply with a per-line reason is recoverable; an all-or-nothing apply
  * over money is a support ticket.
  */
-export async function applyStatement(params: {
-  statementId: string;
+async function creditMatchedRows(opts: {
+  rows: Array<{
+    id: string;
+    lineNo: number;
+    matchedType: string | null;
+    matchedId: string | null;
+  }>;
+  fileName: string;
   actorId: string;
   note?: string;
-}): Promise<ApplyResult> {
-  const { statementId, actorId } = params;
-
-  const statement = await prisma.bankStatement.findUnique({
-    where: { id: statementId },
-    include: { rows: { where: { matchStatus: "MATCHED", creditedAt: null } } },
-  });
-  if (!statement) throw new ReconciliationError("NOT_FOUND", "That statement no longer exists.", 404);
-  if (statement.status === "APPLIED") {
-    throw new ReconciliationError(
-      "ALREADY_APPLIED",
-      "This statement has already been applied. Its rows are settled; nothing further to credit.",
-      409,
-    );
-  }
-
+}): Promise<{ credited: number; alreadySettled: number; failed: ApplyResult["failed"] }> {
+  const { fileName, actorId } = opts;
   const failed: ApplyResult["failed"] = [];
   let credited = 0;
   let alreadySettled = 0;
 
-  for (const row of statement.rows) {
+  for (const row of opts.rows) {
     if (!row.matchedType || !row.matchedId) continue;
 
     const claim =
@@ -1022,7 +1017,7 @@ export async function applyStatement(params: {
         referenceNumber:
           row.matchedType === "TOPUP" ? (claim as { referenceNumber?: string }).referenceNumber : undefined,
         actorId,
-        note: params.note?.trim() || `Bank statement ${statement.fileName}`,
+        note: opts.note?.trim() || `Bank statement ${fileName}`,
       });
       await prisma.bankStatementRow.update({
         where: { id: row.id },
@@ -1038,6 +1033,50 @@ export async function applyStatement(params: {
       });
     }
   }
+
+  return { credited, alreadySettled, failed };
+}
+
+/**
+ * Credit every line the matcher approved. One transaction per line, not one for
+ * the file.
+ *
+ * That is deliberate. Each credit is a conditional claim on its own payment, so
+ * the only thing a batch transaction would add is the ability to lose a hundred
+ * good credits because the hundred-and-first line had a dead foreign key. A
+ * partial apply with a per-line reason is recoverable; an all-or-nothing apply
+ * over money is a support ticket.
+ */
+export async function applyStatement(params: {
+  statementId: string;
+  actorId: string;
+  note?: string;
+}): Promise<ApplyResult> {
+  const { statementId, actorId } = params;
+
+  const statement = await prisma.bankStatement.findUnique({
+    where: { id: statementId },
+    // `decidedAt: null` is load-bearing. recordRowDecision leaves matchStatus
+    // alone when it records IGNORE or REJECT, so a line the admin explicitly
+    // decided to leave alone is still MATCHED - and without this filter the
+    // batch would credit it a moment later, silently overruling the decision.
+    include: { rows: { where: { matchStatus: "MATCHED", creditedAt: null, decidedAt: null } } },
+  });
+  if (!statement) throw new ReconciliationError("NOT_FOUND", "That statement no longer exists.", 404);
+  if (statement.status === "APPLIED") {
+    throw new ReconciliationError(
+      "ALREADY_APPLIED",
+      "This statement has already been applied. Its rows are settled; nothing further to credit.",
+      409,
+    );
+  }
+
+  const { credited, alreadySettled, failed } = await creditMatchedRows({
+    rows: statement.rows,
+    fileName: statement.fileName,
+    actorId,
+    note: params.note,
+  });
 
   await writeAudit(actorId, "BANK_STATEMENT_APPLIED", "BankStatement", statement.id, {
     fileName: statement.fileName,
@@ -1108,30 +1147,50 @@ async function refreshStatementCounts(statementId: string) {
 }
 
 /**
- * Re-run matching over a stored statement, for claims submitted after upload.
+ * The shape `rematchStoredRows` needs.
  *
- * Only meaningful before apply. Afterwards the statement's own rows are the
- * record of what was decided, and rewriting them would overwrite the reason a
- * credit was or was not made.
+ * Structural rather than a Prisma return type, because the two callers fetch
+ * different column sets and neither wants every column just to satisfy a
+ * signature. Everything the matcher touches is listed, so adding a field it
+ * depends on without adding it here is a compile error rather than a silent
+ * `undefined` at 01:00.
  */
-export async function rematchStatement(params: {
-  statementId: string;
-  actorId: string;
-}): Promise<UploadSummary> {
-  const { statementId } = params;
-  const statement = await prisma.bankStatement.findUnique({
-    where: { id: statementId },
-    include: { rows: { orderBy: { lineNo: "asc" } } },
-  });
-  if (!statement) throw new ReconciliationError("NOT_FOUND", "That statement no longer exists.", 404);
-  if (statement.status === "APPLIED") {
-    throw new ReconciliationError(
-      "ALREADY_APPLIED",
-      "This statement was already applied, so its lines will not be re-matched.",
-      409,
-    );
-  }
+type RematchableStatement = {
+  id: string;
+  status: string;
+  warnings: string | null;
+  periodFrom: Date | null;
+  periodTo: Date | null;
+  rows: Array<{
+    id: string;
+    lineNo: number;
+    rawJson: string | null;
+    referenceNorm: string;
+    amount: unknown;
+    inbound: boolean;
+    matchStatus: string;
+    creditedAt: Date | null;
+    decidedAt: Date | null;
+  }>;
+};
 
+/**
+ * The matching pass itself, over rows already stored.
+ *
+ * Extracted from `rematchStatement` because there are now two callers with
+ * different bookkeeping around the same decision: the admin's Rematch button,
+ * and the background sweeper that runs every minute. Two copies of this logic
+ * would drift, and the copy that drifts is the one crediting money unattended.
+ *
+ * Deliberately does not touch statement status or counts - it only moves rows
+ * from "no claim found" to MATCHED when a claim has appeared since the last run.
+ * That is the whole reason the sweeper needs it: a user typically pastes the UTR
+ * a minute *after* the statement is uploaded, so the row is unmatchable at
+ * upload time and matchable on the next tick.
+ *
+ * Returns how many rows newly matched.
+ */
+async function rematchStoredRows(statement: RematchableStatement): Promise<number> {
   const rawJsonByLine = new Map<number, string>();
   const altByRowId = new Map<string, string[]>();
   for (const r of statement.rows) {
@@ -1154,6 +1213,8 @@ export async function rematchStatement(params: {
   const pending = statement.rows.filter(
     (r) => r.matchStatus !== "MATCHED" && !r.creditedAt && !r.decidedAt && r.inbound && keysFor(r).length > 0,
   );
+  if (pending.length === 0) return 0;
+
   const { claims, truncated } = await loadCandidateClaims(
     [...new Set(pending.flatMap((r) => keysFor(r)))],
     statement.periodFrom,
@@ -1206,6 +1267,36 @@ export async function rematchStatement(params: {
     newlyMatched += 1;
   }
 
+  return newlyMatched;
+}
+
+/**
+ * Re-run matching over a stored statement, for claims submitted after upload.
+ *
+ * Only meaningful before apply. Afterwards the statement's own rows are the
+ * record of what was decided, and rewriting them would overwrite the reason a
+ * credit was or was not made.
+ */
+export async function rematchStatement(params: {
+  statementId: string;
+  actorId: string;
+}): Promise<UploadSummary> {
+  const { statementId } = params;
+  const statement = await prisma.bankStatement.findUnique({
+    where: { id: statementId },
+    include: { rows: { orderBy: { lineNo: "asc" } } },
+  });
+  if (!statement) throw new ReconciliationError("NOT_FOUND", "That statement no longer exists.", 404);
+  if (statement.status === "APPLIED") {
+    throw new ReconciliationError(
+      "ALREADY_APPLIED",
+      "This statement was already applied, so its lines will not be re-matched.",
+      409,
+    );
+  }
+
+  const newlyMatched = await rematchStoredRows(statement);
+
   const counts = await refreshStatementCounts(statementId);
   if (counts.matchedCount > 0 && statement.status === "UPLOADED") {
     await prisma.bankStatement.update({ where: { id: statementId }, data: { status: "PREVIEWED" } });
@@ -1229,6 +1320,205 @@ export async function rematchStatement(params: {
     rows: detail?.rows ?? [],
     newlyMatched,
   };
+}
+
+// -----------------------------------------------------------------------------
+// Automatic approval and retention
+// -----------------------------------------------------------------------------
+
+/**
+ * How long an uploaded statement is kept.
+ *
+ * The file's bytes are already gone - only the parsed rows survive - so what
+ * this expires is the row set and the statement header, not a document. Twenty-
+ * four hours is long enough to cover an overnight upload, review it in the
+ * morning, and re-upload the next day's export: `@@unique([fileHash])` would
+ * otherwise reject a daily export that happens to be identical to yesterday's.
+ */
+export const STATEMENT_RETENTION_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Who auto-approved a line.
+ *
+ * Deliberately not the admin who uploaded the file. They chose to upload a
+ * statement; they did not choose to credit a particular row at 01:00, and
+ * stamping their id on an unattended decision makes the audit trail assert
+ * something that did not happen. These columns are bare strings with no foreign
+ * key, so a non-UUID sentinel is safe and is visibly not a person.
+ */
+export const SYSTEM_ACTOR_ID = "system:reconciliation-sweeper";
+
+export interface SweepOutcome {
+  statementId: string;
+  /** Rows that found a claim since the last pass. */
+  rematched: number;
+  credited: number;
+  alreadySettled: number;
+  failed: Array<{ rowId: string; lineNo: number; reason: string }>;
+}
+
+/**
+ * One automatic pass over a statement: re-match what has not matched, then
+ * credit whatever now has.
+ *
+ * Two differences from the admin's Apply, both deliberate:
+ *
+ *  1. It does NOT mark the statement APPLIED. Apply is a terminal verdict on a
+ *     file a human has looked at; this is a watch. Its reason for existing is
+ *     that claims routinely appear *after* the upload - the user pastes the UTR
+ *     a minute later, or the booking is created after the file was read -
+ *     so ending the watch on the first pass would end it before it was useful.
+ *  2. It only credits rows that are MATCHED, uncredited, and undecided. MATCHED
+ *     is not a loose signal: matchRowAgainst has already refused outbound lines,
+ *     amounts that differ by a rupee, references claimed twice, references
+ *     repeated inside the file, settled claims, and every row of a PDF whose
+ *     columns were inferred from glyph positions. What reaches this function is
+ *     an inbound line whose reference names exactly one pending claim and whose
+ *     amount agrees to the paisa.
+ *
+ * Returns null when there is nothing to do, so a quiet tick costs one indexed
+ * query rather than a log line.
+ */
+export async function sweepStatement(params: {
+  statementId: string;
+  actorId?: string;
+}): Promise<SweepOutcome | null> {
+  const { statementId } = params;
+  const actorId = params.actorId ?? SYSTEM_ACTOR_ID;
+
+  const statement = await prisma.bankStatement.findUnique({
+    where: { id: statementId },
+    include: { rows: { orderBy: { lineNo: "asc" } } },
+  });
+  // Missing, or already applied by hand. APPLIED is terminal: a person has taken
+  // responsibility for the file, and rewriting its rows afterwards would destroy
+  // the record of why each line was or was not credited.
+  if (!statement || statement.status === "APPLIED") return null;
+
+  const rematched = await rematchStoredRows(statement);
+
+  const toCredit = await prisma.bankStatementRow.findMany({
+    where: { statementId, matchStatus: "MATCHED", creditedAt: null, decidedAt: null },
+    select: { id: true, lineNo: true, matchedType: true, matchedId: true },
+  });
+
+  const outcome = toCredit.length
+    ? await creditMatchedRows({
+        rows: toCredit,
+        fileName: statement.fileName,
+        actorId,
+        note: `Bank statement ${statement.fileName} - auto-approved`,
+      })
+    : { credited: 0, alreadySettled: 0, failed: [] };
+
+  const counts = await refreshStatementCounts(statementId);
+  if (counts.matchedCount > 0 && statement.status === "UPLOADED") {
+    await prisma.bankStatement.update({ where: { id: statementId }, data: { status: "PREVIEWED" } });
+  }
+
+  if (outcome.credited > 0 || outcome.failed.length > 0) {
+    // Written even when nothing was credited but something failed: a silent
+    // failure in an unattended money path is indistinguishable from success.
+    await writeSystemAudit("BANK_STATEMENT_AUTO_APPLIED", "BankStatement", statementId, {
+      fileName: statement.fileName,
+      fileHash: statement.fileHash,
+      rematched,
+      credited: outcome.credited,
+      alreadySettled: outcome.alreadySettled,
+      failed: outcome.failed,
+    });
+  }
+
+  return {
+    statementId,
+    rematched,
+    credited: outcome.credited,
+    alreadySettled: outcome.alreadySettled,
+    failed: outcome.failed,
+  };
+}
+
+/**
+ * Deletes statements older than the retention window.
+ *
+ * Runs after crediting in the sweep, never before: a statement that still holds
+ * an uncredited matched line must be given the chance to pay out before it is
+ * removed. Rows cascade from the statement, but they are deleted explicitly in
+ * the same transaction so the intent does not depend on migration state - if the
+ * cascade were ever absent, a bare delete would orphan rows rather than fail.
+ *
+ * Each purge writes an audit row carrying what the file contained, because the
+ * statement is the only place that recorded it. Without that, deleting the
+ * statement would also delete the answer to "why was this wallet credited".
+ */
+export async function purgeExpiredStatements(
+  now = new Date(),
+): Promise<{ purged: number; rows: number }> {
+  const cutoff = new Date(now.getTime() - STATEMENT_RETENTION_MS);
+  const stale = await prisma.bankStatement.findMany({
+    where: { createdAt: { lt: cutoff } },
+    select: {
+      id: true,
+      fileName: true,
+      fileHash: true,
+      status: true,
+      rowCount: true,
+      creditedCount: true,
+      unmatchedCount: true,
+    },
+  });
+  if (stale.length === 0) return { purged: 0, rows: 0 };
+
+  let purged = 0;
+  let rows = 0;
+  for (const s of stale) {
+    try {
+      const [rowDelete] = await prisma.$transaction([
+        prisma.bankStatementRow.deleteMany({ where: { statementId: s.id } }),
+        prisma.bankStatement.delete({ where: { id: s.id } }),
+      ]);
+      rows += rowDelete.count;
+      purged += 1;
+      await writeSystemAudit("BANK_STATEMENT_PURGED", "BankStatement", s.id, {
+        fileName: s.fileName,
+        fileHash: s.fileHash,
+        status: s.status,
+        rowCount: s.rowCount,
+        creditedCount: s.creditedCount,
+        unmatchedCount: s.unmatchedCount,
+        retentionHours: STATEMENT_RETENTION_MS / 3_600_000,
+      });
+    } catch (err) {
+      // One locked or half-deleted statement must not stop the rest of the
+      // sweep. It stays and is retried on the next tick.
+      console.error(`[reconciliation] purge failed for ${s.fileName}:`, (err as Error)?.message ?? err);
+    }
+  }
+
+  return { purged, rows };
+}
+
+/** Audit for a background action, which has no admin to attribute it to. */
+async function writeSystemAudit(
+  action: string,
+  entityType: string,
+  entityId: string,
+  metadata: unknown,
+): Promise<void> {
+  try {
+    await prisma.auditLog.create({
+      data: {
+        actorId: null,
+        actorType: "SYSTEM",
+        action,
+        entityType,
+        entityId,
+        metadata: JSON.stringify(metadata),
+      },
+    });
+  } catch (err) {
+    console.error(`[reconciliation] system audit write failed (${action}):`, err);
+  }
 }
 
 async function writeAudit(

@@ -4,6 +4,7 @@ import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
 import { getPartnerEarnings, getConfig } from "../services/pricingEngine";
 import { moneyTransaction } from "../utils/db";
+import { findReferenceConflict, referenceConflictMessage } from "../services/referenceUniqueness";
 import { sendWithdrawalRequestedEmail } from "../services/emailService";
 import { bankNameFromIfsc, isValidIfsc, lookupUpi } from "../services/bankLookup";
 import { createWithdrawalRequest, WithdrawalError } from "../services/withdrawalService";
@@ -71,19 +72,12 @@ export async function requestTopup(req: AuthedRequest, res: Response): Promise<v
       sendError(res, "Enter a valid UTR / reference number (min 6 chars).", 400, "INVALID_REFERENCE");
       return;
     }
-    // UTRs must be unique across top-ups AND booking UPI payments.
-    const [dupTopup, dupUpi] = await Promise.all([
-      prisma.topupRequest.findFirst({
-        where: { referenceNumber, status: { in: ["VERIFICATION_PENDING", "VERIFIED", "REQUEST_INFO"] } },
-        select: { id: true },
-      }),
-      prisma.upiPayment.findFirst({
-        where: { referenceNumber, status: { in: ["VERIFICATION_PENDING", "VERIFIED", "REQUEST_INFO"] } },
-        select: { id: true },
-      }),
-    ]);
-    if (dupTopup || dupUpi) {
-      sendError(res, "This reference number was already used.", 409, "DUPLICATE_REFERENCE");
+    // A UTR is one payment, wherever it was first entered: top-up, booking or
+    // subscription. Checked through the shared guard so this path cannot accept
+    // a reference that one of the other two has already taken.
+    const conflict = await findReferenceConflict(referenceNumber);
+    if (conflict) {
+      sendError(res, referenceConflictMessage(conflict), 409, "DUPLICATE_REFERENCE");
       return;
     }
     const created = await prisma.topupRequest.create({

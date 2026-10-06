@@ -182,7 +182,12 @@ export async function sectionsForPeriod(
   // The longer periods carry the tax table too. Super admin receives one
   // combined mail, so "all reports end to end" has to include the tax bases in
   // that same mail rather than splitting them into a second inbox.
-  if (period === "MONTHLY" || period === "QUARTERLY" || period === "YEARLY") {
+  //
+  // WEEKLY is included because the weekend mail is the one asked for as "full
+  // data": a weekly report a finance admin cannot reconcile GST against is a
+  // summary, and the point of sending the whole week in one mail is to be able
+  // to work from it without waiting for the month to close.
+  if (period === "WEEKLY" || period === "MONTHLY" || period === "QUARTERLY" || period === "YEARLY") {
     return [...standard, { title: "Tax and statutory", rows: await taxRows(window) }];
   }
   return standard;

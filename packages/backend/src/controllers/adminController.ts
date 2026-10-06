@@ -14,6 +14,7 @@ import { isDemoEmail, DEMO_WALLET_CEILING } from "../utils/demo";
 import { moneyTransaction } from "../utils/db";
 import { invalidateConfigCache } from "../services/pricingEngine";
 import { settleTopupRequest, AlreadySettledError } from "../services/topupSettlement";
+import { findReferenceConflict, referenceConflictMessage } from "../services/referenceUniqueness";
 import * as subscriptionBilling from "../services/subscriptionBillingService";
 // Aliased: both services export an AlreadySettledError and they are different
 // classes for different claims. Collapsing them into one import would make
@@ -2827,22 +2828,17 @@ export async function verifySubscriptionPayment(req: AuthedRequest, res: Respons
     }
 
     if (action === "VERIFY") {
-      // A UTR already used by a top-up or a booking payment is almost always a
-      // pasted-by-mistake reference. Checked before settling, because the column
-      // only guards uniqueness within this one table.
+      // A UTR already used elsewhere is almost always a pasted-by-mistake
+      // reference. Checked before settling, because the column only guards
+      // uniqueness within this one table. `excludeId` is this row: it already
+      // carries the reference being verified, so checking it against itself
+      // would reject every verification.
       if (row.referenceNumber) {
-        const clash = await prisma.topupRequest.findFirst({
-          where: { referenceNumber: row.referenceNumber },
-          select: { id: true },
-        });
-        const bookingClash = await prisma.upiPayment.findFirst({
-          where: { referenceNumber: row.referenceNumber },
-          select: { id: true },
-        });
-        if (clash || bookingClash) {
+        const conflict = await findReferenceConflict(row.referenceNumber, { excludeId: row.id });
+        if (conflict) {
           sendError(
             res,
-            "That reference is already recorded against another payment. Check the bank statement and enter the correct UTR.",
+            `${referenceConflictMessage(conflict)} Check the bank statement and enter the correct UTR.`,
             409,
             "REFERENCE_ALREADY_USED",
           );
