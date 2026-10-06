@@ -4,6 +4,7 @@ import { Server as HTTPServer } from "http";
 import { prisma } from "../config/database";
 import { verifyToken } from "../middleware/auth";
 import { registerCallHandlers } from "./callService";
+import { notifySosRecipients } from "./sosNotifications";
 import { redisAdapterClients, markUserOnline, clearUserOnline } from "./redisClient";
 
 type AuthSocket = Socket & { userId?: string; userRole?: string };
@@ -553,6 +554,26 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
             },
           })
           .catch(() => {});
+
+        // The room emissions above only reach sockets that are attached right
+        // now. `notifySosRecipients` writes the Notification rows that the
+        // middleware fans out to realtime and FCM push, which is what makes the
+        // alert survive a backgrounded app - see sosNotifications.ts.
+        //
+        // Wrapped here as well as inside: an SOS that cannot be filed is still
+        // an SOS, so nothing below may be able to break the room alert above.
+        try {
+          await notifySosRecipients({
+            bookingId,
+            triggeredBy: userId,
+            partyUserIds: [booking.userId, booking.partner?.userId],
+            message: alert.message,
+            latitude,
+            longitude,
+          });
+        } catch (notifyErr) {
+          console.error("[SOCKET] SOS notification fan-out failed:", notifyErr);
+        }
       } catch (err) {
         console.error("[SOCKET] SOS error:", err);
       }

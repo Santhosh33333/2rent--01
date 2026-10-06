@@ -1,8 +1,13 @@
 import { Stack } from 'expo-router';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '../src/lib/queryClient';
+import { useSosAlerts } from '../src/hooks/useSosAlerts';
 
 export default function RootLayout() {
+  // Root-level on purpose: an SOS has to surface whichever screen is showing,
+  // including none of them.
+  useSosAlerts();
+
   return (
     <QueryClientProvider client={queryClient}>
       <Stack
