@@ -4,6 +4,7 @@ import { Colors } from '../../src/design-system/tokens/colors';
 export default function TabsLayout() {
   return (
     <Tabs
+      initialRouteName="feed"
       screenOptions={{
         headerShown: false,
         tabBarStyle: { backgroundColor: '#1C1C1E', borderTopColor: '#2A2A2C' },
@@ -11,6 +12,7 @@ export default function TabsLayout() {
         tabBarInactiveTintColor: Colors.onSurfaceVariant,
       }}
     >
+      <Tabs.Screen name="feed" options={{ title: 'Feed' }} />
       <Tabs.Screen name="index" options={{ title: 'Home' }} />
       <Tabs.Screen name="explore" options={{ title: 'Explore' }} />
       <Tabs.Screen name="bookings" options={{ title: 'Bookings' }} />

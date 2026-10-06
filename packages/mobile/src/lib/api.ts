@@ -82,3 +82,41 @@ export function errorMessage(err: unknown, fallback = 'Something went wrong'): s
   if (err instanceof Error) return err.message;
   return fallback;
 }
+
+export async function del<T = any>(path: string): Promise<ApiEnvelope<T>> {
+  const res = await api.delete<ApiEnvelope<T>>(path);
+  return res.data;
+}
+
+export interface LocalFile {
+  uri: string;
+  name: string;
+  type: string;
+  size?: number;
+}
+
+/**
+ * Multipart upload for the blob endpoints (fields: `image`, `video`, `photo`).
+ * The backend stores the bytes in Postgres and returns a relative `/uploads/...`
+ * URL which can then be attached to posts or a profile.
+ */
+export async function upload<T = any>(path: string, field: string, file: LocalFile): Promise<ApiEnvelope<T>> {
+  const form = new FormData();
+  form.append(field, { uri: file.uri, name: file.name, type: file.type } as any);
+  const res = await api.post<ApiEnvelope<T>>(path, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 90000, // videos can take a while to land in Postgres
+  });
+  return res.data;
+}
+
+/**
+ * Resolve a backend `/uploads/...` path into a full URL. Files are served from
+ * `/uploads` (outside `/api`), so the API base suffix must be stripped first.
+ */
+export function mediaUrl(uri?: string | null): string | undefined {
+  if (!uri) return undefined;
+  if (/^https?:\/\//i.test(uri)) return uri;
+  const base = API_URL.replace(/\/api\/?$/, '');
+  return `${base}${uri.startsWith('/') ? '' : '/'}${uri}`;
+}

@@ -1,16 +1,24 @@
-import { View, Text, TouchableOpacity, StyleSheet, Share } from 'react-native';
+import React from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Share, Alert as RNAlert, ActivityIndicator } from 'react-native';
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Screen, Title, Card, Button, Alert } from '../../src/lib/ui';
 import { Colors } from '../../src/design-system/tokens/colors';
-import { get, post } from '../../src/lib/api';
+import { get, post, upload, mediaUrl, errorMessage } from '../../src/lib/api';
 import { tokenStore } from '../../src/lib/storage';
 import { useAuthStore } from '../../src/shared/store/authStore';
+
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024; // backend MAX_FILE_SIZE
 
 export default function Profile() {
   const router = useRouter();
   const logout = useAuthStore((s) => s.logout);
   const user = useAuthStore((s) => s.user);
+  const updateUser = useAuthStore((s) => s.updateUser);
+  const queryClient = useQueryClient();
+  const [photoBusy, setPhotoBusy] = React.useState(false);
   const { data } = useQuery({ queryKey: ['profile'], queryFn: () => get('/users/profile') });
   const profile = (data?.data ?? user ?? {}) as any;
 
@@ -52,12 +60,66 @@ export default function Profile() {
     router.replace('/(auth)/account-type');
   };
 
+  const avatarUrl = profile.avatarUrl ?? user?.avatarUrl ?? null;
+
+  const uploadPhoto = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.85,
+        allowsEditing: true,
+      });
+      if (result.canceled || !result.assets[0]) return;
+      const a = result.assets[0];
+      if (a.fileSize && a.fileSize > MAX_PHOTO_BYTES) {
+        RNAlert.alert('Photo too large', 'Profile photos are limited to 5 MB.');
+        return;
+      }
+      const extMatch = a.uri.match(/\.([a-zA-Z0-9]+)(\?|$)/);
+      const ext = extMatch ? extMatch[1].toLowerCase() : 'jpg';
+      setPhotoBusy(true);
+      const env = await upload('/users/profile-photo', 'photo', {
+        uri: a.uri,
+        name: a.fileName ?? `avatar_${Date.now()}.${ext}`,
+        type: a.mimeType ?? (ext === 'png' ? 'image/png' : 'image/jpeg'),
+        size: a.fileSize,
+      });
+      if (!env.success) throw new Error(env.message || 'Upload failed');
+      const newAvatar = env.data?.avatarUrl as string | undefined;
+      if (newAvatar) updateUser({ avatarUrl: newAvatar });
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      queryClient.invalidateQueries({ queryKey: ['feed'] });
+    } catch (e) {
+      RNAlert.alert('Upload failed', errorMessage(e, 'Could not upload the photo.'));
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
   return (
     <Screen>
       <Title>Profile</Title>
       <Card>
-        <Text style={styles.name}>{profile.fullName ?? user?.fullName ?? '—'}</Text>
-        <Text style={styles.meta}>{profile.email ?? user?.email ?? ''}</Text>
+        <View style={styles.avatarRow}>
+          {avatarUrl ? (
+            <Image source={{ uri: mediaUrl(avatarUrl) }} style={styles.avatarImage} contentFit="cover" />
+          ) : (
+            <View style={styles.avatarFallback}>
+              <Text style={styles.avatarInitial}>{(profile.fullName ?? user?.fullName ?? '?').trim().charAt(0).toUpperCase()}</Text>
+            </View>
+          )}
+          <View style={styles.avatarText}>
+            <Text style={styles.name}>{profile.fullName ?? user?.fullName ?? '—'}</Text>
+            <Text style={styles.meta}>{profile.email ?? user?.email ?? ''}</Text>
+          </View>
+        </View>
+        <TouchableOpacity style={styles.photoBtn} onPress={uploadPhoto} disabled={photoBusy}>
+          {photoBusy ? (
+            <ActivityIndicator color={Colors.primary} size="small" />
+          ) : (
+            <Text style={styles.photoBtnText}>{avatarUrl ? 'Change photo' : 'Add a profile photo'}</Text>
+          )}
+        </TouchableOpacity>
         <Text style={styles.meta}>Role: {profile.activeRole ?? user?.activeRole ?? 'USER'}</Text>
         <Text style={styles.meta}>KYC: {profile.kycStatus ?? user?.kycStatus ?? 'UNVERIFIED'}</Text>
         <Text style={styles.meta}>Phone: {profile.phone ?? user?.phone ?? '—'}</Text>
@@ -87,6 +149,29 @@ export default function Profile() {
 const styles = StyleSheet.create({
   name: { color: Colors.onSurfaceDark, fontWeight: '800', fontSize: 20 },
   meta: { color: Colors.onSurfaceVariant, fontSize: 14, marginTop: 4 },
+  avatarRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
+  avatarText: { flex: 1 },
+  avatarImage: { width: 64, height: 64, borderRadius: 32, backgroundColor: Colors.primary },
+  avatarFallback: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitial: { color: Colors.onPrimary, fontWeight: '800', fontSize: 26 },
+  photoBtn: {
+    alignSelf: 'flex-start',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primary + '22',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginBottom: 12,
+  },
+  photoBtnText: { color: Colors.primary, fontWeight: '700', fontSize: 13 },
   referralTitle: { color: Colors.onSurfaceVariant, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1 },
   referralCode: {
     color: Colors.onSurfaceDark,

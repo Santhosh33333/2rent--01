@@ -21,6 +21,8 @@ export default function RootLayout() {
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="create" />
+        <Stack.Screen name="post/new" />
+        <Stack.Screen name="post/[id]" />
       </Stack>
     </QueryClientProvider>
   );
