@@ -32,8 +32,12 @@ android {
         // A/V never reached the relay), push notifications (the opt-in flag was
         // never set, so no device token was registered), and dead proof-image
         // links in the admin console.
-        versionCode 18
-        versionName "1.0.17"
+        //
+        // 19 / 1.0.18: header burger removed (misclicks on web + app), no more
+        // full-screen interstitials, the banner strip tracks the real ad
+        // height, and LIVE AdMob ids replace Google's test units.
+        versionCode 19
+        versionName "1.0.18"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

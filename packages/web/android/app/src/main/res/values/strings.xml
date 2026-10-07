@@ -7,9 +7,10 @@
     <string name="notification_channel_name">Nabri</string>
     <string name="notification_channel_description">Notifications from Nabri</string>
 
-    <!-- Google AdMob App ID for app.rentbuddy.app.
-         This is Google's public TEST app id: it serves test ads and earns nothing.
-         Replace it with the real id from AdMob console -> App settings once the
-         app is registered, otherwise the app earns no revenue. -->
-    <string name="admob_app_id" translatable="false">ca-app-pub-3940256099942544~3347511713</string>
+    <!-- Google AdMob App ID for app.rentbuddy.app (AdMob app: "Nabri").
+         LIVE app id, not Google's test id - this is what makes impressions
+         billable. The paired banner/rewarded unit ids live in
+         packages/web/.env.production (VITE_ADMOB_*), which the web build
+         bakes into the bundle. -->
+    <string name="admob_app_id" translatable="false">ca-app-pub-3864147873277553~9412779487</string>
 </resources>

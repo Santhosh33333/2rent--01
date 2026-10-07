@@ -4,7 +4,7 @@ Every artifact and where it lives today:
 
 | Surface | Canonical location | Notes |
 |---|---|---|
-| Signed Android APK (app.rentbuddy.app, versionCode 18, versionName 1.0.17, ~16.5 MB) | `packages/web/android/app/build/outputs/apk/release/app-release.apk` | Produced by `npm run cap:build:release`; signing via gitignored `android/keystore.properties` + `rentbuddy-release.jks`. A signed AAB for Play Store is at `.../outputs/bundle/release/app-release.aab`. |
+| Signed Android APK (app.rentbuddy.app, versionCode 19, versionName 1.0.18, ~16.5 MB) | `packages/web/android/app/build/outputs/apk/release/app-release.apk` | Produced by `npm run cap:build:release`; signing via gitignored `android/keystore.properties` + `rentbuddy-release.jks`. A signed AAB for Play Store is at `.../outputs/bundle/release/app-release.aab`. |
 | Web build (`/feed`, download page, `NABRI_APK_URL` baked in) | `packages/web/dist` | Build: `npm run build:web`; deploy: Vercel project **`web`** (yuvers.in — the same push also builds the `2rent-01` project, which is *not* the live domain). |
 | API (feed endpoints, feature flags, gifts, realtime) | Render service `rentbuddy-api` | `render.yaml` `autoDeploy: true`; migrations run on start. |
 | `NABRI_APK_URL` | Vercel env var on project **`web`** (the yuvers.in project — *not* `2rent-01`) | When set, the download buttons link out to it; otherwise a deploy with no local APK shows **NOT CONFIGURED**. |
@@ -27,7 +27,7 @@ The 24 MB binary and the keystore are **not** in git (`.gitignore`: `*.apk`, `*.
    publish anyway for a smoke-only artifact — it is not installable, so it is
    never meant as a real update.
 2. Actions tab → **Build APK and publish a GitHub Release** → Run workflow →
-   `version: 1.0.17` (keep matching `build.gradle` `versionName`; bump
+   `version: 1.0.18` (keep matching `build.gradle` `versionName`; bump
    `versionCode` there for install-over-existing).
 3. The run prints a stable asset URL:
    `https://github.com/Santhosh33333/2rent--01/releases/download/nabri-v<version>/nabri.apk`
@@ -38,9 +38,9 @@ The 24 MB binary and the keystore are **not** in git (`.gitignore`: `*.apk`, `*.
 # Builds the signed APK and publishes it. No gh install needed: the script
 # falls back to a token from the git credential manager (or GH_TOKEN) and
 # publishes via the GitHub REST API with just the `repo` scope.
-node scripts/publish-apk.mjs --version 1.0.17 --build
+node scripts/publish-apk.mjs --version 1.0.18 --build
 # or point at an existing artifact:
-#   node scripts/publish-apk.mjs --version 1.0.17 --apk .\nabri-app-release-1.0.17.apk
+#   node scripts/publish-apk.mjs --version 1.0.18 --apk .\nabri-app-release-1.0.18.apk
 # preview without publishing:
 #   node scripts/publish-apk.mjs --dry-run
 ```
@@ -110,7 +110,7 @@ curl -s https://rentbuddy-api-s7rz.onrender.com/api/content/feature-flags
 curl -s -o /dev/null -w "%{http_code}\n" https://rentbuddy-api-s7rz.onrender.com/api/posts
 
 # APK reachable from wherever the release lives
-curl -sIL https://github.com/Santhosh33333/2rent--01/releases/download/nabri-v1.0.17/nabri.apk
+curl -sIL https://github.com/Santhosh33333/2rent--01/releases/download/nabri-v1.0.18/nabri.apk
 #   -> expect 302 then 200 with Content-Type: application/vnd.android.package-archive
 
 # Web bundle actually changed (compare hash with what you built locally)
@@ -136,7 +136,7 @@ $env:TEMP="D:\tmp-gradle"; $env:TMP="D:\tmp-gradle"   # keep Gradle off a full C
 ```
 
 Output: `packages/web/android/app/build/outputs/bundle/release/app-release.aab`
-(currently **1.0.17 / versionCode 18**).
+(currently **1.0.18 / versionCode 19**).
 
 Upload steps:
 

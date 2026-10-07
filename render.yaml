@@ -75,6 +75,14 @@ services:
       # default cannot disagree.
       - key: ADMIN_EMAIL
         value: "santhoshkrishna958@gmail.com"
+      # Daily report recipients (Nabri daily digest + weekly/monthly/quarterly/
+      # yearly/next-month/tax cadences). Role-scoped; the SUPER_ADMIN address
+      # gets one combined mail carrying every section, which is why it is the
+      # only one configured. Recipient addresses are not secrets, so they are
+      # committed here and Blueprint sync applies them on deploy - without a
+      # DIGEST_EMAIL_* value the report is built nightly but sent to nobody.
+      - key: DIGEST_EMAIL_SUPER_ADMIN
+        value: "santhoshkrishna958@gmail.com"
       # TMDB supplies which Indian films are playing and when. Without it
       # /public/movies/now-playing answers {"configured":false,"movies":[]} and
       # the Movies section on the landing page renders empty in production
