@@ -21,7 +21,18 @@ interface SearchResult {
 
 interface TrendingData {
   communities: Array<{ id: number; name: string; category?: string }>
-  events: Array<{ id: number; name: string; date: string }>
+  // GET /search/trending returns raw Prisma event rows: { id, title, startTime }.
+  // It used to be typed as { name, date }, which rendered "Invalid Date" for
+  // every upcoming event because both fields were undefined.
+  events: Array<{ id: number | string; title?: string; name?: string; startTime?: string; date?: string }>
+}
+
+/** Format an event date, tolerating a missing/invalid value instead of
+ *  printing the literal string "Invalid Date". */
+function formatEventDate(iso?: string): string {
+  if (!iso) return 'Date TBA'
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? 'Date TBA' : d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })
 }
 
 interface PaginationData {
@@ -448,10 +459,10 @@ export function SearchPage() {
                             <Calendar className="w-5 h-5 text-white" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <h3 className="font-bold text-surface-900 dark:text-white truncate">{e.name}</h3>
+                            <h3 className="font-bold text-surface-900 dark:text-white truncate">{e.title ?? e.name}</h3>
                             <p className="text-xs text-surface-500 mt-0.5 flex items-center gap-1">
                               <Clock className="w-3 h-3" />
-                              {new Date(e.date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
+                              {formatEventDate(e.startTime ?? e.date)}
                             </p>
                           </div>
                         </a>

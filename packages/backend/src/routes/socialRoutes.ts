@@ -16,12 +16,15 @@ router.use(authenticateToken);
 // controller so the error code is precise.
 router.post(
   "/",
+  // values: "falsy" treats null (and "") as "absent" so clients that send
+  // imageUrl: null / videoUrl: null for a text post do not get slapped with a
+  // 422 — that broke publishing for every text post from the web app.
   [
-    body("content").optional().isString().trim().isLength({ max: 2000 }),
-    body("imageUrl").optional().isString().trim().isLength({ max: 500 }),
-    body("videoUrl").optional().isString().trim().isLength({ max: 500 }),
-    body("type").optional().isString(),
-    body("visibility").optional().isString(),
+    body("content").optional({ values: "falsy" }).isString().trim().isLength({ max: 2000 }),
+    body("imageUrl").optional({ values: "falsy" }).isString().trim().isLength({ max: 500 }),
+    body("videoUrl").optional({ values: "falsy" }).isString().trim().isLength({ max: 500 }),
+    body("type").optional({ values: "falsy" }).isString(),
+    body("visibility").optional({ values: "falsy" }).isString(),
   ],
   sanitizeInput,
   validateRequest,
@@ -47,7 +50,7 @@ router.post("/:id/save", socialPostController.toggleSave);
 // Comments (one level of replies)
 router.post(
   "/:id/comments",
-  [body("content").notEmpty().trim().isLength({ min: 1, max: 1000 }), body("parentId").optional().isString().trim()],
+  [body("content").notEmpty().trim().isLength({ min: 1, max: 1000 }), body("parentId").optional({ values: "falsy" }).isString().trim()],
   sanitizeInput,
   validateRequest,
   socialPostController.createComment
@@ -59,7 +62,7 @@ router.delete("/:id/comments/:commentId", socialPostController.deleteComment);
 // Report
 router.post(
   "/:id/report",
-  [body("reason").notEmpty().trim().isLength({ min: 3, max: 200 }), body("description").optional().isString().trim().isLength({ max: 500 })],
+  [body("reason").notEmpty().trim().isLength({ min: 3, max: 200 }), body("description").optional({ values: "falsy" }).isString().trim().isLength({ max: 500 })],
   sanitizeInput,
   validateRequest,
   socialPostController.reportPost
@@ -68,7 +71,7 @@ router.post(
 // Gifts — atomic wallet debit/credit
 router.post(
   "/:id/gift",
-  [body("amount").notEmpty().isNumeric(), body("referenceId").optional().isString().trim().isLength({ max: 64 })],
+  [body("amount").notEmpty().isNumeric(), body("referenceId").optional({ values: "falsy" }).isString().trim().isLength({ max: 64 })],
   sanitizeInput,
   validateRequest,
   socialPostController.sendGift

@@ -443,12 +443,19 @@ export const paymentsApi = {
 // Global social feed (/api/posts). No KYC gate on the server, same as the
 // mobile client: posting, commenting, liking and gifting work for every
 // authenticated account.
+
+// The API treats `null` and "" as "absent" on optional body fields now, but a
+// lean payload is still better: drop null/undefined entries before JSON.
+function omitNulls<T extends Record<string, unknown>>(obj: T): Partial<T> {
+  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== null && v !== undefined)) as Partial<T>
+}
+
 export const postApi = {
   feed: (params?: PaginationParams) => api.get('/posts', { params }),
   get: (id: string) => api.get(`/posts/${id}`),
   remove: (id: string) => api.delete(`/posts/${id}`),
   create: (data: { content?: string; imageUrl?: string | null; videoUrl?: string | null; visibility: string }) =>
-    api.post('/posts', data),
+    api.post('/posts', omitNulls({ ...data })),
   // Multipart blobs land in Postgres; the response carries a relative
   // /uploads/... URL that is then attached to the post.
   uploadImage: (file: File) => {
@@ -473,10 +480,10 @@ export const postApi = {
   replies: (id: string, commentId: string, params?: PaginationParams) =>
     api.get(`/posts/${id}/comments/${commentId}/replies`, { params }),
   addComment: (id: string, data: { content: string; parentId?: string | null }) =>
-    api.post(`/posts/${id}/comments`, data),
+    api.post(`/posts/${id}/comments`, omitNulls({ ...data })),
   deleteComment: (id: string, commentId: string) => api.delete(`/posts/${id}/comments/${commentId}`),
-  report: (id: string, data: { reason: string; description?: string }) =>
-    api.post(`/posts/${id}/report`, data),
+  report: (id: string, data: { reason: string | null; description?: string | null }) =>
+    api.post(`/posts/${id}/report`, omitNulls({ ...data })),
   // referenceId is the idempotency key: retries of the same gift succeed once.
   gift: (id: string, data: { amount: number; referenceId: string }) =>
     api.post(`/posts/${id}/gift`, data),
