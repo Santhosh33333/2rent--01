@@ -215,23 +215,6 @@
    title, an artist and an animated equaliser for a song that does not
    exist and never will. There is no real audio catalogue endpoint to
    replace it with, so it is gone rather than restyled. */
-.nb-burger {
-  display: none;
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  background: var(--nb-glass);
-  border: 1px solid var(--nb-line);
-  font-size: 20px;
-  line-height: 1;
-}
-
-.nb-burger svg {
-  width: 20px;
-  height: 20px;
-  margin: auto;
-}
-
 /* ==================================================================
    Buttons
    ================================================================== */
@@ -1682,31 +1665,28 @@
    ================================================================== */
 
 @media (max-width: 1000px) {
-  .nb-nav ul,
+  /* The burger menu is gone: the header's section links stay visible as a
+     horizontally swipeable row instead of hiding behind a three-line button.
+     The CTA buttons keep hiding here - the hero carries the same CTA. */
   .nb-nav-right .nb-btn {
     display: none;
   }
 
-  .nb-burger {
-    display: grid;
-    place-items: center;
+  .nb-nav ul {
+    flex: 1;
+    min-width: 0;
+    justify-content: flex-start;
+    gap: 20px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    -webkit-overflow-scrolling: touch;
+    /* Fade both edges so a cut-off link reads as "swipe me", not as broken. */
+    mask-image: linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
   }
 
-  .nb-nav ul.is-open {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-    position: absolute;
-    top: 72px;
-    left: 0;
-    right: 0;
-    padding: 12px 24px;
-    background: rgba(7, 4, 15, 0.97);
-    border-bottom: 1px solid var(--nb-line);
-  }
-
-  .nb-nav ul.is-open a {
-    padding: 12px 0;
+  .nb-nav ul::-webkit-scrollbar {
+    display: none;
   }
 
   .nb-hero-grid,

@@ -1,7 +1,7 @@
 import { useState, useEffect, type MouseEvent } from 'react';
 import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
 import { 
-  Home, User, Wallet, Users, Sun, Moon, Menu, X, Bell, 
+  Home, User, Wallet, Users, Sun, Moon, X, Bell, 
   MapPin, LogOut, Calendar, Settings, Shield, Info, LayoutDashboard, 
   ClipboardList, Search, QrCode, Send, LifeBuoy 
 } from 'lucide-react';
@@ -18,8 +18,7 @@ import { UserLiveLocationSharer } from './UserLiveLocationSharer';
 import { api } from '../lib/api';
 import { useNotifications } from '../hooks/useSocket';
 import { 
-  destroyBanner, isNative, maybeShowInterstitial, 
-  prepareInterstitial, showBanner, subscribeAdsState 
+  destroyBanner, isNative, showBanner, subscribeAdsState 
 } from '../lib/ads';
 import { motion, AnimatePresence } from 'motion/react';
 import { ReConsentBanner } from './legal/ReConsentBanner';
@@ -102,11 +101,15 @@ const sidebarLinks = [
 ];
 
 /**
- * Height, in CSS pixels, of the strip reserved at the bottom of every screen
- * while an AdMob banner is showing. Anchored BANNER units are 50dp tall on a
- * phone, so 56px clears them with a little breathing room.
+ * Fallback height, in CSS pixels, of the strip reserved at the bottom of every
+ * screen while an AdMob banner is showing - used only in the window between
+ * the banner being requested and the plugin reporting the adaptive banner's
+ * real size (anchored banners run 50-90dp tall). After that the strip matches
+ * the ad exactly, plus STRIP_GAP_PX of breathing room, so the tab bar is never
+ * covered by an oversized ad or left with a dead band under a small one.
  */
 const AD_STRIP_PX = 56;
+const STRIP_GAP_PX = 6;
 
 export function Layout() {
   const { user, logout } = useAuth();
@@ -138,39 +141,38 @@ export function Layout() {
     let cancelled = false;
     // The banner used to be gated to >=1024px, which meant phones - the entire
     // APK audience - never served a banner and the only ad anyone saw was the
-    // occasional full-screen interstitial. It now anchors to the bottom of every
-    // screen, and the shell reserves a strip for it via --nabri-ad-strip so the
-    // tab bar and page content sit above the ad instead of behind it. In chat
-    // that strip stays put while the thread scrolls: a small persistent ad in
-    // otherwise empty space rather than a takeover.
-    void (async () => {
-      await showBanner();
+    // occasional full-screen interstitial. It now anchors to the bottom of
+    // every screen, and the shell reserves a strip for it via --nabri-ad-strip
+    // so the tab bar and page content sit above the ad instead of behind it.
+    // The strip follows the banner's real reported height (adaptive banners
+    // vary 50-90dp): a fixed guess either covered the tab bar or left a dead
+    // band of empty space. In chat the strip stays put while the thread
+    // scrolls: a small persistent ad rather than a takeover.
+    const unsubscribe = subscribeAdsState((state) => {
       if (cancelled) return;
-      setBannerUp(true);
-      document.documentElement.style.setProperty('--nabri-ad-strip', `${AD_STRIP_PX}px`);
-    })();
+      setBannerUp(state.bannerVisible);
+      if (state.bannerVisible) {
+        const px = state.bannerHeight > 0
+          ? Math.ceil(state.bannerHeight) + STRIP_GAP_PX
+          : AD_STRIP_PX;
+        document.documentElement.style.setProperty('--nabri-ad-strip', `${px}px`);
+      } else {
+        document.documentElement.style.removeProperty('--nabri-ad-strip');
+      }
+    });
+    void showBanner();
     return () => {
       cancelled = true;
+      unsubscribe();
       setBannerUp(false);
       document.documentElement.style.removeProperty('--nabri-ad-strip');
       void destroyBanner();
     };
   }, [adsReady]);
 
-  useEffect(() => {
-    if (!adsReady) return;
-    void prepareInterstitial();
-  }, [adsReady]);
-
-  useEffect(() => {
-    if (!adsReady) return;
-    const path = location.pathname;
-    const segment = `/${path.split('/').filter(Boolean)[0] ?? ''}`;
-    const safe = new Set(['/home', '/bookings', '/discover', '/communities', '/partner/dashboard', '/partner/jobs']);
-    if (!safe.has(segment)) return;
-    const timer = window.setTimeout(() => void maybeShowInterstitial(), 2500);
-    return () => window.clearTimeout(timer);
-  }, [adsReady, location.pathname]);
+  // Full-screen interstitials (the "full page" takeover ads) are gone by
+  // request: no prepare, no timed trigger on safe routes. The bottom banner is
+  // the only automatic ad now; rewarded video stays opt-in and labelled.
 
   const handleLogout = () => {
     logout();
@@ -190,12 +192,6 @@ export function Layout() {
           className="max-w-7xl mx-auto h-16 px-3 rounded-3xl bg-surface-50/60 dark:bg-surface-900/60 backdrop-blur-2xl border border-surface-200/50 dark:border-surface-800/50 shadow-xl shadow-black/5 pointer-events-auto flex items-center justify-between"
         >
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="p-2 rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors lg:hidden"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
             <Link to="/dashboard" className="flex items-center gap-2 pl-1 shrink-0" aria-label="Nabri home">
               <span className="brand-badge h-8 w-8">
                 <img src="/logo-glyph-white.svg" alt="" className="h-5 w-5" />
@@ -232,7 +228,15 @@ export function Layout() {
               <Bell className="w-5 h-5" />
               <UnreadBadge />
             </Link>
-            <button onClick={() => setSidebarOpen(true)} className="hidden lg:block p-1 rounded-full hover:scale-110 transition">
+            {/* The avatar - not a hamburger - is how the drawer opens at every
+                width. The three-line button was removed because taps around it
+                did not register reliably on both web and app, and it squeezed a
+                header row that already carries role switcher + four actions. */}
+            <button
+              onClick={() => setSidebarOpen(true)}
+              aria-label="Open menu"
+              className="p-1 rounded-full hover:scale-110 transition"
+            >
               <Avatar src={user?.avatarUrl} name={user?.name} className="w-8 h-8" />
             </button>
           </div>
@@ -339,10 +343,11 @@ export function Layout() {
       </AnimatePresence>
 
       {/* Main Viewport. Bottom padding is inline rather than a competing Tailwind
-          pb-* class: the banner strip is dynamic, and the tab bar lifts with it. */}
+          pb-* class: the banner strip is dynamic (it tracks the ad's real
+          height via --nabri-ad-strip), and the tab bar lifts with it. */}
       <main
         className="pt-24 pb-24 lg:pb-12 transition-all duration-500"
-        style={bannerUp ? { paddingBottom: `calc(6rem + ${AD_STRIP_PX}px)` } : undefined}
+        style={bannerUp ? { paddingBottom: 'calc(6rem + var(--nabri-ad-strip, 0px))' } : undefined}
       >
         <PartnerLiveLocationSharer />
         <UserLiveLocationSharer />

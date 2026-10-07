@@ -2,6 +2,7 @@ import { Capacitor } from '@capacitor/core';
 import {
   AdMob,
   BannerAdPosition,
+  BannerAdPluginEvents,
   BannerAdSize,
   MaxAdContentRating,
 } from '@capacitor-community/admob';
@@ -40,15 +41,26 @@ export const AD_UNITS = {
   rewardedInterstitial: env.VITE_ADMOB_REWARDED_INTERSTITIAL_ID || TEST_IDS.rewardedInterstitial,
 } as const;
 
-/** True while we are still on Google's test units, i.e. earning nothing. */
+/**
+ * True while the banner - the only ad this app serves automatically - is still
+ * on Google's test unit, i.e. earning nothing.
+ *
+ * Deliberately judged on the banner alone: `initializeForTesting` flags the
+ * whole device as a test device, so basing it on every unit (an interstitial
+ * or rewarded unit an admin may never have created still falls back to the
+ * test id) would silently zero out live banner earnings.
+ */
 export const isTestMode = (): boolean =>
-  AD_UNITS.banner === TEST_IDS.banner || AD_UNITS.interstitial === TEST_IDS.interstitial;
+  AD_UNITS.banner === TEST_IDS.banner;
 
 export type ConsentState = 'unknown' | 'not-required' | 'obtained' | 'required' | 'refused';
 
 let consentState: ConsentState = 'unknown';
 let initialized = false;
 let bannerVisible = false;
+/** Live banner height in dp (= CSS px in the WebView); 0 when none is up. */
+let bannerHeight = 0;
+let bannerListenerAttached = false;
 let canRequestAds = false;
 let privacyOptionsRequired = false;
 
@@ -63,6 +75,8 @@ export type AdsState = {
   canRequestAds: boolean;
   privacyOptionsRequired: boolean;
   isTestMode: boolean;
+  bannerVisible: boolean;
+  bannerHeight: number;
 };
 
 const listeners = new Set<(state: AdsState) => void>();
@@ -74,6 +88,8 @@ function snapshot(): AdsState {
     canRequestAds: canRequestAds && initialized,
     privacyOptionsRequired,
     isTestMode: isTestMode(),
+    bannerVisible,
+    bannerHeight,
   };
 }
 
@@ -159,6 +175,31 @@ async function resolveConsent(): Promise<void> {
 }
 
 /**
+ * Anchored adaptive banners are 50-90dp tall depending on what AdMob chooses
+ * to fill with, and the app shell reserves a strip for the ad so page content
+ * and the tab bar never sit behind it. Guessing one height either covers the
+ * tab bar (too small) or wastes a band of empty space (too large), so the
+ * strip follows the real size the plugin reports through
+ * `bannerAdSizeChanged` - dp on Android, which equals CSS px in the WebView.
+ */
+async function trackBannerSize(): Promise<void> {
+  if (bannerListenerAttached) return;
+  bannerListenerAttached = true;
+  try {
+    await AdMob.addListener(BannerAdPluginEvents.SizeChanged, (info) => {
+      const height = Number(info?.height) || 0;
+      if (height === bannerHeight) return;
+      bannerHeight = height;
+      notify();
+    });
+  } catch (err) {
+    // Losing the size event only means the shell keeps its fallback strip.
+    bannerListenerAttached = false;
+    console.warn('[ads] banner size listener failed:', err);
+  }
+}
+
+/**
  * Idempotent. Call once at app start. Resolves even if ads end up disabled.
  */
 export async function initializeAds(): Promise<void> {
@@ -172,6 +213,8 @@ export async function initializeAds(): Promise<void> {
       maxAdContentRating: MaxAdContentRating.ParentalGuidance,
     });
     initialized = true;
+    // Attached before the first banner so the initial size event is not missed.
+    await trackBannerSize();
   } catch (err) {
     console.warn('[ads] initialization failed:', err);
   } finally {
@@ -189,6 +232,7 @@ export async function showBanner(position: BannerAdPosition = BannerAdPosition.B
       isTesting: isTestMode(),
     });
     bannerVisible = true;
+    notify();
   } catch (err) {
     console.warn('[ads] showBanner failed:', err);
   }
@@ -199,6 +243,8 @@ export async function hideBanner(): Promise<void> {
   try {
     await AdMob.hideBanner();
     bannerVisible = false;
+    bannerHeight = 0;
+    notify();
   } catch (err) {
     console.warn('[ads] hideBanner failed:', err);
   }
@@ -209,6 +255,8 @@ export async function destroyBanner(): Promise<void> {
   try {
     await AdMob.removeBanner();
     bannerVisible = false;
+    bannerHeight = 0;
+    notify();
   } catch (err) {
     console.warn('[ads] removeBanner failed:', err);
   }
@@ -218,7 +266,12 @@ export async function destroyBanner(): Promise<void> {
 export async function prepareInterstitial(): Promise<void> {
   if (!canServeAds() || interstitialReady) return;
   try {
-    await AdMob.prepareInterstitial({ adId: AD_UNITS.interstitial, isTesting: isTestMode() });
+    await AdMob.prepareInterstitial({
+      adId: AD_UNITS.interstitial,
+      // Judged per unit: a live unit must never inherit the test-device flag
+      // from an unrelated fallback id.
+      isTesting: AD_UNITS.interstitial === TEST_IDS.interstitial,
+    });
     interstitialReady = true;
   } catch (err) {
     console.warn('[ads] prepareInterstitial failed:', err);
@@ -228,10 +281,11 @@ export async function prepareInterstitial(): Promise<void> {
 /**
  * Show an interstitial, subject to a frequency cap.
  *
- * Deliberately does NOT fire on: app launch or resume, app exit, immediately
- * after another interstitial, or on the confirmation step of any user action.
- * Interstitials at those points are the accidental-click pattern AdMob policy
- * prohibits, and they are the fastest way to get an account suspended.
+ * Nothing calls this automatically any more: the full-screen takeover was
+ * removed by request ("don't want come full page"). It stays exported only so
+ * an explicitly labelled, user-initiated flow can opt back in - never on app
+ * launch, resume, exit, or the confirmation step of a user action, which is
+ * the accidental-click pattern AdMob policy prohibits.
  */
 export async function maybeShowInterstitial(): Promise<boolean> {
   if (!canServeAds() || !interstitialReady) return false;
@@ -259,7 +313,10 @@ export async function maybeShowInterstitial(): Promise<boolean> {
 export async function showRewardedAd(): Promise<boolean> {
   if (!canServeAds()) return false;
   try {
-    await AdMob.prepareRewardVideoAd({ adId: AD_UNITS.rewarded, isTesting: isTestMode() });
+    await AdMob.prepareRewardVideoAd({
+      adId: AD_UNITS.rewarded,
+      isTesting: AD_UNITS.rewarded === TEST_IDS.rewarded,
+    });
     // The plugin resolves this with an AdMobRewardItem ({ type, amount }) when
     // the user earns the reward, and rejects on dismissal/failure, so reaching
     // the return is the signal to grant whatever the caller was promising.

@@ -13,12 +13,17 @@
  *    "Try 1 day free" today because that is what the database says - and
  *    follows an admin's change in `/admin/pricing` with no code change.
  *
+ * 3. **No burger menu.** The three-line toggle is gone from the header: taps
+ *    around it did not register reliably (reported on both web and app), and a
+ *    menu that hides behind a button is one more thing that can fail to open.
+ *    The section links now stay in the header as a horizontally swipeable row
+ *    below 1000px, so the same anchors are always one tap away.
+ *
  * Nav targets are section anchors on this page. Every one of those ids is set
  * by a section in `LandingPage`, so there are no dead anchors.
  */
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Menu, X } from 'lucide-react';
 import { Brand } from './SiteChrome';
 import type { Plan } from '../hooks/useLandingContent';
 
@@ -38,7 +43,6 @@ interface SiteHeaderProps {
 }
 
 export function SiteHeader({ userName, signedIn, plans }: SiteHeaderProps) {
-  const [open, setOpen] = useState(false);
   const [active, setActive] = useState<string>('home');
 
   // Highlight the section currently under the header.
@@ -66,17 +70,6 @@ export function SiteHeader({ userName, signedIn, plans }: SiteHeaderProps) {
     return () => observer.disconnect();
   }, []);
 
-  // Close the mobile menu on Escape. A menu that leaves the page trapped open
-  // behind a full-screen header is a keyboard trap.
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open]);
-
   // The trial length comes from the seeded plan, never from a constant here.
   const trialDays = plans.reduce((max, plan) => Math.max(max, plan.trialDays), 0);
   const ctaLabel = trialDays > 0 ? `Try ${trialDays} day free` : 'Get the app';
@@ -88,14 +81,13 @@ export function SiteHeader({ userName, signedIn, plans }: SiteHeaderProps) {
           <Brand size={26} />
         </a>
 
-        <ul id="nb-menu" className={open ? 'is-open' : ''}>
+        <ul>
           {LINKS.map((link) => (
             <li key={link.id}>
               <a
                 href={`#${link.id}`}
                 data-on={active === link.id}
                 aria-current={active === link.id ? 'page' : undefined}
-                onClick={() => setOpen(false)}
               >
                 {link.label}
               </a>
@@ -110,16 +102,6 @@ export function SiteHeader({ userName, signedIn, plans }: SiteHeaderProps) {
           <a className="nb-btn" href="#download">
             {ctaLabel}
           </a>
-          <button
-            type="button"
-            className="nb-burger"
-            aria-label={open ? 'Close menu' : 'Open menu'}
-            aria-expanded={open}
-            aria-controls="nb-menu"
-            onClick={() => setOpen((v) => !v)}
-          >
-            {open ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
-          </button>
         </div>
       </nav>
     </header>
