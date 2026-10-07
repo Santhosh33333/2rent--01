@@ -259,7 +259,13 @@ export function AdminPricingPage() {
                       <p className="text-xs text-slate-500">{meta.blurb}</p>
                     </div>
                   </header>
-                  <table className="w-full text-sm">
+                  {/* Wrapped in an overflow container: the card clips overflow,
+                      so without this the Value column and its save button ran
+                      off the right edge on a phone with no way to scroll to
+                      them (the horizontal-scroll twin of the admin tables that
+                      already wrap theirs). */}
+                  <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
                     <thead>
                       <tr className="text-left text-xs uppercase tracking-wide text-slate-400 bg-slate-50">
                         <th className="px-5 py-3 font-medium">Key</th>
@@ -297,6 +303,7 @@ export function AdminPricingPage() {
                       ))}
                     </tbody>
                   </table>
+                  </div>
                 </section>
               )
             })}

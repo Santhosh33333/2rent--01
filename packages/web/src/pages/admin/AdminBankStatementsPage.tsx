@@ -429,8 +429,9 @@ function RowTable({ title, rows, tone }: { title: string; rows: StatementRow[]; 
       </p>
       {/* Scrolls rather than paginating: an admin scanning for one bad line is
           looking for an amount or a UTR, and a scrolled table keeps the line and
-          its neighbours together. */}
-      <div className="max-h-[28rem] overflow-y-auto">
+          its neighbours together. Both axes: the card clips overflow, so without
+          an x-axis the columns past the right edge were unreachable on a phone. */}
+      <div className="max-h-[28rem] overflow-y-auto overflow-x-auto">
         <table className="w-full text-left text-sm">
           <tbody className="divide-y divide-surface-700/40">
             {rows.map((r) => {
