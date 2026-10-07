@@ -277,6 +277,31 @@ describe("toggleLike", () => {
     await ctrl.toggleLike(makeReq({ params: { id: "nope" } }), res as never);
     expect(out.statusCode).toBe(404);
   });
+
+  it("records a like notification carrying the post link and event type", async () => {
+    prismaMock.post.findUnique.mockResolvedValue(postRow({ authorId: AUTHOR }));
+    prismaMock.postLike.findUnique.mockResolvedValue(null);
+    prismaMock.postLike.create.mockResolvedValue({});
+    prismaMock.postLike.count.mockResolvedValue(1);
+    const { res, out } = makeRes();
+    await ctrl.toggleLike(makeReq({ params: { id: "p1" } }), res as never);
+    expect(out.payload.data).toEqual({ liked: true, likeCount: 1 });
+    const row = prismaMock.notification.create.mock.calls[0][0].data as any;
+    expect(row.userId).toBe(AUTHOR);
+    expect(row.title).toBe("New like on your post");
+    // data must be JSON clients can parse — it drives deep-linking to the post.
+    expect(JSON.parse(row.data)).toMatchObject({ postId: "p1", type: "POST_LIKE", actorId: ME });
+  });
+
+  it("stays silent when the author likes their own post", async () => {
+    prismaMock.post.findUnique.mockResolvedValue(postRow({ authorId: ME }));
+    prismaMock.postLike.findUnique.mockResolvedValue(null);
+    prismaMock.postLike.create.mockResolvedValue({});
+    prismaMock.postLike.count.mockResolvedValue(1);
+    const { res } = makeRes();
+    await ctrl.toggleLike(makeReq({ params: { id: "p1" } }), res as never);
+    expect(prismaMock.notification.create).not.toHaveBeenCalled();
+  });
 });
 
 describe("toggleSave", () => {
@@ -327,6 +352,31 @@ describe("createComment", () => {
     await ctrl.createComment(makeReq({ params: { id: "p1" }, body: { content: "reply", parentId: "c999" } }), res as never);
     expect(out.statusCode).toBe(404);
     expect(out.payload.error).toBe("COMMENT_NOT_FOUND");
+  });
+
+  it("pings the parent-comment author when a reply lands", async () => {
+    prismaMock.post.findUnique.mockResolvedValue(postRow({ authorId: AUTHOR }));
+    prismaMock.postComment.findFirst.mockResolvedValue({ id: "c1", postId: "p1", authorId: OTHER });
+    prismaMock.postComment.create.mockResolvedValue({ id: "c2", postId: "p1", authorId: ME, content: "agreed", parentId: "c1", author: { id: ME, fullName: "Me", avatarUrl: null } });
+    const { res, out } = makeRes();
+    await ctrl.createComment(makeReq({ params: { id: "p1" }, body: { content: "agreed", parentId: "c1" } }), res as never);
+    expect(out.statusCode).toBe(201);
+    // Post author got the comment ping; the answered comment's author got the reply ping.
+    const calls = prismaMock.notification.create.mock.calls.map((c: any) => c[0].data as any);
+    expect(calls.some((d: any) => d.userId === AUTHOR && JSON.parse(d.data).type === "POST_COMMENT")).toBe(true);
+    expect(calls.some((d: any) => d.userId === OTHER && JSON.parse(d.data).type === "POST_REPLY" && JSON.parse(d.data).parentCommentId === "c1")).toBe(true);
+  });
+
+  it("does not ping the post author twice when the reply answers their own comment", async () => {
+    prismaMock.post.findUnique.mockResolvedValue(postRow({ authorId: AUTHOR }));
+    prismaMock.postComment.findFirst.mockResolvedValue({ id: "c1", postId: "p1", authorId: AUTHOR });
+    prismaMock.postComment.create.mockResolvedValue({ id: "c2", postId: "p1", authorId: ME, content: "ok", parentId: "c1", author: { id: ME, fullName: "Me", avatarUrl: null } });
+    const { res } = makeRes();
+    await ctrl.createComment(makeReq({ params: { id: "p1" }, body: { content: "ok", parentId: "c1" } }), res as never);
+    const calls = prismaMock.notification.create.mock.calls.map((c: any) => c[0].data as any);
+    const hits = calls.filter((d: any) => d.userId === AUTHOR);
+    expect(hits.length).toBe(1);
+    expect(JSON.parse(hits[0].data).type).toBe("POST_COMMENT");
   });
 });
 
@@ -418,6 +468,24 @@ describe("sendGift", () => {
     expect(ledger).toHaveLength(2);
     expect(ledger.map((l: any) => l.type).sort()).toEqual(["GIFT_RECEIVED", "GIFT_SENT"]);
     expect(ledger.every((l: any) => l.referenceId === "ref-abc")).toBe(true);
+  });
+
+  it("notifies the post author with a parseable gift payload", async () => {
+    prismaMock.wallet.upsert
+      .mockResolvedValueOnce(walletRow("wal_s", ME, 100))
+      .mockResolvedValueOnce(walletRow("wal_r", AUTHOR, 0));
+    prismaMock.wallet.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.wallet.update.mockResolvedValue({});
+    prismaMock.gift.create.mockResolvedValue({ id: "gift_1", postId: "p1", senderId: ME, recipientId: AUTHOR, amount: new Prisma.Decimal(50), referenceId: "ref-note" });
+
+    const { res, out } = makeRes();
+    await ctrl.sendGift(makeReq({ params: { id: "p1" }, body: { amount: 50, referenceId: "ref-note" } }), res as never);
+    expect(out.statusCode).toBe(201);
+
+    const row = prismaMock.notification.create.mock.calls[0][0].data as any;
+    expect(row.userId).toBe(AUTHOR);
+    expect(row.title).toBe("You received a gift");
+    expect(JSON.parse(row.data)).toMatchObject({ postId: "p1", type: "POST_GIFT", giftId: "gift_1", amount: 50 });
   });
 
   it("rolls everything back and 409s when the wallet is too empty", async () => {

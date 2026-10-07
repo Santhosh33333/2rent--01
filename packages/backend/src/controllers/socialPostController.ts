@@ -59,7 +59,10 @@ async function canView(post: { authorId: string; visibility: string }, userId: s
 
 // Best-effort notification. A failed write must never break the action that
 // triggered it, so it wraps in its own try/catch (same pattern as the
-// community comments).
+// community comments). One row is enough for both delivery states: the
+// Notification.create middleware in server.ts fans every row out to the
+// user's live socket (`notification` event) and to FCM push, so an open app
+// sees it instantly and a backgrounded app gets the tray notification.
 function notify(userId: string, title: string, body: string, data: Record<string, unknown>): void {
   if (!userId) return;
   void (async () => {
@@ -69,6 +72,16 @@ function notify(userId: string, title: string, body: string, data: Record<string
       /* never fail the action */
     }
   })();
+}
+
+/** Best-effort actor display name for notification copy ("Someone" when unknown). */
+async function actorName(userId: string): Promise<string | null> {
+  try {
+    const u = await prisma.user.findUnique({ where: { id: userId }, select: { fullName: true } });
+    return u?.fullName?.trim() || null;
+  } catch {
+    return null;
+  }
 }
 
 // ============================================================================
@@ -271,7 +284,15 @@ export async function toggleLike(req: AuthedRequest, res: Response): Promise<voi
       // REACTIONS feature flag turns richer reactions on.
       await prisma.postLike.create({ data: { postId: id, userId: me, type: "LIKE" } });
       liked = true;
-      if (post.authorId !== me) notify(post.authorId, "New like on your post", "Someone liked your post", { postId: id, type: "POST_LIKE" });
+      if (post.authorId !== me) {
+        const name = (await actorName(me)) || "Someone";
+        notify(post.authorId, "New like on your post", `${name} liked your post`, {
+          postId: id,
+          actorId: me,
+          actorName: name,
+          type: "POST_LIKE",
+        });
+      }
     }
     const likeCount = await prisma.postLike.count({ where: { postId: id } });
     sendSuccess(res, { liked, likeCount });
@@ -328,19 +349,41 @@ export async function createComment(req: AuthedRequest, res: Response): Promise<
       return;
     }
     const parentId = typeof req.body.parentId === "string" && req.body.parentId.trim() ? req.body.parentId.trim() : null;
+    let parentAuthorId: string | null = null;
     if (parentId) {
       const parent = await prisma.postComment.findFirst({ where: { id: parentId, postId: id } });
       if (!parent) {
         sendError(res, "The comment you are replying to was not found.", 404, "COMMENT_NOT_FOUND");
         return;
       }
+      parentAuthorId = parent.authorId;
     }
     const comment = await prisma.postComment.create({
       data: { postId: id, authorId: me, content, parentId },
       include: { author: { select: AUTHOR_SELECT } },
     });
+    const commenter = comment.author?.fullName?.trim() || "Someone";
     if (post.authorId !== me) {
-      notify(post.authorId, "New comment on your post", `Someone commented: ${content.slice(0, 120)}`, { postId: id, commentId: comment.id, type: "POST_COMMENT" });
+      notify(post.authorId, "New comment on your post", `${commenter} commented: ${content.slice(0, 120)}`, {
+        postId: id,
+        commentId: comment.id,
+        parentId,
+        actorId: me,
+        actorName: commenter,
+        type: "POST_COMMENT",
+      });
+    }
+    // A reply also pings the person the reply answers, unless they are the post
+    // author (already notified above) or themselves (self-replies are noise).
+    if (parentId && parentAuthorId && parentAuthorId !== me && parentAuthorId !== post.authorId) {
+      notify(parentAuthorId, "New reply to your comment", `${commenter} replied to your comment: ${content.slice(0, 120)}`, {
+        postId: id,
+        commentId: comment.id,
+        parentCommentId: parentId,
+        actorId: me,
+        actorName: commenter,
+        type: "POST_REPLY",
+      });
     }
     sendSuccess(res, { ...comment, isMine: true }, "Comment added.", 201);
   } catch {
@@ -591,10 +634,13 @@ export async function sendGift(req: AuthedRequest, res: Response): Promise<void>
       });
 
       if (post.authorId !== me) {
-        notify(post.authorId, "You received a gift", `Someone sent you ₹${amountNum.toFixed(2)} on your post`, {
+        const senderName = (await actorName(me)) || "Someone";
+        notify(post.authorId, "You received a gift", `${senderName} sent you ₹${amountNum.toFixed(2)} on your post`, {
           postId: id,
           giftId: gift.id,
           amount: Number(amount),
+          actorId: me,
+          actorName: senderName,
           type: "POST_GIFT",
         });
       }

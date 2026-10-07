@@ -60,6 +60,14 @@ export default function Profile() {
     router.replace('/(auth)/account-type');
   };
 
+  // Shares the ['notifications'] cache with the inbox screen and is invalidated
+  // by the realtime banner when a row lands, so the badge stays live.
+  const { data: notifData } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: () => get('/notifications', { page: 1, limit: 1 }),
+  });
+  const unreadCount = Number((notifData?.data as any)?.unreadCount ?? 0);
+
   const avatarUrl = profile.avatarUrl ?? user?.avatarUrl ?? null;
 
   const uploadPhoto = async () => {
@@ -140,6 +148,10 @@ export default function Profile() {
       )}
 
       <Button label="Wallet" onPress={() => router.push('/(tabs)/wallet')} />
+      <Button
+        label={unreadCount > 0 ? `Notifications (${unreadCount} unread)` : 'Notifications'}
+        onPress={() => router.push('/notifications')}
+      />
       <Button label="Verify KYC" onPress={() => router.push('/kyc')} />
       <Button label="Log out" variant="ghost" onPress={doLogout} />
     </Screen>

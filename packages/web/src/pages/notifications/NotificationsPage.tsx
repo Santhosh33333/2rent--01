@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Bell, BellOff, Check, CheckCheck, Trash2, MessageSquare, Calendar, MapPin, Users, CreditCard, Shield } from 'lucide-react'
+import { ArrowLeft, Bell, BellOff, Check, CheckCheck, Trash2, MessageSquare, Calendar, MapPin, Users, CreditCard, Shield, Heart, Gift } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { EmptyState } from '../../components/EmptyState'
@@ -32,6 +32,7 @@ export function resolveNotificationRoute(n: { metadata?: string | null; actionUr
     if (d.bookingId) return `/bookings/${d.bookingId}`
     if (d.eventId) return `/events/${d.eventId}`
     if (d.communityId) return `/communities/${d.communityId}`
+    if (d.postId) return `/feed/${d.postId}`
     if (d.userId && (d.kind === 'CHAT' || d.type === 'CHAT_MESSAGE')) return `/messages/${d.userId}`
   } catch {
     // malformed payload — fall through to actionUrl
@@ -47,6 +48,9 @@ function getNotificationIcon(type: string): any {  const lower = (type || 'gener
   if (lower.includes('community')) return Users
   if (lower.includes('payment') || lower.includes('wallet')) return CreditCard
   if (lower.includes('security') || lower.includes('sos')) return Shield
+  if (lower.includes('like')) return Heart
+  if (lower.includes('gift')) return Gift
+  if (lower.includes('comment') || lower.includes('reply')) return MessageSquare
   return Bell
 }
 
@@ -88,6 +92,7 @@ const categoryColors: Record<string, string> = {
   community: 'text-amber-500 bg-amber-50 dark:bg-amber-500/10',
   payment: 'text-rose-500 bg-rose-50 dark:bg-rose-500/10',
   security: 'text-red-500 bg-red-50 dark:bg-red-500/10',
+  post: 'text-pink-500 bg-pink-50 dark:bg-pink-500/10',
   default: 'text-surface-500 bg-surface-100 dark:bg-surface-800',
 }
 
