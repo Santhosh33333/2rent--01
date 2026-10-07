@@ -27,6 +27,11 @@ android {
         // 16 / 1.0.15 bundles the feed-publish fix (null media fields were
         // rejected with 422, so posting text/photo never worked), the /search
         // "Invalid Date" upcoming-events fix, and the profile-photo path.
+        //
+        // 17 / 1.0.16 fixes in-app call audio (RECORD_AUDIO was undeclared and
+        // A/V never reached the relay), push notifications (the opt-in flag was
+        // never set, so no device token was registered), and dead proof-image
+        // links in the admin console.
         versionCode 17
         versionName "1.0.16"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
