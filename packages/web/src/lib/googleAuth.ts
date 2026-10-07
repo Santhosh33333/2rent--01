@@ -24,7 +24,7 @@ declare global {
 const GOOGLE_CLIENT_ID =
   import.meta.env.VITE_GOOGLE_CLIENT_ID ||
   window.__googleClientId ||
-  '523643092182-auoknf0n7fg27j1h91klhs8vr6v5dvej.apps.googleusercontent.com'
+  '411366997531-hnplrt93hpbgssjvhcsknvofgvs9t3oe.apps.googleusercontent.com'
 
 const GOOGLE_GSI_SRC = 'https://accounts.google.com/gsi/client'
 
