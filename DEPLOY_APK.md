@@ -35,8 +35,9 @@ The 24 MB binary and the keystore are **not** in git (`.gitignore`: `*.apk`, `*.
 ### Path B — local machine (you have the keystore)
 
 ```powershell
-# builds the signed APK and publishes it (needs github.com cli: gh)
-npm i -g gh            # or winget install GitHub.cli, then: gh auth login
+# Builds the signed APK and publishes it. No gh install needed: the script
+# falls back to a token from the git credential manager (or GH_TOKEN) and
+# publishes via the GitHub REST API with just the `repo` scope.
 node scripts/publish-apk.mjs --version 1.0.14 --build
 # or point at an existing artifact:
 #   node scripts/publish-apk.mjs --version 1.0.14 --apk .\nabri-app-release-1.0.14.apk
@@ -44,7 +45,8 @@ node scripts/publish-apk.mjs --version 1.0.14 --build
 #   node scripts/publish-apk.mjs --dry-run
 ```
 
-If `gh` is missing the script prints the exact commands instead of guessing.
+If neither a token nor `gh` is available the script prints the exact commands
+instead of guessing.
 
 ---
 
