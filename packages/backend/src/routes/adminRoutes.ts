@@ -13,6 +13,7 @@ import * as eventEscrowController from "../controllers/eventEscrowController";
 import * as otpController from "../controllers/otpController";
 import * as kycTrialController from "../controllers/kycTrialController";
 import * as adminSubscriptionController from "../controllers/adminSubscriptionController";
+import * as formSubmissionController from "../controllers/formSubmissionController";
 
 const router = Router();
 
@@ -352,6 +353,16 @@ router.post("/subscriptions/trial/grant-all", pricingEdit, [body("days").optiona
 // account. express-validator's isInt rejects null, so the check is done in the
 // controller where null and absent can be told apart.
 router.post("/subscriptions/trial/users/:id", pricingEdit, sanitizeInput, validateRequest, adminSubscriptionController.setUserTrial);
+
+// Website enquiry forms (beta tester / app feedback / investor). Support VIEW
+// reads all four: they are inbound messages, the same shape as a ticket, and
+// the email action only ever sends to the admin making the request or an
+// address they type - it never broadcasts.
+const formsView = requireSectionAction("SUPPORT", "VIEW");
+router.get("/forms", formsView, formSubmissionController.list);
+router.get("/forms/stats", formsView, formSubmissionController.stats);
+router.get("/forms/export", formsView, formSubmissionController.exportXlsx);
+router.post("/forms/email", formsView, formSubmissionController.emailXlsx);
 
 export default router;
 

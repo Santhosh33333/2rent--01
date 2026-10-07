@@ -32,6 +32,14 @@ export function UpdateNotice() {
     }
   }, [])
 
+  // Auto-dismiss after 5 seconds. It is informational only - a permanent
+  // overlay parked at the top of every launch reads as a stuck banner.
+  useEffect(() => {
+    if (!visible) return
+    const timer = window.setTimeout(() => setVisible(false), 5000)
+    return () => window.clearTimeout(timer)
+  }, [visible])
+
   if (!visible) return null
 
   return (

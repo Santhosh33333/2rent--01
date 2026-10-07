@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { body } from "express-validator";
 import { authenticateToken, requireKycVerified } from "../middleware/auth";
+import { requirePaidAccess } from "../middleware/requirePaidAccess";
 import { sanitizeInput, validateRequest } from "../middleware/validation";
 import { upload } from "../middleware/upload";
 import { preventDuplicateBooking, preventDuplicatePayment } from "../middleware/fraudPrevention";
@@ -10,7 +11,10 @@ import { SERVICE_KEYS } from "../services/serviceCatalog";
 
 const router = Router();
 
-router.use(authenticateToken, requireKycVerified);
+// Ordered after KYC so an unverified user is told to verify rather than to pay.
+// The paid gate sits here because the free trial closes by itself: once
+// User.accessUntil lapses the booking surface must stop, not keep serving.
+router.use(authenticateToken, requireKycVerified, requirePaidAccess);
 
 // Create booking
 router.post(

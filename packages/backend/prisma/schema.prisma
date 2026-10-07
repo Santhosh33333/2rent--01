@@ -3008,3 +3008,34 @@ model DigestRun {
   @@unique([period, windowKey])
   @@index([claimedAt])
 }
+
+// ============================================================
+// WEBSITE ENQUIRY FORMS — beta tester, app feedback, investor
+// ============================================================
+
+// Every reply submitted from the landing-page forms. The page still posts
+// normally to formsubmit.co, so the founder's mailbox keeps receiving each
+// reply as it always did; the browser mirrors the same answers here. That
+// second copy is the whole point - a mailbox cannot be sorted, filtered or
+// exported, so "show me every reply in one sheet" needs rows to read from.
+model FormSubmission {
+  id        String   @id @default(uuid())
+  // The hidden "Form" field the page posts: "Beta tester", "App feedback" or
+  // "Investor or supporter".
+  form      String
+  // The _subject line the page would have emailed, kept so an exported row
+  // reads like the message it came from.
+  subject   String
+  name      String?
+  email     String
+  // Flat name -> value map of every other answer. JSON rather than columns
+  // because the three forms ask different questions and a fourth form should
+  // not need a migration to be recorded.
+  fields    Json
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([form, createdAt])
+  @@index([createdAt])
+}

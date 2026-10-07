@@ -1,13 +1,16 @@
 import { Router } from "express";
 import { body, param } from "express-validator";
 import { authenticateToken, requireKycVerified } from "../middleware/auth";
+import { requirePaidAccess } from "../middleware/requirePaidAccess";
 import { requireWalkingPartner } from "../middleware/auth";
 import { sanitizeInput, validateRequest } from "../middleware/validation";
 import * as walkingRequestController from "../controllers/walkingRequestController";
 
 const router = Router();
 
-router.use(authenticateToken, requireKycVerified);
+// Ordered after KYC so an unverified user is told to verify rather than to pay.
+// The free trial closes by itself: a lapsed User.accessUntil must block use.
+router.use(authenticateToken, requireKycVerified, requirePaidAccess);
 
 router.post(
   "/",

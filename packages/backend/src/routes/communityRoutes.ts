@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { body } from "express-validator";
 import { authenticateToken, requireKycVerified } from "../middleware/auth";
+import { requirePaidAccess } from "../middleware/requirePaidAccess";
 import { sanitizeInput, validateRequest } from "../middleware/validation";
 import { upload } from "../middleware/upload";
 import * as communityController from "../controllers/communityController";
@@ -8,7 +9,9 @@ import * as communityPostController from "../controllers/communityPostController
 
 const router = Router();
 
-router.use(authenticateToken, requireKycVerified);
+// Ordered after KYC so an unverified user is told to verify rather than to pay.
+// The free trial closes by itself: a lapsed User.accessUntil must block use.
+router.use(authenticateToken, requireKycVerified, requirePaidAccess);
 
 // Create community
 router.post(

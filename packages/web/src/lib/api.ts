@@ -350,6 +350,13 @@ export const adminApi = {
     api.post('/admin/subscriptions/trial/grant-all', { days, reason }),
   setUserTrial: (userId: string, days: number | null, reason?: string) =>
     api.post(`/admin/subscriptions/trial/users/${userId}`, { days, reason }),
+  // Website enquiry forms (beta tester / feedback / investor). The sheet is
+  // built server-side so an export and an emailed copy are the same rows.
+  getFormReplies: (params?: PaginationParams) => api.get('/admin/forms', { params }),
+  getFormReplyStats: () => api.get('/admin/forms/stats'),
+  exportFormReplies: () =>
+    api.get('/admin/forms/export', { responseType: 'blob' }),
+  emailFormReplies: (to?: string) => api.post('/admin/forms/email', { to }),
   // User / partner account blocking with duration + deletion
   blockUser: (userId: string, data: { durationDays?: number; durationYears?: number; permanent?: boolean; reason?: string }) =>
     api.post(`/admin/users/${userId}/block`, data),

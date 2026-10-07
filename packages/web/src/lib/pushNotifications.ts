@@ -1,6 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 import { Device as CapDevice } from '@capacitor/device';
 import { PushNotifications } from '@capacitor/push-notifications';
+import { LocalNotifications } from '@capacitor/local-notifications';
 import type { PluginListenerHandle } from '@capacitor/core';
 import { api } from './api';
 
@@ -63,6 +64,45 @@ async function ensureNotificationChannel(): Promise<void> {
   }
 }
 
+let foregroundPushAttached = false;
+let localNotificationSeq = 0;
+
+/**
+ * Android renders a `notification` payload in the status bar only while the app
+ * is backgrounded. In the foreground `pushNotificationReceived` fires and the
+ * platform shows nothing at all, so a user with the app open saw the socket
+ * event update the in-app bell and never a status-bar notification - which is
+ * exactly the "notification comes inside the app but not in the mobile
+ * notification bar" report. Re-posting the message as a local notification
+ * makes a foreground push look identical to a background one.
+ */
+function attachForegroundPushListener(): void {
+  if (foregroundPushAttached || !isNativeApp()) return;
+  foregroundPushAttached = true;
+  void PushNotifications.addListener('pushNotificationReceived', (msg) => {
+    const title = msg?.title || 'Nabri';
+    const body = msg?.body || '';
+    if (!body) return;
+    void (async () => {
+      try {
+        await ensureNotificationChannel();
+        await LocalNotifications.schedule({
+          notifications: [
+            {
+              id: ++localNotificationSeq,
+              title,
+              body,
+              channelId: DEFAULT_CHANNEL_ID,
+            },
+          ],
+        });
+      } catch (err) {
+        console.warn('[push] foreground status-bar notification failed:', err);
+      }
+    })();
+  });
+}
+
 export async function requestNotificationPermission(): Promise<boolean> {
   if (!isNativeApp() || !isPushOptedIn()) return false;
   try {
@@ -94,6 +134,7 @@ function obtainToken(timeoutMs = 8000): Promise<string> {
 }
 
 export async function registerForPushNotifications(): Promise<boolean> {
+  attachForegroundPushListener();
   if (registeredThisSession || attempted || !isNativeApp()) return false;
   attempted = true;
   try {

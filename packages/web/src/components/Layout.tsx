@@ -90,6 +90,7 @@ const adminNav = [
   { to: '/admin/email', icon: Send, label: 'Email All' },
   { to: '/admin/reports', icon: Shield, label: 'Reports' },
   { to: '/admin/support', icon: LifeBuoy, label: 'Support' },
+  { to: '/admin/form-replies', icon: Send, label: 'Form Replies' },
 ];
 
 const sidebarLinks = [
@@ -99,6 +100,13 @@ const sidebarLinks = [
   { to: '/settings/privacy', icon: Shield, label: 'Privacy' },
   { to: '/home', icon: Info, label: 'About' },
 ];
+
+/**
+ * Height, in CSS pixels, of the strip reserved at the bottom of every screen
+ * while an AdMob banner is showing. Anchored BANNER units are 50dp tall on a
+ * phone, so 56px clears them with a little breathing room.
+ */
+const AD_STRIP_PX = 56;
 
 export function Layout() {
   const { user, logout } = useAuth();
@@ -128,16 +136,25 @@ export function Layout() {
   useEffect(() => {
     if (!adsReady || !isNative()) return;
     let cancelled = false;
-    const sync = async () => {
-      const wide = window.matchMedia('(min-width: 1024px)').matches;
+    // The banner used to be gated to >=1024px, which meant phones - the entire
+    // APK audience - never served a banner and the only ad anyone saw was the
+    // occasional full-screen interstitial. It now anchors to the bottom of every
+    // screen, and the shell reserves a strip for it via --nabri-ad-strip so the
+    // tab bar and page content sit above the ad instead of behind it. In chat
+    // that strip stays put while the thread scrolls: a small persistent ad in
+    // otherwise empty space rather than a takeover.
+    void (async () => {
+      await showBanner();
       if (cancelled) return;
-      if (wide) { await showBanner(); if (!cancelled) setBannerUp(true); }
-      else if (bannerUp) { await destroyBanner(); if (!cancelled) setBannerUp(false); }
+      setBannerUp(true);
+      document.documentElement.style.setProperty('--nabri-ad-strip', `${AD_STRIP_PX}px`);
+    })();
+    return () => {
+      cancelled = true;
+      setBannerUp(false);
+      document.documentElement.style.removeProperty('--nabri-ad-strip');
+      void destroyBanner();
     };
-    void sync();
-    const mq = window.matchMedia('(min-width: 1024px)');
-    mq.addEventListener('change', () => void sync());
-    return () => { cancelled = true; mq.removeEventListener('change', () => void sync()); setBannerUp(false); void destroyBanner(); };
   }, [adsReady]);
 
   useEffect(() => {
@@ -321,8 +338,12 @@ export function Layout() {
         )}
       </AnimatePresence>
 
-      {/* Main Viewport */}
-      <main className={`pt-24 pb-24 lg:pb-12 transition-all duration-500 ${bannerUp ? 'pb-32' : ''}`}>
+      {/* Main Viewport. Bottom padding is inline rather than a competing Tailwind
+          pb-* class: the banner strip is dynamic, and the tab bar lifts with it. */}
+      <main
+        className="pt-24 pb-24 lg:pb-12 transition-all duration-500"
+        style={bannerUp ? { paddingBottom: `calc(6rem + ${AD_STRIP_PX}px)` } : undefined}
+      >
         <PartnerLiveLocationSharer />
         <UserLiveLocationSharer />
       <div className="max-w-7xl mx-auto px-4 py-5 sm:px-6 sm:py-7 lg:px-8 lg:py-8">

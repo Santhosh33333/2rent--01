@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate, useParams } from 'react-router-dom'
+import { Capacitor } from '@capacitor/core'
 import { Toaster } from 'react-hot-toast'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { Layout } from './components/Layout'
@@ -92,6 +93,7 @@ const AdminChatReportsPage = lazy(() => import('./pages/admin/AdminChatReportsPa
 const AdminSosPage = lazy(() => import('./pages/admin/AdminSosPage').then(m => ({ default: m.AdminSosPage })))
 const AdminReportsPage = lazy(() => import('./pages/admin/AdminReportsPage').then(m => ({ default: m.AdminReportsPage })))
 const AdminSupportQueuePage = lazy(() => import('./pages/admin/AdminSupportQueuePage').then(m => ({ default: m.AdminSupportQueuePage })))
+const AdminFormRepliesPage = lazy(() => import('./pages/admin/AdminFormRepliesPage').then(m => ({ default: m.AdminFormRepliesPage })))
 const SupportPage = lazy(() => import('./pages/support/SupportPage').then(m => ({ default: m.SupportPage })))
 const AdminAuditLogsPage = lazy(() => import('./pages/admin/AdminAuditLogsPage').then(m => ({ default: m.AdminAuditLogsPage })))
 const AdminAdminsPage = lazy(() => import('./pages/admin/AdminAdminsPage').then(m => ({ default: m.AdminAdminsPage })))
@@ -174,7 +176,15 @@ export function App() {
             <SongPlayerProvider>
             <Routes>
           {/* Public marketing site. */}
-        <Route path="/" element={<LandingPage />} />
+        {/* "/" is the public marketing site on the web. Inside the installed app
+            it must never appear - the shell already owns every screen a user
+            needs - so native boots redirect to /splash, which routes to
+            onboarding, dashboard or login based on session state. The "*" route
+            lands here too, so an unknown deep link in the APK also stays in-app. */}
+        <Route
+          path="/"
+          element={Capacitor.isNativePlatform() ? <Navigate to="/splash" replace /> : <LandingPage />}
+        />
         {/* The in-app splash remains available for the native shell. */}
         <Route path="/splash" element={<SplashPage />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
@@ -341,6 +351,7 @@ export function App() {
               <Route path="/admin/sos" element={<AdminSosPage />} />
               <Route path="/admin/reports" element={<AdminReportsPage />} />
               <Route path="/admin/support" element={<AdminSupportQueuePage />} />
+              <Route path="/admin/form-replies" element={<AdminFormRepliesPage />} />
               <Route path="/admin/audit-logs" element={<AdminAuditLogsPage />} />
               <Route path="/admin/admins" element={<AdminAdminsPage />} />
                <Route path="/admin/payments" element={<AdminPaymentsPage />} />

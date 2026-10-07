@@ -24,7 +24,12 @@ export function AppTabBar({ onOpenMore }: { onOpenMore: () => void }) {
       aria-label="Primary"
       className="fixed inset-x-0 bottom-0 z-40 lg:hidden"
       // Respect the iOS home indicator instead of letting the bar sit under it.
-      style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
+      style={{
+        paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))",
+        // Lifted above the AdMob banner strip while one is on screen so an ad
+        // can never sit on top of the navigation. 0 when no banner is up.
+        bottom: "var(--nabri-ad-strip, 0px)",
+      }}
     >
       <motion.div
         initial={{ y: 80, opacity: 0 }}

@@ -59,6 +59,7 @@ import agentRoutes from "./routes/agentRoutes";
 import { installAgentAuditSink } from "./agent/auditSink";
 import legalRoutes from "./routes/legalRoutes";
 import supportRoutes from "./routes/supportRoutes";
+import formRoutes from "./routes/formRoutes";
 import referralRoutes from "./routes/referralRoutes";
 import otpApiRoutes from "./routes/otpApiRoutes";
 import { isOriginAllowed, parseAllowedOrigins } from "./config/corsOrigins";
@@ -359,6 +360,10 @@ app.use("/api/movies", moviesRoutes);
   app.use("/api/legal", legalRoutes);
   // Support desk: requester threads plus the staff queue.
   app.use("/api/support", supportRoutes);
+  // Website enquiry forms (beta tester / feedback / investor). Public write,
+  // admin-only read: the browser mirrors a submission here without a session,
+  // and only admins can list or export what came in.
+  app.use("/api/forms", formRoutes);
   // Public generic OTP API (generate/verify) — registered BEFORE the /api
   // search router (which applies auth globally) so it stays unauthenticated,
   // mirroring the reference otp-service's open endpoints.

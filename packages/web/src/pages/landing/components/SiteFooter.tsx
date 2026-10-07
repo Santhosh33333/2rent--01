@@ -37,7 +37,7 @@ function readEnv(key: string): string | null {
   return trimmed;
 }
 
-const COLUMNS: Array<{ heading: string; links: Array<{ label: string; to: string }> }> = [
+const COLUMNS: Array<{ heading: string; links: Array<{ label: string; to?: string; href?: string }> }> = [
   {
     heading: 'Explore',
     links: [
@@ -58,6 +58,18 @@ const COLUMNS: Array<{ heading: string; links: Array<{ label: string; to: string
       { label: 'Become a partner', to: '/partner/apply' },
       { label: 'Plans & pricing', to: '/subscription' },
       { label: 'Help centre', to: '/support' },
+    ],
+  },
+  // Static pages, not app routes: each is a standalone form that posts to the
+  // founder's mailbox. Rendered as plain anchors on purpose - a SPA link to
+  // "/beta-tester.html" would route through index.html and show the landing
+  // page instead of the form.
+  {
+    heading: 'Get involved',
+    links: [
+      { label: 'Become a beta tester', href: '/beta-tester.html' },
+      { label: 'Share app feedback', href: '/app-feedback.html' },
+      { label: 'Back Nabri', href: '/investor-supporter.html' },
     ],
   },
   {
@@ -100,8 +112,12 @@ export function SiteFooter() {
               <h3>{column.heading}</h3>
               <ul>
                 {column.links.map((link) => (
-                  <li key={link.to}>
-                    <Link to={link.to}>{link.label}</Link>
+                  <li key={link.label}>
+                    {link.to ? (
+                      <Link to={link.to}>{link.label}</Link>
+                    ) : (
+                      <a href={link.href}>{link.label}</a>
+                    )}
                   </li>
                 ))}
               </ul>
