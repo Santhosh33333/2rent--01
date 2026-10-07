@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Shield, FileText, Heart, ChevronRight, Lock, Scale, Mail, Globe } from 'lucide-react'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
+import { openExternalUrl } from '../../lib/externalLink'
 
 const APP_VERSION = '1.0.0'
 const BUILD_NUMBER = '2026.07.19'
@@ -21,7 +22,7 @@ export function AboutPage() {
     { icon: Lock, label: 'Data Safety', desc: 'How your data is collected and used', action: () => navigate('/legal#data') },
     { icon: Scale, label: 'Community Guidelines', desc: 'Rules for using Nabri', action: () => navigate('/legal#prohibited') },
     { icon: Mail, label: 'Contact Us', desc: 'nabri.support@gmail.com', action: () => window.location.href = 'mailto:nabri.support@gmail.com' },
-    { icon: Globe, label: 'Website', desc: 'www.nabri.app', action: () => window.open('https://www.nabri.app', '_blank') },
+    { icon: Globe, label: 'Website', desc: 'www.nabri.app', action: () => openExternalUrl('https://www.nabri.app') },
   ]
 
   return (

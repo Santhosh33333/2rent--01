@@ -94,6 +94,22 @@ if (turnUrl) {
     username: import.meta.env.VITE_TURN_USERNAME as string | undefined,
     credential: import.meta.env.VITE_TURN_CREDENTIAL as string | undefined,
   });
+} else {
+  // Fallback relay. STUN alone cannot get through the symmetric NAT / carrier
+  // NAT that virtually every mobile network uses, which is why a call could
+  // ring and then carry no audio. Until a dedicated relay is configured via
+  // VITE_TURN_URL, fall back to the public Metered "Open Relay" project so
+  // calls still connect. For production traffic, set VITE_TURN_URL to your own
+  // TURN server — a shared public relay is rate-limited and can be blocked.
+  ICE_SERVERS.push({
+    urls: [
+      'turn:openrelay.metered.ca:80',
+      'turn:openrelay.metered.ca:443',
+      'turn:openrelay.metered.ca:443?transport=tcp',
+    ],
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  });
 }
 
 const UNAVAILABLE_MESSAGES: Record<string, string> = {

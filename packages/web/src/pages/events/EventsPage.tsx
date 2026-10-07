@@ -7,6 +7,7 @@ import { api, assetUrl } from '../../lib/api'
 import { isSignedIn } from '../../lib/auth'
 import { directionsUrl, isUsableLocation } from '../../lib/maps'
 import { prepareCover } from '../../lib/photo'
+import { openExternalUrl } from '../../lib/externalLink'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { LocationInput } from '../../components/LocationInput'
 import { PageHeader } from '../../components/PageHeader'
@@ -369,7 +370,7 @@ export function EventsPage() {
                   href={mapUrl!}
                   target="_blank"
                   rel="noreferrer noopener"
-                  onClick={(e) => e.stopPropagation()}
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); openExternalUrl(mapUrl) }}
                   title={`Get directions to ${event.location}`}
                   className="text-xs flex items-center gap-1 font-medium text-primary-600 dark:text-primary-400 hover:underline underline-offset-2"
                 >

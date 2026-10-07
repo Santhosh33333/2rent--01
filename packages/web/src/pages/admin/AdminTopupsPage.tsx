@@ -4,6 +4,7 @@ import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
 import { adminApi, assetUrl } from '../../lib/api'
 import { getErrorMessage } from '../../lib/error'
 import { exportTableToPdf } from '../../lib/pdfExport'
+import { openExternalUrl } from '../../lib/externalLink'
 
 interface TopupRow {
   id: string
@@ -148,7 +149,13 @@ export function AdminTopupsPage() {
                   </div>
 
                   {r.proofImageUrl && (
-                    <a href={assetUrl(r.proofImageUrl)} target="_blank" rel="noreferrer" className="flex-shrink-0">
+                    <a
+                      href={assetUrl(r.proofImageUrl)}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => { e.preventDefault(); openExternalUrl(assetUrl(r.proofImageUrl)) }}
+                      className="flex-shrink-0"
+                    >
                       <img src={assetUrl(r.proofImageUrl)} alt="Payment proof" className="h-24 w-24 rounded-xl object-cover border border-surface-200 dark:border-surface-700" />
                     </a>
                   )}

@@ -4,6 +4,7 @@ import { AdminPageHeader, AdminShell } from '../../components/admin/AdminPageHea
 import { ChevronLeft, ChevronRight, Check, X, FileDown, ImagePlus, Loader2, Copy } from 'lucide-react'
 import { adminApi, assetUrl } from '../../lib/api'
 import { exportTableToPdf } from '../../lib/pdfExport'
+import { openExternalUrl } from '../../lib/externalLink'
 import toast from 'react-hot-toast'
 
 interface Withdrawal {
@@ -339,7 +340,13 @@ const handleApprove = async (id: string) => {
                           </button>
                           {w.payoutProofImageUrl && (
                             <div className="mb-2">
-                              <a href={assetUrl(w.payoutProofImageUrl)} target="_blank" rel="noreferrer" title="View payout proof">
+                              <a
+                                href={assetUrl(w.payoutProofImageUrl)}
+                                target="_blank"
+                                rel="noreferrer"
+                                title="View payout proof"
+                                onClick={(e) => { e.preventDefault(); openExternalUrl(assetUrl(w.payoutProofImageUrl)) }}
+                              >
                                 <img src={assetUrl(w.payoutProofImageUrl)} alt="Payout proof" className="h-14 w-14 rounded-lg object-cover border border-gray-700" />
                               </a>
                             </div>

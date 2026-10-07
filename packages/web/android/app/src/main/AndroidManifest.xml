@@ -53,6 +53,13 @@
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="@string/admob_app_id" />
+
+        <!-- Every FCM notification must land on a channel that actually exists,
+             or Android 8+ silently drops it from the status bar. The channel is
+             created at runtime in pushNotifications.ts with this exact id. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="nabri_default" />
     </application>
 
     <!-- Permissions - Runtime permissions requested only when needed -->
@@ -77,6 +84,14 @@
 
     <!-- Camera - requested at runtime -->
     <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- Microphone - required for in-app voice/video calls (WebRTC).
+         Capacitor's BridgeWebChromeClient requests RECORD_AUDIO at runtime when
+         the page calls getUserMedia, but the runtime request is auto-denied if
+         the permission is not declared here first. Without these two lines the
+         call rings on both sides and then carries no audio. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
     <!-- Storage -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />

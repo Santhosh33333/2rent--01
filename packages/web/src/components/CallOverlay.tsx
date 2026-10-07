@@ -79,9 +79,22 @@ export default function CallOverlay() {
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
 
-  // Attach the peer's media so the browser actually plays the audio.
+  // Attach the peer's media so the browser actually plays the audio. `autoPlay`
+  // alone is not reliable inside the Android WebView: the track arrives after
+  // the accept tap, so the user gesture that unlocks autoplay has already been
+  // consumed. Call play() explicitly and retry once metadata is ready.
   useEffect(() => {
-    if (remoteAudioRef.current && remoteStream) remoteAudioRef.current.srcObject = remoteStream;
+    const el = remoteAudioRef.current;
+    if (!el || !remoteStream) return;
+    el.srcObject = remoteStream;
+    const attempt = () => {
+      void el.play().catch(() => {});
+    };
+    attempt();
+    el.onloadedmetadata = attempt;
+    return () => {
+      el.onloadedmetadata = null;
+    };
   }, [remoteStream]);
 
   useEffect(() => {

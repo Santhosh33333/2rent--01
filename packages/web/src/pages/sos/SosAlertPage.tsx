@@ -9,6 +9,7 @@ import { PageHeader } from '../../components/PageHeader'
 import { EmptyState } from '../../components/EmptyState'
 import { LiveMap } from '../../components/LiveMap'
 import { getErrorMessage } from '../../lib/error'
+import { openExternalUrl } from '../../lib/externalLink'
 
 interface SosAlertDetail {
   id: string
@@ -172,6 +173,7 @@ export function SosAlertPage() {
                 href={`https://maps.google.com/?q=${alert.latitude},${alert.longitude}`}
                 target="_blank"
                 rel="noreferrer"
+                onClick={(e) => { e.preventDefault(); openExternalUrl(`https://maps.google.com/?q=${alert.latitude},${alert.longitude}`) }}
                 className="flex items-center gap-2 rounded-2xl border border-surface-200 dark:border-surface-700 px-4 py-3 text-sm font-semibold"
               >
                 <MapPin className="w-4 h-4 text-emerald-500" /> Open in Maps

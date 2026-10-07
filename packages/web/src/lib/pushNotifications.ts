@@ -9,6 +9,10 @@ let registeredThisSession = false;
 
 const PUSH_OPTIN_KEY = 'nabri-push-optin'
 
+// Must match `com.google.firebase.messaging.default_notification_channel_id`
+// in android/app/src/main/AndroidManifest.xml.
+export const DEFAULT_CHANNEL_ID = 'nabri_default'
+
 export function isNativeApp(): boolean {
   try {
     return Capacitor.isNativePlatform();
@@ -18,19 +22,44 @@ export function isNativeApp(): boolean {
 }
 
 export function isPushOptedIn(): boolean {
+  // Default ON. There is no settings toggle wired to setPushOptedIn, and the
+  // old "must be exactly '1'" test meant no device ever registered for push, so
+  // no notification ever reached the status bar. Treat the flag as an explicit
+  // opt-OUT: only a stored '0' disables notifications.
   try {
-    return localStorage.getItem(PUSH_OPTIN_KEY) === '1';
+    return localStorage.getItem(PUSH_OPTIN_KEY) !== '0';
   } catch {
-    return false;
+    return true;
   }
 }
 
 export function setPushOptedIn(enabled: boolean): void {
   try {
-    if (enabled) localStorage.setItem(PUSH_OPTIN_KEY, '1');
-    else localStorage.removeItem(PUSH_OPTIN_KEY);
+    if (enabled) localStorage.removeItem(PUSH_OPTIN_KEY);
+    else localStorage.setItem(PUSH_OPTIN_KEY, '0');
   } catch {
     // storage unavailable — persist on next launch
+  }
+}
+
+/**
+ * FCM on Android 8+ will not display a notification unless it targets a
+ * channel that exists. Create our channel before registering so the very first
+ * notification already has somewhere to land. No-op off Android.
+ */
+async function ensureNotificationChannel(): Promise<void> {
+  try {
+    if (Capacitor.getPlatform() !== 'android') return;
+    await PushNotifications.createChannel({
+      id: DEFAULT_CHANNEL_ID,
+      name: 'Nabri notifications',
+      description: 'Calls, messages, bookings and payment updates',
+      importance: 5, // IMPORTANCE_HIGH — heads-up banner in the status bar
+      visibility: 1, // VISIBILITY_PUBLIC
+      vibration: true,
+    });
+  } catch {
+    // Channel creation is best-effort; FCM falls back to its own channel.
   }
 }
 
@@ -71,6 +100,7 @@ export async function registerForPushNotifications(): Promise<boolean> {
     const perm = await PushNotifications.requestPermissions();
     if (perm.receive !== 'granted') return false;
 
+    await ensureNotificationChannel();
     await PushNotifications.register();
     const token = await obtainToken();
     if (!token) return false;

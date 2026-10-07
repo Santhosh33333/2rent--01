@@ -44,6 +44,16 @@ export async function sendPushNotification(
       token: device.fcmToken,
       notification: { title, body },
       data,
+      android: {
+        // High priority so the message is delivered even while the app is
+        // dozing in the background, and routed to the channel the client
+        // creates — without a live channel Android 8+ drops it silently.
+        priority: "high",
+        notification: {
+          channelId: "nabri_default",
+          sound: "default",
+        },
+      },
     });
   } catch (err) {
     console.error(`Failed to send push notification to ${userId}:`, err);

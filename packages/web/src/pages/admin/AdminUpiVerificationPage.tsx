@@ -3,6 +3,7 @@ import { QrCode, Search, Check, X, HelpCircle, IndianRupee, User as UserIcon, Cl
 import { adminApi, assetUrl } from '../../lib/api'
 import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
 import { getErrorMessage } from '../../lib/error'
+import { openExternalUrl } from '../../lib/externalLink'
 
 interface UpiRow {
   id: string
@@ -196,7 +197,13 @@ export function AdminUpiVerificationPage() {
                     </p>
                     <p className="text-sm text-surface-500">Ref: <b>{r.referenceNumber}</b></p>
                     {r.proofImageUrl ? (
-                      <a href={assetUrl(r.proofImageUrl) || '#'} target="_blank" rel="noreferrer" className="block mt-2">
+                      <a
+                        href={assetUrl(r.proofImageUrl) || '#'}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => { e.preventDefault(); openExternalUrl(assetUrl(r.proofImageUrl)) }}
+                        className="block mt-2"
+                      >
                         <img
                           src={assetUrl(r.proofImageUrl) || ''}
                           alt="Payment proof"

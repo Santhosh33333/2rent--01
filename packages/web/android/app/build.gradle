@@ -27,8 +27,8 @@ android {
         // 16 / 1.0.15 bundles the feed-publish fix (null media fields were
         // rejected with 422, so posting text/photo never worked), the /search
         // "Invalid Date" upcoming-events fix, and the profile-photo path.
-        versionCode 16
-        versionName "1.0.15"
+        versionCode 17
+        versionName "1.0.16"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
