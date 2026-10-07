@@ -22,7 +22,9 @@
  * links that go nowhere, dressed as the primary conversion on the page. Nabri
  * ships an Android APK, so that is the only download offered, and the badge
  * says APK. The APK is copied into `dist/download/` by a Vite plugin at the
- * end of every build, which is the path the button points at.
+ * end of every build, which is the path the button points at (or, when the
+ * binary is absent from a CI clone, the NABRI_APK_URL env var links out to a
+ * hoster-owned copy instead).
  *
  * Note that `*.apk` is gitignored, so a build may well have no APK at all -
  * the plugin warns and `__APK_AVAILABLE__` stays false. These buttons check
@@ -34,6 +36,10 @@ import { ArrowRight, Download, ShieldCheck, Sparkles, Store, Users, Wallet } fro
 import { Backdrop } from '../components/Backdrop';
 import { Brand } from '../components/SiteChrome';
 import { formatPlanPrice, type Plan, type Resource } from '../hooks/useLandingContent';
+
+// The file copied into dist/download by the build, or the external URL set via
+// NABRI_APK_URL when the gitignored binary is not present in a CI build.
+const APK_HREF = __APK_URL__ || '/download/nabri.apk'
 
 /** "1 DAY FREE" / "7 DAYS FREE" - never a hand-written marketing number. */
 export function trialHeadline(days: number): string | null {
@@ -72,7 +78,7 @@ export function DownloadSection({ plans, signedIn }: DownloadProps) {
 
           <div className="nb-btns" style={{ justifyContent: 'center' }}>
             {__APK_AVAILABLE__ ? (
-              <a className="nb-btn nb-btn--lg" href="/download/nabri.apk" download>
+              <a className="nb-btn nb-btn--lg" href={APK_HREF} download>
                 <Download aria-hidden="true" /> Download the Android app
               </a>
             ) : (
@@ -118,7 +124,7 @@ export function DownloadSection({ plans, signedIn }: DownloadProps) {
               Play badges whose URLs were empty strings. */}
           <div className="nb-stores">
             {__APK_AVAILABLE__ ? (
-              <a className="nb-store" href="/download/nabri.apk" download>
+              <a className="nb-store" href={APK_HREF} download>
                 <Store aria-hidden="true" />
                 <span>
                   Android APK

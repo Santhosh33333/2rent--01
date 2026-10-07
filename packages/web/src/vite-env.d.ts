@@ -12,3 +12,9 @@ declare const __APK_AVAILABLE__: boolean
 
 /** Real size in MB of the APK shipped with this build, or null if none. */
 declare const __APK_SIZE_MB__: number | null
+
+/**
+ * External download URL for the APK, from the NABRI_APK_URL env var. Empty
+ * string when this build ships its own binary at /download/nabri.apk.
+ */
+declare const __APK_URL__: string

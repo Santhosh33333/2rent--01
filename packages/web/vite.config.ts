@@ -28,8 +28,14 @@ const apkSource = apkCandidates.find((p) => existsSync(p)) ?? apkCandidates[0]
 // Read at config time so the bundle can be told the truth about whether a
 // download will actually be there when the page renders.
 const apkStats = existsSync(apkSource) ? statSync(apkSource) : null
-const apkAvailable = apkStats !== null
+// A 24 MB binary that is gitignored cannot reach a fresh CI checkout, so this
+// deploy can also point at a URL the operator hosts elsewhere (a GitHub
+// Release, a CDN, an object store). Set NABRI_APK_URL in the build env and the
+// download page links out to it instead of 404ing on /download/nabri.apk.
+const apkUrlExternal = (process.env.NABRI_APK_URL || '').trim() || null
+const apkAvailable = apkStats !== null || apkUrlExternal !== null
 // Rounded to 1dp so the page can show a real figure instead of a guess.
+// Only known for a locally-attached file; an external URL has an unknown size.
 const apkSizeMb = apkStats ? Math.round((apkStats.size / (1024 * 1024)) * 10) / 10 : null
 
 const apkPlugin = {
@@ -41,6 +47,12 @@ const apkPlugin = {
       // stayed green while the file it was for was never there. The UI now
       // reads __APK_AVAILABLE__ and says NOT CONFIGURED instead of linking
       // to nothing.
+      if (apkUrlExternal) {
+        console.log(
+          `[copy-apk] no local APK, but NABRI_APK_URL is set; downloads will link to ${apkUrlExternal}`,
+        )
+        return
+      }
       console.warn(
         [
           '',
@@ -52,6 +64,8 @@ const apkPlugin = {
           '  To enable downloads, run the Capacitor build (yarn android:release) or',
           '  place an APK at packages/web/apk/nabri.apk before building — both are',
           '  gitignored, so they must be present in the build environment.',
+          '  Alternative: host the APK anywhere public and set NABRI_APK_URL so the',
+          '  site links out to it (works on CI where the binary never exists).',
           '',
         ].join('\n'),
       )
@@ -94,11 +108,15 @@ export default defineConfig({
   plugins: [react(), apkPlugin],
   define: {
     __BUILD_ID__: JSON.stringify(resolveBuildId()),
-    // Whether the download the page advertises actually exists on this deploy.
+    // Whether the download the page advertises actually exists on this deploy:
+    // a real file shipped into dist/download, OR an externally-hosted URL set
+    // via NABRI_APK_URL.
     __APK_AVAILABLE__: JSON.stringify(apkAvailable),
     // Real size of the APK being shipped, or null when there isn't one. The
     // page used to hardcode a figure that did not match the file.
     __APK_SIZE_MB__: JSON.stringify(apkSizeMb),
+    // External download URL (NABRI_APK_URL) or "" when the build ships its own.
+    __APK_URL__: JSON.stringify(apkUrlExternal || ''),
   },
   build: {
     // Capacitor WebViews can lag far behind desktop Chrome (a phone's Android

@@ -2,14 +2,15 @@ import { Link } from 'react-router-dom'
 import { Check, Download, Monitor, ShieldCheck, Smartphone, Sparkles, Zap } from 'lucide-react'
 
 const APK_PATH = '/download/nabri.apk'
-// Baked in by vite.config.ts from the file this deploy will actually serve.
-// Both used to be hardcoded: "11 MB · v1.0.11" described an APK the build does
-// not contain, so the page promised a download it could not deliver.
+// Baked in by vite.config.ts from what this deploy will actually serve: the
+// local file copied into dist/download, or the external URL set via the
+// NABRI_APK_URL env var (used when the gitignored binary is not in CI).
+const APK_HREF = __APK_URL__ || APK_PATH
 const APK_AVAILABLE = __APK_AVAILABLE__
 const APK_SIZE = __APK_SIZE_MB__
 const STEPS = [
   { icon: Smartphone, title: 'Open on your phone', text: 'Visit this page from your Android phone so the APK downloads straight to it.' },
-  { icon: Download, title: 'Tap to download', text: 'Your browser will grab the Nabri app (~4 MB). Keep the downloaded file when prompted.' },
+  { icon: Download, title: 'Tap to download', text: `Your browser will grab the Nabri app${APK_SIZE != null ? ` (${APK_SIZE} MB)` : ''}. Keep the downloaded file when prompted.` },
   { icon: ShieldCheck, title: 'Allow installs', text: 'Android may ask to allow installing from your browser — turn that on for this download.' },
   { icon: Check, title: 'Install & sign in', text: 'Open the file and tap Install. Then sign in or create your account.' },
 ]
@@ -48,7 +49,7 @@ export function DownloadPage() {
 
           {APK_AVAILABLE ? (
             <a
-              href={APK_PATH}
+              href={APK_HREF}
               download
               className="mt-8 inline-flex items-center justify-center gap-3 rounded-2xl bg-white px-8 py-4 text-base font-bold text-[#0D378B] shadow-xl shadow-black/20 transition-all hover:-translate-y-0.5 hover:bg-[#E9F0FF]"
             >
@@ -152,7 +153,7 @@ export function DownloadPage() {
         <div className="mt-10 text-center">
           {APK_AVAILABLE ? (
             <a
-              href={APK_PATH}
+              href={APK_HREF}
               download
               className="inline-flex items-center justify-center gap-3 rounded-2xl bg-[#0D378B] hover:bg-[#123F9C] px-8 py-4 text-base font-bold text-white shadow-lg shadow-[#0D378B]/25 transition-all hover:-translate-y-0.5"
             >
