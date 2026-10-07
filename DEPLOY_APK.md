@@ -5,9 +5,9 @@ Every artifact and where it lives today:
 | Surface | Canonical location | Notes |
 |---|---|---|
 | Signed Android APK (app.rentbuddy.app, versionCode 18, versionName 1.0.17, ~16.5 MB) | `packages/web/android/app/build/outputs/apk/release/app-release.apk` | Produced by `npm run cap:build:release`; signing via gitignored `android/keystore.properties` + `rentbuddy-release.jks`. A signed AAB for Play Store is at `.../outputs/bundle/release/app-release.aab`. |
-| Web build (`/feed`, download page, `NABRI_APK_URL` baked in) | `packages/web/dist` | Build: `npm run build:web`; deploy: Vercel project `2rent-01`. |
+| Web build (`/feed`, download page, `NABRI_APK_URL` baked in) | `packages/web/dist` | Build: `npm run build:web`; deploy: Vercel project **`web`** (yuvers.in — the same push also builds the `2rent-01` project, which is *not* the live domain). |
 | API (feed endpoints, feature flags, gifts, realtime) | Render service `rentbuddy-api` | `render.yaml` `autoDeploy: true`; migrations run on start. |
-| `NABRI_APK_URL` | Vercel env var on `2rent-01` | When set, the download buttons link out to it; otherwise a deploy with no local APK shows **NOT CONFIGURED**. |
+| `NABRI_APK_URL` | Vercel env var on project **`web`** (the yuvers.in project — *not* `2rent-01`) | When set, the download buttons link out to it; otherwise a deploy with no local APK shows **NOT CONFIGURED**. |
 
 The 24 MB binary and the keystore are **not** in git (`.gitignore`: `*.apk`, `*.jks`). That is why CI deploys default to NOT CONFIGURED — the fix is to give the deploy an *address* for the APK instead of the *file*.
 
@@ -63,10 +63,17 @@ instead of guessing.
 
 ## 2. Point Vercel at the APK
 
-On the **2rent-01** project:
+The repo feeds **two** Vercel projects from the same GitHub push: `web`
+(serves **yuvers.in** — the live site) and `2rent-01` (2rent-01.vercel.app).
+The variable only matters on the project that serves the domain: before
+1.0.17 it had been set on `2rent-01` alone, which is why yuvers.in kept
+rendering **NOT CONFIGURED** while the build log for the other project
+showed the URL as set.
 
-- Dashboard: Settings → Environment Variables → add `NABRI_APK_URL` = the asset URL above.
-- Or CLI (project is already linked via `.vercel`):
+- Dashboard: project **web** → Settings → Environment Variables → add
+  `NABRI_APK_URL` = the asset URL above (Production).
+- Or CLI from the repo root (`.vercel` is linked to `web`; if it ever points
+  elsewhere, run `npx vercel link --yes --project web` first):
 
 ```powershell
 npx vercel env add NABRI_APK_URL production
@@ -107,7 +114,7 @@ curl -sIL https://github.com/Santhosh33333/2rent--01/releases/download/nabri-v1.
 #   -> expect 302 then 200 with Content-Type: application/vnd.android.package-archive
 
 # Web bundle actually changed (compare hash with what you built locally)
-curl -s https://2rent-01.vercel.app/ | grep -o 'index-[A-Za-z0-9_-]*\.js'
+curl -s https://yuvers.in/ | grep -o 'index-[A-Za-z0-9_-]*\.js'
 ```
 
 Landing page + `/download` should now show the download button with the real

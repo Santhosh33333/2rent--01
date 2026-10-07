@@ -116,3 +116,4 @@ gcp-*.json
 # writes .err alongside .log when a process is backgrounded).
 *.err
 .opencode/skills/cashfree-skills/
+.env*
