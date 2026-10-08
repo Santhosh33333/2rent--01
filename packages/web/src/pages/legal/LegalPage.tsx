@@ -77,6 +77,17 @@ const SECTIONS: Array<{ id: string; title: string; body: string[] }> = [
     ],
   },
   {
+    id: 'child-safety',
+    title: 'Child safety standards (CSAE)',
+    body: [
+      'Nabri is an adults-only service for users aged 18 and over. We do not knowingly allow anyone under 18 to create an account, and we remove any account found to belong to a minor.',
+      'Child sexual abuse material (CSAM) is prohibited without exception. We do not host, promote, distribute or tolerate sexual content involving minors in any form, and we do not permit grooming, sextortion or any attempt to sexualise a minor.',
+      'If we become aware of CSAM or the sexual exploitation of a minor, we remove the content, permanently ban the accounts involved, preserve evidence and report the matter to the relevant law enforcement authorities and to NCMEC (or the equivalent national body in the user\u2019s country).',
+      'Every user can report child safety concerns in-app: open a profile or conversation, use the report option, and choose the child safety category. Reports are reviewed by our moderation team and escalated as described above.',
+      'To report child safety concerns, or to request removal of such content, email nabri.support@gmail.com. We treat these reports as a priority and respond as quickly as we can.',
+    ],
+  },
+  {
     id: 'payments',
     title: 'Payments and refunds',
     body: [
