@@ -182,18 +182,33 @@ api.interceptors.response.use(
         originalRequest.headers.Authorization = `Bearer ${newAccessToken}`
         return api(originalRequest)
       } catch (refreshError) {
-        // Generation guard: only wipe when no newer session won the race.
-        // If another in-flight refresh already stored fresh tokens, the
-        // stored token differs from the one this request attempted with —
-        // wiping now would delete a VALID session (the login-loop bug).
-        const attempted = String(originalRequest.headers?.Authorization || '').replace(/^Bearer\s+/i, '')
-        const current = localStorage.getItem('token') || ''
-        if (!current || current === attempted) {
-          clearSessionStorage()
-          // Entry/portal pages decide routing themselves (Splash, onboarding,
-          // account-type, admin login): never yank them to /login.
-          if (typeof window !== 'undefined' && !['/', '/login', '/register', '/forgot-password', '/onboarding', '/account-type', '/admin/login'].includes(window.location.pathname)) {
-            window.location.replace('/login')
+        // Only a GENUINE auth rejection ends the session: the refresh endpoint
+        // answered 400/401/403 (token invalid, expired or revoked), or there is
+        // no refresh token left to try. A network drop, DNS failure, request
+        // timeout or 5xx from a sleeping backend must leave the stored session
+        // untouched - wiping here is what logged users out mid-session and on
+        // cold start whenever connectivity blipped.
+        const refreshStatus = (refreshError as { response?: { status?: number } } | null)?.response?.status
+        const authRejected =
+          !localStorage.getItem('refreshToken') ||
+          refreshStatus === 400 ||
+          refreshStatus === 401 ||
+          refreshStatus === 403
+
+        if (authRejected) {
+          // Generation guard: only wipe when no newer session won the race.
+          // If another in-flight refresh already stored fresh tokens, the
+          // stored token differs from the one this request attempted with —
+          // wiping now would delete a VALID session (the login-loop bug).
+          const attempted = String(originalRequest.headers?.Authorization || '').replace(/^Bearer\s+/i, '')
+          const current = localStorage.getItem('token') || ''
+          if (!current || current === attempted) {
+            clearSessionStorage()
+            // Entry/portal pages decide routing themselves (Splash, onboarding,
+            // account-type, admin login): never yank them to /login.
+            if (typeof window !== 'undefined' && !['/', '/login', '/register', '/forgot-password', '/onboarding', '/account-type', '/admin/login'].includes(window.location.pathname)) {
+              window.location.replace('/login')
+            }
           }
         }
         return Promise.reject(refreshError)
@@ -357,6 +372,14 @@ export const adminApi = {
   exportFormReplies: () =>
     api.get('/admin/forms/export', { responseType: 'blob' }),
   emailFormReplies: (to?: string) => api.post('/admin/forms/email', { to }),
+  // Beta-tester list for the Google Play closed test. Play has no API for its
+  // tester list, so this is the source you import/paste from.
+  getBetaTesters: () => api.get('/admin/forms/testers'),
+  exportBetaTesters: () => api.get('/admin/forms/testers.csv', { responseType: 'blob' }),
+  // Backfill the beta invitation email to every applicant who has not received
+  // it yet. Bulk outbound mail, so it runs from production (the provider
+  // authorises by source IP). Idempotent: already-invited addresses are skipped.
+  sendBetaInvites: () => api.post('/admin/forms/beta-invites'),
   // User / partner account blocking with duration + deletion
   blockUser: (userId: string, data: { durationDays?: number; durationYears?: number; permanent?: boolean; reason?: string }) =>
     api.post(`/admin/users/${userId}/block`, data),

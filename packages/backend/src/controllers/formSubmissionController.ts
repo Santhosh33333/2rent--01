@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import { prisma } from "../config/database";
 import { sendSuccess, sendError, sendPaginated } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
-import { sendEmail } from "../services/emailService";
+import { sendEmail, sendBetaTesterConfirmationEmail } from "../services/emailService";
 
 /**
  * Landing-page enquiry forms: beta tester, app feedback, investor/supporter.
@@ -27,6 +27,17 @@ const MAX_SUBJECT_LENGTH = 200;
 const MAX_EMAIL_LENGTH = 320;
 /** Export bounds: the sheet is a report, not a database dump. */
 const EXPORT_LIMIT = 5000;
+
+/** The beta-tester form's `Form` value. Matched case-insensitively. */
+const BETA_TESTER_FORM = "beta tester";
+
+/**
+ * Filter for beta-tester rows. The landing page posts "Beta tester" while the
+ * constant is lower-case, so every query must match case-insensitively - an
+ * exact `form: "beta tester"` silently matched zero rows, which is why the
+ * tester list/CSV always came back empty.
+ */
+const BETA_FORM_FILTER = { form: { equals: BETA_TESTER_FORM, mode: "insensitive" as const } };
 
 type Row = {
   id: string;
@@ -66,6 +77,30 @@ function asFields(value: unknown): Record<string, string> {
     if (value_) fields[key.slice(0, 80)] = value_;
   }
   return fields;
+}
+
+/**
+ * Deliver the beta invitation to one address at most once.
+ *
+ * Returns "skipped" when the address already received it, so a caller can tell
+ * "nothing to do" apart from a real delivery failure. The address - not the
+ * submission row - is the unit: the same person can apply twice and must only
+ * be mailed once.
+ */
+async function inviteBetaTester(email: string, name: string | null): Promise<"sent" | "skipped" | "failed"> {
+  const alreadyInvited = await prisma.formSubmission.count({
+    where: { ...BETA_FORM_FILTER, email, invitedAt: { not: null } },
+  });
+  if (alreadyInvited > 0) return "skipped";
+
+  const result = await sendBetaTesterConfirmationEmail(email, name || email);
+  if (!result.ok) return "failed";
+
+  await prisma.formSubmission.updateMany({
+    where: { ...BETA_FORM_FILTER, email, invitedAt: null },
+    data: { invitedAt: new Date() },
+  });
+  return "sent";
 }
 
 /**
@@ -121,6 +156,17 @@ export async function capture(req: AuthedRequest, res: Response): Promise<void> 
     });
 
     sendSuccess(res, { stored: true, id: created.id }, "Reply recorded.", 201);
+
+    // Beta-tester applications get an instant confirmation carrying the Google
+    // Play opt-in link. Fired after the response and never awaited: the
+    // visitor's submission must not wait on mail latency, and a mail failure
+    // must never turn a good capture into an error.
+    if (form.trim().toLowerCase() === BETA_TESTER_FORM.toLowerCase()) {
+      const applicantName = text(body.Name ?? body.name, MAX_NAME_LENGTH) || email;
+      void inviteBetaTester(email, applicantName).catch((err) =>
+        console.error("[forms] beta confirmation email threw:", err)
+      );
+    }
   } catch (error) {
     // Never fail the visitor: the form has already emailed the founder by the
     // time this runs, and a down mirror is not their problem.
@@ -170,6 +216,116 @@ export async function stats(_req: AuthedRequest, res: Response): Promise<void> {
   } catch (error) {
     console.error("[forms] stats failed:", error);
     sendError(res, "Could not load reply counts.", 500, "FORM_STATS_FAILED");
+  }
+}
+
+/**
+ * The beta-tester sign-ups as a de-duplicated, newest-first list.
+ *
+ * This is the "test user list": every applicant, once. The Play closed-test
+ * tester list itself can only be edited in Play Console (there is no API for
+ * it), so this is the authoritative source the founder imports/pastes from.
+ */
+async function collectTesters(): Promise<Array<{ email: string; name: string | null; addedAt: string }>> {
+  const rows = await prisma.formSubmission.findMany({
+    where: BETA_FORM_FILTER,
+    select: { email: true, name: true, createdAt: true },
+    orderBy: { createdAt: "desc" },
+  });
+  const seen = new Map<string, { email: string; name: string | null; addedAt: string }>();
+  for (const row of rows) {
+    const email = row.email.toLowerCase();
+    if (!seen.has(email)) {
+      seen.set(email, { email, name: row.name, addedAt: row.createdAt.toISOString() });
+    }
+  }
+  return Array.from(seen.values());
+}
+
+/** GET /api/admin/forms/testers - the beta list as JSON, plus a count. */
+export async function testers(_req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const list = await collectTesters();
+    sendSuccess(res, { count: list.length, testers: list }, "Beta testers.");
+  } catch (error) {
+    console.error("[forms] testers failed:", error);
+    sendError(res, "Could not load testers.", 500, "FORM_TESTERS_FAILED");
+  }
+}
+
+/** RFC-4180-safe CSV cell. */
+function csvCell(value: string): string {
+  return /[",\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
+/** GET /api/admin/forms/testers.csv - the tester emails as one CSV file. */
+export async function testersCsv(_req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const list = await collectTesters();
+    const body = list
+      .map((t) => [csvCell(t.email), csvCell(t.name ?? ""), csvCell(t.addedAt)].join(","))
+      .join("\n");
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=nabri-beta-testers-${new Date().toISOString().slice(0, 10)}.csv`
+    );
+    res.setHeader("X-Row-Count", String(list.length));
+    res.send(`Email,Name,Added\n${body}\n`);
+  } catch (error) {
+    console.error("[forms] testers csv failed:", error);
+    sendError(res, "Could not export testers.", 500, "FORM_TESTERS_FAILED");
+  }
+}
+
+/**
+ * POST /api/admin/forms/beta-invites - backfill the beta invitation email.
+ *
+ * Every unique beta applicant who has not yet been invited receives the same
+ * email a fresh application gets. This must run from the production server: the
+ * email provider authorises by source IP, so a local run is rejected. Safe to
+ * press twice - already-invited addresses are skipped.
+ */
+export async function sendBetaInvites(_req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const testers = (await collectTesters()).filter((tester) => isEmail(tester.email));
+    const invited = new Set(
+      (
+        await prisma.formSubmission.findMany({
+          where: { ...BETA_FORM_FILTER, invitedAt: { not: null } },
+          select: { email: true },
+          distinct: ["email"],
+        })
+      ).map((row) => row.email.toLowerCase())
+    );
+    const pending = testers.filter((tester) => !invited.has(tester.email.toLowerCase()));
+
+    let sent = 0;
+    let failed = 0;
+    const CHUNK = 8;
+    for (let i = 0; i < pending.length; i += CHUNK) {
+      const results = await Promise.all(
+        pending.slice(i, i + CHUNK).map((tester) => inviteBetaTester(tester.email, tester.name))
+      );
+      for (const result of results) {
+        if (result === "sent") sent += 1;
+        else if (result === "failed") failed += 1;
+      }
+    }
+
+    if (sent === 0 && failed > 0) {
+      sendError(res, "No beta invites could be delivered. Check the email provider configuration.", 502, "EMAIL_DELIVERY_FAILED");
+      return;
+    }
+
+    sendSuccess(
+      res,
+      { total: testers.length, alreadyInvited: testers.length - pending.length, sent, failed },
+      `Beta invites sent to ${sent} of ${pending.length} pending testers.`
+    );
+  } catch (error) {
+    console.error("[forms] beta invite backfill failed:", error);
+    sendError(res, "Could not send beta invites.", 500, "FORM_TESTERS_FAILED");
   }
 }
 

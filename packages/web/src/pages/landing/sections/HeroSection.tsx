@@ -14,6 +14,7 @@
  * what is left instead is a real count of what the server returned.
  */
 import { CalendarDays, Download, Film, ShieldCheck, Sparkles, Users } from 'lucide-react';
+import { PLAY_STORE_URL } from '../../../lib/appLinks';
 import { Backdrop } from '../components/Backdrop';
 import { Brand } from '../components/SiteChrome';
 import { StateBlock } from '../components/StateBlock';
@@ -77,30 +78,39 @@ export function HeroSection({ events, plans, signedIn }: HeroProps) {
           <Brand size={64} className="nb-logo--hero" />
 
           <h1 id="nb-hero-h">
-            Good things
+            Meet People.
             <br />
-            happen <em>nearby</em>
+            Discover <em>Experiences.</em>
+            <br />
+            Live More.
           </h1>
 
           <p className="nb-kicker">
-            <span>Meet</span>
-            <span>Connect</span>
-            <span>Celebrate</span>
-            <span>Watch</span>
+            <span>Dating</span>
+            <span>Friends</span>
+            <span>Movies</span>
+            <span>Events</span>
+            <span>Sports</span>
+            <span>Travel</span>
           </p>
 
           <p className="nb-lead">
-            Nabri brings dating, events, communities and films into one place, so the things
-            happening a few streets away are the easiest part of your week.
+            Nabri brings dating, friendship, activities, movies, sports, events, communities,
+            travel and AI-powered discovery into one place.
           </p>
 
           <div className="nb-btns">
-            <a className="nb-btn" href="#download">
+            <a
+              className="nb-btn"
+              href={PLAY_STORE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               <Download aria-hidden="true" />
-              {signedIn ? 'Open Nabri' : 'Get the app'}
+              {signedIn ? 'Open Nabri' : 'Try Nabri'}
             </a>
             <a className="nb-btn nb-btn--ghost" href="#events">
-              See what&apos;s on
+              Explore the Future
             </a>
           </div>
 
@@ -133,7 +143,12 @@ export function HeroSection({ events, plans, signedIn }: HeroProps) {
                 Join now and your first {trialDays === 1 ? 'day is' : 'days are'} on us. Plans
                 start at {formatPlanPrice(cheapestPlan)}.
               </p>
-              <a className="nb-btn" href="#download">
+              <a
+                className="nb-btn"
+                href={PLAY_STORE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 Get Nabri
               </a>
               <span className="nb-offer-note">

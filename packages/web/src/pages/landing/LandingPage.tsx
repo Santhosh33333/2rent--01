@@ -39,6 +39,13 @@ import {
 } from './sections/PillarSections';
 import { DownloadSection, TrustSection } from './sections/TrustSections';
 import {
+  AskNabriSection,
+  FaqSection,
+  FutureVisionSection,
+  HowItWorksSection,
+} from './sections/InfoSections';
+import { BetaSection, WhatIsNabriSection } from './sections/EcosystemSections';
+import {
   useCommunities,
   useDiscoverProfiles,
   useEventCategories,
@@ -232,12 +239,18 @@ export function LandingPage() {
 
       <main id="nb-main">
         <HeroSection events={events} plans={plans.data?.plans ?? []} signedIn={signedIn} />
+        <WhatIsNabriSection />
+        <HowItWorksSection />
         <DatingSection profiles={profiles} signedIn={signedIn} />
         <EventsSection events={events} categories={categories} />
         <CommunitySection communities={communities} />
         <MoviesSection movies={movies} />
+        <AskNabriSection />
+        <FutureVisionSection />
         <DownloadSection plans={plans} signedIn={signedIn} />
         <TrustSection />
+        <BetaSection />
+        <FaqSection />
       </main>
 
       <SiteFooter />

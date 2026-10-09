@@ -47,7 +47,7 @@ function SupportIllustration() {
 
 /** The questions the assistant is actually good at, so the entry is not a blank box. */
 const ASSISTANT_STARTERS = [
-  'Why is my wallet top-up still pending?',
+  'Why is my top-up still pending?',
   'A booking I paid for has not started.',
   'How do I change or cancel a booking?',
   'Someone is messaging me and I am not comfortable.',

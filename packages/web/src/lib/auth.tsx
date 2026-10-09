@@ -49,7 +49,7 @@ interface AuthContextType {
   }>,
   logout: () => void
   updateUser: (data: Partial<User>) => void
-  refreshProfile: () => Promise<void>
+  refreshProfile: () => Promise<User | null>
   impersonating: ImpersonationInfo | null
   impersonate: (userId: string) => Promise<User>
   stopImpersonation: () => Promise<void>
@@ -241,7 +241,16 @@ async function restoreSessionFromRefreshToken(): Promise<User | null> {
     localStorage.setItem('user', JSON.stringify(u))
     reconcileCompletionFlags(u)
     return u
-  } catch {
+  } catch (err) {
+    // A genuine auth rejection (the rotating refresh token is invalid, expired
+    // or revoked) is terminal, so clear the dead session. Anything else -
+    // offline, DNS failure, a timeout, or a sleeping backend answering 5xx -
+    // must NOT wipe storage. Doing so silently deleted the account and forced
+    // the user back through signup the next time they launched the app.
+    const status = (err as { response?: { status?: number } } | null)?.response?.status
+    if (status === 400 || status === 401 || status === 403) {
+      clearSessionData()
+    }
     return null
   }
 }
@@ -251,13 +260,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [impersonating, setImpersonating] = useState<ImpersonationInfo | null>(() => loadImpersonationInfo())
 
-  const refreshProfile = useCallback(async () => {
+  const refreshProfile = useCallback(async (): Promise<User | null> => {
     const token = localStorage.getItem('token')
+    const refreshToken = localStorage.getItem('refreshToken')
+
+    // Only a refresh token on hand (e.g. the short-lived access token was
+    // dropped but the long-lived credential survived). Mint a new access token,
+    // then load the profile - never treat this as "logged out".
+    if ((!token || isDemoSessionToken(token)) && refreshToken && !isDemoSessionToken(refreshToken)) {
+      const restored = await restoreSessionFromRefreshToken()
+      if (restored) setUser(restored)
+      return restored
+    }
+
     if (!token || isDemoSessionToken(token)) {
       clearSessionData()
       setUser(null)
-      return
+      return null
     }
+
     try {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 10000)
@@ -269,34 +290,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.setItem('user', JSON.stringify(u))
         setUser(u)
         reconcileCompletionFlags(u)
+        return u
       }
+      return null
     } catch {
+      // The request failed for a non-auth reason (offline, timeout, cold
+      // start, 5xx). Serve the cached profile so the app stays usable; the
+      // response interceptor owns actually ending the session when - and only
+      // when - the server genuinely rejects the token.
       const saved = localStorage.getItem('user')
       if (saved) {
         try {
-          setUser(JSON.parse(saved))
+          const u = JSON.parse(saved) as User
+          setUser(u)
+          return u
         } catch {
-          // ignore
+          // ignore corrupt cache
         }
       }
+      return null
     }
   }, [])
 
   useEffect(() => {
     const token = localStorage.getItem('token')
     const refreshToken = localStorage.getItem('refreshToken')
-    if (token && user) {
-      refreshProfile().finally(() => setLoading(false))
-    } else if (!token && refreshToken && !user) {
-      restoreSessionFromRefreshToken()
-        .then((restored) => {
-          if (restored) setUser(restored)
-        })
-        .catch(() => {})
-        .finally(() => setLoading(false))
-    } else {
+
+    // No credential at all -> definitely a fresh/anonymous visitor.
+    if (!token && !refreshToken) {
       setLoading(false)
+      return
     }
+
+    // ANY credential means "we might have a session": resolve it. This covers
+    // access-token-only, refresh-token-only, and the half-written state where
+    // `token` survived but the cached `user` JSON was lost - all of which used
+    // to fall through to the logged-out branch and bounce the user to /login.
+    // `refreshProfile` never clears the session on a transient failure.
+    refreshProfile()
+      .then((restored) => {
+        if (restored) setUser(restored)
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

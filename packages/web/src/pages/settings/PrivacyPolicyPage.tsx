@@ -28,12 +28,12 @@ export function PrivacyPolicyPage() {
           <div className="prose prose-sm dark:prose-invert max-w-none space-y-6 text-surface-700 dark:text-surface-300">
             <section>
               <h2 className="text-lg font-bold font-display text-surface-900 dark:text-white mb-3">1. Information We Collect</h2>
-              <p className="text-sm leading-relaxed">We collect information you provide directly, including your name, email address, phone number, profile photo, location data (when enabled), and payment information. We also collect usage data such as booking history, chat messages, and app interaction patterns.</p>
+              <p className="text-sm leading-relaxed">We collect information you provide directly, including your name, email address, phone number, profile photo, and location data (when enabled). We also collect usage data such as booking history, chat messages, and app interaction patterns. We do not collect or store your bank card or UPI credentials: payments for services are settled by UPI directly to the account shown at checkout and confirmed against our bank statement, and the app shows your balance and payment history after confirmation.</p>
             </section>
 
             <section>
               <h2 className="text-lg font-bold font-display text-surface-900 dark:text-white mb-3">2. How We Use Your Information</h2>
-              <p className="text-sm leading-relaxed">We use your information to provide and improve our services, process bookings and payments, match you with service providers, send notifications, ensure safety, and comply with legal obligations. We do not sell your personal data to third parties.</p>
+              <p className="text-sm leading-relaxed">We use your information to provide and improve our services, process bookings, settle payments for services you book, match you with service providers, send notifications, ensure safety, and comply with legal obligations. We do not sell your personal data to third parties.</p>
             </section>
 
             <section>
@@ -43,7 +43,7 @@ export function PrivacyPolicyPage() {
 
             <section>
               <h2 className="text-lg font-bold font-display text-surface-900 dark:text-white mb-3">4. Data Sharing</h2>
-              <p className="text-sm leading-relaxed">We share your information only with service providers (partners) as needed to fulfill bookings, with payment processors for transactions, and with law enforcement when legally required. Your profile information visible to others is controlled by your privacy settings.</p>
+              <p className="text-sm leading-relaxed">We share your information only with service providers (partners) as needed to fulfill bookings, and with law enforcement when legally required. Your profile information visible to others is controlled by your privacy settings. Payments are settled via UPI directly to the account shown at checkout; no third-party payment processor receives your personal data.</p>
             </section>
 
             <section>

@@ -355,14 +355,21 @@ router.post("/subscriptions/trial/grant-all", pricingEdit, [body("days").optiona
 router.post("/subscriptions/trial/users/:id", pricingEdit, sanitizeInput, validateRequest, adminSubscriptionController.setUserTrial);
 
 // Website enquiry forms (beta tester / app feedback / investor). Support VIEW
-// reads all four: they are inbound messages, the same shape as a ticket, and
-// the email action only ever sends to the admin making the request or an
-// address they type - it never broadcasts.
+// reads all four: they are inbound messages, the same shape as a ticket. The
+// /forms/email action only ever sends to the admin making the request or an
+// address they type; the one broadcast (beta invites) needs the stronger
+// NOTIFICATIONS/CREATE grant and is declared separately below.
 const formsView = requireSectionAction("SUPPORT", "VIEW");
 router.get("/forms", formsView, formSubmissionController.list);
 router.get("/forms/stats", formsView, formSubmissionController.stats);
+router.get("/forms/testers", formsView, formSubmissionController.testers);
+router.get("/forms/testers.csv", formsView, formSubmissionController.testersCsv);
 router.get("/forms/export", formsView, formSubmissionController.exportXlsx);
 router.post("/forms/email", formsView, formSubmissionController.emailXlsx);
+// Backfill the beta invitation email to every applicant who has not received it
+// yet. Bulk outbound mail, so it needs the same NOTIFICATIONS/CREATE grant as
+// the other broadcasts - SUPPORT/VIEW alone must not be able to mail everyone.
+router.post("/forms/beta-invites", notificationsSend, formSubmissionController.sendBetaInvites);
 
 export default router;
 

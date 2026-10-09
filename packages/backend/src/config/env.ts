@@ -135,6 +135,15 @@ const envSchema = z.object({
     // Wrong region returns an opaque 401, so it is explicit.
     ZOHO_API_REGION: z.string().optional(),
 
+    // Google Group used as the Google Play closed-test tester list. Play exposes
+    // testers to a personal account only as Google Groups, and a group's members
+    // must join it themselves, so the beta confirmation email carries this
+    // group's join link. Put the same address in Play Console under
+    // Test your app > Closed testing > Manage track > Testers > Google Groups.
+    BETA_TESTER_GROUP_EMAIL: z
+      .string()
+      .default("nabri-beta@googlegroups.com"),
+
   // Agreement archive: every issued agreement is blind-copied to these
   // recipients (comma-separated). Defaults to the primary super admin so legal
   // records always reach the owner; add more addresses here as needed.

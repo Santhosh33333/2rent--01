@@ -1,0 +1,18 @@
+# Vercel upload exclusions — the CLI uploads everything not listed here, and
+# the deploy was rejected with "File size limit exceeded (100 MB)" because a
+# 242 MB packages.rar plus local Android/Gradle outputs were being sent.
+node_modules
+.git
+*.rar
+*.apk
+*.aab
+*.jks
+.opencode
+.kiro
+.vscode
+release
+**/android/app/build
+**/android/.gradle
+**/android/build
+**/dist
+*.log

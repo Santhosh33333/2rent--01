@@ -1823,3 +1823,581 @@
     transform: none;
   }
 }
+
+/* ==================================================================
+   Info sections — How it works, Vision, Ask Nabri, FAQ
+   ------------------------------------------------------------------
+   These share one shell (`.nb-info`) with a header block and a body.
+   They sit between the full-bleed pillars to give the page a calmer,
+   text-first rhythm, and every card is glass-on-near-black so the
+   contrast matches the rest of the page.
+   ================================================================== */
+
+.nb-info {
+  padding: 96px 0;
+  border-top: 1px solid var(--nb-line);
+}
+
+.nb-info-head {
+  max-width: 720px;
+  margin: 0 auto 44px;
+  text-align: center;
+}
+
+.nb-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--nb-pink);
+}
+
+.nb-eyebrow svg {
+  width: 14px;
+  height: 14px;
+}
+
+.nb-info-head h2,
+.nb-ask-copy h2 {
+  margin: 0;
+  font-size: clamp(26px, 4vw, 42px);
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+}
+
+.nb-info-sub {
+  margin: 14px auto 0;
+  max-width: 620px;
+  font-size: 16px;
+  color: var(--nb-copy);
+}
+
+.nb-info-cta {
+  justify-content: center;
+  margin-top: 40px;
+}
+
+/* --- How it works ------------------------------------------------- */
+
+.nb-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.nb-step {
+  position: relative;
+  padding: 24px 22px;
+  border-radius: var(--nb-radius);
+  background: var(--nb-glass);
+  border: 1px solid var(--nb-line);
+  overflow: hidden;
+  transition: transform 0.25s ease, border-color 0.25s ease, background 0.25s ease;
+}
+
+.nb-step:hover {
+  transform: translateY(-3px);
+  border-color: rgba(255, 45, 135, 0.4);
+  background: var(--nb-glass-strong);
+}
+
+.nb-step-num {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.08);
+}
+
+.nb-step-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: rgba(255, 45, 135, 0.14);
+  color: var(--nb-pink);
+}
+
+.nb-step-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.nb-step h3 {
+  margin: 16px 0 8px;
+  font-size: 16px;
+}
+
+.nb-step p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--nb-dim);
+}
+
+/* --- Future vision ------------------------------------------------ */
+
+.nb-info--vision {
+  background: radial-gradient(120% 80% at 50% 0%, rgba(123, 60, 255, 0.1), transparent 60%);
+}
+
+.nb-vision {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.nb-vision-item {
+  padding: 22px;
+  border-radius: var(--nb-radius);
+  background: var(--nb-glass);
+  border: 1px solid var(--nb-line);
+  border-top-width: 3px;
+}
+
+.nb-vision-item--live {
+  border-top-color: var(--nb-teal);
+}
+
+.nb-vision-item--beta {
+  border-top-color: var(--nb-blue);
+}
+
+.nb-vision-item--soon {
+  border-top-color: var(--nb-amber);
+}
+
+.nb-vision-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.nb-vision-pill svg {
+  width: 13px;
+  height: 13px;
+}
+
+.nb-vision-item--live .nb-vision-pill {
+  background: rgba(25, 211, 162, 0.16);
+  color: var(--nb-teal);
+}
+
+.nb-vision-item--beta .nb-vision-pill {
+  background: rgba(47, 123, 255, 0.16);
+  color: #7cb0ff;
+}
+
+.nb-vision-item--soon .nb-vision-pill {
+  background: rgba(255, 150, 60, 0.16);
+  color: var(--nb-amber);
+}
+
+.nb-vision-item h3 {
+  margin: 14px 0 6px;
+  font-size: 16px;
+}
+
+.nb-vision-item p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--nb-dim);
+}
+
+/* --- Ask Nabri ---------------------------------------------------- */
+
+.nb-info--ask {
+  background: radial-gradient(120% 90% at 80% 20%, rgba(25, 211, 162, 0.08), transparent 55%);
+}
+
+.nb-ask-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.05fr;
+  gap: clamp(28px, 5vw, 64px);
+  align-items: center;
+}
+
+.nb-ask-copy .nb-info-sub {
+  text-align: left;
+  margin-left: 0;
+}
+
+.nb-ask-copy .nb-btns {
+  justify-content: flex-start;
+  margin-top: 26px;
+}
+
+.nb-ask-side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.nb-ask-card {
+  padding: 22px 24px;
+  border-radius: var(--nb-radius);
+  background: var(--nb-glass);
+  border: 1px solid var(--nb-line);
+}
+
+.nb-ask-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--nb-teal);
+}
+
+.nb-ask-card-head svg {
+  width: 14px;
+  height: 14px;
+}
+
+.nb-ask-card ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.nb-ask-card li {
+  position: relative;
+  padding-left: 18px;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--nb-copy);
+}
+
+.nb-ask-card li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--nb-teal);
+}
+
+.nb-ask-caps {
+  display: grid;
+  gap: 12px;
+}
+
+.nb-ask-cap {
+  padding: 16px 18px;
+  border-radius: var(--nb-radius);
+  background: var(--nb-glass);
+  border: 1px solid var(--nb-line);
+}
+
+.nb-ask-cap .nb-step-icon {
+  width: 36px;
+  height: 36px;
+  background: rgba(25, 211, 162, 0.14);
+  color: var(--nb-teal);
+}
+
+.nb-ask-cap h3 {
+  margin: 12px 0 6px;
+  font-size: 15px;
+}
+
+.nb-ask-cap p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--nb-dim);
+}
+
+/* --- FAQ ---------------------------------------------------------- */
+
+.nb-info--faq {
+  background: radial-gradient(120% 80% at 50% 100%, rgba(123, 60, 255, 0.08), transparent 60%);
+}
+
+.nb-faq {
+  max-width: 760px;
+  margin: 0 auto;
+  display: grid;
+  gap: 10px;
+}
+
+.nb-faq-item {
+  border-radius: var(--nb-radius);
+  background: var(--nb-glass);
+  border: 1px solid var(--nb-line);
+  overflow: hidden;
+}
+
+.nb-faq-item summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  cursor: pointer;
+  font-size: 15.5px;
+  font-weight: 600;
+  list-style: none;
+}
+
+.nb-faq-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.nb-faq-mark {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--nb-glass-strong);
+  font-size: 18px;
+  font-weight: 400;
+  transition: transform 0.2s ease;
+}
+
+.nb-faq-item[open] .nb-faq-mark {
+  transform: rotate(45deg);
+}
+
+.nb-faq-body {
+  padding: 0 20px 18px;
+  font-size: 14.5px;
+  line-height: 1.65;
+  color: var(--nb-dim);
+}
+
+.nb-faq-body a {
+  color: var(--nb-pink);
+  text-decoration: underline;
+}
+
+.nb-faq-foot {
+  margin: 22px 0 0;
+  text-align: center;
+  font-size: 14px;
+  color: var(--nb-dim);
+}
+
+.nb-faq-foot a {
+  color: var(--nb-pink);
+  font-weight: 600;
+}
+
+/* --- Ecosystem ("What is Nabri?") --------------------------------- */
+
+.nb-info--eco {
+  background: radial-gradient(120% 80% at 20% 0%, rgba(47, 123, 255, 0.1), transparent 60%);
+}
+
+.nb-eco {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.nb-eco-item {
+  padding: 22px;
+  border-radius: var(--nb-radius);
+  background: var(--nb-glass);
+  border: 1px solid var(--nb-line);
+  border-top-width: 3px;
+  transition: transform 0.25s ease, border-color 0.25s ease, background 0.25s ease;
+}
+
+.nb-eco-item:hover {
+  transform: translateY(-3px);
+  background: var(--nb-glass-strong);
+}
+
+.nb-eco-item--live {
+  border-top-color: var(--nb-teal);
+}
+
+.nb-eco-item--beta {
+  border-top-color: var(--nb-blue);
+}
+
+.nb-eco-item--soon {
+  border-top-color: var(--nb-amber);
+}
+
+.nb-eco-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--nb-glass-strong);
+  margin-bottom: 14px;
+}
+
+.nb-eco-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.nb-eco-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.nb-eco-pill svg {
+  width: 13px;
+  height: 13px;
+}
+
+.nb-eco-item--live .nb-eco-pill {
+  background: rgba(25, 211, 162, 0.16);
+  color: var(--nb-teal);
+}
+
+.nb-eco-item--beta .nb-eco-pill {
+  background: rgba(47, 123, 255, 0.16);
+  color: #7cb0ff;
+}
+
+.nb-eco-item--soon .nb-eco-pill {
+  background: rgba(255, 150, 60, 0.16);
+  color: var(--nb-amber);
+}
+
+.nb-eco-item h3 {
+  margin: 12px 0 6px;
+  font-size: 16px;
+}
+
+.nb-eco-item p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--nb-dim);
+}
+
+/* --- Ask Nabri: example conversation ------------------------------ */
+
+.nb-demo-tag {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 150, 60, 0.16);
+  color: var(--nb-amber);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+
+.nb-demo {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.nb-demo-turn {
+  display: grid;
+  gap: 4px;
+}
+
+.nb-demo-turn--user {
+  justify-items: end;
+  text-align: right;
+}
+
+.nb-demo-who {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nb-dim);
+}
+
+.nb-demo-turn p {
+  margin: 0;
+  max-width: 92%;
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.nb-demo-turn--user p {
+  background: rgba(255, 45, 135, 0.16);
+  border: 1px solid rgba(255, 45, 135, 0.3);
+}
+
+.nb-demo-turn--ai p {
+  background: var(--nb-glass-strong);
+  border: 1px solid var(--nb-line);
+}
+
+.nb-demo-note {
+  margin: 14px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--nb-dim);
+}
+
+/* --- Testing / beta ----------------------------------------------- */
+
+.nb-info--beta {
+  background: radial-gradient(120% 80% at 50% 100%, rgba(255, 150, 60, 0.08), transparent 60%);
+}
+
+@media (max-width: 900px) {
+  .nb-ask-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .nb-info {
+    padding: 64px 0;
+  }
+
+  .nb-step-num {
+    font-size: 28px;
+  }
+}
+

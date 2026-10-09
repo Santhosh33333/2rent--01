@@ -3,6 +3,10 @@ import { env } from "../config/env";
 import { prisma } from "../config/database";
 import { renderEmail, escHtml, paragraphHtml, WEB_ORIGIN } from "./emailTemplate";
 
+/** Canonical Android links. Kept in one place so no two emails disagree. */
+const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=app.rentbuddy.app";
+const PLAY_TESTING_URL = "https://play.google.com/apps/testing/app.rentbuddy.app";
+
 export type EmailProviderName = "none" | "smtp" | "gmail" | "brevo" | "resend" | "zoho";
 
 export function emailProvider(): EmailProviderName {
@@ -434,6 +438,47 @@ export async function sendIntroductionEmail(email: string, name: string): Promis
       note: "You're receiving this because you recently created a Nabri account.",
     }),
     `Hi ${displayName}, thanks for joining Nabri! Complete your profile and verify your account to unlock bookings and services.`
+  );
+}
+
+/**
+ * Beta-tester confirmation. Sent the moment a landing-page beta application
+ * arrives, so the applicant has every link in hand before the founder has even
+ * opened the notification.
+ *
+ * Three links, in order, and all matter: joining the Google Group is what
+ * Google Play checks before granting access, the /apps/testing/ URL is where the
+ * applicant taps "Become a tester", and the store listing only resolves once
+ * they are a tester. Sending the store link alone is how applicants ended up
+ * staring at "App not available".
+ */
+export async function sendBetaTesterConfirmationEmail(email: string, name: string): Promise<EmailResult> {
+  const displayName = name && name !== email ? name : "there";
+  const firstName = displayName.split(/\s+/)[0] || displayName;
+  const groupEmail = env.BETA_TESTER_GROUP_EMAIL;
+  const groupUrl = `https://groups.google.com/g/${groupEmail.split("@")[0]}`;
+  const bodyHtml = `<p style="margin:0 0 14px">Hi <strong style="color:#1C1917">${escHtml(firstName)}</strong>,</p>
+<p style="margin:0 0 14px"><span style="font-size:18px">🎉</span> <strong style="color:#1C1917">You're on the Nabri beta list!</strong></p>
+<p style="margin:0 0 14px">Three quick steps and you're in. Use the <strong>same Google account</strong> you applied with throughout.</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px">
+  <tr><td style="vertical-align:top;padding:0 0 12px;font-size:13.5px;line-height:1.6;color:#4B453D"><strong style="color:#1C1917">1. Join the beta group</strong> — <a href="${groupUrl}" style="color:#2F5BFF;font-weight:600">${escHtml(groupEmail)}</a>, then tap <strong>Join group</strong>. This is the list Google Play checks before letting you in.</td></tr>
+  <tr><td style="vertical-align:top;padding:0 0 12px;font-size:13.5px;line-height:1.6;color:#4B453D"><strong style="color:#1C1917">2. Become a tester</strong> — open the button below with the same Google account and tap <strong>Become a tester</strong>.</td></tr>
+  <tr><td style="vertical-align:top;padding:0;font-size:13.5px;line-height:1.6;color:#4B453D"><strong style="color:#1C1917">3. Install from Google Play</strong> — once you're a tester, the listing unlocks and you can download the beta.</td></tr>
+</table>
+<p style="margin:0 0 14px">Then use it like a real app and tell us what breaks — every report reaches the founder directly.</p>`;
+  return sendEmail(
+    email,
+    "You're on the Nabri beta list 🎉",
+    renderEmail({
+      supportEmail: env.SUPPORT_EMAIL,
+      title: "You're in — welcome to the Nabri beta",
+      kicker: "Beta confirmed",
+      bodyHtml,
+      ctaText: "Become a tester",
+      ctaUrl: PLAY_TESTING_URL,
+      note: `Same Google account throughout. First join the group (${groupEmail}), then tap Become a tester, then install from Google Play: ${PLAY_STORE_URL}`,
+    }),
+    `You're on the Nabri beta list! 1) Join the group ${groupEmail}: ${groupUrl} — 2) Become a tester: ${PLAY_TESTING_URL} — 3) Install from Google Play: ${PLAY_STORE_URL}. Use the same Google account you applied with.`
   );
 }
 

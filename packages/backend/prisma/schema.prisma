@@ -3035,7 +3035,13 @@ model FormSubmission {
   ip        String?
   userAgent String?
   createdAt DateTime @default(now())
+  // When the beta-tester invitation email was delivered to this address.
+  // Null means "not yet invited". Set on every row for the address after a
+  // successful send, so the backfill and the live capture path never mail the
+  // same person twice. Non-beta replies always leave it null.
+  invitedAt DateTime?
 
   @@index([form, createdAt])
   @@index([createdAt])
+  @@index([email])
 }

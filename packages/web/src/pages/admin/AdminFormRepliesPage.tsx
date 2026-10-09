@@ -1,7 +1,7 @@
 import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
 import { AdminPageHeader, AdminShell } from '../../components/admin/AdminPageHeader'
-import { ChevronLeft, ChevronRight, Download, Loader2, Mail, Inbox } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Download, Loader2, Mail, Inbox, Users, Send } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { adminApi } from '../../lib/api'
 
@@ -44,7 +44,8 @@ export function AdminFormRepliesPage() {
   const [totalPages, setTotalPages] = useState(1)
   const [total, setTotal] = useState(0)
   const [filter, setFilter] = useState('')
-  const [busy, setBusy] = useState<'export' | 'email' | null>(null)
+  const [busy, setBusy] = useState<'export' | 'email' | 'testers' | 'invites' | null>(null)
+  const [testerCount, setTesterCount] = useState<number | null>(null)
 
   const load = async () => {
     setLoading(true)
@@ -76,6 +77,16 @@ export function AdminFormRepliesPage() {
     }
   }
 
+  const loadTesters = async () => {
+    try {
+      const res = await adminApi.getBetaTesters()
+      const d = res.data?.data || res.data
+      if (d && typeof d.count === 'number') setTesterCount(d.count)
+    } catch {
+      // Count is a header nicety; the export still works without it.
+    }
+  }
+
   useEffect(() => {
     void load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -83,6 +94,7 @@ export function AdminFormRepliesPage() {
 
   useEffect(() => {
     void loadStats()
+    void loadTesters()
   }, [])
 
   const downloadSheet = async () => {
@@ -121,6 +133,56 @@ export function AdminFormRepliesPage() {
     }
   }
 
+  const downloadTesters = async () => {
+    setBusy('testers')
+    try {
+      const res = await adminApi.exportBetaTesters()
+      const blob = new Blob([res.data as BlobPart], { type: 'text/csv;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `nabri-beta-testers-${new Date().toISOString().slice(0, 10)}.csv`
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      URL.revokeObjectURL(url)
+      toast.success('Tester list downloaded — import it into Google Play.')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Could not export the tester list'))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const emailBetaInvites = async () => {
+    const count = testerCount !== null ? testerCount : 'all'
+    if (!window.confirm(
+      `Send the beta invitation email to ${count} beta tester(s) who have not received it yet?\n\n` +
+      'Existing (old) and newly signed-up beta testers are included; anyone already invited is skipped. ' +
+      'This runs from the server and mails real people, so it cannot be undone.',
+    )) return
+    setBusy('invites')
+    try {
+      const res = await adminApi.sendBetaInvites()
+      const d = res.data?.data || res.data
+      if (d) {
+        toast.success(
+          `Beta invites: ${d.sent} sent` +
+          (d.failed ? `, ${d.failed} failed` : '') +
+          (d.alreadyInvited ? `, ${d.alreadyInvited} already invited` : '') +
+          '.',
+        )
+      } else {
+        toast.success('Beta invites sent.')
+      }
+      void loadTesters()
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Could not send beta invites'))
+    } finally {
+      setBusy(null)
+    }
+  }
+
   const filters = ['', ...(stats?.byForm.map((entry) => entry.form) ?? [])]
 
   return (
@@ -149,6 +211,24 @@ export function AdminFormRepliesPage() {
         </div>
 
         <div className="ml-auto flex gap-2">
+          <button
+            onClick={() => void downloadTesters()}
+            disabled={busy !== null || (testerCount ?? 0) === 0}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white transition"
+            title="Deduplicated beta-tester emails, ready to import into the Google Play closed test"
+          >
+            {busy === 'testers' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
+            Tester emails{testerCount !== null ? ` (${testerCount})` : ''}
+          </button>
+          <button
+            onClick={() => void emailBetaInvites()}
+            disabled={busy !== null || (testerCount ?? 0) === 0}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white transition"
+            title="Email the beta invitation (join group → become tester → install) to every beta tester not yet invited. Sends from the server."
+          >
+            {busy === 'invites' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            Email beta invites
+          </button>
           <button
             onClick={() => void downloadSheet()}
             disabled={busy !== null || total === 0}
