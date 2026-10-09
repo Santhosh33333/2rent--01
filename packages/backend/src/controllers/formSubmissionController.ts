@@ -222,6 +222,34 @@ export async function stats(_req: AuthedRequest, res: Response): Promise<void> {
 }
 
 /**
+ * DELETE /api/admin/forms/:id - remove one mirrored reply.
+ *
+ * The mirror is a convenience copy, so an admin must be able to drop a test or
+ * spam row. Deleting here never touches the original formsubmit.co email the
+ * founder already received, and a missing id is a 404 rather than a silent ok.
+ */
+export async function remove(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const id = text(req.params?.id, 64);
+    if (!id) {
+      sendError(res, "A reply id is required.", 400, "FORM_ID_REQUIRED");
+      return;
+    }
+
+    const deleted = await prisma.formSubmission.deleteMany({ where: { id } });
+    if (deleted.count === 0) {
+      sendError(res, "Reply not found.", 404, "FORM_NOT_FOUND");
+      return;
+    }
+
+    sendSuccess(res, { id, deleted: deleted.count }, "Reply deleted.");
+  } catch (error) {
+    console.error("[forms] delete failed:", error);
+    sendError(res, "Could not delete reply.", 500, "FORM_DELETE_FAILED");
+  }
+}
+
+/**
  * The beta-tester sign-ups as a de-duplicated, newest-first list.
  *
  * This is the "test user list": every applicant, once. The Play closed-test

@@ -7,6 +7,7 @@ const { prismaMock, sendBetaMock } = vi.hoisted(() => ({
       count: vi.fn(),
       updateMany: vi.fn(),
       create: vi.fn(),
+      deleteMany: vi.fn(),
     },
   },
   sendBetaMock: vi.fn(),
@@ -18,7 +19,7 @@ vi.mock("../services/emailService", () => ({
   sendBetaTesterConfirmationEmail: sendBetaMock,
 }));
 
-import { capture, sendBetaInvites } from "../controllers/formSubmissionController";
+import { capture, sendBetaInvites, remove } from "../controllers/formSubmissionController";
 
 type MockRes = {
   statusCode: number;
@@ -144,5 +145,34 @@ describe("capture fires the beta invite", () => {
     await new Promise((r) => setTimeout(r, 10));
     expect(sendBetaMock).not.toHaveBeenCalled();
     expect(prismaMock.formSubmission.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("remove form reply", () => {
+  it("deletes an existing row", async () => {
+    prismaMock.formSubmission.deleteMany.mockResolvedValue({ count: 1 });
+    const out = makeRes();
+    await remove({ params: { id: "row-1" } } as never, out as never);
+
+    expect(out.statusCode).toBe(200);
+    expect(out.payload.data).toMatchObject({ id: "row-1", deleted: 1 });
+    expect(prismaMock.formSubmission.deleteMany).toHaveBeenCalledWith({ where: { id: "row-1" } });
+  });
+
+  it("404s for a missing row", async () => {
+    prismaMock.formSubmission.deleteMany.mockResolvedValue({ count: 0 });
+    const out = makeRes();
+    await remove({ params: { id: "gone" } } as never, out as never);
+
+    expect(out.statusCode).toBe(404);
+    expect(out.payload.error).toBe("FORM_NOT_FOUND");
+  });
+
+  it("400s without an id", async () => {
+    const out = makeRes();
+    await remove({ params: {} } as never, out as never);
+
+    expect(out.statusCode).toBe(400);
+    expect(out.payload.error).toBe("FORM_ID_REQUIRED");
   });
 });

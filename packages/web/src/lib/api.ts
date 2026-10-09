@@ -380,6 +380,9 @@ export const adminApi = {
   // it yet. Bulk outbound mail, so it runs from production (the provider
   // authorises by source IP). Idempotent: already-invited addresses are skipped.
   sendBetaInvites: () => api.post('/admin/forms/beta-invites'),
+  // Remove one mirrored reply (test / spam). Only the mirror is gone; the
+  // original formsubmit.co email is untouched.
+  deleteFormReply: (id: string) => api.delete(`/admin/forms/${id}`),
   // User / partner account blocking with duration + deletion
   blockUser: (userId: string, data: { durationDays?: number; durationYears?: number; permanent?: boolean; reason?: string }) =>
     api.post(`/admin/users/${userId}/block`, data),

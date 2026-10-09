@@ -360,12 +360,15 @@ router.post("/subscriptions/trial/users/:id", pricingEdit, sanitizeInput, valida
 // address they type; the one broadcast (beta invites) needs the stronger
 // NOTIFICATIONS/CREATE grant and is declared separately below.
 const formsView = requireSectionAction("SUPPORT", "VIEW");
+// Removing a mirrored reply is a mutation, so it sits above the read tier.
+const formsEdit = requireSectionAction("SUPPORT", "EDIT");
 router.get("/forms", formsView, formSubmissionController.list);
 router.get("/forms/stats", formsView, formSubmissionController.stats);
 router.get("/forms/testers", formsView, formSubmissionController.testers);
 router.get("/forms/testers.csv", formsView, formSubmissionController.testersCsv);
 router.get("/forms/export", formsView, formSubmissionController.exportXlsx);
 router.post("/forms/email", formsView, formSubmissionController.emailXlsx);
+router.delete("/forms/:id", formsEdit, formSubmissionController.remove);
 // Backfill the beta invitation email to every applicant who has not received it
 // yet. Bulk outbound mail, so it needs the same NOTIFICATIONS/CREATE grant as
 // the other broadcasts - SUPPORT/VIEW alone must not be able to mail everyone.

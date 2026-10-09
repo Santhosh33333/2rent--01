@@ -1,7 +1,7 @@
 import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
 import { AdminPageHeader, AdminShell } from '../../components/admin/AdminPageHeader'
-import { ChevronLeft, ChevronRight, Download, Loader2, Mail, Inbox, Users, Send } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Download, Loader2, Mail, Inbox, Users, Send, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { adminApi } from '../../lib/api'
 
@@ -47,6 +47,7 @@ export function AdminFormRepliesPage() {
   const [total, setTotal] = useState(0)
   const [filter, setFilter] = useState('')
   const [busy, setBusy] = useState<'export' | 'email' | 'testers' | 'invites' | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [testerCount, setTesterCount] = useState<number | null>(null)
 
   const load = async () => {
@@ -185,6 +186,28 @@ export function AdminFormRepliesPage() {
     }
   }
 
+  const deleteReply = async (reply: FormReply) => {
+    if (!window.confirm(
+      `Delete this mirrored reply from ${reply.name || reply.email}?\n\n` +
+      'The copy on this screen (and in exports) is removed. The original email the form sent to the founder is untouched.',
+    )) return
+    setDeletingId(reply.id)
+    try {
+      await adminApi.deleteFormReply(reply.id)
+      toast.success('Reply deleted.')
+      // If the deleted row was the only one on this page, step back before
+      // reloading so the admin does not land on an empty page.
+      if (items.length === 1 && page > 1) setPage((p) => p - 1)
+      else await load()
+      void loadStats()
+      void loadTesters()
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Could not delete reply'))
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   const filters = ['', ...(stats?.byForm.map((entry) => entry.form) ?? [])]
 
   return (
@@ -308,6 +331,17 @@ export function AdminFormRepliesPage() {
                   <span className="ml-auto text-gray-500 text-xs">
                     {new Date(reply.createdAt).toLocaleString('en-IN')}
                   </span>
+                  <button
+                    onClick={() => void deleteReply(reply)}
+                    disabled={deletingId !== null}
+                    className="text-gray-500 hover:text-red-400 disabled:opacity-40 transition"
+                    title="Delete this reply"
+                    aria-label="Delete reply"
+                  >
+                    {deletingId === reply.id
+                      ? <Loader2 className="w-4 h-4 animate-spin" />
+                      : <Trash2 className="w-4 h-4" />}
+                  </button>
                 </div>
 
                 {Object.keys(fields).length > 0 && (
