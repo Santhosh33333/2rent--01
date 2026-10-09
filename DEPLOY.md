@@ -50,13 +50,24 @@ track), add release notes, and roll out.
 
 ## Web deploy
 
+The public site is the Vercel project `web` linked in this repo; the production
+alias is <https://yuvers.in>. Build locally to check a change:
+
 ```bash
 npm run build:web      # builds packages/web into packages/web/dist
 ```
 
-Deploy `packages/web/dist` to the hosting project that serves the public domain.
-The web app reads the Play link from `appLinks.ts`, so no build-time environment
-variable is required for the download buttons.
+Then deploy from the repo root:
+
+```bash
+npx vercel --prod      # builds remotely and re-points https://yuvers.in
+```
+
+A push alone did **not** trigger a Vercel build here, so run the command above
+after merging. (The API on Render *does* auto-deploy — see `render.yaml`.)
+Vercel builds `packages/web/dist` from the root `vercel.json`. The web app reads
+the Play link from `appLinks.ts`, so no build-time environment variable is
+required for the download buttons.
 
 ## Beta testers (Google Group)
 

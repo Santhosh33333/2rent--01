@@ -16,3 +16,8 @@ release
 **/android/build
 **/dist
 *.log
+# Never upload secrets: the CLI does not apply .gitignore for env files.
+.env
+.env.*
+**/.env
+**/.env.*
