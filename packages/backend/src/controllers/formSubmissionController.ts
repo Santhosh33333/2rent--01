@@ -49,6 +49,8 @@ type Row = {
   ip: string | null;
   userAgent: string | null;
   createdAt: Date;
+  /** Set once the beta invitation has been emailed; null otherwise. */
+  invitedAt: Date | null;
 };
 
 /** One value to a bounded string. Arrays are joined so a multi-select survives. */

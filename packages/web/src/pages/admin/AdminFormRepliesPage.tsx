@@ -22,6 +22,8 @@ interface FormReply {
   email: string
   fields: Record<string, string> | null
   createdAt: string
+  /** When the beta invitation was emailed; null/absent for non-beta forms. */
+  invitedAt: string | null
 }
 
 interface Stats {
@@ -289,6 +291,16 @@ export function AdminFormRepliesPage() {
                   <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${FORM_BADGE[reply.form] || 'bg-gray-700 text-gray-300'}`}>
                     {reply.form}
                   </span>
+                  {reply.form.trim().toLowerCase() === 'beta tester' && (
+                    <span
+                      className={`text-xs px-2.5 py-1 rounded-full font-medium ${
+                        reply.invitedAt ? 'bg-emerald-900/40 text-emerald-300' : 'bg-amber-900/40 text-amber-300'
+                      }`}
+                      title={reply.invitedAt ? `Invited ${new Date(reply.invitedAt).toLocaleString('en-IN')}` : 'Invitation not sent yet'}
+                    >
+                      {reply.invitedAt ? 'Invited' : 'Not invited'}
+                    </span>
+                  )}
                   <p className="text-white text-sm font-medium">{reply.name || reply.email}</p>
                   <a href={`mailto:${reply.email}`} className="text-blue-400 text-xs hover:underline">
                     {reply.email}
