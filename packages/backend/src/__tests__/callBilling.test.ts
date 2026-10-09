@@ -41,11 +41,17 @@ function uniq(tag: string) {
 }
 
 async function makeUserWithBalance(tag: string, balance: number) {
-  const email = `${uniq(tag)}@test.local`;
+  const id = uniq(tag);
+  const email = `${id}@test.local`;
+  // phone is the other unique column. Derive it from the same clock+seq as the
+  // email so an interrupted earlier run (whose rows were never cleaned up)
+  // cannot collide with this one. The old fixed-offset formula was stable
+  // across runs, so one killed run made every later run fail.
+  const phone = `+91${id.replace(/\D/g, "").slice(-10)}`;
   const user = await prisma.user.create({
     data: {
       email,
-      phone: `+91${String(9000000000 + (seq % 9000000)).slice(0, 10)}`,
+      phone,
       passwordHash: "x",
       fullName: `Billing ${tag}`,
       // dateOfBirth is required by the schema; a fixed past date keeps these
