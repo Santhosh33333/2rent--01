@@ -1,7 +1,7 @@
 import { getErrorMessage, getErrorDetail } from '../../lib/error'
 import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
-import { useForm } from 'react-hook-form'
+import { useForm, type FieldErrors } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
@@ -121,6 +121,12 @@ export function RegisterPage() {
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  // A server rejection (duplicate email/phone, a policy refusal, a dropped
+  // connection) is never just a toast. The toast vanishes; the person is left
+  // staring at a button that appears to do nothing. Keeping the message in
+  // state renders it inline on the step that failed so the next action is
+  // obvious and the wizard does not advance on a rejected attempt.
+  const [submitError, setSubmitError] = useState('')
   const [accountType, setAccountType] = useState<'USER' | 'PARTNER'>(() =>
     (location.state as any)?.accountType === 'PARTNER' ? 'PARTNER' : 'USER'
   )
@@ -219,6 +225,7 @@ export function RegisterPage() {
   }
 
   const handleNext = async () => {
+    setSubmitError('')
     let fields: (keyof RegisterForm)[] = []
     if (step === 1) {
       setStep(2)
@@ -228,6 +235,10 @@ export function RegisterPage() {
       const valid = await trigger(['name', 'email'])
       if (!valid) return
       if (otpStatus !== 'verified') {
+        // Shown inline in the OTP panel too, not only as a toast: the toast
+        // disappears in seconds and the person is left on a step that refuses
+        // to advance with no visible reason.
+        setOtpError('Verify your email first: tap Send verification code, then enter the code we email you.')
         toast.error('Verify your email first with the OTP code.')
         return
       }
@@ -241,6 +252,7 @@ export function RegisterPage() {
   }
 
   const onSubmit = async (data: RegisterForm) => {
+    setSubmitError('')
     try {
       setLoading(true)
       const isReferral = data.referralCode && data.referralCode.trim().length > 0
@@ -310,10 +322,20 @@ export function RegisterPage() {
         navigate(accountType === 'USER' ? '/profile/complete' : '/partner/dashboard', { replace: true })
       }
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Registration failed. Please check your details and try again.'))
+      const message = getErrorMessage(err, 'Registration failed. Please check your details and try again.')
+      setSubmitError(message)
+      toast.error(message)
     } finally {
       setLoading(false)
     }
+  }
+
+  // handleSubmit only calls onSubmit when the whole form is valid. Without an
+  // invalid handler a failed final validation is silent on screen, so the
+  // person taps Create Account and nothing appears to happen.
+  const onInvalid = (formErrors: FieldErrors<RegisterForm>) => {
+    const first = (Object.values(formErrors) as Array<{ message?: string } | undefined>).find((e) => e?.message)
+    setSubmitError(first?.message || 'Please fix the highlighted fields before continuing.')
   }
 
   return (
@@ -385,7 +407,7 @@ export function RegisterPage() {
               <p className="text-sm text-surface-500 mt-1">{steps[step - 1].subtitle}</p>
             </div>
 
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="space-y-4">
               {step === 1 && (
                 <>
                   <div className="space-y-3">
@@ -467,21 +489,30 @@ export function RegisterPage() {
                         <div className="text-sm font-semibold text-surface-800 dark:text-surface-100 mb-1">Verify your email</div>
                         <p className="text-xs text-surface-500 mb-3">We'll send a one-time code to your inbox to prove this address is yours.</p>
                         {otpStatus === 'idle' || otpStatus === 'error' || otpStatus === 'sending' ? (
-                          <button
-                            type="button"
-                            onClick={requestEmailOtp}
-                            disabled={otpStatus === 'sending'}
-                            className="w-full rounded-xl bg-primary-50 text-primary-700 dark:bg-primary-950/40 dark:text-primary-300 border border-primary-200 dark:border-primary-700 px-4 py-2.5 text-sm font-semibold transition hover:bg-primary-100 disabled:opacity-60 disabled:cursor-not-allowed"
-                          >
-                            {otpStatus === 'sending' ? (
-                              <span className="flex items-center justify-center gap-2">
-                                <span className="w-3.5 h-3.5 rounded-full border-2 border-primary-300 border-t-primary-600 animate-spin" />
-                                Sending code...
-                              </span>
-                            ) : (
-                              <span className="flex items-center justify-center gap-2">Send verification code</span>
+                          <>
+                            <button
+                              type="button"
+                              onClick={requestEmailOtp}
+                              disabled={otpStatus === 'sending'}
+                              className="w-full rounded-xl bg-primary-50 text-primary-700 dark:bg-primary-950/40 dark:text-primary-300 border border-primary-200 dark:border-primary-700 px-4 py-2.5 text-sm font-semibold transition hover:bg-primary-100 disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                              {otpStatus === 'sending' ? (
+                                <span className="flex items-center justify-center gap-2">
+                                  <span className="w-3.5 h-3.5 rounded-full border-2 border-primary-300 border-t-primary-600 animate-spin" />
+                                  Sending code...
+                                </span>
+                              ) : (
+                                <span className="flex items-center justify-center gap-2">Send verification code</span>
+                              )}
+                            </button>
+                            {/* The failed-request message must survive here. This
+                                branch is where a duplicate email / rate limit /
+                                dropped connection lands, and it used to render
+                                the button again with no explanation. */}
+                            {otpStatus !== 'sending' && otpError && (
+                              <p className="mt-2 text-xs text-danger-500 font-medium" role="alert">{otpError}</p>
                             )}
-                          </button>
+                          </>
                         ) : otpStatus === 'sent' || otpStatus === 'verifying' ? (
                           <div className="space-y-3">
                             <div className="relative">
@@ -574,6 +605,11 @@ export function RegisterPage() {
                 <>
                   <div>
                     <label className="label">Gender</label>
+                    {/* Registered so step validation and the inline error are
+                        driven by react-hook-form. The buttons set the value via
+                        setValue(); without a registered field the required rule
+                        can be skipped and the error text never renders. */}
+                    <input type="hidden" {...register('gender')} />
                     <div className="grid grid-cols-3 gap-2">
                       {GENDERS.map((g) => {
                         const Icon = g.icon
@@ -695,6 +731,14 @@ export function RegisterPage() {
 
               {step === 5 && (
                 <>
+                  {submitError && (
+                    <div
+                      role="alert"
+                      className="rounded-xl border border-danger-200 bg-danger-50 px-4 py-3 text-sm font-medium text-danger-700 dark:border-danger-800 dark:bg-danger-900/30 dark:text-danger-300"
+                    >
+                      {submitError}
+                    </div>
+                  )}
                   <div className="glass-card-sm p-5 space-y-4 text-sm">
                     <div className="flex justify-between items-center">
                       <span className="text-surface-500">Account Type</span>
