@@ -48,6 +48,11 @@ Before uploading, bump `versionCode` (and `versionName`) in
 Then upload the AAB in Play Console → your app → **Production** (or a testing
 track), add release notes, and roll out.
 
+> The Android app bundles `packages/web/dist`; it does **not** load a remote URL
+> (there is no `server.url` in `capacitor.config.ts`). So a web-only change fixes
+> the site at `yuvers.in` but does **not** reach anyone on an installed build
+> until a new AAB is built here and rolled out.
+
 ## Web deploy
 
 The public site is the Vercel project `web` linked in this repo; the production

@@ -36,8 +36,14 @@ android {
         // 19 / 1.0.18: header burger removed (misclicks on web + app), no more
         // full-screen interstitials, the banner strip tracks the real ad
         // height, and LIVE AdMob ids replace Google's test units.
-        versionCode 19
-        versionName "1.0.18"
+        //
+        // 20 / 1.0.19: the signup wizard no longer fails silently. Every
+        // validation and server error now renders inline on the current step
+        // and an invalid step refuses to advance. Before this, a duplicate
+        // email (or any failed OTP request) re-rendered the Send button with no
+        // message, and a rejection on the final step was only a toast.
+        versionCode 20
+        versionName "1.0.19"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
