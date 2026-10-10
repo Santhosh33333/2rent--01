@@ -80,10 +80,23 @@ export function aiConfigInfo(): { provider: AiProvider; requiredEnv: string[]; b
 }
 
 // --- cost control: per-user token bucket (per process) ----------------------
-const BUCKET_CAPACITY = Number(env.AI_USER_QUOTA_PER_HOUR || 60);
+function quotaCapacity(): number {
+  const raw = env.AI_USER_QUOTA_PER_HOUR;
+  if (!raw) return 60;
+  const q = raw.trim().toLowerCase();
+  if (q === "unlimited" || q === "off" || q === "none" || q === "0" || q === "-1") return 0;
+  const n = Number(q);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return n;
+}
+
+const BUCKET_CAPACITY = quotaCapacity();
 const buckets = new Map<string, { tokens: number; resetAt: number }>();
 
 export function checkAiQuota(userId: string): { allowed: boolean; retryAfterSec?: number } {
+  if (BUCKET_CAPACITY <= 0) {
+    return { allowed: true };
+  }
   const now = Date.now();
   const entry = buckets.get(userId);
   if (!entry || entry.resetAt <= now) {
