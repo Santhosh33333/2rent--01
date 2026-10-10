@@ -33,13 +33,15 @@ const PROVIDER_MODEL: Record<string, string> = {
 };
 
 /**
- * True when the caller has not opted out of the keyless public fallback.
- * Set AI_ALLOW_PUBLIC_FALLBACK=false|0 to force "none" (honest
- * AI_NOT_CONFIGURED) when no key is configured.
+ * Off by default: with no provider key the assistant must run the offline rule
+ * engine, not silently call a third-party endpoint. The keyless public fallback
+ * (pollinations) is unreliable for tool calls and is an external dependency the
+ * operator did not ask for, so it must be opted into explicitly with
+ * AI_ALLOW_PUBLIC_FALLBACK=true|1|on|yes.
  */
 function publicFallbackAllowed(): boolean {
   const raw = (env.AI_ALLOW_PUBLIC_FALLBACK ?? "").trim().toLowerCase();
-  return raw !== "false" && raw !== "0" && raw !== "off" && raw !== "no";
+  return raw === "true" || raw === "1" || raw === "on" || raw === "yes";
 }
 
 function configuredProvider(): AiProvider {
@@ -75,8 +77,8 @@ export function aiProvider(): AiProvider {
     // Default: try Gemini first for "free api" case unless explicitly configured
     return env.AI_PROVIDER === "openai-compatible" ? "openai-compatible" : "gemini";
   }
-  // No key at all: fall back to the keyless public endpoint so the assistant
-  // still works out of the box, unless the operator disabled it.
+  // No key at all: the assistant runs the offline rule engine (aiProvider
+  // "none"). A keyless public endpoint is only used if explicitly enabled.
   return publicFallbackAllowed() ? "pollinations" : "none";
 }
 

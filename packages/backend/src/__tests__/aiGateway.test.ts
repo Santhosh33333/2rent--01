@@ -59,8 +59,14 @@ describe("aiGateway provider resolution (free tiers)", () => {
     expect(g.aiModelName()).toBe("nvidia/nemotron-3.5-lightning-30b-a3b");
   });
 
-  it("falls back to the keyless public provider when nothing is configured", async () => {
+  it("defaults to 'none' (offline rules) when nothing is configured", async () => {
     const g = await loadGateway({ AI_PROVIDER: undefined, AI_API_KEY: undefined, AI_API_BASE: undefined, AI_ALLOW_PUBLIC_FALLBACK: undefined });
+    expect(g.aiProvider()).toBe("none");
+    expect(g.aiConfigInfo().requiredEnv).toContain("AI_API_KEY");
+  });
+
+  it("only uses the keyless public provider when explicitly enabled", async () => {
+    const g = await loadGateway({ AI_PROVIDER: undefined, AI_API_KEY: undefined, AI_API_BASE: undefined, AI_ALLOW_PUBLIC_FALLBACK: "true" });
     expect(g.aiProvider()).toBe("pollinations");
     expect(g.aiBaseUrl()).toContain("text.pollinations.ai");
   });
