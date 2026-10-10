@@ -131,30 +131,32 @@ services:
       # omission would only be noticed by users not receiving notifications.
       - key: FIREBASE_SERVICE_ACCOUNT
         sync: false
-      # In-app AI assistant. The provider is Groq's OpenAI-compatible endpoint
-      # (https://api.groq.com/openai/v1) - free tier, and one of the few hosts
-      # that reliably returns tool calls, which the Nabri agent needs to query
-      # real data instead of inventing it. The code also auto-detects a gsk_*
-      # key as Groq, so AI_PROVIDER is documented here mostly to guard against a
-      # key-format change.
+      # In-app AI assistant.
       #
-      # A secret, so never committed: set it in the dashboard.
-      # IMPORTANT: an AI provider that *rejects* a key (401/403) is surfaced as a
-      # non-retryable AI_AUTH_ERROR, and a request without a key is surfaced as
-      # AI_NOT_CONFIGURED - the assistant never pretends a blocked call passed.
+      # The assistant runs with NO external API by default: when no provider key
+      # is set, the backend answers from the offline rule router
+      # (packages/backend/src/agent/ruleRouter.ts), which reads live data through
+      # the same role-filtered agent tools and never invents a value. Writes still
+      # require the normal confirmation step and are guided to the app screen.
+      #
+      # A provider key is OPTIONAL. If one is added (dashboard only, never
+      # committed) the code auto-detects the provider from the key prefix
+      # (gsk_* -> Groq, AIza* -> Gemini, nvapi-* -> NIM, sk-or-v1-* -> OpenRouter)
+      # and upgrades the assistant to free-text tool planning. AI_PROVIDER can
+      # force a provider explicitly, but is intentionally left unset so the
+      # keyless offline mode is the default.
+      #
+      # A key that is *rejected* (401/403) is surfaced as a non-retryable
+      # AI_AUTH_ERROR, and a request without a key runs the offline router - the
+      # assistant never pretends a blocked call passed.
       - key: AI_API_KEY
         sync: false
-      - key: AI_PROVIDER
-        value: groq
-      - key: AI_MODEL
-        value: "openai/gpt-oss-120b"
       # The owner asked for unlimited assistant usage; this disables the
       # per-user hourly cap rather than raising it.
       - key: AI_USER_QUOTA_PER_HOUR
         value: unlimited
-      # With a real key configured there is no reason to silently fall back to
-      # the flaky keyless public provider; a missing key should read as
-      # "not configured" rather than quietly using a third party.
+      # Never silently fall back to the flaky keyless public provider: a missing
+      # key must read as "offline rules engine", not as a third-party call.
       - key: AI_ALLOW_PUBLIC_FALLBACK
         value: "false"
       # Cashfree is RETIRED. Payments are collected manually against the platform

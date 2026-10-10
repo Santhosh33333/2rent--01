@@ -2,8 +2,15 @@ import { z } from "zod";
 import { aiChat, aiProvider, type AiChatMessage } from "../services/aiGateway";
 import { getConfig } from "../services/pricingEngine";
 import { getDatingRequestCharge } from "../services/datingService";
-import { AgentToolError, toolSchemasForRole, type AgentToolContext } from "./toolRegistry";
+import { AgentToolError, listToolsForGrants, toolSchemasForRole, type AgentToolContext } from "./toolRegistry";
 import { runAgentTool, grantsFilterFor, type ToolOutcome } from "./toolRouter";
+import {
+  routeMessage,
+  composeRuleReply,
+  ruleHelp,
+  ruleSuggestions,
+  type RuleActivity,
+} from "./ruleRouter";
 
 /**
  * Agent Service — the model loop.
@@ -138,15 +145,12 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentTurnResu
   const activity: AgentToolActivity[] = [];
   const confirmations: AgentConfirmationRequest[] = [];
 
+  // No LLM provider is configured. Rather than disabling the assistant, answer
+  // through the transparent rule router, which can only read the same
+  // role-filtered tools and never invents a value. This is the "own AI, no
+  // external API" mode: the app's assistant keeps working with no provider key.
   if (aiProvider() === "none") {
-    return {
-      message:
-        "The AI assistant isn't configured on this server yet, so I can't answer right now.",
-      toolActivity: [],
-      awaitingConfirmation: [],
-      suggestions: [],
-      error: { code: "AI_NOT_CONFIGURED", message: "AI provider not configured.", retryable: false },
-    };
+    return runOfflineTurn(input);
   }
 
   const tools = toolSchemasForRole(ctx.role, ctx.isAdminTier, grantsFilterFor(ctx));
@@ -232,6 +236,14 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentTurnResu
         if (code === "AI_RATE_LIMITED" && attempt < RATE_LIMIT_RETRIES) {
           await sleep(rateLimitWaitMs(err));
           continue;
+        }
+        // The model is unreachable. If this was a plain read-only question, let the
+        // offline rule router answer it from the same tools rather than showing an
+        // error. An approved write never reaches here (it returns above), so this
+        // cannot silently execute an action.
+        if (!input.approved && !approvedExecuted && activity.length === 0) {
+          const offline = await runOfflineTurn(input);
+          if (offline.toolActivity.length > 0) return offline;
         }
         return {
           message:
@@ -345,6 +357,88 @@ const outcome = await runAgentTool(ctx, { toolName: call.function.name, args });
     awaitingConfirmation: [],
     suggestions: [],
     error: { code: "TOOL_LOOP_EXHAUSTED", message: "Too many tool rounds.", retryable: true },
+  };
+}
+
+/**
+ * Offline turn: the no-provider path.
+ *
+ * When no LLM provider is configured (or the provider is unreachable), the
+ * assistant still has to answer. This maps the message to read-only tools with
+ * transparent keyword rules and composes a reply strictly from their payloads.
+ * It reuses the exact registry, permission, validation, confirmation and audit
+ * path as a model turn, so it cannot reach anything the caller could not already
+ * reach and it never invents a value.
+ */
+async function runOfflineTurn(input: AgentTurnInput): Promise<AgentTurnResult> {
+  const { ctx } = input;
+  const activity: AgentToolActivity[] = [];
+
+  const allowed = new Set(
+    listToolsForGrants(ctx.role, ctx.isAdminTier, grantsFilterFor(ctx)).map((t) => t.name)
+  );
+  if (!allowed.size) {
+    return {
+      message: "No assistant actions are available for your account.",
+      toolActivity: [],
+      awaitingConfirmation: [],
+      suggestions: [],
+      error: { code: "NO_TOOLS", message: "No tools available for role.", retryable: false },
+    };
+  }
+
+  // A user-approved confirmation is executed exactly as in a model turn.
+  if (input.approved) {
+    const outcome = await runAgentTool(ctx, {
+      toolName: input.approved.toolName,
+      args: input.approved.args,
+      confirmationToken: input.approved.token,
+    });
+    activity.push(toActivity(outcome, input.approved.toolName));
+    if (outcome.status === "confirmation_required") {
+      return {
+        message: "That action still needs your confirmation.",
+        toolActivity: activity,
+        awaitingConfirmation: [outcome.confirmation],
+        suggestions: [],
+      };
+    }
+    return {
+      message: composeRuleReply(activity),
+      toolActivity: activity,
+      awaitingConfirmation: [],
+      suggestions: ruleSuggestions(activity),
+    };
+  }
+
+  const route = routeMessage(input.message, allowed);
+  if (!route.calls.length) {
+    return {
+      message: route.guidance ?? ruleHelp(allowed),
+      toolActivity: [],
+      awaitingConfirmation: [],
+      suggestions: ruleSuggestions([]),
+    };
+  }
+
+  for (const call of route.calls) {
+    const outcome = await runAgentTool(ctx, { toolName: call.toolName, args: call.args });
+    activity.push(toActivity(outcome, call.toolName));
+    if (outcome.status === "confirmation_required") {
+      return {
+        message: "Before I do that, please confirm the details below.",
+        toolActivity: activity,
+        awaitingConfirmation: [outcome.confirmation],
+        suggestions: [],
+      };
+    }
+  }
+
+  return {
+    message: composeRuleReply(activity),
+    toolActivity: activity,
+    awaitingConfirmation: [],
+    suggestions: ruleSuggestions(activity),
   };
 }
 
