@@ -239,7 +239,9 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentTurnResu
               ? "You've reached the assistant's hourly limit. Try again a little later."
               : code === "AI_RATE_LIMITED"
                 ? "The assistant is busy right now. Try again in a moment."
-                : "I couldn't reach the assistant service just now.",
+                : code === "AI_AUTH_ERROR"
+                  ? "The assistant's AI key was rejected by the provider. An admin needs to check the AI_API_KEY/project."
+                  : "I couldn't reach the assistant service just now.",
           toolActivity: activity,
           awaitingConfirmation: [],
           suggestions: [],

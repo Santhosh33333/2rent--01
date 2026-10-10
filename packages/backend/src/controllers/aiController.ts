@@ -286,6 +286,10 @@ export async function translateMessage(req: AuthedRequest, res: Response): Promi
         sendError(res, "Translation quota exceeded. Try again later.", 429, "AI_QUOTA_EXCEEDED");
         return;
       }
+      if (err?.code === "AI_AUTH_ERROR") {
+        sendError(res, "Translation is misconfigured: the AI key was rejected by the provider.", 502, "AI_AUTH_ERROR");
+        return;
+      }
       throw err;
     }
   } catch (err: any) {
@@ -322,6 +326,10 @@ export async function draftText(req: AuthedRequest, res: Response): Promise<void
       }
       if (err?.code === "AI_QUOTA_EXCEEDED") {
         sendError(res, "Writing quota exceeded. Try again later.", 429, "AI_QUOTA_EXCEEDED");
+        return;
+      }
+      if (err?.code === "AI_AUTH_ERROR") {
+        sendError(res, "Writing help is misconfigured: the AI key was rejected by the provider.", 502, "AI_AUTH_ERROR");
         return;
       }
       throw err;

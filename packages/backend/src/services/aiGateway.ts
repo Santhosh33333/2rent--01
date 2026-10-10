@@ -205,6 +205,11 @@ async function postCompletion(
         err.code = "AI_RATE_LIMITED";
         const retryAfterSec = Number(res.headers.get("retry-after"));
         err.retryAfterSec = Number.isFinite(retryAfterSec) && retryAfterSec > 0 ? retryAfterSec : 10;
+      } else if (res.status === 401 || res.status === 403) {
+        // A rejected key/project is a configuration fault, not a transient
+        // outage. Classify it separately so it is never retried and the
+        // message can point at the key instead of "try again later".
+        err.code = "AI_AUTH_ERROR";
       } else {
         err.code = "AI_PROVIDER_ERROR";
       }

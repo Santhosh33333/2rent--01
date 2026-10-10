@@ -56,4 +56,24 @@ describe("aiGateway provider resolution (free tiers)", () => {
     const g = await loadGateway({ AI_PROVIDER: undefined, AI_API_KEY: undefined, AI_API_BASE: undefined });
     expect(g.aiProvider()).toBe("none");
   });
+
+  it("classifies a 403 from the provider as AI_AUTH_ERROR (not a transient outage)", async () => {
+    const g = await loadGateway({ AI_PROVIDER: "gemini", AI_API_KEY: "rejected-key", AI_USER_QUOTA_PER_HOUR: "unlimited" });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      headers: { get: () => null },
+      json: async () => ({}),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      await g.aiComplete("u1", "sys", "hi", { cacheKey: undefined });
+      throw new Error("expected aiComplete to reject");
+    } catch (e: any) {
+      expect(e.code).toBe("AI_AUTH_ERROR");
+      expect(e.status).toBe(403);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
