@@ -14,11 +14,12 @@
  */
 import { env } from "../config/env";
 
-export type AiProvider = "none" | "openai-compatible" | "nim" | "gemini" | "pollinations";
+export type AiProvider = "none" | "openai-compatible" | "nim" | "gemini" | "groq" | "pollinations";
 
 const PROVIDER_BASE: Record<string, string> = {
   nim: "https://integrate.api.nvidia.com/v1",
   gemini: "https://generativelanguage.googleapis.com/v1beta/openai",
+  groq: "https://api.groq.com/openai/v1",
   pollinations: "https://text.pollinations.ai/openai",
   "openai-compatible": "",
 };
@@ -26,6 +27,7 @@ const PROVIDER_BASE: Record<string, string> = {
 const PROVIDER_MODEL: Record<string, string> = {
   nim: "meta/muse-glimmer-30b",
   gemini: "gemini-3.8-flash",
+  groq: "openai/gpt-oss-120b",
   pollinations: "openai-fast",
   "openai-compatible": "gpt-4o-mini",
 };
@@ -44,6 +46,7 @@ function configuredProvider(): AiProvider {
   if (
     env.AI_PROVIDER === "nim" ||
     env.AI_PROVIDER === "gemini" ||
+    env.AI_PROVIDER === "groq" ||
     env.AI_PROVIDER === "pollinations"
   ) {
     return env.AI_PROVIDER;
@@ -63,8 +66,8 @@ export function aiProvider(): AiProvider {
     // Auto-infer common free providers if a key is present but provider not set
     // Gemini: Google AI Studio keys often look like AIzaSy...
     if (/^AIza[0-9A-Za-z_-]{35}$/.test(env.AI_API_KEY)) return "gemini";
-    // Groq keys often start gsk_
-    if (env.AI_API_KEY.startsWith("gsk_")) return "openai-compatible";
+    // Groq keys start gsk_ — dedicated base URL, tool-calling capable.
+    if (env.AI_API_KEY.startsWith("gsk_")) return "groq";
     // NVIDIA NIM keys nvapi-*
     if (env.AI_API_KEY.startsWith("nvapi-")) return "nim";
     // OpenRouter sk-or-v1-*

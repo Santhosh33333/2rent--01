@@ -26,6 +26,13 @@ async function loadGateway(withEnv: Record<string, string | undefined>) {
 }
 
 describe("aiGateway provider resolution (free tiers)", () => {
+  it("auto-detects a Groq key (gsk_) and points at the Groq base URL with a tool-capable model", async () => {
+    const g = await loadGateway({ AI_PROVIDER: undefined, AI_API_KEY: "gsk_test", AI_MODEL: undefined, AI_API_BASE: undefined });
+    expect(g.aiProvider()).toBe("groq");
+    expect(g.aiBaseUrl()).toBe("https://api.groq.com/openai/v1");
+    expect(g.aiModelName()).toBe("openai/gpt-oss-120b");
+  });
+
   it("resolves to 'none' when a keyed provider is named but has no key", async () => {
     const g = await loadGateway({ AI_PROVIDER: "gemini", AI_API_KEY: undefined });
     expect(g.aiProvider()).toBe("none");
