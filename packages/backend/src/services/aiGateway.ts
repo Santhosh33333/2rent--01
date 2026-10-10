@@ -35,11 +35,23 @@ function configuredProvider(): AiProvider {
 }
 
 export function aiProvider(): AiProvider {
-  const p = configuredProvider();
+  let p = configuredProvider();
   // nim/gemini still require a key; without one we report "none" so the app
   // stays honest (AI_NOT_CONFIGURED) instead of pretending to be live.
   if (p !== "none" && !env.AI_API_KEY) return "none";
-  return p;
+  if (p !== "none") return p;
+  if (!env.AI_API_KEY) return "none";
+  // Auto-infer common free providers if a key is present but provider not set
+  // Gemini: Google AI Studio keys often look like AIzaSy...
+  if (/^AIza[0-9A-Za-z_-]{35}$/.test(env.AI_API_KEY)) return "gemini";
+  // Groq keys often start gsk_
+  if (env.AI_API_KEY.startsWith("gsk_")) return "openai-compatible";
+  // NVIDIA NIM keys nvapi-*
+  if (env.AI_API_KEY.startsWith("nvapi-")) return "nim";
+  // OpenRouter sk-or-v1-*
+  if (env.AI_API_KEY.startsWith("sk-or-v1-")) return "openai-compatible";
+  // Default: try Gemini first for "free api" case unless explicitly configured
+  return env.AI_PROVIDER === "openai-compatible" ? "openai-compatible" : "gemini";
 }
 
 export function aiBaseUrl(): string {

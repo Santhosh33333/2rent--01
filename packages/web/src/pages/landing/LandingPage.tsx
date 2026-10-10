@@ -37,6 +37,12 @@ import {
   EventsSection,
   MoviesSection,
 } from './sections/PillarSections';
+import {
+  SportsSection,
+  ActivitiesSection,
+  TravelSection,
+  AiDatingSection,
+} from './sections/ExperienceSections';
 import { DownloadSection, TrustSection } from './sections/TrustSections';
 import {
   AskNabriSection,
@@ -238,13 +244,17 @@ export function LandingPage() {
       <MusicToggle variant="floating" label="background music" />
 
       <main id="nb-main">
-        <HeroSection events={events} plans={plans.data?.plans ?? []} signedIn={signedIn} />
+        <HeroSection plans={plans.data?.plans ?? []} signedIn={signedIn} />
         <WhatIsNabriSection />
         <HowItWorksSection />
         <DatingSection profiles={profiles} signedIn={signedIn} />
         <EventsSection events={events} categories={categories} />
         <CommunitySection communities={communities} />
         <MoviesSection movies={movies} />
+        <SportsSection />
+        <ActivitiesSection />
+        <TravelSection />
+        <AiDatingSection />
         <AskNabriSection />
         <FutureVisionSection />
         <DownloadSection plans={plans} signedIn={signedIn} />

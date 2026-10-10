@@ -668,6 +668,80 @@
   min-height: 420px;
 }
 
+/* Hero video player (Landing 2.0). The video fills the stage; the poster is
+   the designed fallback frame; the controls sit on the bottom edge and are
+   always reachable. */
+.nb-hero-video {
+  position: relative;
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 30px 80px -20px rgba(8, 31, 79, 0.55);
+  background: #081f4f;
+}
+
+.nb-hero-video__media {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+}
+
+.nb-hero-video__captions {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 52px;
+  margin: 0;
+  padding: 0 16px;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+}
+
+.nb-hero-video__controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: linear-gradient(180deg, transparent, rgba(5, 12, 30, 0.72));
+}
+
+.nb-hero-video__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.nb-hero-video__btn:hover {
+  background: rgba(255, 255, 255, 0.26);
+}
+
+.nb-hero-video__btn:focus-visible {
+  outline: 3px solid #d2f53c;
+  outline-offset: 2px;
+}
+
 /* These three are the positioning frames for the absolute cards inside them.
    They need a real width. Left to their own devices they are flex items with
    no in-flow children, so they resolve to zero width and the cards - which are

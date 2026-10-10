@@ -134,6 +134,15 @@ export function Layout() {
       ] : [];
 
   useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
+
+  // Scroll to top on route change. Without this, navigating from a scrolled-down
+  // page (e.g. a long /home feed) to another tab leaves the window at the old
+  // offset, so the new page renders partway down with its top hidden behind the
+  // fixed header capsule. Screens that own an inner scroll container (chat, the
+  // event chat) are unaffected — this only resets the window scroll.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
   useEffect(() => subscribeAdsState((state) => setAdsReady(state.canRequestAds)), []);
 
   useEffect(() => {
