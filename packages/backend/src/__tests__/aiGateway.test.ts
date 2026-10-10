@@ -26,7 +26,7 @@ async function loadGateway(withEnv: Record<string, string | undefined>) {
 }
 
 describe("aiGateway provider resolution (free tiers)", () => {
-  it("resolves to 'none' when no key is present", async () => {
+  it("resolves to 'none' when a keyed provider is named but has no key", async () => {
     const g = await loadGateway({ AI_PROVIDER: "gemini", AI_API_KEY: undefined });
     expect(g.aiProvider()).toBe("none");
     const info = g.aiConfigInfo();
@@ -52,9 +52,21 @@ describe("aiGateway provider resolution (free tiers)", () => {
     expect(g.aiModelName()).toBe("nvidia/nemotron-3.5-lightning-30b-a3b");
   });
 
-  it("treats the provider as unconfigured (AI_NOT_CONFIGURED) without a key", async () => {
-    const g = await loadGateway({ AI_PROVIDER: undefined, AI_API_KEY: undefined, AI_API_BASE: undefined });
+  it("falls back to the keyless public provider when nothing is configured", async () => {
+    const g = await loadGateway({ AI_PROVIDER: undefined, AI_API_KEY: undefined, AI_API_BASE: undefined, AI_ALLOW_PUBLIC_FALLBACK: undefined });
+    expect(g.aiProvider()).toBe("pollinations");
+    expect(g.aiBaseUrl()).toContain("text.pollinations.ai");
+  });
+
+  it("honours AI_ALLOW_PUBLIC_FALLBACK=false (AI_NOT_CONFIGURED) without a key", async () => {
+    const g = await loadGateway({
+      AI_PROVIDER: undefined,
+      AI_API_KEY: undefined,
+      AI_API_BASE: undefined,
+      AI_ALLOW_PUBLIC_FALLBACK: "false",
+    });
     expect(g.aiProvider()).toBe("none");
+    expect(g.aiConfigInfo().requiredEnv).toContain("AI_API_KEY");
   });
 
   it("classifies a 403 from the provider as AI_AUTH_ERROR (not a transient outage)", async () => {

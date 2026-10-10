@@ -14,44 +14,67 @@
  */
 import { env } from "../config/env";
 
-export type AiProvider = "none" | "openai-compatible" | "nim" | "gemini";
+export type AiProvider = "none" | "openai-compatible" | "nim" | "gemini" | "pollinations";
 
 const PROVIDER_BASE: Record<string, string> = {
   nim: "https://integrate.api.nvidia.com/v1",
   gemini: "https://generativelanguage.googleapis.com/v1beta/openai",
+  pollinations: "https://text.pollinations.ai/openai",
   "openai-compatible": "",
 };
 
 const PROVIDER_MODEL: Record<string, string> = {
   nim: "meta/muse-glimmer-30b",
   gemini: "gemini-3.8-flash",
+  pollinations: "openai-fast",
   "openai-compatible": "gpt-4o-mini",
 };
 
+/**
+ * True when the caller has not opted out of the keyless public fallback.
+ * Set AI_ALLOW_PUBLIC_FALLBACK=false|0 to force "none" (honest
+ * AI_NOT_CONFIGURED) when no key is configured.
+ */
+function publicFallbackAllowed(): boolean {
+  const raw = (env.AI_ALLOW_PUBLIC_FALLBACK ?? "").trim().toLowerCase();
+  return raw !== "false" && raw !== "0" && raw !== "off" && raw !== "no";
+}
+
 function configuredProvider(): AiProvider {
-  if (env.AI_PROVIDER === "nim" || env.AI_PROVIDER === "gemini") return env.AI_PROVIDER;
+  if (
+    env.AI_PROVIDER === "nim" ||
+    env.AI_PROVIDER === "gemini" ||
+    env.AI_PROVIDER === "pollinations"
+  ) {
+    return env.AI_PROVIDER;
+  }
   if (env.AI_API_KEY && env.AI_API_BASE) return "openai-compatible";
   return "none";
 }
 
 export function aiProvider(): AiProvider {
-  let p = configuredProvider();
-  // nim/gemini still require a key; without one we report "none" so the app
-  // stays honest (AI_NOT_CONFIGURED) instead of pretending to be live.
-  if (p !== "none" && !env.AI_API_KEY) return "none";
-  if (p !== "none") return p;
-  if (!env.AI_API_KEY) return "none";
-  // Auto-infer common free providers if a key is present but provider not set
-  // Gemini: Google AI Studio keys often look like AIzaSy...
-  if (/^AIza[0-9A-Za-z_-]{35}$/.test(env.AI_API_KEY)) return "gemini";
-  // Groq keys often start gsk_
-  if (env.AI_API_KEY.startsWith("gsk_")) return "openai-compatible";
-  // NVIDIA NIM keys nvapi-*
-  if (env.AI_API_KEY.startsWith("nvapi-")) return "nim";
-  // OpenRouter sk-or-v1-*
-  if (env.AI_API_KEY.startsWith("sk-or-v1-")) return "openai-compatible";
-  // Default: try Gemini first for "free api" case unless explicitly configured
-  return env.AI_PROVIDER === "openai-compatible" ? "openai-compatible" : "gemini";
+  const configured = configuredProvider();
+  // A keyless public provider is honoured as soon as it is named.
+  if (configured === "pollinations") return "pollinations";
+  // Keyed providers still require a key; without one we report "none" so the
+  // app stays honest (AI_NOT_CONFIGURED) instead of pretending to be live.
+  if (configured !== "none") return env.AI_API_KEY ? configured : "none";
+  if (env.AI_API_KEY) {
+    // Auto-infer common free providers if a key is present but provider not set
+    // Gemini: Google AI Studio keys often look like AIzaSy...
+    if (/^AIza[0-9A-Za-z_-]{35}$/.test(env.AI_API_KEY)) return "gemini";
+    // Groq keys often start gsk_
+    if (env.AI_API_KEY.startsWith("gsk_")) return "openai-compatible";
+    // NVIDIA NIM keys nvapi-*
+    if (env.AI_API_KEY.startsWith("nvapi-")) return "nim";
+    // OpenRouter sk-or-v1-*
+    if (env.AI_API_KEY.startsWith("sk-or-v1-")) return "openai-compatible";
+    // Default: try Gemini first for "free api" case unless explicitly configured
+    return env.AI_PROVIDER === "openai-compatible" ? "openai-compatible" : "gemini";
+  }
+  // No key at all: fall back to the keyless public endpoint so the assistant
+  // still works out of the box, unless the operator disabled it.
+  return publicFallbackAllowed() ? "pollinations" : "none";
 }
 
 export function aiBaseUrl(): string {
@@ -188,10 +211,14 @@ async function postCompletion(
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
+    const reqHeaders: Record<string, string> = { "Content-Type": "application/json" };
+    // Keyless public providers reject/ignore an Authorization header, and a
+    // literal "Bearer undefined" has broken some upstreams.
+    if (env.AI_API_KEY) reqHeaders.Authorization = `Bearer ${env.AI_API_KEY}`;
     const res = await fetch(`${aiBaseUrl()}/chat/completions`, {
       method: "POST",
       signal: ctrl.signal,
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${env.AI_API_KEY}` },
+      headers: reqHeaders,
       body: JSON.stringify(payload),
     });
     if (!res.ok) {

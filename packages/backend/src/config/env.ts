@@ -298,26 +298,32 @@ const envSchema = z.object({
   // freeze stays on) rather than opening deletion by accident.
   SELF_DELETION_FROZEN_UNTIL: z.string().optional(),
 
-  // AI gateway — all optional. Without AI_API_BASE + AI_API_KEY the LLM
-  // features honestly report AI_NOT_CONFIGURED; rules-based AI (matching,
-  // safety flags, assistant router, admin summary) works without any key.
+  // AI gateway — all optional. With no key, the assistant falls back to a
+  // keyless public provider (pollinations) so it works out of the box; set
+  // AI_ALLOW_PUBLIC_FALLBACK=false to require a real key instead.
+  // Rules-based AI (matching, safety flags, assistant router, admin summary)
+  // works without any provider at all.
   //
-  // AI_PROVIDER: "openai-compatible" (default) | "nim" | "gemini".
+  // AI_PROVIDER: "openai-compatible" (default) | "nim" | "gemini" | "pollinations".
   //   "nim"    -> NVIDIA NIM free tier (https://integrate.api.nvidia.com/v1).
   //              Hosts open-weight models for $0 (e.g. meta/muse-glimmer-30b).
   //              Sign up at build.nvidia.com — free dev API key, no card.
   //   "gemini" -> Google AI Studio free tier
   //              (https://generativelanguage.googleapis.com/v1beta/openai/).
   //              Free key at aistudio.google.com/apikey (US-only data policy).
+  //   "pollinations" -> keyless public fallback
+  //              (https://text.pollinations.ai/openai), used automatically
+  //              when no key is configured.
   //   "openai-compatible" -> any other /chat/completions endpoint.
   // When AI_PROVIDER is "nim" or "gemini", AI_API_BASE is optional (the
   // provider's well-known base URL is assumed) and AI_MODEL falls back to the
   // provider's flagship model (meta/muse-glimmer-30b / gemini-3.8-flash).
-  AI_PROVIDER: z.enum(["openai-compatible", "nim", "gemini"]).optional(),
+  AI_PROVIDER: z.enum(["openai-compatible", "nim", "gemini", "pollinations"]).optional(),
   AI_API_BASE: z.string().optional(),
   AI_API_KEY: z.string().optional(),
   AI_MODEL: z.string().optional(),
   AI_USER_QUOTA_PER_HOUR: z.string().optional(),
+  AI_ALLOW_PUBLIC_FALLBACK: z.string().optional(),
 
   // Demo sandbox accounts (fenced: invisible to real users and vice versa).
   DEMO_USER_EMAIL: z.string().optional(),
