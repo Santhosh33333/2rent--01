@@ -13,9 +13,8 @@
  * gradient. Those are claims about activity that the API does not support, so
  * what is left instead is a real count of what the server returned.
  */
-import { CalendarDays, Download, Film, ShieldCheck, Users } from 'lucide-react';
+import { CalendarDays, Download, Film, ShieldCheck, Sparkles, Users } from 'lucide-react';
 import { PLAY_STORE_URL } from '../../../lib/appLinks';
-import { HeroVideoPlayer } from '../components/HeroVideoPlayer';
 import { Backdrop } from '../components/Backdrop';
 import { Brand } from '../components/SiteChrome';
 import {
@@ -124,11 +123,47 @@ export function HeroSection({ plans, signedIn }: HeroProps) {
           ) : null}
         </div>
 
-        {/* The hero video. Replaces the old phone mock: the landing spec calls for
-            a presenter video as the hero visual, and the real-event rows it used
-            to show still appear in the Events section below. */}
-        <div className="nb-stage nb-rv" aria-hidden="false">
-          <HeroVideoPlayer />
+        {/* Phone mock (restored) instead of video. */}
+        <div className="nb-stage nb-rv" aria-hidden="true">
+          <div className="nb-phone">
+            <div className="nb-phone-back" />
+            <div className="nb-phone-side" />
+            <div className="nb-phone-side nb-phone-side--left" />
+            <div className="nb-phone-frame">
+              <div className="nb-notch" />
+              <div className="nb-screen">
+                <Brand size={20} />
+                <h3>Nearby on Nabri</h3>
+                <p className="nb-screen-tag">Live feed</p>
+                <div style={{ width: '100%', marginTop: 8 }}>
+                  <div className="nb-mini">
+                    <span className="nb-mini-av">NB</span>
+                    <span style={{ minWidth: 0 }}>
+                      <b>Real events nearby</b>
+                      <small>See what is happening now</small>
+                    </span>
+                  </div>
+                  <div className="nb-mini">
+                    <span className="nb-mini-av">NB</span>
+                    <span style={{ minWidth: 0 }}>
+                      <b>Meet people</b>
+                      <small>Dating · Communities · Groups</small>
+                    </span>
+                  </div>
+                  <div className="nb-mini">
+                    <span className="nb-mini-av">NB</span>
+                    <span style={{ minWidth: 0 }}>
+                      <b>Discover experiences</b>
+                      <small>Sports · Activities · Travel</small>
+                    </span>
+                  </div>
+                </div>
+                <span className="nb-pill">
+                  <Sparkles aria-hidden="true" style={{ width: 14, height: 14 }} /> Browse all
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </section>
