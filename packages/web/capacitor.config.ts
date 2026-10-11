@@ -21,6 +21,12 @@ const config: CapacitorConfig = {
       style: 'DARK',
       backgroundColor: '#6366f1',
     },
+    SystemBars: {
+      // index.html already declares `viewport-fit=cover`; telling the built-in
+      // SystemBars plugin up front avoids the one-frame layout shift it would
+      // otherwise produce while reading the meta tag after page commit.
+      initialViewportFitValueHint: 'cover',
+    },
     Keyboard: {
       resize: 'body',
       style: 'DARK',

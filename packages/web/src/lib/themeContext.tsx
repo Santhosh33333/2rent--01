@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import { syncStatusBar } from './systemBars'
 
 type Theme = 'light' | 'dark'
 export type Accent = 'navy' | 'coral' | 'indigo' | 'emerald' | 'rose' | 'amber' | 'sky'
@@ -49,6 +50,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     const isDark = theme === 'dark'
     document.documentElement.classList.toggle('dark', isDark)
     localStorage.setItem('theme', theme)
+    // Match the Android status-bar icons to the app theme (see systemBars.ts).
+    void syncStatusBar(theme)
   }, [theme])
 
   useEffect(() => {
