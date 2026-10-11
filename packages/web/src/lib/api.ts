@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { compressImageFile, isLargeUncompressedImage } from './imageCompress'
 import type {
   PaginationParams,
   BookingCreateInput,
@@ -56,6 +57,34 @@ api.interceptors.request.use(
     if (['post', 'put', 'patch'].includes(config.method ?? '') && !config.headers['X-Idempotency-Key']) {
       config.headers['X-Idempotency-Key'] = generateIdempotencyKey()
     }
+    return config
+  },
+  (error) => Promise.reject(error)
+)
+
+// Central image downscale for multipart uploads.
+//
+// Several forms (KYC documents, chat photos, payment proofs) append the file
+// straight from the picker. A modern phone camera produces 5-12 MB stills and
+// the server caps uploads at 5 MB (10 MB for chat), so those picks failed with
+// an opaque "upload failed". Resizing here fixes every current and future
+// image upload in one place instead of at each of the dozen call sites.
+api.interceptors.request.use(
+  async (config) => {
+    const body = config.data
+    if (typeof FormData === 'undefined' || !(body instanceof FormData)) return config
+    const entries = Array.from(body.entries())
+    if (!entries.some(([, value]) => isLargeUncompressedImage(value))) return config
+    const compressed = new FormData()
+    for (const [key, value] of entries) {
+      if (isLargeUncompressedImage(value)) {
+        const shrunk = await compressImageFile(value)
+        compressed.append(key, shrunk, shrunk.name || 'photo.jpg')
+      } else {
+        compressed.append(key, value)
+      }
+    }
+    config.data = compressed
     return config
   },
   (error) => Promise.reject(error)

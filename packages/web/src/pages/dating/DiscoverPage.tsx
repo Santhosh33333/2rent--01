@@ -32,6 +32,31 @@ import { MatchSongPrompt } from '../landing/components/MusicToggle'
 
 const SWIPE_DISTANCE = 110
 
+/**
+ * Who the viewer wants to see. This is a lasting preference rather than a
+ * one-off filter, so it is stored locally and applied to every feed request.
+ * The previous build had no way at all to narrow the deck by gender - the
+ * request simply never sent one - so a user who wanted to see only men or only
+ * women still got everybody.
+ */
+export type ShowMe = 'everyone' | 'MALE' | 'FEMALE'
+const SHOW_ME_KEY = 'dating.showMe'
+const SHOW_ME_OPTIONS: { value: ShowMe; label: string }[] = [
+  { value: 'everyone', label: 'Everyone' },
+  { value: 'FEMALE', label: 'Women' },
+  { value: 'MALE', label: 'Men' },
+]
+
+function readShowMe(): ShowMe {
+  try {
+    const stored = localStorage.getItem(SHOW_ME_KEY)
+    if (stored === 'MALE' || stored === 'FEMALE') return stored
+  } catch {
+    // Private mode / storage disabled: fall through to the default.
+  }
+  return 'everyone'
+}
+
 export function DiscoverPage() {
   const navigate = useNavigate()
   const reduce = useReducedMotion()
@@ -50,6 +75,8 @@ export function DiscoverPage() {
    * why the feed ignored everything the user had chosen.
    */
   const [filters, setFilters] = useState<DiscoverFilters>({})
+  /** Lasting "show me" preference; sent as the `gender` filter on every load. */
+  const [showMe, setShowMe] = useState<ShowMe>(readShowMe)
   const [showFilters, setShowFilters] = useState(false)
   /** Eligible candidates before the limit, so "no matches" reads differently to "5 shown". */
   const [totalEligible, setTotalEligible] = useState(0)
@@ -79,7 +106,10 @@ export function DiscoverPage() {
       setLoading(true)
       setError(null)
       try {
-        const page = await fetchDiscover(filters, signal)
+        const page = await fetchDiscover(
+          showMe === 'everyone' ? filters : { ...filters, gender: showMe },
+          signal,
+        )
         setQueue(page.results)
         setTotalEligible(page.totalEligible)
       } catch (e) {
@@ -89,7 +119,7 @@ export function DiscoverPage() {
         setLoading(false)
       }
     },
-    [filters],
+    [filters, showMe],
   )
 
   useEffect(() => {
@@ -106,6 +136,15 @@ export function DiscoverPage() {
   const clearFilters = useCallback(() => {
     setFilters({})
     setShowFilters(false)
+  }, [])
+
+  const changeShowMe = useCallback((next: ShowMe) => {
+    setShowMe(next)
+    try {
+      localStorage.setItem(SHOW_ME_KEY, next)
+    } catch {
+      // Non-fatal: the choice still applies for this session.
+    }
   }, [])
 
   const resetOffsets = useCallback(() => {
@@ -240,6 +279,28 @@ export function DiscoverPage() {
         </div>
       </header>
 
+      {/* Always visible: who you want to see is a lasting choice, not a one-off
+          filter, and it was previously impossible to set at all. */}
+      <div className="relative z-10 mx-auto max-w-md px-4 pb-2">
+        <div className="flex items-center gap-1 rounded-2xl border border-white/10 bg-white/5 p-1 backdrop-blur">
+          {SHOW_ME_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => changeShowMe(opt.value)}
+              aria-pressed={showMe === opt.value}
+              className={`flex-1 rounded-xl px-3 py-2 text-sm font-medium transition active:scale-95 ${
+                showMe === opt.value
+                  ? 'bg-primary-500 text-white shadow'
+                  : 'text-white/70 hover:bg-white/10'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {showFilters && (
         <div className="relative z-10 mx-auto max-w-md px-4 pb-4">
           <div className="rounded-3xl border border-white/10 bg-white/5 p-4 backdrop-blur">
@@ -344,17 +405,22 @@ export function DiscoverPage() {
               <p className="mt-1 text-sm text-white/60">
                 {activeFilterCount > 0
                   ? 'Nobody matches these filters. Try widening them.'
-                  : 'Check back later, or widen your saved preferences.'}
+                  : showMe !== 'everyone'
+                    ? `No ${showMe === 'MALE' ? 'men' : 'women'} to show right now.`
+                    : 'Check back later, or widen your saved preferences.'}
               </p>
             </div>
             <div className="flex flex-wrap justify-center gap-3">
-              {activeFilterCount > 0 ? (
+              {activeFilterCount > 0 || showMe !== 'everyone' ? (
                 <button
                   type="button"
-                  onClick={clearFilters}
+                  onClick={() => {
+                    clearFilters()
+                    changeShowMe('everyone')
+                  }}
                   className="rounded-full border border-white/20 px-6 py-3 text-sm font-medium text-white/80 transition hover:bg-white/5 active:scale-95"
                 >
-                  Clear these filters
+                  {activeFilterCount > 0 ? 'Clear these filters' : 'Show everyone'}
                 </button>
               ) : (
                 <button

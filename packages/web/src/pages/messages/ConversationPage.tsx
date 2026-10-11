@@ -482,7 +482,13 @@ export function ConversationPage() {
     setUploading(true)
     try {
       const form = new FormData()
-      form.append('file', file)
+      // Give the file a safe extension. The chat upload endpoint allowlists by
+      // extension, and Android's document picker sometimes hands back a name
+      // with none, so picking a perfectly good photo failed as an "unsupported
+      // file type". The central compressor (lib/imageCompress.ts) also shrinks
+      // oversized camera stills before this request leaves the client.
+      const ext = (file.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg')
+      form.append('file', file, kind === 'IMAGE' ? `chat.${ext}` : file.name)
       const up = await api.post('/messages/upload', form, { headers: { 'Content-Type': 'multipart/form-data' } })
       const mediaUrl = up.data?.data?.mediaUrl || up.data?.mediaUrl
       if (!mediaUrl) throw new Error('Upload failed')

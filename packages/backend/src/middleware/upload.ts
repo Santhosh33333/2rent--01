@@ -7,14 +7,36 @@ import { blobStorageEngine } from "./blobUpload";
 const storage = blobStorageEngine("public");
 const privateStorage = blobStorageEngine("private");
 
-const imageFilter = (_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
-  const allowed = /jpeg|jpg|png|webp|gif/;
+const IMAGE_EXT_BY_MIME: Record<string, string> = {
+  "image/jpeg": ".jpg",
+  "image/jpg": ".jpg",
+  "image/pjpeg": ".jpg",
+  "image/png": ".png",
+  "image/webp": ".webp",
+  "image/gif": ".gif",
+};
+
+// Accept a picked image when EITHER the filename extension or the MIME type is
+// a known image type. The old test required both, but Android's Capacitor
+// WebView frequently hands back a picked photo with a generic
+// `application/octet-stream` (or empty) MIME, so a perfectly valid image was
+// rejected as "only image files are allowed" - which read to users as "photo
+// upload is broken". When the name has no image extension but the MIME does,
+// the name is normalised so the stored blob keeps a servable extension.
+// Exported for unit testing.
+export const imageFilter = (_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
   const ext = path.extname(file.originalname).toLowerCase();
-  if (allowed.test(ext) && allowed.test(file.mimetype)) {
+  if (/jpeg|jpg|png|webp|gif/.test(ext)) {
     cb(null, true);
-  } else {
-    cb(new Error("Only image files are allowed (jpeg, jpg, png, webp, gif)."));
+    return;
   }
+  const mimeExt = IMAGE_EXT_BY_MIME[(file.mimetype || "").toLowerCase()];
+  if (mimeExt) {
+    file.originalname = `${file.originalname || "image"}${mimeExt}`;
+    cb(null, true);
+    return;
+  }
+  cb(new Error("Only image files are allowed (jpeg, jpg, png, webp, gif)."));
 };
 
 export const upload = multer({
