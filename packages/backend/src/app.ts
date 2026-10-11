@@ -9,6 +9,8 @@ import http from "http";
 
 import { env } from "./config/env";
 import { prisma } from "./config/database";
+import { getFirebaseAuth } from "./services/firebaseAuthService";
+import { isPushEnabled } from "./services/notificationService";
 import { generalRateLimiter } from "./middleware/rateLimiter";
 import { requireDocumentAccess } from "./middleware/fileAccess";
 import { blobFileHandler } from "./middleware/blobHandler";
@@ -162,7 +164,20 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
   });
 
   app.get("/health", (_req: Request, res: Response) => {
-    res.status(200).json({ success: true, data: { status: "ok", timestamp: new Date().toISOString() } });
+    res.status(200).json({
+      success: true,
+      data: {
+        status: "ok",
+        timestamp: new Date().toISOString(),
+        // Non-secret readiness flags. Both are false when
+        // FIREBASE_SERVICE_ACCOUNT is unset, which silently disables push and
+        // Firebase Auth — the exact misconfiguration this makes visible.
+        features: {
+          firebaseAuth: !!getFirebaseAuth(),
+          pushNotifications: isPushEnabled(),
+        },
+      },
+    });
   });
 
   // Public DB-liveness probe. Unlike /health (which never touches the DB),

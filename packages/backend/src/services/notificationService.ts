@@ -18,6 +18,14 @@ export function initializeFirebase(): void {
   }
 }
 
+/**
+ * Whether push is actually wired up in this process. Reported by the health
+ * probe so a missing or malformed credential is visible without reading logs.
+ */
+export function isPushEnabled(): boolean {
+  return firebaseApp !== null;
+}
+
 export async function sendPushNotification(
   userId: string,
   title: string,
