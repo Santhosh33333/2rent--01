@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, Navigate, useSearchParams } from 'react-router-dom'
 import { MessageCircle, Search, ChevronRight, Clock, Phone } from 'lucide-react'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
@@ -73,6 +73,12 @@ export function MessagesPage() {
   const { user } = useAuth()
   const myId = user?.id
   const { on } = useSocket({ autoConnect: true })
+  // Discovery cards ("Message <name>") link to `/messages?user=<id>`. That param
+  // used to be ignored, so tapping the button landed on the conversation LIST
+  // with nothing open — it read as "chat does not open". Forward it to the
+  // thread route, which handles a brand-new (empty) conversation too.
+  const [searchParams] = useSearchParams()
+  const targetUserId = searchParams.get('user')
 
   // Recent calls, so a missed call can be returned without leaving the app.
   // The API returns identities only - never phone numbers.
@@ -157,6 +163,10 @@ export function MessagesPage() {
 
   const filtered = conversations.filter(c => c.partnerName.toLowerCase().includes(search.toLowerCase()))
   const unreadCount = conversations.filter(c => c.unreadCount > 0).length
+
+  if (targetUserId && targetUserId !== 'undefined' && targetUserId !== 'null') {
+    return <Navigate to={`/messages/${targetUserId}`} replace />
+  }
 
   if (loading) {
     return (
