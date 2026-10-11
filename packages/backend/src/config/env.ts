@@ -197,7 +197,14 @@ const envSchema = z.object({
   TURN_URL: z.string().optional(),
   TURN_USERNAME: z.string().optional(),
   TURN_CREDENTIAL: z.string().optional(),
+  // TURN REST API shared secret (coturn `use-auth-secret`, Metered static auth,
+  // etc.). When set alongside TURN_URL the server mints SHORT-LIVED per-request
+  // credentials instead of using fixed TURN_USERNAME / TURN_CREDENTIAL, so no
+  // reusable relay password ever reaches a client. Takes precedence over those
+  // fixed values when both are present.
+  TURN_SECRET: z.string().optional(),
   // Lifetime (seconds) requested when minting Twilio NTS credentials, 60..86400.
+  // Also the lifetime of TURN REST API credentials when TURN_SECRET is used.
   TURN_TTL_SECONDS: z.string().optional(),
 
   // SMS (MSG91) — optional. Free account needs just the auth key from

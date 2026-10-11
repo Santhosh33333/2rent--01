@@ -6,6 +6,7 @@ const mockEnv = vi.hoisted(() => ({
   TURN_URL: undefined as string | undefined,
   TURN_USERNAME: undefined as string | undefined,
   TURN_CREDENTIAL: undefined as string | undefined,
+  TURN_SECRET: undefined as string | undefined,
   TURN_TTL_SECONDS: undefined as string | undefined,
   TWILIO_ACCOUNT_SID: undefined as string | undefined,
   TWILIO_AUTH_TOKEN: undefined as string | undefined,
@@ -13,12 +14,14 @@ const mockEnv = vi.hoisted(() => ({
 
 vi.mock('../config/env', () => ({ env: mockEnv }));
 
+import crypto from 'crypto';
 import { getIceConfig, resetIceCache } from '../services/iceService';
 
 function resetEnv() {
   mockEnv.TURN_URL = undefined;
   mockEnv.TURN_USERNAME = undefined;
   mockEnv.TURN_CREDENTIAL = undefined;
+  mockEnv.TURN_SECRET = undefined;
   mockEnv.TURN_TTL_SECONDS = undefined;
   mockEnv.TWILIO_ACCOUNT_SID = undefined;
   mockEnv.TWILIO_AUTH_TOKEN = undefined;
@@ -55,6 +58,32 @@ describe('ICE server resolution', () => {
     const relay = config.iceServers.find((s) => String(s.urls).includes('relay.example.com'));
     expect(relay).toMatchObject({ username: 'nabri', credential: 'secret' });
     expect(flattenUrls(config)).not.toContain('openrelay.metered.ca');
+  });
+
+  it('mints short-lived TURN REST credentials when only TURN_SECRET is set', async () => {
+    mockEnv.TURN_URL = 'turn:staticauth.openrelay.metered.ca:80';
+    mockEnv.TURN_SECRET = 'openrelayprojectsecret';
+    const config = await getIceConfig();
+    expect(config.source).toBe('env-turn');
+    const relay = config.iceServers.find((s) => String(s.urls).includes('staticauth.openrelay.metered.ca'));
+    expect(relay).toBeDefined();
+    expect(relay!.username).toMatch(/^\d+:nabri$/);
+    expect(relay!.credential).toBe(
+      crypto.createHmac('sha1', 'openrelayprojectsecret').update(relay!.username as string).digest('base64'),
+    );
+  });
+
+  it('public fallback offers a rotating credential alongside the legacy relay', async () => {
+    const config = await getIceConfig();
+    expect(config.source).toBe('public-relay');
+    const urls = flattenUrls(config);
+    expect(urls).toContain('openrelay.metered.ca');
+    expect(urls).toContain('staticauth.openrelay.metered.ca');
+    const rest = config.iceServers.find((s) => String(s.urls).includes('staticauth.openrelay.metered.ca'))!;
+    expect(rest.username).toMatch(/^\d+:nabri$/);
+    expect(rest.credential).toBe(
+      crypto.createHmac('sha1', 'openrelayprojectsecret').update(rest.username as string).digest('base64'),
+    );
   });
 
   it('mints short-lived Twilio credentials when a real account is configured', async () => {

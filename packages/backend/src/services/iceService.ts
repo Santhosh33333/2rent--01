@@ -8,7 +8,10 @@
 // through environment variables without rebuilding and re-shipping the app.
 //
 // Resolution order (first match wins):
-//   1. A static TURN server from env: TURN_URL / TURN_USERNAME / TURN_CREDENTIAL.
+//   1. A TURN server from env, either:
+//        a. TURN_URL + TURN_USERNAME / TURN_CREDENTIAL (fixed long-term creds), or
+//        b. TURN_URL + TURN_SECRET (TURN REST API / coturn `use-auth-secret`,
+//           where the server mints a fresh short-lived credential per request).
 //      Works with any provider (Metered, Cloudflare, Twilio, self-hosted coturn).
 //   2. Twilio Network Traversal Service: short-lived credentials minted from
 //      TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN. Only used when those look real.
@@ -16,6 +19,7 @@
 //
 // Credentials are served at runtime (never baked into the web bundle), so they
 // are not scrapable from the shipped JavaScript.
+import crypto from "crypto";
 import { env } from "../config/env";
 
 export interface IceServerConfig {
@@ -39,9 +43,14 @@ const STUN_SERVERS: IceServerConfig[] = [
   { urls: ["stun:stun.cloudflare.com:3478"] },
 ];
 
-// Public Metered "Open Relay" project. It needs no account and keeps calls
-// working out of the box, but it is shared and rate-limited, so a dedicated
-// relay should be configured for production traffic.
+// The public Metered "Open Relay" project keeps calls working with no setup.
+// It is shared and rate-limited, so a dedicated relay is still recommended for
+// production traffic. Two entries are offered:
+//   * the legacy fixed-credential endpoint, and
+//   * the same project's TURN REST API endpoint, which accepts short-lived
+//     credentials derived from its published shared secret.
+// Both are handed to every client, so a failure of either one still leaves the
+// other (and STUN) available while ICE gathers candidates.
 const PUBLIC_FALLBACK_TURN: IceServerConfig = {
   urls: [
     "turn:openrelay.metered.ca:80",
@@ -52,6 +61,18 @@ const PUBLIC_FALLBACK_TURN: IceServerConfig = {
   username: "openrelayproject",
   credential: "openrelayproject",
 };
+
+// Published, intentionally public shared secret for the free Open Relay project.
+// It is not a private credential: anyone can read it from Metered's docs. Using
+// it lets the fallback mint rotating credentials, which is better than shipping
+// the single shared password to every client.
+const PUBLIC_OPENRELAY_SECRET = "openrelayprojectsecret";
+const PUBLIC_FALLBACK_TURN_REST_URLS = [
+  "turn:staticauth.openrelay.metered.ca:80",
+  "turn:staticauth.openrelay.metered.ca:443",
+  "turn:staticauth.openrelay.metered.ca:443?transport=tcp",
+  "turns:staticauth.openrelay.metered.ca:443?transport=tcp",
+];
 
 const DEFAULT_TURN_TTL_SECONDS = 3600;
 const STATIC_CACHE_SECONDS = 3600;
@@ -71,6 +92,27 @@ function turnTtlSeconds(): number {
   if (!Number.isFinite(parsed)) return DEFAULT_TURN_TTL_SECONDS;
   // Twilio's NTS accepts 60s..86400s; clamp to that window.
   return Math.min(86400, Math.max(60, Math.floor(parsed)));
+}
+
+/**
+ * Mint a TURN REST API credential — the scheme coturn exposes with
+ * `use-auth-secret` and Metered's static auth uses. The username encodes an
+ * expiry timestamp and the credential is base64(HMAC-SHA1(secret, username)),
+ * which the relay validates without ever storing a password.
+ */
+function mintTurnRestCredential(secret: string): { username: string; credential: string } {
+  const expiry = Math.floor(Date.now() / 1000) + turnTtlSeconds();
+  const username = `${expiry}:nabri`;
+  const credential = crypto.createHmac("sha1", secret).update(username).digest("base64");
+  return { username, credential };
+}
+
+/** Servers used when nothing is configured: the two public relays. */
+function publicFallbackTurn(): IceServerConfig[] {
+  return [
+    PUBLIC_FALLBACK_TURN,
+    { urls: PUBLIC_FALLBACK_TURN_REST_URLS, ...mintTurnRestCredential(PUBLIC_OPENRELAY_SECRET) },
+  ];
 }
 
 /**
@@ -119,7 +161,8 @@ async function mintTwilioTurn(): Promise<IceServerConfig[]> {
 
 /**
  * Decide which relay to hand to clients. Returns the config plus how long it
- * may be cached (Twilio credentials expire, so that window is shorter).
+ * may be cached — short-lived credentials (Twilio NTS, TURN REST API) expire, so
+ * their cache window is kept shorter than their lifetime.
  */
 async function resolveIceConfig(): Promise<{ config: IceConfig; cacheSeconds: number }> {
   let turn: IceServerConfig[] = [];
@@ -129,13 +172,20 @@ async function resolveIceConfig(): Promise<{ config: IceConfig; cacheSeconds: nu
   // 1) Operator-provided TURN (any provider) wins — most explicit, most trusted.
   const staticUrls = splitUrls(env.TURN_URL);
   if (staticUrls.length > 0) {
-    turn = [
-      {
-        urls: staticUrls,
-        username: env.TURN_USERNAME || undefined,
-        credential: env.TURN_CREDENTIAL || undefined,
-      },
-    ];
+    if (env.TURN_SECRET) {
+      // TURN REST API: mint a fresh short-lived credential instead of using a
+      // stored password. Refresh before it expires.
+      turn = [{ urls: staticUrls, ...mintTurnRestCredential(env.TURN_SECRET) }];
+      cacheSeconds = Math.max(60, turnTtlSeconds() - 300);
+    } else {
+      turn = [
+        {
+          urls: staticUrls,
+          username: env.TURN_USERNAME || undefined,
+          credential: env.TURN_CREDENTIAL || undefined,
+        },
+      ];
+    }
     source = "env-turn";
   }
 
@@ -153,8 +203,11 @@ async function resolveIceConfig(): Promise<{ config: IceConfig; cacheSeconds: nu
 
   // 3) Public fallback relay so a call still connects with no configuration.
   if (turn.length === 0) {
-    turn = [PUBLIC_FALLBACK_TURN];
+    turn = publicFallbackTurn();
     source = "public-relay";
+    // The REST-API fallback credential also expires, so keep its cache window
+    // inside the credential lifetime.
+    cacheSeconds = Math.max(60, Math.min(STATIC_CACHE_SECONDS, turnTtlSeconds() - 300));
   }
 
   return {

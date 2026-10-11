@@ -86,23 +86,35 @@ Android bundle, and the credentials never ship in the JavaScript.
 
 Resolution order on the server (`packages/backend/src/services/iceService.ts`):
 
-1. `TURN_URL` (+ `TURN_USERNAME` / `TURN_CREDENTIAL`) — any provider: Metered,
-   Cloudflare Calls TURN, Twilio NTS, or a self-hosted coturn. Comma/space
-   separated list of `turn:` / `turns:` URLs.
+1. `TURN_URL` — any provider: Metered, Cloudflare Calls TURN, Twilio NTS, or a
+   self-hosted coturn. Comma/space separated list of `turn:` / `turns:` URLs.
+   Authenticate either with fixed `TURN_USERNAME` / `TURN_CREDENTIAL`, or — better
+   — with `TURN_SECRET`, the TURN REST API shared secret (coturn
+   `use-auth-secret`). With a secret the server mints a fresh short-lived
+   credential per fetch, so no reusable relay password ever reaches a client.
+   `TURN_SECRET` takes precedence if both are set.
 2. Twilio Network Traversal Service — short-lived credentials minted from a
    **real** `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN`. Skipped when those look
    like the `.env` placeholders, so a half-configured environment is never
    mistaken for a working relay.
 3. A public Metered "Open Relay" relay — keeps calls working with no setup, but
-   it is shared and rate-limited.
+   it is shared and rate-limited. It is offered both as a fixed-credential server
+   and as a TURN REST API server using Metered's published free secret, so the
+   fallback rotates credentials too.
 
 To add a dedicated relay, set on the Render service and redeploy:
 
 ```
+# Option A — fixed credentials (any provider):
 TURN_URL=turn:relay.example.com:3478,turns:relay.example.com:443?transport=tcp
 TURN_USERNAME=nabri
 TURN_CREDENTIAL=<shared secret>
-# optional, only used when minting Twilio NTS credentials:
+
+# Option B — TURN REST API (coturn use-auth-secret / Metered static auth):
+# TURN_URL=turn:staticauth.openrelay.metered.ca:80,turn:staticauth.openrelay.metered.ca:443,turns:staticauth.openrelay.metered.ca:443?transport=tcp
+# TURN_SECRET=<rest-api shared secret>
+
+# optional: credential lifetime in seconds (Twilio NTS and TURN REST API), 60..86400
 # TURN_TTL_SECONDS=3600
 ```
 
