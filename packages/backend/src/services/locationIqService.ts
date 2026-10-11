@@ -66,6 +66,20 @@ interface AutocompleteResult {
   lat: number;
   lon: number;
   displayName: string;
+  address?: {
+    houseNumber?: string;
+    road?: string;
+    neighbourhood?: string;
+    suburb?: string;
+    city?: string;
+    town?: string;
+    village?: string;
+    county?: string;
+    state?: string;
+    postcode?: string;
+    country?: string;
+    countryCode?: string;
+  };
   type: string;
   importance: number;
 }
@@ -389,6 +403,7 @@ export async function autocomplete(
       lat: parseFloat(x.lat),
       lon: parseFloat(x.lon),
       displayName: x.display_name,
+      address: nominatimAddress(x.address),
       type: x.type,
       importance: x.importance ?? 0,
     }));
@@ -420,6 +435,20 @@ export async function autocomplete(
     lat: parseFloat(r.lat),
     lon: parseFloat(r.lon),
     displayName: r.display_name,
+    address: r.address
+      ? {
+          houseNumber: r.address?.house_number,
+          road: r.address?.road,
+          neighbourhood: r.address?.neighbourhood,
+          suburb: r.address?.suburb,
+          city: r.address?.city || r.address?.town || r.address?.village,
+          county: r.address?.county,
+          state: r.address?.state,
+          postcode: r.address?.postcode,
+          country: r.address?.country,
+          countryCode: r.address?.country_code,
+        }
+      : undefined,
     type: r.type,
     importance: r.importance,
   }));

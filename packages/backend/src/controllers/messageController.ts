@@ -371,10 +371,15 @@ export async function getMessages(req: AuthedRequest, res: Response): Promise<vo
       convId = conv.id;
     }
 
-    const [items, total] = await Promise.all([
+    // Newest window first, then flip to chronological order for rendering.
+    // `asc` + skip/take returned the OLDEST `limit` rows, so a thread longer
+    // than 50 messages could never show its latest messages — and the client's
+    // 15s safety-net poll then overwrote the live socket appends with those
+    // stale rows. `desc` + reverse makes page 1 the newest window.
+    const [rows, total] = await Promise.all([
       prisma.message.findMany({
         where: { conversationId: convId },
-        orderBy: { createdAt: "asc" },
+        orderBy: { createdAt: "desc" },
         skip: (page - 1) * limit,
         take: limit,
         include: {
@@ -384,6 +389,7 @@ export async function getMessages(req: AuthedRequest, res: Response): Promise<vo
       }),
       prisma.message.count({ where: { conversationId: convId } }),
     ]);
+    const items = rows.reverse();
 
     // Delivery receipt: everything the reader has now seen moves SENT ->
     // DELIVERED (READ still requires the explicit markAsRead call). Notify

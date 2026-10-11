@@ -265,6 +265,8 @@ export function ProfileCompletionPage() {
                         <div>
                           <LocationInput
                             label="City"
+                            mode="city"
+                            maxLength={100}
                             value={watchedCity || ''}
                             onChange={(v) => setValue('city', v, { shouldValidate: true })}
                             placeholder="Your city"

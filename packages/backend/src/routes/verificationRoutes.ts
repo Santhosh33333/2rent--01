@@ -22,9 +22,9 @@ router.post(
     // rule and, critically, compares this against the number on the account, so
     // it must not be reduced to a format check here.
     body("phone").isString().trim().isLength({ min: 1, max: 20 }).withMessage("Mobile number is required"),
-    body("city").optional().isString().trim().isLength({ max: 100 }),
-    body("country").optional().isString().trim().isLength({ max: 100 }),
-    body("address").optional().isString().trim().isLength({ max: 500 }),
+    body("city").optional().isString().trim().isLength({ max: 100 }).withMessage("City must be 100 characters or less"),
+    body("country").optional().isString().trim().isLength({ max: 100 }).withMessage("Country must be 100 characters or less"),
+    body("address").optional().isString().trim().isLength({ max: 500 }).withMessage("Address must be 500 characters or less"),
   ],
   sanitizeInput,
   validateRequest,

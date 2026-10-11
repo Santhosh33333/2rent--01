@@ -403,15 +403,20 @@ export function useChat(conversationId: string) {
     [on]
   );
 
-  // Auto-join on mount
+  // Auto-join on mount, and again after every (re)connection. `emit` is a
+  // fire-and-forget no-op while the socket is down, so a user who opened the
+  // thread before the socket was ready (or lost it briefly) was never added to
+  // the room — typing indicators, presence and the room copy of new messages
+  // were silently lost even though direct delivery still worked, masking it.
   useEffect(() => {
-    if (conversationId) {
-      joinChat();
-    }
+    if (!conversationId) return;
+    joinChat();
+    const socket = globalSocket;
+    const rejoin = () => joinChat();
+    socket?.on('connect', rejoin);
     return () => {
-      if (conversationId) {
-        leaveChat();
-      }
+      socket?.off('connect', rejoin);
+      leaveChat();
     };
   }, [conversationId, joinChat, leaveChat]);
 

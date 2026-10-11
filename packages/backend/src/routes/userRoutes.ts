@@ -27,7 +27,7 @@ router.put(
     body("fullName").optional().notEmpty().trim().isLength({ min: 2, max: 100 }),
     body("dateOfBirth").optional().isISO8601({ strict: true, strictSeparator: true }),
     body("bio").optional().isString().trim().isLength({ max: 500 }),
-    body("city").optional().isString().trim().isLength({ max: 100 }),
+    body("city").optional().isString().trim().isLength({ max: 100 }).withMessage("City must be 100 characters or less"),
     body("country").optional().isString().trim().isLength({ max: 100 }),
     body("gender").optional().isIn(["MALE", "FEMALE", "OTHER"]),
   ],

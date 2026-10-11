@@ -4,12 +4,33 @@ import toast from 'react-hot-toast'
 import { api } from '../lib/api'
 import { useGeolocation, geoStatusMessage } from '../lib/geolocation'
 
+interface AddressParts {
+  neighbourhood?: string
+  suburb?: string
+  road?: string
+  city?: string
+  town?: string
+  village?: string
+  county?: string
+  state?: string
+  postcode?: string
+  country?: string
+}
+
 interface Suggestion {
   placeId: string
   lat: number
   lon: number
   displayName: string
+  address?: AddressParts
 }
+
+/**
+ * "city" collapses a place to its city name (used by profile setup, where the
+ * field really is a city). "address" keeps the street/suburb detail (used by
+ * event, booking and request locations).
+ */
+type LocationMode = 'address' | 'city'
 
 interface LocationInputProps {
   label: string
@@ -21,18 +42,83 @@ interface LocationInputProps {
   // When true (default) the field fills itself: fresh cache instantly,
   // otherwise the device GPS + reverse-geocode. Manual typing always wins.
   autoDetect?: boolean
+  mode?: LocationMode
+  // Hard ceiling for the string handed back to the form. The server rejects a
+  // city longer than 100 chars with a 422 "Invalid value", so a full
+  // reverse-geocoded address used to fail profile setup. Everything composed
+  // here is cut to this length on a comma boundary.
+  maxLength?: number
 }
 
 const LOCATION_CACHE_KEY = 'Sidebud-last-location'
 // A resolved place NAME stays valid far longer than a GPS fix: once we know
 // it, every location field reuses it silently instead of re-prompting.
 const LOCATION_CACHE_TTL_MS = 24 * 60 * 60 * 1000
+const DEFAULT_MAX_LENGTH = 100
 
 interface CachedLocation {
   lat: number
   lon: number
   displayName: string
+  city?: string
+  area?: string
   ts: number
+}
+
+function collapse(value: string): string {
+  return value.replace(/\s+/g, ' ').trim()
+}
+
+function looksLikeCoordinates(value: string | undefined | null): boolean {
+  return /^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(collapse(value || ''))
+}
+
+/**
+ * Cut a label to `limit` characters without slicing a word in half. The label
+ * is a comma-separated address, so whole segments are dropped from the end
+ * (e.g. "Ratna Nagar, Chennai, Tamil Nadu, 600035, India" -> the first
+ * segments that fit). A single over-long segment is hard-sliced as a last
+ * resort so the field is never empty.
+ */
+function cutToLimit(value: string, limit: number): string {
+  const clean = collapse(value)
+  if (clean.length <= limit) return clean
+  const parts = clean.split(',').map((p) => p.trim()).filter(Boolean)
+  let out = ''
+  for (const part of parts) {
+    const next = out ? `${out}, ${part}` : part
+    if (next.length > limit) break
+    out = next
+  }
+  return out || clean.slice(0, limit).trim()
+}
+
+/**
+ * Build a short, human-readable place label from a geocoder result.
+ *
+ * This is the fix for the profile-setup "value error": the reverse-geocoder
+ * returns a full display name (street, ward, zone, city, district, state,
+ * postcode, country) that easily exceeds the server's 100-char city limit, so
+ * saving the profile was rejected with 422 "Invalid value" — while a bare
+ * coordinate pair happened to fit and was accepted. A city is collapsed to the
+ * city name, and every other mode is collapsed to the useful address parts,
+ * all capped at `limit`.
+ */
+function composeLocation(
+  displayName: string | undefined,
+  address: AddressParts | undefined,
+  mode: LocationMode,
+  limit: number,
+): string {
+  const city = address?.city || address?.town || address?.village || address?.county
+  const area = address?.neighbourhood || address?.suburb
+  if (mode === 'city') {
+    const label = city || area || (displayName ? displayName.split(',')[0] : '')
+    return cutToLimit(label, limit)
+  }
+  const pieces = [address?.road, area, city, address?.state].filter(Boolean) as string[]
+  const label = pieces.length ? Array.from(new Set(pieces)).join(', ') : displayName || ''
+  return cutToLimit(label, limit)
 }
 
 function readCachedLocation(): CachedLocation | null {
@@ -47,15 +133,25 @@ function readCachedLocation(): CachedLocation | null {
   }
 }
 
-function writeCachedLocation(lat: number, lon: number, displayName: string) {
+function writeCachedLocation(lat: number, lon: number, displayName: string, city?: string, area?: string) {
   try {
-    localStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify({ lat, lon, displayName, ts: Date.now() }))
+    localStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify({ lat, lon, displayName, city, area, ts: Date.now() }))
   } catch {
     // storage unavailable (private mode) — detection still works per mount
   }
 }
 
-export function LocationInput({ label, value, onChange, placeholder, required, optional, autoDetect = true }: LocationInputProps) {
+export function LocationInput({
+  label,
+  value,
+  onChange,
+  placeholder,
+  required,
+  optional,
+  autoDetect = true,
+  mode = 'address',
+  maxLength = DEFAULT_MAX_LENGTH,
+}: LocationInputProps) {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const [open, setOpen] = useState(false)
   const [searching, setSearching] = useState(false)
@@ -101,61 +197,57 @@ export function LocationInput({ label, value, onChange, placeholder, required, o
       setSuggestions(results)
       setOpen(results.length > 0)
       setActiveIndex(-1)
-    } catch (err) {
-      // Autocomplete is best-effort, so manual entry has to keep working. The
-      // failure is still surfaced (a spinner that stops with no dropdown used
-      // to be indistinguishable from "no matches"), and the old suggestions are
-      // cleared so a stale list is never offered against a new query.
+    } catch {
       setSuggestions([])
       setOpen(false)
-      setSearchError(err instanceof Error ? err.message : 'Location lookup unavailable')
+      setSearchError('Place search is unavailable right now')
     } finally {
       setSearching(false)
     }
   }
 
-  const handleChange = (next: string) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const next = e.target.value
     onChange(next)
-    // Any keystroke supersedes a previous failure, so the message cannot sit
-    // under a field the user has already changed.
     setSearchError(null)
     clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => search(next), 400)
+    debounceRef.current = setTimeout(() => search(next), 300)
   }
 
   const pick = (s: Suggestion) => {
-    // Programmatic fills (pick, reverse-geocode, the cached location) call
-    // onChange directly and deliberately bypass handleChange, so they never
-    // schedule a search. An earlier skipNextSearch flag was meant to suppress
-    // that non-existent search, but it simply stayed set and swallowed the
-    // user's NEXT real query - which is why typing a location after the field
-    // auto-filled produced no suggestions at all.
-    onChange(s.displayName)
+    // A chosen suggestion replaces the raw typed text with a clean, short
+    // label so the value always fits the field it is written to.
+    onChange(composeLocation(s.displayName, s.address, mode, maxLength))
     setSuggestions([])
     setOpen(false)
     setSearchError(null)
   }
 
-  const resolveAndFill = async (lat: number, lon: number, silent: boolean) => {
+  const fillFromCoordinates = async (lat: number, lon: number, silent: boolean) => {
     setLocating(true)
     try {
-      const res = await api.get('/location/reverse', {
-        params: { lat, lon },
-      })
+      const res = await api.get('/location/reverse', { params: { lat, lon } })
       const result = res.data?.data?.result
-      const name =
-        result?.displayName && !String(result.displayName).startsWith(String(lat).slice(0, 5))
-          ? (result.displayName as string)
-          : (result?.displayName as string) || `${lat.toFixed(4)}, ${lon.toFixed(4)}`
+      const city = result?.address?.city || result?.address?.town || result?.address?.village || result?.address?.county
+      const area = result?.address?.neighbourhood || result?.address?.suburb
+      const label = composeLocation(result?.displayName, result?.address, mode, maxLength)
       setSearchError(null)
-      onChangeRef.current(name)
-      writeCachedLocation(lat, lon, name)
-      if (!silent) toast.success('Current location detected')
+      if (label) {
+        onChangeRef.current(label)
+        writeCachedLocation(lat, lon, label, city, area)
+        if (!silent) toast.success('Current location detected')
+      }
     } catch {
-      const fallback = `${lat.toFixed(4)}, ${lon.toFixed(4)}`
-      onChangeRef.current(fallback)
-      writeCachedLocation(lat, lon, fallback)
-      if (!silent) toast.success('Current location coordinates detected')
+      // A city field must never be filled with raw coordinates: that is the
+      // "location comes as a number" complaint. Ask the person to type instead.
+      if (mode === 'city') {
+        setSearchError('Could not read a place name for that location')
+      } else {
+        const fallback = `${lat.toFixed(4)}, ${lon.toFixed(4)}`
+        onChangeRef.current(fallback)
+        writeCachedLocation(lat, lon, fallback)
+        if (!silent) toast.success('Current location coordinates detected')
+      }
     } finally {
       setLocating(false)
     }
@@ -164,7 +256,7 @@ export function LocationInput({ label, value, onChange, placeholder, required, o
   useEffect(() => {
     if (!geo.fix || !wantFillRef.current || valueRef.current) return
     wantFillRef.current = false
-    resolveAndFill(geo.fix.lat, geo.fix.lon, true)
+    fillFromCoordinates(geo.fix.lat, geo.fix.lon, true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [geo.fix])
 
@@ -183,8 +275,17 @@ export function LocationInput({ label, value, onChange, placeholder, required, o
     if (valueRef.current) return
     const cached = readCachedLocation()
     if (cached) {
-      onChangeRef.current(cached.displayName)
-      return
+      // A cached coordinate pair is useless to a city field — re-resolve it
+      // rather than writing "13.0339" as the city.
+      if (!(mode === 'city' && looksLikeCoordinates(cached.displayName))) {
+        const label = mode === 'city'
+          ? cutToLimit(cached.city || cached.area || cached.displayName.split(',')[0] || '', maxLength)
+          : cutToLimit(cached.displayName, maxLength)
+        if (label) {
+          onChangeRef.current(label)
+          return
+        }
+      }
     }
     wantFillRef.current = true
     geo.requestFix()
@@ -217,11 +318,12 @@ export function LocationInput({ label, value, onChange, placeholder, required, o
         <input
           type="text"
           value={value}
-          onChange={(e) => handleChange(e.target.value)}
+          onChange={handleChange}
           onKeyDown={handleKeyDown}
           onFocus={() => suggestions.length > 0 && setOpen(true)}
           placeholder={placeholder}
           autoComplete="off"
+          maxLength={maxLength}
           className="input pl-12 pr-24 py-3.5"
         />
         <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">

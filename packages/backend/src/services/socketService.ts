@@ -681,8 +681,13 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
           timestamp: message.createdAt.toISOString(),
         };
 
-        // Broadcast to the chat room (both participants if joined) ...
-        io.to(`chat_${convId}`).emit("new_message", payload);
+        // Broadcast to the chat room EXCEPT the sender's own socket. `io.to`
+        // included the sender, so the sender received this as well as the
+        // "message_sent" ack below and the optimistic bubble was appended twice
+        // (the ack renames the temp id to the real id, leaving two bubbles with
+        // the same id). The sender still learns the result from the ack; its
+        // other devices/tabs are in the room and still receive this.
+        socket.to(`chat_${convId}`).emit("new_message", payload);
         // ... and push directly to the recipient so delivery works even if they
         // are not currently viewing this conversation (no silent drops).
         emitToUser(membership.receiverId, "new_message", payload);
