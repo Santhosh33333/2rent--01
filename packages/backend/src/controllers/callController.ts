@@ -16,13 +16,19 @@ export async function createCall(req: AuthedRequest, res: Response): Promise<voi
       sendError(res, "Receiver not found.", 404, "RECEIVER_NOT_FOUND");
       return;
     }
-    // Only people who share a booking, conversation or friendship may call.
+    // Any member may be called; only a block between the two refuses it.
     // Phone numbers play no part in authorising or placing the call.
     const permission = await canCall(req.user!.userId, receiverId);
     if (!permission.allowed) {
+      const message =
+        permission.reason === "SELF_CALL"
+          ? "You cannot call yourself."
+          : permission.reason === "NO_RECEIVER"
+            ? "That member is not available for calls."
+            : "You cannot call this person.";
       sendError(
         res,
-        "You can only call people you have interacted with on Nabri.",
+        message,
         403,
         permission.reason === "SELF_CALL" ? "INVALID_RECEIVER" : "CALL_NOT_ALLOWED"
       );

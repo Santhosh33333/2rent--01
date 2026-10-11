@@ -1,13 +1,17 @@
 import { Router } from "express";
 import { body } from "express-validator";
-import { authenticateToken, requireKycVerified } from "../middleware/auth";
+import { authenticateToken } from "../middleware/auth";
 import { sanitizeInput, validateRequest } from "../middleware/validation";
 import { requireReConsent } from "../middleware/legalConsent";
 import * as messageController from "../controllers/messageController";
 
 const router = Router();
 
-router.use(authenticateToken, requireKycVerified);
+// Messaging is open to every authenticated member. It previously required an
+// admin-approved KYC, so a brand-new account could not read or send a single
+// message until verification cleared and chat looked completely broken. Sending
+// into a *new* conversation is still gated below by requireReConsent.
+router.use(authenticateToken);
 
 // Send message (TEXT, or IMAGE/VOICE with a mediaUrl from POST /upload)
 router.post(

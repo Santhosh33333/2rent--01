@@ -85,6 +85,9 @@ function notifyIncomingCall(peer: CallPeer): void {
 // VITE_TURN_URL / VITE_TURN_USERNAME / VITE_TURN_CREDENTIAL.
 const ICE_SERVERS: RTCIceServer[] = [
   { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+  // A second, independent STUN provider: if one is unreachable (blocked DNS,
+  // regional outage) the other still yields the reflexive candidates.
+  { urls: ['stun:stun.cloudflare.com:3478'] },
 ];
 
 const turnUrl = import.meta.env.VITE_TURN_URL as string | undefined;
@@ -106,6 +109,7 @@ if (turnUrl) {
       'turn:openrelay.metered.ca:80',
       'turn:openrelay.metered.ca:443',
       'turn:openrelay.metered.ca:443?transport=tcp',
+      'turns:openrelay.metered.ca:443?transport=tcp',
     ],
     username: 'openrelayproject',
     credential: 'openrelayproject',
@@ -115,7 +119,7 @@ if (turnUrl) {
 const UNAVAILABLE_MESSAGES: Record<string, string> = {
   SELF_CALL: 'You cannot call yourself.',
   NO_RELATIONSHIP: 'You can only call people you have interacted with.',
-  FORBIDDEN: 'You are not allowed to make this call.',
+  FORBIDDEN: "You can't call this member.",
   NO_RECEIVER: 'This person is not available for calls.',
   CALL_GONE: 'This call already ended.',
   MEDIA_FAILED: 'The other person could not connect their microphone.',
@@ -513,19 +517,31 @@ export function useInAppCall(): InAppCall {
     return () => window.clearInterval(timer);
   }, [state]);
 
-  // An OUTGOING ring is dropped when the app is backgrounded: nobody is
-  // waiting on us, and holding the call open would leave the caller's mic
-  // warm indefinitely. An INCOMING ring must be kept, otherwise switching to
-  // another tab to check something cancels the call before the user can ever
-  // answer it - the exact reason "it only rings" happened in the first place.
+  // An OUTGOING ring is dropped only after the app stays backgrounded for a
+  // while. Ending it the moment the tab was hidden meant briefly switching apps
+  // or locking the screen mid-dial cancelled the call instantly, which read as
+  // "the call cuts off". A long absence still cleans up so the caller's mic is
+  // not left warm. An INCOMING ring is never cancelled here: checking another
+  // app must not kill a call the user has not answered yet.
   useEffect(() => {
     if (typeof document === 'undefined') return;
+    let hideTimer: number | undefined;
     const onVisibility = () => {
-      if (document.visibilityState !== 'hidden') return;
-      if (stateRef.current === 'calling') endCall();
+      if (document.visibilityState === 'hidden') {
+        if (stateRef.current !== 'calling') return;
+        hideTimer = window.setTimeout(() => {
+          if (stateRef.current === 'calling') endCall();
+        }, 20000);
+      } else if (hideTimer) {
+        window.clearTimeout(hideTimer);
+        hideTimer = undefined;
+      }
     };
     document.addEventListener('visibilitychange', onVisibility);
-    return () => document.removeEventListener('visibilitychange', onVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      if (hideTimer) window.clearTimeout(hideTimer);
+    };
   }, [endCall]);
 
   // Never leave a live microphone behind on sign-out.

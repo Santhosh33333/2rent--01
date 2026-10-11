@@ -65,6 +65,7 @@ async function ensureNotificationChannel(): Promise<void> {
 }
 
 let foregroundPushAttached = false;
+let actionListenerAttached = false;
 let localNotificationSeq = 0;
 
 /**
@@ -103,6 +104,26 @@ function attachForegroundPushListener(): void {
   });
 }
 
+/**
+ * Android fires `pushNotificationActionPerformed` when the user taps a status-bar
+ * notification. There was no listener, so a tap only opened the app and did
+ * nothing useful - an incoming call had almost always already timed out. Dispatch
+ * a DOM event so app-level code can route the tap (e.g. to the caller's chat so
+ * the user can ring back).
+ */
+export function attachNotificationActionListener(): void {
+  if (actionListenerAttached || !isNativeApp()) return;
+  actionListenerAttached = true;
+  void PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+    const data = (action?.notification?.data || {}) as Record<string, unknown>;
+    try {
+      window.dispatchEvent(new CustomEvent('nabri:notification-action', { detail: data }));
+    } catch {
+      // Non-fatal: the tap simply opens the app with no extra routing.
+    }
+  });
+}
+
 export async function requestNotificationPermission(): Promise<boolean> {
   if (!isNativeApp() || !isPushOptedIn()) return false;
   try {
@@ -135,6 +156,7 @@ function obtainToken(timeoutMs = 8000): Promise<string> {
 
 export async function registerForPushNotifications(): Promise<boolean> {
   attachForegroundPushListener();
+  attachNotificationActionListener();
   if (registeredThisSession || attempted || !isNativeApp()) return false;
   attempted = true;
   try {

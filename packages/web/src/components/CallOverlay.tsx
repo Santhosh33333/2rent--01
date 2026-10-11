@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Mic, MicOff, PhoneOff, Phone, Volume2, VolumeX } from 'lucide-react';
 import { useInAppCall, formatCallDuration, type CallPeer } from '../hooks/useInAppCall';
 import { Avatar } from './Avatar';
@@ -78,6 +79,30 @@ export default function CallOverlay() {
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  // Latest call state, readable from the notification listener without
+  // re-subscribing on every state change.
+  const stateRef = useRef(state);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
+  const navigate = useNavigate();
+
+  // A tapped push notification is routed here. For an incoming call that has
+  // already timed out this opens the caller's chat so the user can ring back;
+  // while a call is still ringing the overlay already owns the screen, so we
+  // leave the user where they are.
+  useEffect(() => {
+    const onAction = (event: Event) => {
+      const detail = (event as CustomEvent<{ type?: string; callerId?: string }>).detail;
+      if (detail?.type !== 'INCOMING_CALL' || !detail.callerId) return;
+      if (stateRef.current === 'incoming') return;
+      navigate(`/messages/${detail.callerId}`);
+    };
+    window.addEventListener('nabri:notification-action', onAction);
+    return () => window.removeEventListener('nabri:notification-action', onAction);
+  }, [navigate]);
 
   // Attach the peer's media so the browser actually plays the audio. `autoPlay`
   // alone is not reliable inside the Android WebView: the track arrives after

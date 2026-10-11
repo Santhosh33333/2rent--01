@@ -38,46 +38,32 @@ interface PeerIdentity {
 
 /**
  * May `fromUserId` call `toUserId`?
- * Allowed only for people who already share a real relationship on the
- * platform: an active/settled booking together, an existing conversation, or
- * an accepted friendship. This stops the feature being used to cold-call
- * arbitrary members, and it never consults phone numbers.
+ *
+ * Any member may ring any other member: calls are brokered by the platform and
+ * never expose a phone number. The previous relationship gate (shared booking /
+ * existing conversation / accepted friendship) turned the call button into a
+ * dead end for the overwhelmingly common first interaction, so it was removed.
+ * Blocking is still honoured in both directions, and the callee must exist.
  */
 export async function canCall(fromUserId: string, toUserId: string): Promise<{ allowed: boolean; reason?: string }> {
   if (fromUserId === toUserId) return { allowed: false, reason: "SELF_CALL" };
 
-  const [sharedBooking, conversation, friendship] = await Promise.all([
-    prisma.booking.findFirst({
+  const [blocked, target] = await Promise.all([
+    prisma.userBlock.findFirst({
       where: {
         OR: [
-          { userId: fromUserId, partner: { userId: toUserId } },
-          { userId: toUserId, partner: { userId: fromUserId } },
+          { blockerId: fromUserId, blockedId: toUserId },
+          { blockerId: toUserId, blockedId: fromUserId },
         ],
       },
       select: { id: true },
     }),
-    prisma.conversation.findFirst({
-      where: {
-        OR: [
-          { participant1Id: fromUserId, participant2Id: toUserId },
-          { participant1Id: toUserId, participant2Id: fromUserId },
-        ],
-      },
-      select: { id: true },
-    }),
-    prisma.friendship.findFirst({
-      where: {
-        OR: [
-          { requesterId: fromUserId, addresseeId: toUserId, status: "ACCEPTED" },
-          { requesterId: toUserId, addresseeId: fromUserId, status: "ACCEPTED" },
-        ],
-      },
-      select: { id: true },
-    }),
+    prisma.user.findUnique({ where: { id: toUserId }, select: { id: true } }),
   ]);
 
-  if (sharedBooking || conversation || friendship) return { allowed: true };
-  return { allowed: false, reason: "NO_RELATIONSHIP" };
+  if (blocked) return { allowed: false, reason: "FORBIDDEN" };
+  if (!target) return { allowed: false, reason: "NO_RECEIVER" };
+  return { allowed: true };
 }
 
 /** Display identity for the ringing screen. No phone, ever. */
@@ -189,6 +175,10 @@ export function registerCallHandlers(
         type: "INCOMING_CALL",
         callId: call.id,
         callType: type,
+        // Lets the app route a notification tap to the caller's chat: by the
+        // time the user taps, the 30s ring has usually already timed out.
+        callerId: userId,
+        callerName: caller.fullName || "Nabri member",
       }).catch(() => {});
     } catch (err) {
       console.error("[CALL] invite failed:", (err as Error)?.message);
