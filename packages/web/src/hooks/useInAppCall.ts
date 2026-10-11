@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useSocket } from './useSocket';
 import { useAuth } from '../lib/auth';
+import { callApi, type IceServerConfig } from '../lib/api';
 import { startCallRingtone, stopCallRingtone } from '../lib/notificationSound';
 
 export type CallState = 'idle' | 'calling' | 'incoming' | 'connecting' | 'active';
@@ -81,18 +82,22 @@ function notifyIncomingCall(peer: CallPeer): void {
 }
 
 // Google's public STUN servers let most peers find each other directly. Networks
-// that block direct connections additionally need a relay, configured through
-// VITE_TURN_URL / VITE_TURN_USERNAME / VITE_TURN_CREDENTIAL.
-const ICE_SERVERS: RTCIceServer[] = [
+// that block direct connections additionally need a relay. The server hands out
+// the full ICE list at call time (a TURN provider configured server-side is
+// picked up without rebuilding the app); this static list is only the fallback
+// used when that request fails or the build sets VITE_TURN_URL for local dev.
+const STATIC_STUN_SERVERS: RTCIceServer[] = [
   { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
   // A second, independent STUN provider: if one is unreachable (blocked DNS,
   // regional outage) the other still yields the reflexive candidates.
   { urls: ['stun:stun.cloudflare.com:3478'] },
 ];
 
+const STATIC_ICE_SERVERS: RTCIceServer[] = [...STATIC_STUN_SERVERS];
+
 const turnUrl = import.meta.env.VITE_TURN_URL as string | undefined;
 if (turnUrl) {
-  ICE_SERVERS.push({
+  STATIC_ICE_SERVERS.push({
     urls: turnUrl,
     username: import.meta.env.VITE_TURN_USERNAME as string | undefined,
     credential: import.meta.env.VITE_TURN_CREDENTIAL as string | undefined,
@@ -100,11 +105,9 @@ if (turnUrl) {
 } else {
   // Fallback relay. STUN alone cannot get through the symmetric NAT / carrier
   // NAT that virtually every mobile network uses, which is why a call could
-  // ring and then carry no audio. Until a dedicated relay is configured via
-  // VITE_TURN_URL, fall back to the public Metered "Open Relay" project so
-  // calls still connect. For production traffic, set VITE_TURN_URL to your own
-  // TURN server — a shared public relay is rate-limited and can be blocked.
-  ICE_SERVERS.push({
+  // ring and then carry no audio. The server normally supplies a relay; this
+  // public Metered "Open Relay" project keeps calls working when it cannot.
+  STATIC_ICE_SERVERS.push({
     urls: [
       'turn:openrelay.metered.ca:80',
       'turn:openrelay.metered.ca:443',
@@ -114,6 +117,48 @@ if (turnUrl) {
     username: 'openrelayproject',
     credential: 'openrelayproject',
   });
+}
+
+let iceCache: { servers: RTCIceServer[]; expiresAt: number } | null = null;
+let iceInflight: Promise<RTCIceServer[]> | null = null;
+
+function toRTCIceServers(servers: IceServerConfig[] | undefined): RTCIceServer[] {
+  if (!Array.isArray(servers)) return [];
+  return servers
+    .filter((s) => Boolean(s?.urls))
+    .map((s) => ({ urls: s.urls, username: s.username, credential: s.credential }));
+}
+
+/**
+ * Resolve the ICE server list for a call. Fetched from the API once and cached
+ * until the server-provided TTL lapses; on any failure the static list keeps
+ * calling working rather than failing the call for a config hiccup.
+ */
+async function loadIceServers(): Promise<RTCIceServer[]> {
+  const now = Date.now();
+  if (iceCache && iceCache.expiresAt > now) return iceCache.servers;
+  if (iceInflight) return iceInflight;
+
+  const pending = (async () => {
+    try {
+      const res = await callApi.iceServers();
+      const servers = toRTCIceServers(res.data?.data?.iceServers);
+      const ttl = Number(res.data?.data?.ttl) || 300;
+      if (servers.length > 0) {
+        iceCache = { servers, expiresAt: Date.now() + Math.max(60, ttl) * 1000 };
+        return servers;
+      }
+    } catch {
+      // Fall through to the static list below.
+    }
+    return STATIC_ICE_SERVERS;
+  })();
+  iceInflight = pending;
+  try {
+    return await pending;
+  } finally {
+    iceInflight = null;
+  }
 }
 
 const UNAVAILABLE_MESSAGES: Record<string, string> = {
@@ -133,7 +178,7 @@ const UNAVAILABLE_MESSAGES: Record<string, string> = {
   // ICE never found a usable path. Almost always a missing TURN relay: STUN
   // alone cannot get through symmetric NAT or carrier-grade NAT, which is what
   // mobile/corporate networks use.
-  NO_RELAY: 'No audio path could be found on this network. Set up a TURN relay (VITE_TURN_URL) to fix this.',
+  NO_RELAY: 'No audio path could be found on this network. Try switching networks or contact support.',
 };
 
 export function useInAppCall(): InAppCall {
@@ -222,7 +267,8 @@ export function useInAppCall(): InAppCall {
   const buildConnection = useCallback(
     async (targetCallId: string, type: 'VOICE' | 'VIDEO'): Promise<RTCPeerConnection> => {
       const stream = await acquireLocalMedia(type);
-      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+      const iceServers = await loadIceServers();
+      const pc = new RTCPeerConnection({ iceServers });
       pcRef.current = pc;
       stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
@@ -509,6 +555,13 @@ export function useInAppCall(): InAppCall {
       offUnavailable?.();
     };
   }, [applyCallType, applyState, buildConnection, emit, endWithNotice, flushCandidates, on, resetCall, teardownMedia, userId]);
+
+  // Warm the ICE server list as soon as a session exists so the first call does
+  // not wait on a config round-trip before it can start negotiating.
+  useEffect(() => {
+    if (!userId) return;
+    void loadIceServers();
+  }, [userId]);
 
   // Call timer.
   useEffect(() => {

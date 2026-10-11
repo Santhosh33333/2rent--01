@@ -23,6 +23,8 @@ router.post(
 router.post("/:id/accept", callController.acceptCall);
 router.post("/:id/end", callController.endCall);
 router.get("/", callController.getCallHistory);
+// Must be declared before "/:id", or Express matches "ice-servers" as an id.
+router.get("/ice-servers", callController.getIceServers);
 router.get("/:id", callController.getCallLog);
 
 export default router;

@@ -552,3 +552,19 @@ export const supportApi = {
   assign: (id: string, assigneeId: string) =>
     api.patch(`/support/tickets/${id}/assign`, { assigneeId }),
 }
+
+export interface IceServerConfig {
+  urls: string | string[]
+  username?: string
+  credential?: string
+}
+
+// In-app calling. ICE servers are fetched at call time rather than baked into
+// the bundle, so a TURN relay can be configured or rotated server-side without
+// rebuilding the app, and the relay credentials never ship in the JavaScript.
+export const callApi = {
+  iceServers: () =>
+    api.get<{ success: boolean; data: { iceServers: IceServerConfig[]; ttl: number; source: string } }>(
+      '/calls/ice-servers',
+    ),
+}

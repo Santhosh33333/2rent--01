@@ -12,6 +12,18 @@ declare global {
             auto_select?: boolean
           }) => void
           prompt: (callback?: (notification: any) => void) => void
+          renderButton: (
+            container: HTMLElement,
+            options: {
+              type?: 'standard' | 'icon'
+              theme?: 'outline' | 'filled_blue' | 'filled_black'
+              size?: 'large' | 'medium' | 'small'
+              text?: 'signin_with' | 'signup_with' | 'continue_with' | 'sign_in_with'
+              shape?: 'rectangular' | 'pill' | 'circle' | 'square'
+              width?: number
+              logo_alignment?: 'left' | 'center'
+            },
+          ) => void
         }
       }
     }
@@ -67,6 +79,36 @@ export async function initGoogleSignIn(callback: (credential: string) => void): 
     return
   }
   configureGoogle()
+}
+
+/**
+ * Render Google's own "Sign in with Google" button into `container`.
+ *
+ * The custom in-app button called `prompt()`, which is the One Tap flow: it
+ * silently does nothing when One Tap is suppressed (many browsers now require
+ * FedCM) or when the visitor has no live Google session, so tapping the button
+ * looked like a dead control. The rendered button is user-initiated and always
+ * opens Google's account chooser / sign-in popup instead.
+ *
+ * Returns false when the SDK rendered nothing, so the caller can keep its own
+ * fallback button on screen.
+ */
+export function renderGoogleButton(
+  container: HTMLElement | null,
+  text: 'signin_with' | 'signup_with' | 'continue_with' = 'continue_with',
+): boolean {
+  if (!container || !window.google?.accounts?.id) return false
+  container.replaceChildren()
+  window.google.accounts.id.renderButton(container, {
+    type: 'standard',
+    theme: 'outline',
+    size: 'large',
+    text,
+    shape: 'rectangular',
+    width: 320,
+    logo_alignment: 'left',
+  })
+  return container.childElementCount > 0
 }
 
 export function promptGoogleSignIn() {

@@ -3,6 +3,7 @@ import { prisma } from "../config/database";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
 import { canCall } from "../services/callService";
+import { getIceConfig } from "../services/iceService";
 
 export async function createCall(req: AuthedRequest, res: Response): Promise<void> {
   try {
@@ -161,5 +162,25 @@ export async function getCallLog(req: AuthedRequest, res: Response): Promise<voi
     sendSuccess(res, call, "Call log retrieved.");
   } catch (err) {
     sendError(res, "Failed to retrieve call log.", 500, "INTERNAL_ERROR");
+  }
+}
+
+/**
+ * GET /calls/ice-servers — the STUN/TURN list clients should use for WebRTC.
+ *
+ * Served at runtime (never baked into the web bundle) so the relay can be
+ * swapped via environment variables without re-shipping the app, and so the
+ * credentials are not scrapable from the published JavaScript.
+ */
+export async function getIceServers(_req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const config = await getIceConfig();
+    sendSuccess(
+      res,
+      { iceServers: config.iceServers, ttl: config.ttl, source: config.source },
+      "ICE servers retrieved."
+    );
+  } catch (err) {
+    sendError(res, "Failed to retrieve call configuration.", 500, "INTERNAL_ERROR");
   }
 }

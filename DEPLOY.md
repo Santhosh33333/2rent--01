@@ -74,6 +74,46 @@ Vercel builds `packages/web/dist` from the root `vercel.json`. The web app reads
 the Play link from `appLinks.ts`, so no build-time environment variable is
 required for the download buttons.
 
+## In-app voice/video calls — TURN relay
+
+Calls use WebRTC. STUN alone proves a peer's public address but cannot relay
+media through symmetric NAT or carrier-grade NAT — which is what almost every
+mobile network uses. Without a relay the call rings, the handshake finishes, and
+then carries **no audio**. Clients fetch the ICE server list from
+`GET /api/calls/ice-servers` **at call time**, so the relay is configured on the
+API (Render) and can be added or rotated without rebuilding the web app or the
+Android bundle, and the credentials never ship in the JavaScript.
+
+Resolution order on the server (`packages/backend/src/services/iceService.ts`):
+
+1. `TURN_URL` (+ `TURN_USERNAME` / `TURN_CREDENTIAL`) — any provider: Metered,
+   Cloudflare Calls TURN, Twilio NTS, or a self-hosted coturn. Comma/space
+   separated list of `turn:` / `turns:` URLs.
+2. Twilio Network Traversal Service — short-lived credentials minted from a
+   **real** `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN`. Skipped when those look
+   like the `.env` placeholders, so a half-configured environment is never
+   mistaken for a working relay.
+3. A public Metered "Open Relay" relay — keeps calls working with no setup, but
+   it is shared and rate-limited.
+
+To add a dedicated relay, set on the Render service and redeploy:
+
+```
+TURN_URL=turn:relay.example.com:3478,turns:relay.example.com:443?transport=tcp
+TURN_USERNAME=nabri
+TURN_CREDENTIAL=<shared secret>
+# optional, only used when minting Twilio NTS credentials:
+# TURN_TTL_SECONDS=3600
+```
+
+The response includes `source` (`env-turn`, `twilio-nts`, or `public-relay`) so
+you can confirm which tier is live:
+
+```bash
+curl -H "Authorization: Bearer <accessToken>" \
+  https://rentbuddy-api-s7rz.onrender.com/api/calls/ice-servers
+```
+
 ## Beta testers (Google Group)
 
 A **personal** Play developer account can only grant closed-test access through

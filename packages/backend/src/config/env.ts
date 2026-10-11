@@ -185,6 +185,21 @@ const envSchema = z.object({
   TWILIO_AUTH_TOKEN: z.string().optional(),
   TWILIO_FROM_NUMBER: z.string().optional(),
 
+  // TURN relay for in-app voice/video calls — optional.
+  //
+  // STUN cannot relay media through the symmetric NAT / carrier-grade NAT that
+  // mobile networks use, so without a relay a call rings then carries no audio.
+  // TURN_URL takes a comma/space separated list of URLs from ANY provider
+  // (Metered, Cloudflare, Twilio NTS, or a self-hosted coturn); TURN_USERNAME
+  // and TURN_CREDENTIAL are the matching long-term credentials. When unset the
+  // server mints short-lived Twilio NTS credentials (if a real TWILIO_ACCOUNT_SID
+  // / TWILIO_AUTH_TOKEN is present), and otherwise falls back to a public relay.
+  TURN_URL: z.string().optional(),
+  TURN_USERNAME: z.string().optional(),
+  TURN_CREDENTIAL: z.string().optional(),
+  // Lifetime (seconds) requested when minting Twilio NTS credentials, 60..86400.
+  TURN_TTL_SECONDS: z.string().optional(),
+
   // SMS (MSG91) — optional. Free account needs just the auth key from
   // MSG91 → Settings → API Keys. MSG91_SENDER_ID is the 6-char transactional
   // sender (defaults to "NABRI"); DLT-approved sender/template may be required
