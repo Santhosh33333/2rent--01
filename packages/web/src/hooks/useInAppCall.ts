@@ -46,6 +46,24 @@ export interface InAppCall {
 const ICE_NEGOTIATION_TIMEOUT_MS = 15000;
 
 /**
+ * The single call state machine lives in the app-root <CallOverlay />. Buttons
+ * and pages reach it through this registry so a tap runs the *same* code path -
+ * most importantly `startCall`, which takes the microphone up front. Firing the
+ * socket invite directly (the old launcher behaviour) skipped that, so the
+ * caller's mic-permission prompt only appeared once the callee had already
+ * accepted, and a missed or denied prompt left the call connected with no audio.
+ */
+let registeredController: InAppCall | null = null;
+
+export function registerCallController(controller: InAppCall | null): void {
+  registeredController = controller;
+}
+
+export function getCallController(): InAppCall | null {
+  return registeredController;
+}
+
+/**
  * Raise a desktop notification for an incoming call.
  *
  * Without this the only alert is the in-page overlay plus the ringtone, and an

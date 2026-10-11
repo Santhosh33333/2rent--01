@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mic, MicOff, PhoneOff, Phone, Volume2, VolumeX } from 'lucide-react';
-import { useInAppCall, formatCallDuration, type CallPeer } from '../hooks/useInAppCall';
+import { useInAppCall, formatCallDuration, registerCallController, type CallPeer } from '../hooks/useInAppCall';
 import { Avatar } from './Avatar';
 
 function PeerAvatar({ peer, size }: { peer: CallPeer | null; size: 'lg' | 'sm' }) {
@@ -60,6 +60,7 @@ function ActionButton({
  * contact details.
  */
 export default function CallOverlay() {
+  const call = useInAppCall();
   const {
     state,
     peer,
@@ -74,7 +75,16 @@ export default function CallOverlay() {
     endCall,
     toggleMute,
     toggleSpeaker,
-  } = useInAppCall();
+  } = call;
+
+  // Publish this instance to the call registry so CallUserButton and the pages
+  // start calls through this state machine. That path takes the microphone
+  // before ringing; firing the invite directly (what the launcher used to do)
+  // deferred the mic prompt to accept time and could leave a silent call.
+  useEffect(() => {
+    registerCallController(call);
+  });
+  useEffect(() => () => registerCallController(null), []);
 
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
