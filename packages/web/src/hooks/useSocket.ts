@@ -37,6 +37,30 @@ export function disconnectGlobalSocket(): void {
 }
 
 /**
+ * Mobile WebViews suspend the websocket while the app is backgrounded, and the
+ * background reconnect backoff can give up long before the user returns. Nudge
+ * a reconnect when the app becomes visible again so messages and incoming calls
+ * resume immediately instead of waiting on the timer. Installed once for the
+ * lifetime of the page.
+ */
+let resumeRetryInstalled = false;
+function installSocketResumeRetry(): void {
+  if (resumeRetryInstalled || typeof document === 'undefined') return;
+  resumeRetryInstalled = true;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    const socket = globalSocket;
+    if (socket && !socket.connected) {
+      try {
+        socket.connect();
+      } catch {
+        /* the reconnect timer will retry on its own */
+      }
+    }
+  });
+}
+
+/**
  * Hook for real-time Socket.io communication
  * Manages connection lifecycle and provides event handlers
  */
@@ -49,6 +73,7 @@ export function useSocket(options: UseSocketOptions = {}) {
 
   useEffect(() => {
     if (autoConnect) installNotificationAudioUnlock();
+    installSocketResumeRetry();
     // Logout cleanup: no user -> tear down any live socket
     if (!user && globalSocket) {
       disconnectGlobalSocket();
@@ -73,7 +98,11 @@ export function useSocket(options: UseSocketOptions = {}) {
         reconnection: true,
         reconnectionDelay: 1000,
         reconnectionDelayMax: 5000,
-        reconnectionAttempts: 5,
+        // Retry forever with capped backoff. A cap of 5 attempts meant a mobile
+        // network flap longer than ~15s silently killed realtime for the rest of
+        // the session - no incoming messages, no ringing calls - until the app
+        // was fully reloaded. A messaging app has to reconnect on its own.
+        reconnectionAttempts: Infinity,
       });
 
       socket.on('connect', () => {
