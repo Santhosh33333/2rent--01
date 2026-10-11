@@ -305,25 +305,35 @@ export function useInAppCall(): InAppCall {
       // forever. Without this the user sees an accepted call with no audio and
       // no error at all, which reads as "the app is broken". Give up loudly
       // instead of leaving them talking into a dead line.
+      //
+      // The watchdog is now disarmed ONLY when media actually connects. It used
+      // to also be cleared when ICE *gathering* completed, but gathering
+      // completes even when every relay failed to allocate a candidate (the
+      // browser has simply finished asking). With a dead TURN server that
+      // disarmed the watchdog on a call that could never carry audio, so the
+      // call screen sat there indefinitely - "they accept but we can't speak".
+      const iceWatchdog = setTimeout(() => {
+        if (pcRef.current !== pc) return;
+        const conn = pc.connectionState;
+        const ice = pc.iceConnectionState;
+        if (conn === 'connected' || ice === 'connected' || ice === 'completed') return;
+        emit('call:end', { callId: targetCallId });
+        endWithNotice('NO_RELAY');
+      }, ICE_NEGOTIATION_TIMEOUT_MS);
+      const disarmIceWatchdog = () => clearTimeout(iceWatchdog);
+
       pc.oniceconnectionstatechange = () => {
+        if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+          disarmIceWatchdog();
+          return;
+        }
         if (pc.iceConnectionState === 'failed') {
           emit('call:end', { callId: targetCallId });
           endWithNotice('NO_RELAY');
         }
       };
-      const iceWatchdog = setTimeout(() => {
-        const s = pc.iceConnectionState;
-        if (pcRef.current !== pc) return;
-        if (s === 'new' || s === 'checking') {
-          emit('call:end', { callId: targetCallId });
-          endWithNotice('NO_RELAY');
-        }
-      }, ICE_NEGOTIATION_TIMEOUT_MS);
-      pc.addEventListener('icegatheringstatechange', () => {
-        if (pc.iceGatheringState === 'complete') clearTimeout(iceWatchdog);
-      });
       pc.addEventListener('connectionstatechange', () => {
-        if (pc.connectionState === 'connected') clearTimeout(iceWatchdog);
+        if (pc.connectionState === 'connected') disarmIceWatchdog();
       });
 
       return pc;
@@ -371,6 +381,11 @@ export function useInAppCall(): InAppCall {
   const acceptCall = useCallback(() => {
     const targetCallId = callIdRef.current;
     if (!targetCallId) return;
+    // Stop ringing the moment the user answers. The ringtone is otherwise only
+    // stopped when the remote audio track arrives (pc.ontrack), so a call whose
+    // media path never establishes rings on and on even though it was answered -
+    // which reads as "I accept but it only keeps ringing".
+    stopCallRingtone();
     applyState('connecting');
     void buildConnection(targetCallId, callTypeRef.current)
       .then(() => emit('call:accept', { callId: targetCallId }))
@@ -464,6 +479,12 @@ export function useInAppCall(): InAppCall {
       }
       void (async () => {
         try {
+          // The callee picked up, so stop the outgoing ring here rather than
+          // waiting for audio: if the media path never establishes the caller
+          // would otherwise hear their own ring forever. Show "Connecting…"
+          // until the ICE watchdog either succeeds or reports NO_RELAY.
+          stopCallRingtone();
+          applyState('connecting');
           const pc = pcRef.current ?? (await buildConnection(data.callId, callTypeRef.current));
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
