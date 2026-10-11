@@ -1,26 +1,36 @@
 {
   "project_info": {
-    "project_number": "869142722641",
-    "project_id": "nabri-9b94d",
-    "storage_bucket": "nabri-9b94d.firebasestorage.app"
+    "project_number": "411366997531",
+    "project_id": "nabri-9faed",
+    "storage_bucket": "nabri-9faed.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:869142722641:android:1c4bd6fda11f731633e070",
+        "mobilesdk_app_id": "1:411366997531:android:cf4252d7a540f2083782be",
         "android_client_info": {
           "package_name": "app.rentbuddy.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "411366997531-hnplrt93hpbgssjvhcsknvofgvs9t3oe.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
-          "current_key": "AIzaSyBbccNnZWy3y49IoEurtkUn2F4n3ZKwPJU"
+          "current_key": "AIzaSyDd3YgKjMumLzW0rWc5HEet0ncxO8rTPs4"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "411366997531-hnplrt93hpbgssjvhcsknvofgvs9t3oe.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
