@@ -111,7 +111,7 @@ actions={
           </button>}
         />
         <div className="mb-6">
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {[['ALL', 'All'], ['PENDING', 'Pending'], ['RESOLVED', 'Resolved'], ['DISMISSED', 'Dismissed']].map(([s, label]) => (
               <button
                 key={s}

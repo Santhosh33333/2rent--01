@@ -216,7 +216,7 @@ export function AdminBankStatementsPage() {
           tone="surface"
         />
 
-        <div className="flex gap-1 rounded-2xl bg-surface-100 p-1 dark:bg-surface-800">
+        <div className="flex flex-wrap gap-1 rounded-2xl bg-surface-100 p-1 dark:bg-surface-800">
           {(
             [
               ['upload', 'Upload & preview', Upload],
@@ -228,7 +228,7 @@ export function AdminBankStatementsPage() {
               key={key}
               type="button"
               onClick={() => setTab(key as Tab)}
-              className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition ${
+              className={`flex flex-1 min-w-[8.5rem] items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition ${
                 tab === key
                   ? 'bg-white text-surface-900 shadow-sm dark:bg-surface-700 dark:text-white'
                   : 'text-surface-600 hover:text-surface-900 dark:text-surface-300 dark:hover:text-white'

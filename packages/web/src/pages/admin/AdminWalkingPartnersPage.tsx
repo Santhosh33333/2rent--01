@@ -173,7 +173,7 @@ export function AdminWalkingPartnersPage() {
       />
 
         <div className="mb-6">
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {[['ALL', 'All'], ['APPLIED', 'Applied'], ['APPROVED', 'Approved'], ['REJECTED', 'Rejected'], ['SUSPENDED', 'Suspended']].map(([s, label]) => (
               <button
                 key={s}

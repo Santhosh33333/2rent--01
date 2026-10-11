@@ -89,7 +89,7 @@ export function WalletPage() {
               </div>
             </div>
 
-            <div className="flex gap-3 mt-8">
+            <div className="flex flex-wrap gap-3 mt-8">
               <Link to="/walking-requests/create" className="px-6 py-3 rounded-2xl bg-white/15 hover:bg-white/25 text-sm font-semibold transition-all flex items-center gap-2 backdrop-blur-sm">
                 <ShoppingCart className="w-4 h-4" /> Book a Walk
               </Link>

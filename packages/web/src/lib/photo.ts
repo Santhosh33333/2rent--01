@@ -4,18 +4,38 @@ import { api } from './api'
 import { getErrorMessage } from './error'
 
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+const ACCEPTED_EXT = /\.(jpe?g|png|webp|gif)$/i
 const MAX_INPUT_BYTES = 12 * 1024 * 1024
 const AVATAR_SIZE = 1024
+
+/**
+ * Android's document/camera picker can return a valid JPEG with an empty MIME
+ * type, which the strict `file.type` allow-list rejected before the user even
+ * saw a preview ("image upload does not work"). Fall back to the extension.
+ */
+function looksLikeAcceptedImage(file: File): boolean {
+  if (file.type) return ACCEPTED_TYPES.includes(file.type)
+  return ACCEPTED_EXT.test(file.name || '')
+}
 
 function loadImage(file: File): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file)
     const img = new Image()
+    // Bound the decode: a capture that fires neither load nor error would hang
+    // the avatar/cover spinner forever on the Android WebView.
+    const timer = window.setTimeout(() => {
+      window.clearTimeout(timer)
+      URL.revokeObjectURL(url)
+      reject(new Error('Timed out reading that image. Try another file.'))
+    }, 15000)
     img.onload = () => {
+      window.clearTimeout(timer)
       URL.revokeObjectURL(url)
       resolve(img)
     }
     img.onerror = () => {
+      window.clearTimeout(timer)
       URL.revokeObjectURL(url)
       reject(new Error('Could not read that image. Try another file.'))
     }
@@ -29,7 +49,7 @@ function loadImage(file: File): Promise<HTMLImageElement> {
  * every large upload fails with a generic error.
  */
 export async function prepareAvatar(file: File): Promise<{ blob: Blob; previewUrl: string }> {
-  if (!ACCEPTED_TYPES.includes(file.type)) {
+  if (!looksLikeAcceptedImage(file)) {
     throw new Error('Please choose a JPEG, PNG, WebP or GIF image.')
   }
   if (file.size > MAX_INPUT_BYTES) {
@@ -73,7 +93,7 @@ const COVER_MAX_BYTES = 8 * 1024 * 1024
  * No cropping — the full frame is kept, CSS object-cover handles display.
  */
 export async function prepareCover(file: File): Promise<{ blob: Blob; previewUrl: string }> {
-  if (!ACCEPTED_TYPES.includes(file.type)) {
+  if (!looksLikeAcceptedImage(file)) {
     throw new Error('Please choose a JPEG, PNG, WebP or GIF image.')
   }
   if (file.size > COVER_MAX_BYTES) {

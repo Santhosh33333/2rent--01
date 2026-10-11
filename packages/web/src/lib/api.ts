@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { compressImageFile, isLargeUncompressedImage } from './imageCompress'
+import { compressImageFile, hasUnknownImageType, isLargeUncompressedImage, normalizeImagePart } from './imageCompress'
 import { API_BASE_URL } from './apiBase'
 import type {
   PaginationParams,
@@ -73,14 +73,20 @@ api.interceptors.request.use(
     const body = config.data
     if (typeof FormData === 'undefined' || !(body instanceof FormData)) return config
     const entries = Array.from(body.entries())
-    if (!entries.some(([, value]) => isLargeUncompressedImage(value))) return config
+    const needsWork = entries.some(
+      ([, value]) => isLargeUncompressedImage(value) || hasUnknownImageType(value),
+    )
+    if (!needsWork) return config
     const compressed = new FormData()
     for (const [key, value] of entries) {
-      if (isLargeUncompressedImage(value)) {
-        const shrunk = await compressImageFile(value)
+      // Re-label an extension-identified image that arrived with no MIME type
+      // (Android picker) before deciding whether it also needs shrinking.
+      const part = normalizeImagePart(value)
+      if (isLargeUncompressedImage(part)) {
+        const shrunk = await compressImageFile(part)
         compressed.append(key, shrunk, shrunk.name || 'photo.jpg')
       } else {
-        compressed.append(key, value)
+        compressed.append(key, part)
       }
     }
     config.data = compressed

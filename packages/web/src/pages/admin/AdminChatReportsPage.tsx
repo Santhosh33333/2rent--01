@@ -86,7 +86,7 @@ export function AdminChatReportsPage() {
         subtitle="Messaging safety reports &amp; moderation"
 />
         <div className="mb-6">
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {[['ALL', 'All'], ['PENDING', 'Pending'], ['REVIEWED', 'Reviewed'], ['ACTIONED', 'Actioned'], ['DISMISSED', 'Dismissed']].map(([s, label]) => (
               <button
                 key={s}

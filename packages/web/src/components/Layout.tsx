@@ -1,4 +1,4 @@
-import { useState, useEffect, type MouseEvent } from 'react';
+import { useState, useEffect, useRef, type MouseEvent } from 'react';
 import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
 import { 
   Home, User, Wallet, Users, Sun, Moon, X, Bell, 
@@ -121,6 +121,7 @@ export function Layout() {
   const [moreOpen, setMoreOpen] = useState(false);
   const [adsReady, setAdsReady] = useState(false);
   const [bannerUp, setBannerUp] = useState(false);
+  const topStackRef = useRef<HTMLDivElement | null>(null);
 
   const navItems = activeRole === 'PARTNER' ? partnerNav
     : isAdminTierRole(activeRole) ? adminNav
@@ -143,6 +144,33 @@ export function Layout() {
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [location.pathname]);
+
+  // Publish the fixed top stack's measured height as `--nabri-top-stack`, so
+  // <main> offsets page content by the real amount instead of a hard-coded
+  // 6rem. That guess is only right with no banners; as soon as the
+  // impersonation or offline banner is present the stacked rows overlap the
+  // top of every page. ResizeObserver keeps it correct when a banner appears,
+  // disappears, or wraps to a second line on a narrow screen.
+  useEffect(() => {
+    const el = topStackRef.current;
+    if (!el) return;
+    const publish = () => {
+      document.documentElement.style.setProperty(
+        '--nabri-top-stack',
+        `${Math.round(el.getBoundingClientRect().height)}px`,
+      );
+    };
+    publish();
+    if (typeof ResizeObserver === 'undefined') {
+      return () => document.documentElement.style.removeProperty('--nabri-top-stack');
+    }
+    const observer = new ResizeObserver(publish);
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      document.documentElement.style.removeProperty('--nabri-top-stack');
+    };
+  }, []);
   useEffect(() => subscribeAdsState((state) => setAdsReady(state.canRequestAds)), []);
 
   useEffect(() => {
@@ -190,23 +218,33 @@ export function Layout() {
 
   return (
     <div className="min-h-screen bg-surface-50 dark:bg-surface-950 transition-colors duration-500">
-      <ImpersonationBanner />
-      <OfflineBanner />
-
-      {/* Floating Header Capsule. The top padding carries the status-bar inset
-          (`--safe-top`), which on the Android build is the only thing keeping
-          the capsule out from under the system status bar (edge-to-edge is
-          mandatory at targetSdk 36). */}
-      <header
-        className="fixed top-0 inset-x-0 z-50 px-4 pointer-events-none"
-        style={{ paddingTop: 'calc(1rem + var(--safe-top, 0px))' }}
+      {/* Fixed top stack: the status/offline/impersonation banners and the
+          header capsule now live in ONE fixed, safe-area-aware container.
+          Before, the banners were siblings of the fixed header, so the capsule
+          overlapped them and the impersonation "Exit" button sat under the
+          Android status bar where it could not be tapped. The container carries
+          `--safe-top` itself, so every row clears the system bar, and its
+          measured height is published as `--nabri-top-stack` (see the effect
+          above) so <main> can offset page content instead of assuming 6rem. */}
+      <div
+        ref={topStackRef}
+        className="fixed top-0 inset-x-0 z-50 pointer-events-none"
+        style={{ paddingTop: 'var(--safe-top, 0px)' }}
       >
+        <div className="pointer-events-auto">
+          <ImpersonationBanner />
+          <OfflineBanner />
+        </div>
+
+        <header
+          className="px-4 pt-4 pointer-events-none"
+        >
         <motion.div 
           initial={{ y: -20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           className="max-w-7xl mx-auto h-16 px-3 rounded-3xl bg-surface-50/60 dark:bg-surface-900/60 backdrop-blur-2xl border border-surface-200/50 dark:border-surface-800/50 shadow-xl shadow-black/5 pointer-events-auto flex items-center justify-between"
         >
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             <Link to="/dashboard" className="flex items-center gap-2 pl-1 shrink-0" aria-label="Nabri home">
               <span className="brand-badge h-8 w-8">
                 <img src="/logo-glyph-white.svg" alt="" className="h-5 w-5" />
@@ -217,7 +255,7 @@ export function Layout() {
                   was always correct (light in dark mode, verified in a browser).
                   Now it shrinks to a smaller size on narrow screens instead of
                   vanishing, since the header row genuinely has room for it. */}
-              <span className="block text-base sm:text-lg font-black font-display tracking-tight text-surface-900 dark:text-surface-50">
+              <span className="block text-base sm:text-lg font-black font-display tracking-tight text-surface-900 dark:text-surface-50 max-[359px]:hidden">
                 Nabri<span className="text-primary-500">.</span>
               </span>
             </Link>
@@ -225,7 +263,7 @@ export function Layout() {
 
           <RoleSwitcher />
 
-          <div className="flex items-center gap-1 sm:gap-2">
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             <Link to="/search" className="p-2 rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 transition hidden sm:block">
               <Search className="w-5 h-5" />
             </Link>
@@ -256,7 +294,8 @@ export function Layout() {
             </button>
           </div>
         </motion.div>
-      </header>
+        </header>
+      </div>
 
       {/* Kinetic Sidebar Drawer */}
       <AnimatePresence>
@@ -367,7 +406,7 @@ export function Layout() {
       <main
         className="pt-24 pb-24 lg:pb-12 transition-all duration-500"
         style={{
-          paddingTop: 'calc(6rem + var(--safe-top, 0px))',
+          paddingTop: 'calc(var(--nabri-top-stack, 5rem) + 1rem)',
           ...(bannerUp
             ? { paddingBottom: 'calc(6rem + var(--nabri-ad-strip, 0px))' }
             : null),

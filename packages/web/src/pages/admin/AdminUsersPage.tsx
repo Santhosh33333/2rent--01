@@ -359,7 +359,7 @@ export function AdminUsersPage() {
             cannot see. Editing a user never touches this: selection is
             explicit, per-account, and cleared on navigation. */}
         {selectedIds.size > 0 && confirmStep === 'none' && (
-          <div className="sticky top-2 z-20 mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-blue-700/50 bg-gray-900/95 px-4 py-3 shadow-lg shadow-black/40 backdrop-blur">
+          <div className="sticky z-20 mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-blue-700/50 bg-gray-900/95 px-4 py-3 shadow-lg shadow-black/40 backdrop-blur" style={{ top: 'calc(var(--nabri-top-stack, 5rem) + 0.75rem)' }}>
             <span className="text-sm text-white font-medium">
               {selectedIds.size} selected
             </span>

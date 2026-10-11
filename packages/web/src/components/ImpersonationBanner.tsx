@@ -14,7 +14,7 @@ export function ImpersonationBanner() {
   }
 
   return (
-    <div className="sticky top-0 inset-x-0 z-[60] bg-amber-500 text-white shadow-lg">
+    <div className="bg-amber-500 text-white shadow-lg">
       <div className="max-w-7xl mx-auto px-4 py-2 flex items-center justify-between gap-3 text-sm">
         <div className="flex items-center gap-2 font-medium min-w-0">
           <Eye className="w-4 h-4 flex-shrink-0" />

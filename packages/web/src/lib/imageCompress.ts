@@ -33,11 +33,22 @@ function loadImage(file: File): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file)
     const img = new Image()
+    // A decode that fires neither load nor error (seen with a few HEIC/RAW
+    // captures in the Android WebView) would otherwise hang the request
+    // interceptor forever, so the upload spinner never resolves and the pick
+    // looks like it silently did nothing. Bound the wait.
+    const timer = window.setTimeout(() => {
+      window.clearTimeout(timer)
+      URL.revokeObjectURL(url)
+      reject(new Error('Timed out reading that image.'))
+    }, 15000)
     img.onload = () => {
+      window.clearTimeout(timer)
       URL.revokeObjectURL(url)
       resolve(img)
     }
     img.onerror = () => {
+      window.clearTimeout(timer)
       URL.revokeObjectURL(url)
       reject(new Error('Could not read that image.'))
     }
@@ -59,7 +70,14 @@ export async function compressImageFile(
   quality = 0.82,
 ): Promise<File> {
   try {
-    if (!file.type.startsWith('image/') || file.type === 'image/gif') return file
+    const mime = file.type || ''
+    const looksLikeImage =
+      mime.startsWith('image/') || /\.(jpe?g|png|webp|bmp)$/i.test(file.name || '')
+    // Android's document picker sometimes hands back an empty MIME type for a
+    // perfectly valid large JPEG. Requiring `image/*` here made those photos
+    // skip compression entirely, then bounce off the server's size cap, which
+    // is exactly the "image upload does not work" case on a phone.
+    if (!looksLikeImage || mime === 'image/gif') return file
     const img = await loadImage(file)
     const longest = Math.max(img.naturalWidth, img.naturalHeight)
     if (!longest) return file
@@ -80,5 +98,51 @@ export async function compressImageFile(
     return new File([blob], `${base}.jpg`, { type: 'image/jpeg' })
   } catch {
     return file
+  }
+}
+
+/** True for a File that is an image by extension but carries no MIME type. */
+export function hasUnknownImageType(value: unknown): boolean {
+  return (
+    typeof File !== 'undefined' &&
+    value instanceof File &&
+    !value.type &&
+    /\.(jpe?g|png|webp|gif|heic|heif|bmp)$/i.test(value.name || '')
+  )
+}
+
+/**
+ * Re-label a picked File that lost its MIME type.
+ *
+ * Android's camera/document picker sometimes returns a real JPEG with an empty
+ * `type`. The browser then sends that multipart part as
+ * `application/octet-stream`, and any server-side image filter rejects it —
+ * which is the "image upload does not work" report on a phone. Re-attach the
+ * correct type from the filename so every upload site (KYC, chat, posts,
+ * payment proof, covers) accepts it. Non-files and unknown extensions pass
+ * through untouched.
+ */
+export function normalizeImagePart(value: FormDataEntryValue): FormDataEntryValue {
+  if (typeof File === 'undefined' || !(value instanceof File)) return value
+  if (value.type) return value
+  const match = /\.(jpe?g|png|webp|gif|heic|heif|bmp)$/i.exec(value.name || '')
+  if (!match) return value
+  const ext = match[1].toLowerCase()
+  const type =
+    ext === 'png'
+      ? 'image/png'
+      : ext === 'webp'
+        ? 'image/webp'
+        : ext === 'gif'
+          ? 'image/gif'
+          : ext === 'bmp'
+            ? 'image/bmp'
+            : ext === 'heic' || ext === 'heif'
+              ? 'image/heic'
+              : 'image/jpeg'
+  try {
+    return new File([value], value.name, { type, lastModified: value.lastModified })
+  } catch {
+    return value
   }
 }

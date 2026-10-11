@@ -114,7 +114,7 @@ export function AdminEmailBroadcastPage() {
                 onChange={(e) => setTestTo(e.target.value)}
                 type="email"
                 placeholder="you@example.com"
-                className="flex-1 bg-gray-800 rounded-xl px-3 py-2.5 text-white border border-gray-700 focus:border-primary-500 outline-none"
+                className="flex-1 min-w-0 bg-gray-800 rounded-xl px-3 py-2.5 text-white border border-gray-700 focus:border-primary-500 outline-none"
               />
               <button
                 onClick={sendTest}

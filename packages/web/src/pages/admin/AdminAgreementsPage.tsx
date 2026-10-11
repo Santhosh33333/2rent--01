@@ -122,7 +122,7 @@ export function AdminAgreementsPage() {
       />
 
         <div className="mb-6 flex flex-wrap items-center gap-3">
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {[['ALL', 'All'], ['ACCEPTED', 'Accepted'], ['SENT', 'Sent'], ['PENDING', 'Pending']].map(([s, label]) => (
               <button
                 key={s}
@@ -135,7 +135,7 @@ export function AdminAgreementsPage() {
               </button>
             ))}
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {[['ALL', 'Member + Partner'], ['USER', 'Member'], ['PARTNER', 'Partner']].map(([k, label]) => (
               <button
                 key={k}

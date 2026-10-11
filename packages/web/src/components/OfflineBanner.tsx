@@ -26,7 +26,7 @@ export function OfflineBanner() {
   return (
     <div
       role="alert"
-      className="sticky top-0 z-[60] flex items-center justify-center gap-2 bg-amber-500 px-4 py-2 text-center text-xs font-semibold text-white"
+      className="flex items-center justify-center gap-2 bg-amber-500 px-4 py-2 text-center text-xs font-semibold text-white"
     >
       <WifiOff className="w-4 h-4 shrink-0" />
       You're offline — showing last loaded data. Changes will sync when you reconnect.

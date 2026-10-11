@@ -235,7 +235,7 @@ export function AdminFormRepliesPage() {
           ))}
         </div>
 
-        <div className="ml-auto flex gap-2">
+        <div className="ml-auto flex flex-wrap gap-2">
           <button
             onClick={() => void downloadTesters()}
             disabled={busy !== null || (testerCount ?? 0) === 0}
@@ -361,8 +361,8 @@ export function AdminFormRepliesPage() {
       )}
 
       {!loading && totalPages > 1 && (
-        <div className="mt-6 flex items-center justify-between">
-          <p className="text-gray-500 text-sm">
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-gray-500 text-sm min-w-0">
             {total} reply(ies) · page {page} of {totalPages}
           </p>
           <div className="flex gap-2">

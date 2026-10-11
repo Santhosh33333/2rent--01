@@ -33,13 +33,13 @@ const TONE: Record<
   }
 > = {
   console: {
-    wrap: 'flex items-center gap-3 mb-6',
+    wrap: 'flex flex-wrap items-center gap-3 mb-6',
     back: 'p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition',
     title: 'text-2xl font-bold font-display text-white',
     subtitle: 'text-gray-400 text-sm mt-1',
   },
   surface: {
-    wrap: 'flex items-center gap-3 mb-6',
+    wrap: 'flex flex-wrap items-center gap-3 mb-6',
     back: 'p-2 rounded-lg bg-surface-200 dark:bg-surface-800 hover:bg-surface-300 dark:hover:bg-surface-700 text-surface-600 dark:text-surface-300 hover:text-surface-900 dark:hover:text-white transition',
     title: 'text-2xl font-bold font-display text-surface-900 dark:text-white',
     subtitle: 'text-surface-500 dark:text-surface-400 text-sm mt-1',
@@ -48,7 +48,7 @@ const TONE: Record<
   // `slate` ramp. It gets the structure without being re-themed, so adopting
   // this component does not quietly change how that page looks.
   slate: {
-    wrap: 'flex items-center gap-3 mb-6',
+    wrap: 'flex flex-wrap items-center gap-3 mb-6',
     back: 'p-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-slate-900 transition',
     title: 'text-2xl font-bold font-display text-slate-900',
     subtitle: 'text-slate-500 text-sm mt-1',

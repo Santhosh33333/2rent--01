@@ -67,7 +67,7 @@ export function AdminSosPage() {
     <div className="space-y-6">
       <PageHeader title="SOS Alerts" subtitle="Emergencies needing eyes right now — auto-refreshes" />
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {(['ACTIVE', 'ALL'] as const).map((f) => (
           <button
             key={f}
