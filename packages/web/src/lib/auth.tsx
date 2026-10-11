@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 import { api, refreshSessionTokens } from './api'
 import { disconnectGlobalSocket } from '../hooks/useSocket'
-import { isNativeApp, isPushOptedIn, requestNotificationPermission, registerForPushNotifications } from './pushNotifications'
+import { isNativeApp, isPushOptedIn, requestNotificationPermission, registerForPushNotifications, resetPushRegistration } from './pushNotifications'
 import type { RegisterInput } from '../types/api'
 
 interface User {
@@ -508,6 +508,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearSessionData()
     // Tear down the realtime socket so the session doesn't stay alive server-side
     disconnectGlobalSocket()
+    // Allow the next account on this device to re-register its push token, so
+    // notifications are not delivered to this device for the old account.
+    resetPushRegistration()
     setUser(null)
     setImpersonating(null)
   }

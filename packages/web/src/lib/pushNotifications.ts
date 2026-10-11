@@ -173,6 +173,17 @@ function obtainToken(timeoutMs = 8000): Promise<string> {
   });
 }
 
+/**
+ * Clear the successful-registration latch. Called on logout so the next account
+ * that signs in on this device re-registers its FCM token: the backend only
+ * detaches the token from the previous user when the device re-registers, so a
+ * stale latch meant the new user got no push and the old account's
+ * notifications were delivered to this device instead.
+ */
+export function resetPushRegistration(): void {
+  registeredThisSession = false;
+}
+
 export async function registerForPushNotifications(): Promise<boolean> {
   attachForegroundPushListener();
   attachNotificationActionListener();
