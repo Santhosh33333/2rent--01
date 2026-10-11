@@ -8,7 +8,7 @@ import {
   Trash2, Flag, Ban, X, MessageCircleReply, Phone,
   Compass, Calendar
 } from 'lucide-react'
-import { api } from '../../lib/api'
+import { api, assetUrl } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { useChat } from '../../hooks/useSocket'
 import { useCallLauncher } from '../../hooks/useCallLauncher'
@@ -45,19 +45,29 @@ const REACTION_KEYS = Object.keys(REACTION_GLYPHS)
 function ChatAttachment({ mediaUrl, kind }: { mediaUrl: string; kind: string }) {
   const [src, setSrc] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
+  // Chat media is stored as a relative "/uploads/..." path. `api`'s baseURL
+  // ends in "/api", so requesting it unresolved hits "/api/uploads/..." and
+  // 404s — every shared photo/voice note rendered "Attachment unavailable".
+  // assetUrl() resolves it against the API origin instead.
+  const resolved = assetUrl(mediaUrl)
   useEffect(() => {
     let alive = true
     let objectUrl: string | null = null
-    api.get(mediaUrl, { responseType: 'blob' }).then((res) => {
+    if (!resolved) {
+      setFailed(true)
+      return
+    }
+    api.get(resolved, { responseType: 'blob' }).then((res) => {
       if (!alive) return
       objectUrl = URL.createObjectURL(res.data)
       setSrc(objectUrl)
+      setFailed(false)
     }).catch(() => { if (alive) setFailed(true) })
     return () => {
       alive = false
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [mediaUrl])
+  }, [resolved])
   if (failed) return <p className="text-xs opacity-70">Attachment unavailable</p>
   if (!src) return <Loader2 className="w-4 h-4 animate-spin" />
   if (kind === 'IMAGE') {
