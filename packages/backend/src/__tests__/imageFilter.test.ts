@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import multer from 'multer';
 
 // Establish a minimal environment before importing anything that pulls in
 // config/env (which validates and refuses to load without the required vars).
@@ -24,7 +25,7 @@ function run(originalname: string, mimetype: string) {
   imageFilter({} as Express.Request, file, ((err: Error | null, ok?: boolean) => {
     error = err;
     accepted = !!ok;
-  }) as Express.Multer.FileFilterCallback);
+  }) as multer.FileFilterCallback);
   return { file, accepted, error: error as Error | null };
 }
 
