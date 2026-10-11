@@ -97,6 +97,14 @@ export function ConversationPage() {
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const convIdRef = useRef<string | null>(null)
   const tempSeq = useRef(0)
+  // Timers for optimistic bubbles awaiting a server ack. If the ack never
+  // arrives (the socket died mid-send) the placeholder is dropped instead of
+  // lingering forever as a message that was never actually delivered.
+  const pendingAcks = useRef(new Map<string, ReturnType<typeof setTimeout>>())
+  // The userId the currently-rendered fetch belongs to. A slow response for a
+  // conversation the user already navigated away from must not repopulate it.
+  const userIdRef = useRef(userId)
+  userIdRef.current = userId
   const chat = useChat(conversationId ?? '')
   const chatRef = useRef(chat)
   chatRef.current = chat
@@ -107,19 +115,50 @@ export function ConversationPage() {
 
   useEffect(() => { convIdRef.current = conversationId }, [conversationId])
 
+  // React reuses this component instance when the user opens a different
+  // conversation from the Messages list (same route, different :userId param).
+  // Without a reset the previous thread's conversationId and messages leak into
+  // the new one: sends went to the old conversation, receipts marked the wrong
+  // thread, and the previous chat's bubbles stayed on screen.
+  useEffect(() => {
+    setMessages([])
+    setConversationId(null)
+    convIdRef.current = null
+    setPartnerName('Chat')
+    setPartnerAvatar(null)
+    setOtherTyping(false)
+    setText('')
+    setReplyTarget(null)
+    setError(null)
+    setLoading(true)
+  }, [userId])
+
+  /** Drop the ack watchdog for an optimistic bubble (reconciled or failed). */
+  const clearPending = (tempId: string) => {
+    const t = pendingAcks.current.get(tempId)
+    if (t) {
+      clearTimeout(t)
+      pendingAcks.current.delete(tempId)
+    }
+  }
+
   // Initial load + safety-net poll (every 15s). Real-time socket events update the
   // list immediately; the poll only catches anything a dropped socket frame missed.
   const fetchMessages = useCallback(async () => {
     if (!userId) return
     try {
       const response = await api.get(`/messages/${userId}`)
+      // The user switched threads while this request was in flight.
+      if (userIdRef.current !== userId) return
       const result = response.data
       if (result.success) {
         const items: Message[] = result.data?.items || []
         const cid = (items as any[]).find((m: any) => m.conversationId)?.conversationId
         if (cid) {
           convIdRef.current = cid
-          setConversationId((prev) => prev ?? cid)
+          // Replace, not `prev ?? cid`: on a thread switch the previous
+          // conversationId must be replaced, not sticky.
+          setConversationId(cid)
         }
         const theirs = items.find((m) => m.senderId === userId && (m as any).sender?.fullName)
         if (theirs) {
@@ -169,10 +208,14 @@ export function ConversationPage() {
   useEffect(() => {
     const offs: Array<(() => void) | undefined> = []
     offs.push(chat.listenToMessageSent((data) => {
-      if (data.conversationId) {
+      // Only adopt the ack's conversationId if it belongs to the thread that is
+      // actually open. A late ack from a thread the user just navigated away
+      // from must not yank `conversationId` back to the old conversation.
+      if (data.conversationId && (!convIdRef.current || convIdRef.current === data.conversationId)) {
         convIdRef.current = data.conversationId
-        setConversationId((prev) => prev ?? data.conversationId)
+        setConversationId(data.conversationId)
       }
+      if (data.clientId) clearPending(data.clientId)
       setMessages((prev) => {
         // Reconcile the EXACT optimistic bubble. Matching on "the last temp"
         // instead crosses ids whenever two messages are in flight, because the
@@ -205,6 +248,10 @@ export function ConversationPage() {
     offs.push(chat.listenToMessages((data) => {
       const msgId = data.messageId || data.id
       if (!msgId) return
+      // New messages are delivered to the user's room regardless of which
+      // thread is open, so a message from another conversation used to appear
+      // in the currently-open thread. Only render the ones for this thread.
+      if (data.conversationId && data.conversationId !== conversationId) return
       setMessages((prev) => {
         if (prev.some((m) => m.id === msgId)) return prev
         const incoming: Message = {
@@ -321,6 +368,7 @@ export function ConversationPage() {
         const saved = res.data?.data?.message || res.data?.data || res.data
         const realId = saved?.id || saved?.message?.id
         if (realId) {
+          clearPending(tempId)
           setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, id: realId } : m)))
         }
       } else if (chat.isConnected()) {
@@ -328,6 +376,17 @@ export function ConversationPage() {
         // creates the conversation; message_sent returns the real conversationId.
         // clientId lets the ack rename this exact bubble rather than "the last one".
         chat.sendMessage(content, conversationId ? undefined : userId, tempId)
+        // Watchdog: if the server never acks (the socket died between the
+        // isConnected() guard and the emit) drop the placeholder and say so,
+        // instead of leaving a bubble that was silently never delivered.
+        pendingAcks.current.set(
+          tempId,
+          setTimeout(() => {
+            pendingAcks.current.delete(tempId)
+            setMessages((prev) => (prev.some((m) => m.id === tempId) ? prev.filter((m) => m.id !== tempId) : prev))
+            toast.error('Message not delivered. Check your connection and try again.')
+          }, 12000)
+        )
       } else {
         // The socket emit is fire-and-forget: when the socket is down it only
         // logs a warning and never throws, so the optimistic bubble would sit
@@ -338,10 +397,12 @@ export function ConversationPage() {
         const saved = res.data?.data?.message || res.data?.data || res.data
         const realId = saved?.id || saved?.message?.id
         if (realId) {
+          clearPending(tempId)
           setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, id: realId } : m)))
         }
       }
     } catch {
+      clearPending(tempId)
       setMessages((prev) => prev.filter((m) => m.id !== tempId))
       toast.error('Message not sent. Try again.')
     } finally {

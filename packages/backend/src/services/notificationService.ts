@@ -30,31 +30,62 @@ export async function sendPushNotification(
 
   try {
     const { prisma } = await import("../config/database.js");
-    const device = await prisma.device.findFirst({
+    // Every device the user has registered, not just the first. `findFirst`
+    // meant a user with a phone and a tablet only ever got the push on one of
+    // them, which reads as "notifications are unreliable".
+    const devices = await prisma.device.findMany({
       where: { userId, fcmToken: { not: null } },
-      select: { fcmToken: true },
+      select: { id: true, fcmToken: true },
     });
 
-    if (!device || !device.fcmToken) {
+    if (devices.length === 0) {
       return;
     }
 
     const messaging = getMessaging(firebaseApp);
-    await messaging.send({
-      token: device.fcmToken,
-      notification: { title, body },
-      data,
-      android: {
-        // High priority so the message is delivered even while the app is
-        // dozing in the background, and routed to the channel the client
-        // creates — without a live channel Android 8+ drops it silently.
-        priority: "high",
-        notification: {
-          channelId: "nabri_default",
-          sound: "default",
-        },
-      },
-    });
+    const staleIds: string[] = [];
+
+    await Promise.all(
+      devices.map(async (device) => {
+        if (!device.fcmToken) return;
+        try {
+          await messaging.send({
+            token: device.fcmToken,
+            notification: { title, body },
+            data,
+            android: {
+              // High priority so the message is delivered even while the app is
+              // dozing in the background, and routed to the channel the client
+              // creates; without a live channel Android 8+ drops it silently.
+              priority: "high",
+              notification: {
+                channelId: "nabri_default",
+                sound: "default",
+              },
+            },
+          });
+        } catch (err) {
+          const code = (err as { code?: string })?.code || "";
+          // FCM reports a permanently-dead token with these codes; leaving them
+          // in place meant every later send retried a token that can never work.
+          if (
+            code === "messaging/registration-token-not-registered" ||
+            code === "messaging/invalid-registration-token" ||
+            code === "messaging/invalid-argument"
+          ) {
+            staleIds.push(device.id);
+          } else {
+            console.error(`Failed to send push notification to ${userId}:`, err);
+          }
+        }
+      }),
+    );
+
+    if (staleIds.length > 0) {
+      await prisma.device
+        .updateMany({ where: { id: { in: staleIds } }, data: { fcmToken: null } })
+        .catch(() => {});
+    }
   } catch (err) {
     console.error(`Failed to send push notification to ${userId}:`, err);
   }

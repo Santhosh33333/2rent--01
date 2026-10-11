@@ -193,8 +193,14 @@ export function Layout() {
       <ImpersonationBanner />
       <OfflineBanner />
 
-      {/* Floating Header Capsule */}
-      <header className="fixed top-0 inset-x-0 z-50 px-4 pt-4 pointer-events-none">
+      {/* Floating Header Capsule. The top padding carries the status-bar inset
+          (`--safe-top`), which on the Android build is the only thing keeping
+          the capsule out from under the system status bar (edge-to-edge is
+          mandatory at targetSdk 36). */}
+      <header
+        className="fixed top-0 inset-x-0 z-50 px-4 pointer-events-none"
+        style={{ paddingTop: 'calc(1rem + var(--safe-top, 0px))' }}
+      >
         <motion.div 
           initial={{ y: -20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -264,6 +270,10 @@ export function Layout() {
               initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }}
               transition={{ type: 'spring', damping: 20, stiffness: 150 }}
               className="fixed inset-y-0 left-0 w-80 max-w-[85vw] bg-surface-50 dark:bg-surface-900 shadow-2xl p-6 flex flex-col overflow-hidden"
+              style={{
+                paddingTop: 'calc(1.5rem + var(--safe-top, 0px))',
+                paddingBottom: 'calc(1.5rem + var(--safe-bottom, 0px))',
+              }}
               onClick={(e: MouseEvent) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-8">
@@ -356,7 +366,12 @@ export function Layout() {
           height via --nabri-ad-strip), and the tab bar lifts with it. */}
       <main
         className="pt-24 pb-24 lg:pb-12 transition-all duration-500"
-        style={bannerUp ? { paddingBottom: 'calc(6rem + var(--nabri-ad-strip, 0px))' } : undefined}
+        style={{
+          paddingTop: 'calc(6rem + var(--safe-top, 0px))',
+          ...(bannerUp
+            ? { paddingBottom: 'calc(6rem + var(--nabri-ad-strip, 0px))' }
+            : null),
+        }}
       >
         <PartnerLiveLocationSharer />
         <UserLiveLocationSharer />

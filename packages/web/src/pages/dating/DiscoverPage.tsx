@@ -188,7 +188,16 @@ export function DiscoverPage() {
   ).length
 
   return (
-    <div className="relative -mx-4 -my-6 min-h-[calc(100dvh-2rem)] overflow-hidden bg-slate-950 text-white">
+    // Full-bleed dark surface. The height tracks the shell's content box
+    // exactly: 100dvh minus the fixed header (6rem) and the reserved nav/ad
+    // padding (6rem), minus the status-bar inset. The previous
+    // `min-h-[calc(100dvh-2rem)]` was taller than the space inside the shell,
+    // so the deck's header slid up under the status bar and the action row
+    // fell behind the tab bar.
+    <div
+      className="relative -mx-4 -my-5 overflow-hidden bg-slate-950 text-white"
+      style={{ minHeight: 'calc(100dvh - 12rem - var(--safe-top, 0px))' }}
+    >
       {/* One aurora behind the whole deck, so the screen has depth without the
           cards each carrying their own colour. */}
       <div className="prism-aurora animate-prism-drift opacity-50" aria-hidden />
@@ -486,7 +495,7 @@ export function DiscoverPage() {
       </main>
 
       {current && !loading && (
-        <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-white/10 bg-slate-950/85 px-4 py-4 backdrop-blur-lg">
+        <nav className="above-tabbar fixed inset-x-0 z-20 border-t border-white/10 bg-slate-950/85 px-4 py-4 backdrop-blur-lg">
           <div className="mx-auto flex max-w-md items-center justify-center gap-3">
             <Tilt max={12} lift={12} scale={1.06}>
               <button

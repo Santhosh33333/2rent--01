@@ -3,6 +3,7 @@ import { prisma } from "../config/database";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
 import { emitToUser } from "../services/socketService";
+import { notifyNewMessage } from "../services/messageNotifications";
 import { chatUpload, classifyChatFile, resolveChatMedia, type ResolvedChatMedia } from "../services/chatUploadService";
 import { readBlob, removeBlob } from "../services/blobStorage";
 
@@ -188,6 +189,11 @@ export async function sendMessage(req: AuthedRequest, res: Response): Promise<vo
         : null,
       timestamp: message.createdAt,
     });
+
+    // Inbox row + push for the receiver, matching the realtime path. Chat was
+    // the only user-facing event with no persistent notification, so a message
+    // sent to a closed app never appeared in the inbox and never pushed.
+    void notifyNewMessage(receiverId, message.sender, conversation.id, String(content ?? ""));
 
     // Echo the id on the response itself as well as persisting it, so the
     // contract is "a well-formed id or null" no matter what the driver returns

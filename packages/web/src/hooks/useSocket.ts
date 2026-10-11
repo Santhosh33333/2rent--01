@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useMemo } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from '../lib/auth';
 import { installNotificationAudioUnlock, playNotificationSound } from '../lib/notificationSound';
@@ -420,26 +420,51 @@ export function useChat(conversationId: string) {
     };
   }, [conversationId, joinChat, leaveChat]);
 
-  return {
-    joinChat,
-    leaveChat,
-    sendMessage,
-    // Lets callers detect a dead socket before emitting. `emit` is
-    // fire-and-forget and never throws, so without this a send on a dropped
-    // connection looks like it worked and the message is silently lost.
-    isConnected,
-    markAsRead,
-    setTyping,
-    listenToMessages,
-    listenToUserTyping,
-    listenToUserStoppedTyping,
-    listenToMessagesRead,
-    listenToMessageSent,
-    listenToMessageDeleted,
-    listenToMessageReacted,
-    listenToUserActive,
-    listenToUserInactive,
-  };
+  // Memoised so the consumer's `useEffect(..., [chat])` dependencies are
+  // stable. The individual callbacks are already `useCallback`-stable, but a
+  // fresh object literal each render re-ran every chat effect on every render -
+  // detaching and re-attaching listeners dozens of times a second, which is
+  // both wasteful and could drop an event during the teardown window.
+  return useMemo(
+    () => ({
+      joinChat,
+      leaveChat,
+      sendMessage,
+      // Lets callers detect a dead socket before emitting. `emit` is
+      // fire-and-forget and never throws, so without this a send on a dropped
+      // connection looks like it worked and the message is silently lost.
+      isConnected,
+      markAsRead,
+      setTyping,
+      listenToMessages,
+      listenToUserTyping,
+      listenToUserStoppedTyping,
+      listenToMessagesRead,
+      listenToMessageSent,
+      listenToMessageDeleted,
+      listenToMessageReacted,
+      listenToUserActive,
+      listenToUserInactive,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      joinChat,
+      leaveChat,
+      sendMessage,
+      isConnected,
+      markAsRead,
+      setTyping,
+      listenToMessages,
+      listenToUserTyping,
+      listenToUserStoppedTyping,
+      listenToMessagesRead,
+      listenToMessageSent,
+      listenToMessageDeleted,
+      listenToMessageReacted,
+      listenToUserActive,
+      listenToUserInactive,
+    ]
+  );
 }
 
 /**
@@ -474,11 +499,10 @@ export function useNotifications() {
     };
   }, [subscribe, unsubscribe]);
 
-  return {
-    subscribe,
-    unsubscribe,
-    listenToNotifications,
-  };
+  return useMemo(
+    () => ({ subscribe, unsubscribe, listenToNotifications }),
+    [subscribe, unsubscribe, listenToNotifications]
+  );
 }
 
 /**

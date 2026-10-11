@@ -2,6 +2,21 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ===== SAFE AREAS =====
+   The Android app targets SDK 36, where edge-to-edge is mandatory: the WebView
+   is laid out behind the transparent status and navigation bars. iOS populates
+   `env(safe-area-inset-*)`, but Android WebView only does so on newer versions,
+   so Capacitor's SystemBars plugin injects `--safe-area-inset-*` at runtime.
+   We take whichever source is present (max of the two) and expose a stable
+   `--safe-*` pair that every shell surface consumes, so the header, tab bar and
+   full-bleed screens clear the system bars on both platforms. */
+:root {
+  --safe-top: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px));
+  --safe-right: max(env(safe-area-inset-right, 0px), var(--safe-area-inset-right, 0px));
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px));
+  --safe-left: max(env(safe-area-inset-left, 0px), var(--safe-area-inset-left, 0px));
+}
+
 /* ===== ACCENT THEMES =====
    `primary-*`, `indigo-*`, `violet-*`, `purple-*` utilities resolve to these
    CSS variables, so the accent is switched purely by `data-accent` on <html>. */
@@ -129,7 +144,7 @@ html[data-accent='sky'] {
     /* When the mobile keyboard opens and the browser auto-scrolls a focused
        input into view, keep it BELOW the sticky Nabri header (h-16 = 4rem +
        notch inset) instead of letting it slide underneath the logo. */
-    scroll-padding-top: calc(4rem + env(safe-area-inset-top) + 0.75rem);
+    scroll-padding-top: calc(4rem + var(--safe-top, 0px) + 0.75rem);
   }
 
   html[data-font-size='small'] {
@@ -213,6 +228,20 @@ html.dark [class~='dark:text-primary-600'][class],
 html.dark [class~='dark:text-primary-700'][class] { color: rgb(var(--c-400)); }
 
 @layer components {
+  /* Fixed action bars that live *inside* a tabbed page (e.g. the dating
+     like/pass row) must clear the primary bottom tab bar, the AdMob strip and
+     the home indicator - otherwise the dock sits on top of them and the primary
+     action is untappable. Below lg the tab bar is present; at lg and up it is
+     hidden, so the bar only needs to respect the ad strip / safe area. */
+  .above-tabbar {
+    bottom: calc(var(--nabri-ad-strip, 0px) + var(--safe-bottom, 0px));
+  }
+  @media (max-width: 1023.98px) {
+    .above-tabbar {
+      bottom: calc(var(--nabri-ad-strip, 0px) + var(--safe-bottom, 0px) + 4.25rem);
+    }
+  }
+
   /* ===== SURFACES ===== */
   .glass {
     /* Was `dark:bg-surface-900` (#1c1917), barely lighter than the page's

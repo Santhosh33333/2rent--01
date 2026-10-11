@@ -1,11 +1,12 @@
 import { Capacitor } from '@capacitor/core';
 import { Device as CapDevice } from '@capacitor/device';
+import { App as CapApp } from '@capacitor/app';
 import { PushNotifications } from '@capacitor/push-notifications';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import type { PluginListenerHandle } from '@capacitor/core';
 import { api } from './api';
 
-let attempted = false;
+let inFlight = false;
 let registeredThisSession = false;
 
 const PUSH_OPTIN_KEY = 'nabri-push-optin'
@@ -66,7 +67,25 @@ async function ensureNotificationChannel(): Promise<void> {
 
 let foregroundPushAttached = false;
 let actionListenerAttached = false;
+let resumeRetryAttached = false;
 let localNotificationSeq = 0;
+
+/**
+ * Retry registration whenever the app returns to the foreground until it
+ * succeeds. Registration runs once after login; if that one attempt failed
+ * (permission granted later in Settings, token timeout on a cold start, no
+ * network), push stayed dead for the rest of the session. A resume is the
+ * natural moment to try again.
+ */
+function attachResumeRetry(): void {
+  if (resumeRetryAttached || !isNativeApp()) return;
+  resumeRetryAttached = true;
+  void CapApp.addListener('appStateChange', (state) => {
+    if (state?.isActive && !registeredThisSession) {
+      void registerForPushNotifications();
+    }
+  });
+}
 
 /**
  * Android renders a `notification` payload in the status bar only while the app
@@ -157,15 +176,23 @@ function obtainToken(timeoutMs = 8000): Promise<string> {
 export async function registerForPushNotifications(): Promise<boolean> {
   attachForegroundPushListener();
   attachNotificationActionListener();
-  if (registeredThisSession || attempted || !isNativeApp()) return false;
-  attempted = true;
+  attachResumeRetry();
+  // Only a *successful* registration is latched (`registeredThisSession`). The
+  // old `attempted` latch meant a single transient failure — a denied-then-
+  // granted permission, an 8s token timeout, a dropped network — disabled push
+  // for the rest of the session with no way to recover until a full restart.
+  if (registeredThisSession || inFlight || !isNativeApp()) return false;
+  inFlight = true;
   try {
     const perm = await PushNotifications.requestPermissions();
     if (perm.receive !== 'granted') return false;
 
     await ensureNotificationChannel();
     await PushNotifications.register();
-    const token = await obtainToken();
+    // One retry: the first token callback occasionally arrives after the 8s
+    // window on a cold start.
+    let token = await obtainToken();
+    if (!token) token = await obtainToken(12000);
     if (!token) return false;
 
     let name: string | undefined;
@@ -186,5 +213,7 @@ export async function registerForPushNotifications(): Promise<boolean> {
   } catch (err) {
     console.warn('[push] registration failed:', err);
     return false;
+  } finally {
+    inFlight = false;
   }
 }

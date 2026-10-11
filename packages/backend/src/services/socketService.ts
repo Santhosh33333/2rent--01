@@ -5,6 +5,7 @@ import { prisma } from "../config/database";
 import { verifyToken } from "../middleware/auth";
 import { registerCallHandlers } from "./callService";
 import { notifySosRecipients } from "./sosNotifications";
+import { notifyNewMessage } from "./messageNotifications";
 import { redisAdapterClients, markUserOnline, clearUserOnline } from "./redisClient";
 
 type AuthSocket = Socket & { userId?: string; userRole?: string };
@@ -108,17 +109,18 @@ export function getIO(): SocketIOServer | null {
 }
 
 /**
- * Emit an event to every socket belonging to a user.
- * Targets both the notifications room and raw sockets so delivery works
- * even if the client never subscribed to notifications.
+ * Emit an event to every socket belonging to a user, exactly once.
+ *
+ * Emitting to the `notifications_*` room *and* to each socket id (the previous
+ * behaviour) delivered every event twice to any socket that had subscribed to
+ * notifications - which surfaced as unread badges counting +2 and duplicated
+ * chat bubbles. Every socket joins `user_${userId}` on connect, and the Redis
+ * adapter fans a room out across instances, so a single room emit is both
+ * exactly-once and cross-instance correct.
  */
 export function emitToUser(userId: string, event: string, payload: unknown): void {
   if (!ioInstance) return;
-  ioInstance.to(`notifications_${userId}`).emit(event, payload);
-  const sockets = userSockets.get(userId) || [];
-  for (const socketId of sockets) {
-    ioInstance.to(socketId).emit(event, payload);
-  }
+  ioInstance.to(userRoom(userId)).emit(event, payload);
 }
 
 /** Room name holding every live socket of one user, on any instance. */
@@ -688,9 +690,17 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
         // the same id). The sender still learns the result from the ack; its
         // other devices/tabs are in the room and still receive this.
         socket.to(`chat_${convId}`).emit("new_message", payload);
-        // ... and push directly to the recipient so delivery works even if they
-        // are not currently viewing this conversation (no silent drops).
-        emitToUser(membership.receiverId, "new_message", payload);
+        // The receiver's sockets that are NOT viewing this thread receive it
+        // through their user room, so a message still lands when the thread is
+        // closed. A socket already in `chat_*` is excluded, so a message that
+        // the receiver is watching is delivered exactly once rather than two or
+        // three times.
+        io.to(userRoom(membership.receiverId)).except(`chat_${convId}`).emit("new_message", payload);
+
+        // Inbox row + push for the receiver. Chat previously created no
+        // Notification, so a message that arrived while the app was closed was
+        // completely silent. Fire-and-forget: never fail the send for this.
+        void notifyNewMessage(membership.receiverId, senderProfile, convId!, content);
 
         // Send receipt to sender (incl. conversationId so the client can reconcile
         // its optimistic message and start joining the room for a brand-new thread)

@@ -23,9 +23,14 @@ export function AppTabBar({ onOpenMore }: { onOpenMore: () => void }) {
     <nav
       aria-label="Primary"
       className="fixed inset-x-0 bottom-0 z-40 lg:hidden"
-      // Respect the iOS home indicator instead of letting the bar sit under it.
+      // Respect the iOS home indicator / Android navigation bar instead of
+      // letting the bar sit under it. `--safe-bottom` resolves the inset on
+      // both platforms (Android WebView does not populate env() on every
+      // version; Capacitor injects --safe-area-inset-* there instead).
       style={{
-        paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))",
+        paddingBottom: "max(0.5rem, var(--safe-bottom, env(safe-area-inset-bottom, 0px)))",
+        paddingLeft: "var(--safe-left, 0px)",
+        paddingRight: "var(--safe-right, 0px)",
         // Lifted above the AdMob banner strip while one is on screen so an ad
         // can never sit on top of the navigation. 0 when no banner is up.
         bottom: "var(--nabri-ad-strip, 0px)",
