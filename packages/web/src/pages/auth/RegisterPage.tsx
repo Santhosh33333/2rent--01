@@ -9,7 +9,7 @@ import { User, Mail, Phone, Lock, Eye, EyeOff, ArrowRight, ArrowLeft, Check, Spa
 import { useAuth } from '../../lib/auth'
 import { resolveLandingRole } from '../../lib/roles'
 import { api } from '../../lib/api'
-import { initGoogleSignIn, signInWithGoogle, renderGoogleButton } from '../../lib/googleAuth'
+import { initGoogleSignIn, signInWithGoogle, renderGoogleButton, isNativeApp, signInWithGoogleNative } from '../../lib/googleAuth'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { stashPendingReferralCode } from '../../components/account/ReferralCard'
 
@@ -136,6 +136,7 @@ export function RegisterPage() {
   const [googleReady, setGoogleReady] = useState(false)
   const googleBtnRef = useRef<HTMLDivElement>(null)
   const [googleRendered, setGoogleRendered] = useState(false)
+  const isNative = isNativeApp()
 
   const [otpStatus, setOtpStatus] = useState<OtpStatus>('idle')
   const [otpError, setOtpError] = useState('')
@@ -154,6 +155,9 @@ export function RegisterPage() {
   // the same place as one who filled in the form (profile completion).
   useEffect(() => {
     let active = true
+    // Web GSI is blocked inside the native WebView; the packaged app drives the
+    // on-device Google picker from handleGoogleClick instead.
+    if (isNative) return
     initGoogleSignIn(handleGoogleCredential)
       .then(() => {
         if (!active || !window.google?.accounts?.id) return
@@ -279,7 +283,26 @@ export function RegisterPage() {
     }
   }
 
-  const handleGoogleClick = () => {
+  const handleGoogleClick = async () => {
+    if (isNative) {
+      // Native shell: Google's GSI script is blocked in the WebView, so use the
+      // on-device account picker and exchange the ID token with our backend.
+      setGoogleLoading(true)
+      try {
+        const idToken = await signInWithGoogleNative()
+        await handleGoogleCredential(idToken)
+      } catch (err: unknown) {
+        // A dismissed account picker is a no-op, not an error worth shouting about.
+        if (!/cancel/i.test(String(err instanceof Error ? err.message : err))) {
+          const message = getErrorMessage(err, 'Google sign-up failed')
+          setSubmitError(message)
+          toast.error(message)
+        }
+      } finally {
+        setGoogleLoading(false)
+      }
+      return
+    }
     if (!googleReady) {
       toast.error('Google sign-up is still loading. Please wait a moment.')
       return

@@ -748,10 +748,22 @@ export async function googleSignIn(req: Request, res: Response): Promise<void> {
       const { OAuth2Client } = require("google-auth-library");
       const clientId = env.GOOGLE_CLIENT_ID;
       const client = new OAuth2Client(clientId);
+      // The Android/iOS app asks Google for an ID token whose audience is the
+      // Firebase web client (google-services.json `default_web_client_id`),
+      // while the browser flow uses GOOGLE_CLIENT_ID. Accept both so a stale
+      // env value can never reject a legitimately signed-in app user.
+      const audiences = Array.from(
+        new Set(
+          [
+            clientId,
+            "411366997531-hnplrt93hpbgssjvhcsknvofgvs9t3oe.apps.googleusercontent.com",
+          ].filter((id): id is string => Boolean(id)),
+        ),
+      );
       try {
         const ticket = await client.verifyIdToken({
           idToken,
-          audience: clientId,
+          audience: audiences,
         });
         const payload = ticket.getPayload();
         if (!payload) {

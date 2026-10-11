@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core'
 import { api } from './api'
 import { loadScriptOnce } from './loadScript'
 
@@ -128,4 +129,33 @@ export async function signInWithGoogle(idToken: string): Promise<{
     throw new Error(res.error || res.message || 'Google sign-in failed')
   }
   return res.data
+}
+
+/** True inside the packaged Android/iOS app rather than a browser tab. */
+export function isNativeApp(): boolean {
+  return Capacitor.isNativePlatform()
+}
+
+/**
+ * Google sign-in for the native shell.
+ *
+ * Google's web GSI script refuses to run inside an embedded WebView
+ * (`disallowed_useragent`), which left the in-app button dead. The packaged app
+ * instead drives the on-device Google account picker through the native Google
+ * SDK and returns a Google ID token, which is exchanged for a Buddi session by
+ * the very same `/auth/google` endpoint the browser flow uses.
+ *
+ * `skipNativeAuth` keeps Firebase Auth out of the loop: we hand the raw Google
+ * ID token to our own backend, so no extra Firebase user is created.
+ */
+export async function signInWithGoogleNative(): Promise<string> {
+  const { FirebaseAuthentication } = await import('@capacitor-firebase/authentication')
+  const result = await FirebaseAuthentication.signInWithGoogle({
+    skipNativeAuth: true,
+  })
+  const idToken = result.credential?.idToken
+  if (!idToken) {
+    throw new Error('Google did not return an ID token. Please try again.')
+  }
+  return idToken
 }

@@ -42,8 +42,8 @@ android {
         // and an invalid step refuses to advance. Before this, a duplicate
         // email (or any failed OTP request) re-rendered the Send button with no
         // message, and a rejection on the final step was only a toast.
-        versionCode 21
-        versionName "1.0.20"
+        versionCode 22
+        versionName "1.0.21"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

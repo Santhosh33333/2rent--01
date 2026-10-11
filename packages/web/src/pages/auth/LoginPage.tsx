@@ -2,7 +2,7 @@ import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../lib/auth'
-import { initGoogleSignIn, signInWithGoogle, renderGoogleButton } from '../../lib/googleAuth'
+import { initGoogleSignIn, signInWithGoogle, renderGoogleButton, isNativeApp, signInWithGoogleNative } from '../../lib/googleAuth'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { ArrowRight, Mail, Lock, Loader2, Phone, Eye, EyeOff, Smartphone } from 'lucide-react'
 import { api } from '../../lib/api'
@@ -42,6 +42,7 @@ export function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const { user, loading: authLoading, login, completeLogin } = useAuth()
+  const isNative = isNativeApp()
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
@@ -92,6 +93,9 @@ export function LoginPage() {
     // The Google SDK is fetched on demand and awaited, instead of being a
     // blocking tag on every page plus a 200ms polling loop.
     let active = true
+    // Web GSI is blocked inside the native WebView; the packaged app drives the
+    // on-device Google picker from handleGoogleClick instead.
+    if (isNative) return
     initGoogleSignIn(handleGoogleCredential)
       .then(() => {
         if (!active || !window.google?.accounts?.id) return
@@ -152,7 +156,24 @@ export function LoginPage() {
     }
   }, [completeLogin])
 
-  const handleGoogleClick = () => {
+  const handleGoogleClick = async () => {
+    if (isNative) {
+      // Native shell: Google's GSI script is blocked in the WebView, so use the
+      // on-device account picker and exchange the ID token with our backend.
+      setGoogleLoading(true)
+      try {
+        const idToken = await signInWithGoogleNative()
+        await handleGoogleCredential(idToken)
+      } catch (err: unknown) {
+        // A dismissed account picker is a no-op, not an error worth shouting about.
+        if (!/cancel/i.test(String(err instanceof Error ? err.message : err))) {
+          toast.error(getErrorMessage(err, 'Google sign-in failed'))
+        }
+      } finally {
+        setGoogleLoading(false)
+      }
+      return
+    }
     if (!googleReady) {
       toast.error('Google sign-in is still loading. Please wait a moment.')
       return
