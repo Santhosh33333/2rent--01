@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback, useMemo } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from '../lib/auth';
 import { installNotificationAudioUnlock, playNotificationSound } from '../lib/notificationSound';
+import { API_ORIGIN } from '../lib/apiBase';
 import type {
   LocationData,
   BookingStatusData,
@@ -90,7 +91,7 @@ export function useSocket(options: UseSocketOptions = {}) {
     isConnectingRef.current = true;
 
     try {
-      const socket = io((import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/api$/, ''), {
+      const socket = io(API_ORIGIN, {
         // Read the CURRENT token on every (re)connection attempt — prevents
         // stale-token reconnect loops after an access-token refresh.
         auth: (cb) => cb({ token: typeof window !== 'undefined' ? localStorage.getItem('token') : null }),

@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { compressImageFile, isLargeUncompressedImage } from './imageCompress'
+import { API_BASE_URL } from './apiBase'
 import type {
   PaginationParams,
   BookingCreateInput,
@@ -15,8 +16,6 @@ import type {
   PricingConfigInput,
   AdminAccountInput,
 } from '../types/api'
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
 
 function generateIdempotencyKey(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}-${crypto.randomUUID().slice(0, 8)}`

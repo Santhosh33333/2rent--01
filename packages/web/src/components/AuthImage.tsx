@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
 import { api, assetUrl } from '../lib/api'
+import { API_ORIGIN } from '../lib/apiBase'
 import { ImageOff } from 'lucide-react'
 
 interface AuthImageProps {
@@ -15,14 +16,6 @@ interface AuthImageProps {
 // /api/uploads/... and 404.
 // The API origin, which is not necessarily the page origin: in dev the SPA runs
 // on Vite's port and assets resolve to the backend's port.
-const API_ORIGIN = (() => {
-  try {
-    const base = import.meta.env.VITE_API_BASE_URL as string | undefined
-    return base ? new URL(base).origin : window.location.origin
-  } catch {
-    return window.location.origin
-  }
-})()
 
 // True when `resolved` points at our own backend, so the request may carry the
 // bearer token. Anything else must be fetched anonymously.
