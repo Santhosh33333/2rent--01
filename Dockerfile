@@ -23,4 +23,11 @@ EXPOSE 5000
 # the column stayed, and nothing failed. The prisma/migrations directory is
 # already copied in above. When nothing is pending this is a fast no-op, and a
 # migration that cannot apply fails the boot loudly rather than drifting.
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/src/server.js"]
+#
+# The deploy is retried with a short backoff because the first connection to
+# the managed Postgres can time out transiently (Prisma P1002) while the
+# database is still waking up, which previously failed an otherwise-good
+# deploy and left the previous container serving old code. Migrations must
+# still succeed before the server starts; after the retries the boot exits
+# non-zero, so a genuinely broken migration never serves traffic.
+CMD ["sh", "-c", "i=0; until npx prisma migrate deploy; do i=$((i+1)); echo \"prisma migrate deploy failed (attempt $i)\"; if [ $i -ge 5 ]; then echo 'migrations did not apply after 5 attempts'; exit 1; fi; sleep 10; done; node dist/src/server.js"]
