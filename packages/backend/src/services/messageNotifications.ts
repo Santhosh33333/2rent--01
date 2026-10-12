@@ -31,11 +31,17 @@ export async function notifyNewMessage(
   const trimmed = (preview || "").trim();
   const text = trimmed || "Sent you a message";
   const body = text.length > 140 ? `${text.slice(0, 137)}...` : text;
-  const data = {
+  // The chat route is keyed by the *peer's user id* (`/messages/:userId`), not
+  // the conversation id. Using conversationId here sent the in-app inbox tap to
+  // `/messages/<conversationId>`, which the conversation page read as a user id
+  // and fetched an empty thread for - i.e. tapping a message notification did
+  // not open the chat. An empty route is a valid FCM data value and the router
+  // ignores it.
+  const data: Record<string, string> = {
     type: "message",
     conversationId,
     senderId,
-    route: `/messages/${conversationId}`,
+    route: senderId ? `/messages/${senderId}` : "",
   };
 
   try {
@@ -52,10 +58,5 @@ export async function notifyNewMessage(
   }
 
   // FCM data payloads must be string-valued.
-  void sendPushNotification(receiverId, title, body, {
-    type: "message",
-    conversationId,
-    senderId,
-    route: `/messages/${conversationId}`,
-  });
+  void sendPushNotification(receiverId, title, body, data);
 }

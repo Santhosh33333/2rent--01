@@ -102,13 +102,32 @@ export default function CallOverlay() {
   // A tapped push notification is routed here. For an incoming call that has
   // already timed out this opens the caller's chat so the user can ring back;
   // while a call is still ringing the overlay already owns the screen, so we
-  // leave the user where they are.
+  // leave the user where they are. A new-message push opens that conversation:
+  // only call taps were handled, so tapping a message notification opened the
+  // app and left the user on whatever screen they were already on.
   useEffect(() => {
     const onAction = (event: Event) => {
-      const detail = (event as CustomEvent<{ type?: string; callerId?: string }>).detail;
-      if (detail?.type !== 'INCOMING_CALL' || !detail.callerId) return;
-      if (stateRef.current === 'incoming') return;
-      navigate(`/messages/${detail.callerId}`);
+      const detail = (event as CustomEvent<{
+        type?: string;
+        callerId?: string;
+        senderId?: string;
+        route?: string;
+      }>).detail;
+      if (!detail) return;
+      if (detail.type === 'INCOMING_CALL' && detail.callerId) {
+        if (stateRef.current === 'incoming') return;
+        navigate(`/messages/${detail.callerId}`);
+        return;
+      }
+      if (detail.type === 'message') {
+        // The server route is the peer's chat (`/messages/<senderId>`); fall
+        // back to senderId for pushes sent before that field was corrected.
+        if (typeof detail.route === 'string' && detail.route.startsWith('/')) {
+          navigate(detail.route);
+        } else if (detail.senderId) {
+          navigate(`/messages/${detail.senderId}`);
+        }
+      }
     };
     window.addEventListener('nabri:notification-action', onAction);
     return () => window.removeEventListener('nabri:notification-action', onAction);
