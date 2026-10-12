@@ -1,5 +1,6 @@
 import { Response } from "express";
 import { prisma } from "../config/database";
+import { sendPushNotification } from "../services/notificationService";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
 
@@ -151,6 +152,32 @@ export async function sendChatRequest(req: AuthedRequest, res: Response): Promis
       },
     });
 
+    // Tell the receiver. Every other user-to-user event (likes, matches,
+    // bookings) creates an inbox row and a push; a sent chat request created
+    // neither, so the only way to notice one was to open the Requests screen
+    // unprompted - the feature was effectively invisible. The daily / same
+    // person / cooldown limits above already bound how often this can fire.
+    const senderName = chatRequest.sender.fullName?.trim() || "Someone";
+    const notificationData = {
+      kind: "CHAT_REQUEST",
+      chatRequestId: chatRequest.id,
+      senderId,
+      route: "/messages/requests",
+    };
+    void prisma.notification
+      .create({
+        data: {
+          userId: receiverId,
+          title: "New chat request",
+          body: `${senderName} wants to message you.`,
+          data: JSON.stringify(notificationData),
+        },
+      })
+      .catch(() => {});
+    void sendPushNotification(receiverId, "New chat request", `${senderName} wants to message you.`, {
+      ...notificationData,
+    });
+
     sendSuccess(res, { chatRequest }, "Chat request sent.", 201);
   } catch (err: any) {
     console.error("sendChatRequest error:", err);
@@ -242,9 +269,30 @@ export async function acceptChatRequest(req: AuthedRequest, res: Response): Prom
         userId: updated.senderId,
         title: "Chat request accepted",
         body: `${updated.receiver.fullName} accepted your chat request.`,
-        data: JSON.stringify({ kind: "CHAT_REQUEST_ACCEPTED", chatRequestId: updated.id }),
+        // Route to the chat with the person who accepted. Without a route the
+        // inbox row was not tappable (`resolveNotificationRoute` returns null).
+        data: JSON.stringify({
+          kind: "CHAT_REQUEST_ACCEPTED",
+          chatRequestId: updated.id,
+          senderId: updated.receiver.id,
+          route: `/messages/${updated.receiver.id}`,
+        }),
       },
     }).catch(() => {});
+
+    // Push too, not just the inbox row: the sender has been waiting on this and
+    // will usually have the app closed by the time it is accepted.
+    void sendPushNotification(
+      updated.senderId,
+      "Chat request accepted",
+      `${updated.receiver.fullName} accepted your chat request.`,
+      {
+        kind: "CHAT_REQUEST_ACCEPTED",
+        chatRequestId: updated.id,
+        senderId: updated.receiver.id,
+        route: `/messages/${updated.receiver.id}`,
+      },
+    );
 
     sendSuccess(res, { chatRequest: updated }, "Chat request accepted.");
   } catch (err: any) {
