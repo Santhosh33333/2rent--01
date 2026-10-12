@@ -1,6 +1,5 @@
 import { Response } from 'express'
 import { prisma } from '../config/database'
-import { sendPushNotification } from '../services/notificationService'
 import { AuthedRequest } from '../middleware/authTypes'
 
 /**
@@ -349,8 +348,7 @@ export async function notifyBookingStatusChange(
   const msg = messages[status]
   if (!msg) return
 
-  void sendPushNotification(userId, msg.title, msg.body, { bookingId, status })
-
+  // Row only: the Notification.create middleware fans it out to realtime + push.
   return createNotification(
     userId,
     msg.title,

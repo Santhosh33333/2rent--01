@@ -6,7 +6,7 @@ import * as preferenceService from "./preferenceService";
 // from the controller mirrors that precedent; the alternative, socketService's
 // sendNotificationToUser, has no callers at all, so it is not a real option.
 import { createNotification } from "../controllers/notificationController";
-import { sendPushNotification } from "./notificationService";
+
 
 export const DATING_NEW_USER_HOURS = 48;
 
@@ -139,13 +139,14 @@ async function excludedIds(viewerId: string): Promise<string[]> {
  * Tell a user about something, in-app and by push, without ever failing the
  * caller's request.
  *
- * Both halves are already non-blocking on their own - createNotification catches
- * its own errors and returns null, and sendPushNotification returns immediately
- * when Firebase is not configured. The catch here is belt and braces, and it
- * matters more than usual in this file: by the time a notification is sent the
- * request has already been charged for, so a thrown error must never turn a
- * successful paid request into a 500. Losing a notification is survivable;
- * charging someone and then telling them it failed is not.
+ * Only the inbox row is written. The `Notification.create` middleware
+ * (`server.ts`) fans every row out to the realtime event AND to FCM push, so a
+ * second explicit `sendPushNotification` here would deliver a duplicate push.
+ * The catch is belt and braces, and it matters more than usual in this file: by
+ * the time a notification is sent the request has already been charged for, so
+ * a thrown error must never turn a successful paid request into a 500. Losing a
+ * notification is survivable; charging someone and then telling them it failed
+ * is not.
  */
 async function announce(
   userId: string,
@@ -155,7 +156,6 @@ async function announce(
 ): Promise<void> {
   try {
     await createNotification(userId, title, body, data);
-    void sendPushNotification(userId, title, body, data);
   } catch (err) {
     console.error(
       "dating notification failed:",

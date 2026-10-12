@@ -1,6 +1,5 @@
 ﻿import { prisma } from "../config/database";
 import { emitToUser, getIO } from "./socketService";
-import { sendPushNotification } from "./notificationService";
 
 /**
  * Job dispatch pipeline.
@@ -130,17 +129,13 @@ export async function dispatchBooking(bookingId: string): Promise<void> {
 
     for (const target of targets) {
       emitToUser(target.userId, "new_job", payload);
+      // Row only: the Notification.create middleware fans it out to realtime +
+      // push. An explicit sendPushNotification here was a second, identical push.
       void persistNotification(
         target.userId,
         "New job nearby",
         `A ${serviceLabel} job is available. Open the app to view details and accept.`,
         payload
-      );
-      void sendPushNotification(
-        target.userId,
-        "New job nearby",
-        `A ${serviceLabel} job is available. Open the app to view details and accept.`,
-        { bookingId: booking.id, type: "NEW_JOB" }
       );
     }
 

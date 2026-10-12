@@ -1,5 +1,4 @@
 import { prisma } from "../config/database";
-import { sendPushNotification } from "./notificationService";
 
 interface SenderProfile {
   id: string;
@@ -18,6 +17,10 @@ interface SenderProfile {
  *
  * Always called fire-and-forget: a notification failure must never fail the
  * message send.
+ *
+ * Note: only the inbox row is written here. The `Notification.create` middleware
+ * (`server.ts`) fans every row out to the realtime event AND to FCM push, so an
+ * explicit `sendPushNotification` here would deliver a second, identical push.
  */
 export async function notifyNewMessage(
   receiverId: string,
@@ -56,7 +59,4 @@ export async function notifyNewMessage(
   } catch (err) {
     console.error("[notifyNewMessage] failed to create notification:", err);
   }
-
-  // FCM data payloads must be string-valued.
-  void sendPushNotification(receiverId, title, body, data);
 }

@@ -450,14 +450,25 @@ if (!dbAvailable) {
 
   // Realtime + push fan-out for EVERY in-app notification row (spec: OTP and
   // arrival alerts must reach the user live, not sit silently in the DB).
-  // Installed once on the shared singleton — covers all creators, so no
+  // Installed once on the shared singleton - covers all creators, so no
   // call site can forget to emit. Never throws into the write path.
+  //
+  // `createMany` is handled as well: it is a different Prisma action, so rows
+  // written in bulk (e.g. the admin verification queue) otherwise land in the
+  // inbox and reach nobody's phone - the exact "written but nobody told" bug
+  // this middleware exists to prevent.
   prisma.$use(async (params, next) => {
     const result = await next(params);
-    if (params.model === "Notification" && params.action === "create") {
+    const isCreate = params.model === "Notification" && params.action === "create";
+    const isCreateMany = params.model === "Notification" && params.action === "createMany";
+    if (isCreate || isCreateMany) {
       try {
-        const n = result as { id: string; userId: string; title: string; body: string; data?: string | null };
-        if (n?.userId) {
+        const rows: Array<{ id?: string; userId?: string; title?: string; body?: string; data?: string | null }> =
+          isCreate
+            ? [result as { id: string; userId: string; title: string; body: string; data?: string | null }]
+            : (Array.isArray(params.args?.data) ? params.args.data : [params.args?.data]).filter(Boolean);
+        for (const n of rows) {
+          if (!n?.userId) continue;
           emitToUser(n.userId, "notification", { id: n.id, title: n.title, body: n.body, data: n.data });
           let pushData: Record<string, string> | undefined;
           try {
@@ -470,7 +481,7 @@ if (!dbAvailable) {
           } catch {
             pushData = undefined;
           }
-          void sendPushNotification(n.userId, n.title, n.body, pushData);
+          void sendPushNotification(n.userId, n.title ?? "", n.body ?? "", pushData);
         }
       } catch (err) {
         console.error("[NOTIFY] fan-out failed:", err);

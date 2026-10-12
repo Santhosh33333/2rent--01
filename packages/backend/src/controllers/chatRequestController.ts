@@ -1,6 +1,5 @@
 import { Response } from "express";
 import { prisma } from "../config/database";
-import { sendPushNotification } from "../services/notificationService";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
 
@@ -153,10 +152,11 @@ export async function sendChatRequest(req: AuthedRequest, res: Response): Promis
     });
 
     // Tell the receiver. Every other user-to-user event (likes, matches,
-    // bookings) creates an inbox row and a push; a sent chat request created
-    // neither, so the only way to notice one was to open the Requests screen
-    // unprompted - the feature was effectively invisible. The daily / same
-    // person / cooldown limits above already bound how often this can fire.
+    // bookings) creates an inbox row, which the `Notification.create` middleware
+    // fans out to realtime + push; a sent chat request created none, so the only
+    // way to notice one was to open the Requests screen unprompted - the feature
+    // was effectively invisible. The daily / same person / cooldown limits above
+    // already bound how often this can fire.
     const senderName = chatRequest.sender.fullName?.trim() || "Someone";
     const notificationData = {
       kind: "CHAT_REQUEST",
@@ -174,9 +174,6 @@ export async function sendChatRequest(req: AuthedRequest, res: Response): Promis
         },
       })
       .catch(() => {});
-    void sendPushNotification(receiverId, "New chat request", `${senderName} wants to message you.`, {
-      ...notificationData,
-    });
 
     sendSuccess(res, { chatRequest }, "Chat request sent.", 201);
   } catch (err: any) {
@@ -271,6 +268,8 @@ export async function acceptChatRequest(req: AuthedRequest, res: Response): Prom
         body: `${updated.receiver.fullName} accepted your chat request.`,
         // Route to the chat with the person who accepted. Without a route the
         // inbox row was not tappable (`resolveNotificationRoute` returns null).
+        // The `Notification.create` middleware also pushes this row, which is
+        // what reaches the sender whose app is closed while they wait.
         data: JSON.stringify({
           kind: "CHAT_REQUEST_ACCEPTED",
           chatRequestId: updated.id,
@@ -279,20 +278,6 @@ export async function acceptChatRequest(req: AuthedRequest, res: Response): Prom
         }),
       },
     }).catch(() => {});
-
-    // Push too, not just the inbox row: the sender has been waiting on this and
-    // will usually have the app closed by the time it is accepted.
-    void sendPushNotification(
-      updated.senderId,
-      "Chat request accepted",
-      `${updated.receiver.fullName} accepted your chat request.`,
-      {
-        kind: "CHAT_REQUEST_ACCEPTED",
-        chatRequestId: updated.id,
-        senderId: updated.receiver.id,
-        route: `/messages/${updated.receiver.id}`,
-      },
-    );
 
     sendSuccess(res, { chatRequest: updated }, "Chat request accepted.");
   } catch (err: any) {
