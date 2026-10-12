@@ -15,6 +15,7 @@ import type {
   ReportResolve,
   PricingConfigInput,
   AdminAccountInput,
+  SubscriptionPlanInput,
 } from '../types/api'
 
 function generateIdempotencyKey(): string {
@@ -405,6 +406,20 @@ export const adminApi = {
   // Permanent "free for life" access for one named account.
   grantUserLifetime: (userId: string, reason?: string) =>
     api.post(`/admin/subscriptions/trial/users/${userId}/lifetime`, { reason }),
+  // Subscription plan catalogue. `price` is what a renewal costs; `listPrice`
+  // is the higher struck-through "was" and `offerPrice` is the discounted first
+  // period shown to a brand-new subscriber. Every amount on the user pricing
+  // screen comes from these rows, so this is the only place a price is set.
+  getSubscriptionPlans: () => api.get('/admin/subscriptions/plans'),
+  createSubscriptionPlan: (data: SubscriptionPlanInput) =>
+    api.post('/admin/subscriptions/plans', data),
+  // Partial update: only the fields present are changed.
+  updateSubscriptionPlan: (code: string, data: Partial<SubscriptionPlanInput>) =>
+    api.post(`/admin/subscriptions/plans/${code}`, data),
+  // Flips the plan on/off. The server refuses to hide a plan that still has
+  // active subscribers.
+  toggleSubscriptionPlan: (code: string) =>
+    api.post(`/admin/subscriptions/plans/${code}/toggle`),
   // Website enquiry forms (beta tester / feedback / investor). The sheet is
   // built server-side so an export and an emailed copy are the same rows.
   getFormReplies: (params?: PaginationParams) => api.get('/admin/forms', { params }),

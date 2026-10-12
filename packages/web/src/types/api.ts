@@ -136,6 +136,30 @@ export interface AdminAccountInput {
   department?: string
 }
 
+/**
+ * A subscription plan row, as configured by an admin.
+ *
+ * `listPrice` is the higher struck-through "was" and `offerPrice` is the
+ * discounted first period offered to a brand-new subscriber. Both are nullable:
+ * clearing either removes the offer entirely rather than drawing a discount the
+ * product is not actually granting. The server rejects a `listPrice` that is not
+ * above `price`, or an `offerPrice` that is not below it.
+ */
+export interface SubscriptionPlanInput {
+  code?: string
+  name?: string
+  description?: string | null
+  price?: number
+  listPrice?: number | null
+  offerPrice?: number | null
+  currency?: string
+  durationDays?: number
+  trialDays?: number
+  displayOrder?: number
+  isActive?: boolean
+  reason?: string
+}
+
 export interface PriceEstimateParams {
   serviceType: string
   durationMinutes: number

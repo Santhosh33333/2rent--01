@@ -103,6 +103,7 @@ const AdminTopupsPage = lazy(() => import('./pages/admin/AdminTopupsPage').then(
 const AdminBankStatementsPage = lazy(() => import('./pages/admin/AdminBankStatementsPage').then(m => ({ default: m.AdminBankStatementsPage })))
 const AdminSettingsPage = lazy(() => import('./pages/admin/AdminSettingsPage').then(m => ({ default: m.AdminSettingsPage })))
 const AdminPricingPage = lazy(() => import('./pages/admin/AdminPricingPage').then(m => ({ default: m.AdminPricingPage })))
+const AdminSubscriptionPlansPage = lazy(() => import('./pages/admin/AdminSubscriptionPlansPage').then(m => ({ default: m.AdminSubscriptionPlansPage })))
 const AdminLiveTrackingPage = lazy(() => import('./pages/admin/AdminLiveTrackingPage').then(m => ({ default: m.AdminLiveTrackingPage })))
 const AdminEmailBroadcastPage = lazy(() => import('./pages/admin/AdminEmailBroadcastPage').then(m => ({ default: m.AdminEmailBroadcastPage })))
 
@@ -360,6 +361,7 @@ export function App() {
           <Route path="/admin/bank-statements" element={<AdminBankStatementsPage />} />
               <Route path="/admin/settings" element={<AdminSettingsPage />} />
               <Route path="/admin/pricing" element={<AdminPricingPage />} />
+          <Route path="/admin/subscription-plans" element={<AdminSubscriptionPlansPage />} />
               <Route path="/admin/live-tracking" element={<AdminLiveTrackingPage />} />
               <Route path="/admin/email" element={<AdminEmailBroadcastPage />} />
             </Route>

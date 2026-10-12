@@ -136,14 +136,23 @@ export const ROLE_TEMPLATES: Record<string, Partial<Record<Section, Action[]>>> 
     CONTENT_MODERATION: ["VIEW", "APPROVE", "REJECT"],
     AGREEMENTS: ["VIEW"],
   },
+  // "All finance access": the whole money surface, plus PRICING so this role can
+  // set the subscription price/offer it is collecting, plus read-only audit logs
+  // to trace every movement it can now make. Previously this role was actually
+  // NARROWER than the plain FINANCE role (it had no AGREEMENTS and no PRICING),
+  // which meant the person responsible for the money could not configure it.
   FINANCE_ADMIN: {
-    WALLETS: ["VIEW", "CREATE", "EDIT", "EXPORT"],
-    REFUNDS: ["VIEW", "CREATE", "APPROVE", "REJECT", "EXPORT"],
-    WITHDRAWALS: ["VIEW", "APPROVE", "REJECT", "EXPORT"],
-    PAYMENTS: ["VIEW", "EXPORT"],
-    ANALYTICS: ["VIEW"],
-    REPORTS: ["VIEW"],
+    USERS: ["VIEW"],
     BOOKINGS: ["VIEW"],
+    PAYMENTS: ["VIEW", "EDIT", "EXPORT"],
+    REFUNDS: ["VIEW", "CREATE", "APPROVE", "REJECT", "EXPORT"],
+    WALLETS: ["VIEW", "CREATE", "EDIT", "EXPORT"],
+    WITHDRAWALS: ["VIEW", "APPROVE", "REJECT", "EXPORT"],
+    PRICING: ["VIEW", "EDIT"],
+    AGREEMENTS: ["VIEW", "EDIT", "EXPORT"],
+    ANALYTICS: ["VIEW"],
+    REPORTS: ["VIEW", "CREATE", "APPROVE", "REJECT", "EXPORT"],
+    AUDIT_LOGS: ["VIEW"],
   },
   MARKETING_ADMIN: {
     OFFERS: ["VIEW", "CREATE", "EDIT", "APPROVE", "REJECT", "DELETE", "EXPORT"],

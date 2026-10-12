@@ -2,7 +2,7 @@ import { Response, NextFunction } from "express";
 import { prisma } from "../config/database";
 import { sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
-import { ADMIN_ROLES, Action, Section, SUPER_ADMIN_ROLE, perm } from "./sections";
+import { ADMIN_ROLES, Action, Section, SUPER_ADMIN_ROLE, ROLE_TEMPLATES, expandTemplate, perm } from "./sections";
 import { isAdminTierRole } from "./activeRole";
 
 function parsePerms(raw: unknown): string[] {
@@ -41,9 +41,18 @@ export async function resolveAdminPermissions(adminUserId: string): Promise<{
     return { role, permissions: ["*"], isSuper: true };
   }
   const override = parsePerms((adminUser as any)?.permissions);
+  // A per-account override is an explicit, deliberate grant or narrowing, so it
+  // always wins. Otherwise, for a role that ships a template, prefer the SHIPPED
+  // template over the stored AdminRole row: that row is a snapshot written when
+  // the account was provisioned, so a role widened in code (e.g. FINANCE_ADMIN
+  // gaining PRICING) never reached accounts that already existed. Roles with no
+  // template (custom roles) still fall back to their stored permission list.
+  const template = ROLE_TEMPLATES[role];
   const base = override.length
     ? override
-    : parsePerms(adminUser?.role?.permissions);
+    : template
+      ? expandTemplate(template)
+      : parsePerms(adminUser?.role?.permissions);
   return { role, permissions: base, isSuper: false };
 }
 

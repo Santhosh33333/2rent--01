@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import {
   LayoutDashboard, Users, ShieldCheck, Handshake,
-  Banknote, Flag, ScrollText, Settings, Percent, CalendarCheck, Wallet, Radio, Users2, CalendarDays, Layers, ShieldAlert, QrCode, Siren, FileSignature, LifeBuoy, Landmark
+  Banknote, Flag, ScrollText, Settings, Percent, CalendarCheck, Wallet, Radio, Users2, CalendarDays, Layers, ShieldAlert, QrCode, Siren, FileSignature, LifeBuoy, Landmark, BadgePercent
 } from 'lucide-react'
 import { RoleSwitcher } from '../../components/RoleSwitcher'
 import { AdminPageHeader, AdminShell } from '../../components/admin/AdminPageHeader'
@@ -30,6 +30,7 @@ export function AdminPortalPage() {
   { path: '/admin/support', title: 'Support desk', desc: 'Answer user requests', icon: LifeBuoy },
     { path: '/admin/audit-logs', title: 'Audit Logs', desc: 'System activity logs', icon: ScrollText },
     { path: '/admin/pricing', title: 'Pricing & Fees', desc: 'User & partner fee control', icon: Percent },
+    { path: '/admin/subscription-plans', title: 'Subscription Plans', desc: 'Regular price & first-month offer', icon: BadgePercent },
     { path: '/admin/settings', title: 'Settings', desc: 'Platform configuration', icon: Settings },
   ]
 
