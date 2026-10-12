@@ -15,6 +15,16 @@
   --safe-right: max(env(safe-area-inset-right, 0px), var(--safe-area-inset-right, 0px));
   --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px));
   --safe-left: max(env(safe-area-inset-left, 0px), var(--safe-area-inset-left, 0px));
+
+  /* ===== PHONE AUTO-FIT =====
+     Every Tailwind size is expressed in rem, so the root font size is the single
+     lever that makes the whole UI scale with the device. Before this the base was
+     a fixed 16px, so a 320px phone packed 16px-sized paddings and text into the
+     narrowest screen (cramped, and prone to overflow) while a 430px phone looked
+     sparse. Now the base tracks the viewport width: ~15px at 320px, reaching 16px
+     around 400px, then held at 16px so large phones and desktop never inflate.
+     Never below 15px, so touch targets stay usable. */
+  --app-font-base: clamp(15px, calc(9.09px + 1.818vw), 16px);
 }
 
 /* ===== ACCENT THEMES =====
@@ -141,17 +151,27 @@ html[data-accent='sky'] {
     scroll-behavior: smooth;
     -webkit-tap-highlight-color: transparent;
     color-scheme: light;
+    /* Viewport-proportional base (see --app-font-base). This is what makes a
+       320px phone and a 430px phone both lay out correctly without per-screen
+       tweaks. */
+    font-size: var(--app-font-base, 16px);
+    /* Android WebView "font boosting" re-inflates body text it thinks is too
+       small, which fights the auto-fit above. Pin it. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
     /* When the mobile keyboard opens and the browser auto-scrolls a focused
        input into view, keep it BELOW the sticky Nabri header (h-16 = 4rem +
        notch inset) instead of letting it slide underneath the logo. */
     scroll-padding-top: calc(4rem + var(--safe-top, 0px) + 0.75rem);
   }
 
+  /* The user's manual size choice now composes with the auto-fit base instead of
+     replacing it with a fixed percentage. */
   html[data-font-size='small'] {
-    font-size: 93.75%; /* 15px base */
+    font-size: calc(var(--app-font-base, 16px) * 0.9375); /* ~15px-class */
   }
   html[data-font-size='large'] {
-    font-size: 106.25%; /* 17px base */
+    font-size: calc(var(--app-font-base, 16px) * 1.0625); /* ~17px-class */
   }
 
   body {
@@ -160,6 +180,20 @@ html[data-accent='sky'] {
     background-size: 36px 36px;
     transition: background-color 0.25s ease, color 0.25s ease;
     overflow-x: clip;
+    /* Auto-fit guard: an unbreakable string (email, URL, long id) is the usual
+       reason one card spills past the edge of a narrow phone. break-word only
+       kicks in when the token cannot fit on its own line, so normal text is
+       untouched. */
+    overflow-wrap: break-word;
+  }
+
+  /* Auto-fit guard: media never wider than its container, so one oversized
+     image can't introduce a horizontal scroll on a small screen. */
+  img,
+  video,
+  canvas {
+    max-width: 100%;
+    height: auto;
   }
 
   html.dark { color-scheme: dark; }
