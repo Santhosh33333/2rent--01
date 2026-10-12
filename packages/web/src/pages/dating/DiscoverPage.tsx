@@ -173,6 +173,11 @@ export function DiscoverPage() {
         if (res.isMatch) setMatch(current)
       } catch {
         setError('That action did not go through.')
+        // The directive was never recorded, so put the card back: dropping it
+        // silently loses a profile until a full refresh and makes the failure
+        // look like a stale deck. The id guard avoids duplicating a card if a
+        // background refresh already re-added it.
+        setQueue((q) => (q.some((c) => c.id === current.id) ? q : [current, ...q]))
       } finally {
         setBusy(false)
       }
