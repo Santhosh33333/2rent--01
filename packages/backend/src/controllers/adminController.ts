@@ -1328,7 +1328,7 @@ export async function approveWithdrawalWithProof(req: AuthedRequest, res: Respon
         userId: request.userId,
         title: "Withdrawal paid",
         body: `Rs ${Number(request.amount)} was paid out to your ${request.method === "UPI" ? "UPI" : "bank"} account. A payout proof has been attached.`,
-        data: JSON.stringify({ kind: "WITHDRAWAL_PAID", withdrawalId: id }),
+        data: JSON.stringify({ kind: "WITHDRAWAL_PAID", withdrawalId: id, route: "/wallet" }),
       },
     });
 
@@ -2944,7 +2944,7 @@ export async function verifySubscriptionPayment(req: AuthedRequest, res: Respons
             userId: row.userId,
             title: "Subscription payment rejected",
             body: `Your ${row.plan.name} payment was not accepted. ${note}`.trim(),
-            data: JSON.stringify({ kind: "SUBSCRIPTION_PAYMENT_REJECTED", subscriptionPaymentId: id }),
+            data: JSON.stringify({ kind: "SUBSCRIPTION_PAYMENT_REJECTED", subscriptionPaymentId: id, route: "/subscription" }),
           },
         });
       }
@@ -2959,7 +2959,7 @@ export async function verifySubscriptionPayment(req: AuthedRequest, res: Respons
           userId: row.userId,
           title: "More info needed",
           body: `We need more information for your ${row.plan.name} payment. ${note}`.trim(),
-          data: JSON.stringify({ kind: "SUBSCRIPTION_PAYMENT_INFO", subscriptionPaymentId: id }),
+          data: JSON.stringify({ kind: "SUBSCRIPTION_PAYMENT_INFO", subscriptionPaymentId: id, route: "/subscription" }),
         },
       });
       sendSuccess(res, { status: "REQUEST_INFO" }, "Information requested.");
@@ -3039,7 +3039,7 @@ export async function verifyTopupRequest(req: AuthedRequest, res: Response): Pro
           userId: row.userId,
           title: "Top-up rejected",
           body: `Your top-up was not accepted. ${note}`.trim(),
-          data: JSON.stringify({ kind: "TOPUP_REJECTED", topupId: id }),
+          data: JSON.stringify({ kind: "TOPUP_REJECTED", topupId: id, route: "/wallet" }),
         },
       });
       sendSuccess(res, { status: "REJECTED" }, "Top-up rejected.");
@@ -3053,7 +3053,7 @@ export async function verifyTopupRequest(req: AuthedRequest, res: Response): Pro
           userId: row.userId,
           title: "More info needed",
           body: `Admin needs more information for your top-up. ${note}`.trim(),
-          data: JSON.stringify({ kind: "TOPUP_INFO", topupId: id }),
+          data: JSON.stringify({ kind: "TOPUP_INFO", topupId: id, route: "/wallet" }),
         },
       });
       sendSuccess(res, { status: "REQUEST_INFO" }, "Information requested.");
@@ -3124,7 +3124,7 @@ export async function creditUserWallet(req: AuthedRequest, res: Response): Promi
         userId: user.id,
         title: "Wallet credited",
         body: `Rs ${amount} added to your wallet. ${note}`.trim(),
-        data: JSON.stringify({ kind: "ADMIN_CREDIT", amount }),
+        data: JSON.stringify({ kind: "ADMIN_CREDIT", amount, route: "/wallet" }),
       },
     });
     sendSuccess(res, { email: user.email, balance: Number(wallet.balance), credited: amount }, "Wallet credited.");

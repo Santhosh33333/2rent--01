@@ -419,7 +419,7 @@ export async function verifyPayment(req: AuthedRequest, res: Response): Promise<
         userId,
         title: "Payment Successful",
         body: `₹${verified.amountRupees} has been credited to your wallet.`,
-        data: JSON.stringify({ paymentId: verified.gatewayPaymentId, amount: verified.amountRupees }),
+        data: JSON.stringify({ paymentId: verified.gatewayPaymentId, amount: verified.amountRupees, route: "/wallet" }),
       },
     })
 
@@ -709,7 +709,7 @@ async function settleCashfreeOrder(input: {
         userId: order.userId,
         title: "Payment Confirmed",
         body: `₹${Number(order.amount)} has been added to your wallet.`,
-        data: JSON.stringify({ paymentId: input.gatewayPaymentId ?? order.id, amount: Number(order.amount) }),
+        data: JSON.stringify({ paymentId: input.gatewayPaymentId ?? order.id, amount: Number(order.amount), route: "/wallet" }),
       },
     })
 

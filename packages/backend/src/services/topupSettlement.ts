@@ -163,7 +163,7 @@ export async function settleTopupRequest(
       userId: row.userId,
       title: "Wallet topped up",
       body: `Rs ${amount} added to your wallet. ${note ?? ""}`.trim(),
-      data: JSON.stringify({ kind: "TOPUP_VERIFIED", topupId: row.id }),
+      data: JSON.stringify({ kind: "TOPUP_VERIFIED", topupId: row.id, route: "/wallet" }),
     },
   });
 }

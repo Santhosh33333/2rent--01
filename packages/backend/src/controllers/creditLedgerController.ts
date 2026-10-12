@@ -264,7 +264,7 @@ async function notifySuperAdmins(n: { type: string; title: string; body: string 
         userId: s.id,
         title: n.title,
         body: n.body,
-        data: JSON.stringify({ kind: n.type }),
+        data: JSON.stringify({ kind: n.type, route: "/admin/dashboard" }),
       })),
     });
   } catch {

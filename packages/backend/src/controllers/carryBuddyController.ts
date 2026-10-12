@@ -281,7 +281,7 @@ export async function completeRequest(req: AuthedRequest, res: Response): Promis
           userId: request.requesterId,
           title: "Carrier requested completion",
           body: "Your carrier marked the delivery as done. Confirm to release their earning.",
-          data: JSON.stringify({ carryRequestId: id, type: "CARRY_COMPLETION_REQUEST" }),
+          data: JSON.stringify({ carryRequestId: id, type: "CARRY_COMPLETION_REQUEST", route: "/carry/jobs" }),
         },
       }).catch(() => {});
       await prisma.auditLog.create({

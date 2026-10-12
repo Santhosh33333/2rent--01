@@ -495,7 +495,7 @@ export async function submitForVerification(req: AuthedRequest, res: Response): 
             userId: a.id,
             title: "New KYC submission",
             body: `${submitter?.fullName || submitter?.email || "A user"} submitted identity documents for review.`,
-            data: JSON.stringify({ type: "KYC_SUBMITTED", verificationId: verification.id }),
+            data: JSON.stringify({ type: "KYC_SUBMITTED", verificationId: verification.id, route: "/admin/kyc" }),
           })),
         });
       }

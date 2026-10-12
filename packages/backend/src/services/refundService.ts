@@ -276,7 +276,7 @@ export async function applyRefund(input: {
         // this payment created is reversed. Saying it was refunded *to* the
         // wallet would describe the opposite of what happened.
         body: `₹${Number(order.amount)} has been refunded to your payment method and the matching wallet credit has been reversed.`,
-        data: JSON.stringify({ refundId: gatewayRefundId, amount: Number(order.amount) }),
+        data: JSON.stringify({ refundId: gatewayRefundId, amount: Number(order.amount), route: "/wallet" }),
       },
     });
 

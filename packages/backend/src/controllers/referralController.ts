@@ -170,7 +170,7 @@ export function buildReferralRewardService(defaults: { referrer?: number; refere
             userId: payout.userId,
             title: "Referral bonus credited",
             body: `You received ₹${payout.amount} as a referral ${payout.role.toLowerCase()} bonus.`,
-            data: JSON.stringify({ kind: "REFERRAL_BONUS", referralId: referral.id, role: payout.role }),
+            data: JSON.stringify({ kind: "REFERRAL_BONUS", referralId: referral.id, role: payout.role, route: "/wallet" }),
           },
         }).catch(() => {});
       }

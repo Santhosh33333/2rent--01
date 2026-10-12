@@ -292,7 +292,7 @@ export async function completeWalk(req: AuthedRequest, res: Response): Promise<v
         userId: request.requesterId,
         title: "Walker requested completion",
         body: "Your walker marked the walk as done. Confirm to release their payout.",
-        data: JSON.stringify({ walkingRequestId: id, type: "WALK_COMPLETION_REQUEST" }),
+        data: JSON.stringify({ walkingRequestId: id, type: "WALK_COMPLETION_REQUEST", route: `/walking-requests/${id}` }),
       },
     }).catch(() => {});
     sendSuccess(res, { requested: true }, "Completion requested. The requester must confirm.", 202);
