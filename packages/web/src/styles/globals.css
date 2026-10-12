@@ -819,6 +819,20 @@ html.dark [class~='dark:text-primary-700'][class] { color: rgb(var(--c-400)); }
       height: calc(100dvh - 10rem - var(--nabri-ad-strip, 0px));
     }
   }
+
+  /* Floating action buttons sit 6rem above the bottom. The tab bar lifts by
+     --nabri-ad-strip while a banner is up, so the buttons must add the same
+     band or the ad-free `bottom-24` lands them on top of the navigation. Off
+     the native build the strip is 0, so the web layout is unchanged.
+     .fab-clear-md reproduces FloatingActionButton's old `md:bottom-8`. */
+  .fab-clear {
+    bottom: calc(6rem + var(--nabri-ad-strip, 0px));
+  }
+  @media (min-width: 768px) {
+    .fab-clear-md {
+      bottom: calc(2rem + var(--nabri-ad-strip, 0px));
+    }
+  }
 }
 
 @keyframes pageEnter {

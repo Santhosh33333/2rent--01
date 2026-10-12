@@ -27,7 +27,7 @@ export function FloatingActionButton({
   return (
     <button
       onClick={onClick}
-      className={`fixed bottom-24 md:bottom-8 right-4 md:right-8 z-40
+      className={`fixed fab-clear fab-clear-md right-4 md:right-8 z-40
         flex items-center gap-2.5 px-5 py-3.5 rounded-2xl
         text-white font-semibold text-sm
         transition-all duration-300 ease-out

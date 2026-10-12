@@ -34,7 +34,7 @@ export function AgentLauncher() {
         type="button"
         onClick={() => openAssistant()}
         aria-label="Open Nabri Assistant"
-        className="fixed bottom-24 right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-primary-500 text-white shadow-lg shadow-primary-500/30 transition-transform active:scale-95 hover:scale-105"
+        className="fixed fab-clear right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-primary-500 text-white shadow-lg shadow-primary-500/30 transition-transform active:scale-95 hover:scale-105"
       >
         <Bot className="w-6 h-6" aria-hidden />
         <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 border-2 border-white dark:border-slate-950" />
