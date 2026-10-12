@@ -310,7 +310,9 @@ export async function recordSwipe(
         toUserId,
         superLike ? "New super like" : "Someone likes you",
         `${swipeResult.senderName ?? "Someone"} ${likeVerb}.`,
-        { type: "DATING_LIKE", fromUserId },
+        // Likes surface in the Requests inbox (with a link into dating), so
+        // that is where the tap should land.
+        { type: "DATING_LIKE", fromUserId, route: "/requests" },
       );
     }
     return { swipe: type, match: null };
@@ -332,13 +334,15 @@ export async function recordSwipe(
       toUserId,
       "It's a match",
       `${swipeResult.senderName ?? "Someone"} and you liked each other. Say hello.`,
-      { type: "DATING_MATCH", matchId: match.id },
+      // Open the chat with the *other* person: the payload is per-recipient,
+      // because the peer differs for each side of the match.
+      { type: "DATING_MATCH", matchId: match.id, peerUserId: fromUserId, route: `/messages/${fromUserId}` },
     ),
     announce(
       fromUserId,
       "It's a match",
       `${swipeResult.targetName ?? "Someone"} and you liked each other. Say hello.`,
-      { type: "DATING_MATCH", matchId: match.id },
+      { type: "DATING_MATCH", matchId: match.id, peerUserId: toUserId, route: `/messages/${toUserId}` },
     ),
   ]);
 
