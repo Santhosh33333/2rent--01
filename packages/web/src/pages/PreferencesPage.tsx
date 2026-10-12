@@ -557,7 +557,13 @@ export function PreferencesPage() {
         scrolling back up is a Save that gets forgotten. pb-28 on the container keeps
         the last chip clear of this bar.
       */}
-      <div className="fixed bottom-0 left-0 right-0 z-20 bg-white/90 dark:bg-surface-900/90 backdrop-blur border-t border-surface-100 dark:border-surface-800">
+      {/* Sits on top of the tab bar. `bottom-0` put this row behind the z-40
+          dock, so Save was untappable on a phone; the bar publishes its
+          measured height as --nabri-tabbar. Also clears the ad strip. */}
+      <div
+        className="fixed left-0 right-0 z-20 bg-white/90 dark:bg-surface-900/90 backdrop-blur border-t border-surface-100 dark:border-surface-800"
+        style={{ bottom: 'calc(var(--nabri-tabbar, 0px) + var(--nabri-ad-strip, 0px))' }}
+      >
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
           <p className="text-xs text-surface-500 dark:text-surface-400 min-w-0 truncate">
             {lifestyleAnswerCount > 0 || selectedInterestLabels > 0

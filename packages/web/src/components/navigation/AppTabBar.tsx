@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { NavLink } from "react-router-dom";
 import { MoreHorizontal } from "lucide-react";
 import { motion } from "motion/react";
@@ -19,8 +20,37 @@ import { useLocation } from "react-router-dom";
 export function AppTabBar({ onOpenMore }: { onOpenMore: () => void }) {
   const { pathname } = useLocation();
 
+  const navRef = useRef<HTMLElement | null>(null);
+
+  // Publish the bar's real height as `--nabri-tabbar`, so page-owned bottom
+  // bars (e.g. the Preferences Save row) can sit on top of it instead of
+  // underneath. `lg:hidden` means this is 0 on desktop, where there is no bar,
+  // so the same rule degrades to `bottom: 0` there. Matches the shell's
+  // `--nabri-top-stack` measurement (getBoundingClientRect + ResizeObserver).
+  useEffect(() => {
+    const el = navRef.current;
+    if (!el) return;
+    const publish = () => {
+      document.documentElement.style.setProperty(
+        "--nabri-tabbar",
+        `${Math.round(el.getBoundingClientRect().height)}px`,
+      );
+    };
+    publish();
+    if (typeof ResizeObserver === "undefined") {
+      return () => document.documentElement.style.removeProperty("--nabri-tabbar");
+    }
+    const observer = new ResizeObserver(publish);
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      document.documentElement.style.removeProperty("--nabri-tabbar");
+    };
+  }, []);
+
   return (
     <nav
+      ref={navRef}
       aria-label="Primary"
       className="fixed inset-x-0 bottom-0 z-40 lg:hidden"
       // Respect the iOS home indicator / Android navigation bar instead of
