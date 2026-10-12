@@ -67,6 +67,7 @@ async function ensureNotificationChannel(): Promise<void> {
 
 let foregroundPushAttached = false;
 let actionListenerAttached = false;
+let localActionListenerAttached = false;
 let resumeRetryAttached = false;
 let localNotificationSeq = 0;
 
@@ -113,6 +114,9 @@ function attachForegroundPushListener(): void {
               title,
               body,
               channelId: DEFAULT_CHANNEL_ID,
+              // Carry the original FCM data through, so tapping this re-posted
+              // banner can still route (see the local-action listener below).
+              extra: (msg.data ?? {}) as Record<string, string>,
             },
           ],
         });
@@ -184,9 +188,27 @@ export function resetPushRegistration(): void {
   registeredThisSession = false;
 }
 
+/**
+ * The foreground re-post (above) uses a *local* notification, so tapping it
+ * fires `localNotificationActionPerformed` rather than the push action. There
+ * was no listener for that, so a message that arrived while the app was open
+ * produced a banner whose tap did nothing. Forward the `extra` we copied from
+ * the FCM payload through the same DOM event the push-tap path uses.
+ */
+export function attachLocalNotificationActionListener(): void {
+  if (localActionListenerAttached || !isNativeApp()) return;
+  localActionListenerAttached = true;
+  void LocalNotifications.addListener('localNotificationActionPerformed', (action) => {
+    const extra = action?.notification?.extra;
+    if (!extra || typeof extra !== 'object') return;
+    window.dispatchEvent(new CustomEvent('nabri:notification-action', { detail: extra }));
+  });
+}
+
 export async function registerForPushNotifications(): Promise<boolean> {
   attachForegroundPushListener();
   attachNotificationActionListener();
+  attachLocalNotificationActionListener();
   attachResumeRetry();
   // Only a *successful* registration is latched (`registeredThisSession`). The
   // old `attempted` latch meant a single transient failure — a denied-then-
