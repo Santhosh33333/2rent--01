@@ -265,7 +265,7 @@ export function DiscoverPage() {
     // fell behind the tab bar.
     <div
       className="relative -mx-4 -my-5 overflow-hidden bg-slate-950 text-white"
-      style={{ minHeight: 'calc(100dvh - 12rem - var(--safe-top, 0px))' }}
+      style={{ minHeight: 'calc(100dvh - 12rem - var(--safe-top, 0px) - var(--nabri-ad-strip, 0px))' }}
     >
       {/* One aurora behind the whole deck, so the screen has depth without the
           cards each carrying their own colour. */}
