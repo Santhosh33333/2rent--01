@@ -1,37 +1,79 @@
 name: Keep Render API awake
 
+# Render's free tier spins the API down after ~15 minutes with no traffic, and
+# the next request then takes 30-60s to wake it. A GitHub cron of "*/10" does
+# NOT actually keep it awake: GitHub heavily delays high-frequency schedules on
+# free runners (this workflow was observed running only every 4-6 hours, i.e.
+# the API slept most of the day). Instead, one job is scheduled every 5 hours
+# and pings every 10 minutes for its whole (up to 6-hour) slot, so there is
+# always a ping well inside Render's 15-minute idle window.
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: '0 */5 * * *'
+  # Manual run from the Actions tab, useful for testing the pings.
   workflow_dispatch:
 
+permissions: {}
+
+# A newer slot should replace a still-running older one rather than queue behind
+# it (two runners pinging the same URL is pointless and wastes minutes).
+concurrency:
+  group: render-keepalive
+  cancel-in-progress: true
+
 jobs:
-  ping:
+  keepalive:
     runs-on: ubuntu-latest
+    # 35 pings at 10-minute spacing is ~5h50m, just inside the 6-hour cap.
+    timeout-minutes: 350
     steps:
-      - name: Ping Nabri API health to prevent Render free-tier sleep
+      - name: Ping /health and /health/db every 10 minutes
         run: |
-          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 90 \
-            https://rentbuddy-api-s7rz.onrender.com/api/health || true)
-          echo "health status: ${code}"
-          # 401 is fine (endpoint is auth-guarded); a total failure (000/empty)
-          # flags a real outage worth investigating.
-          if [ "$code" = "000" ] || [ -z "$code" ]; then
-            echo "::error::API unreachable during keepalive ping"
-            exit 1
-          fi
-      - name: Ping DB liveness probe
-        run: |
-          body=$(curl -s --max-time 60 \
-            https://rentbuddy-api-s7rz.onrender.com/health/db || true)
-          echo "health/db response: ${body}"
-          # A 503/5xx from /health/db means the API is up but the database is
-          # unreachable (login, wallets, KYC, payments all 500). Surface that as
-          # a failing run so the owner gets the GitHub Action failure email.
-          if echo "${body}" | grep -q '"status": "ok"'; then
-            echo "DB liveness: OK"
-          else
-            echo "::error::Database unreachable according to /api/health/db"
-            echo "body=${body}"
-            exit 1
-          fi
+          set -u
+          API=https://rentbuddy-api-s7rz.onrender.com
+          # Consecutive failed DB checks; initialised because `set -u` would
+          # otherwise abort `db_down=$((db_down + 1))` on its first evaluation.
+          db_down=0
+          for i in $(seq 1 35); do
+            ts=$(date -u +%H:%M:%S)
+
+            # Liveness route lives at the root (/health), NOT /api/health -
+            # everything under /api sits behind auth and answers 401 there.
+            health=$(curl -s -o /dev/null -w "%{http_code}" --max-time 90 "$API/health" || true)
+
+            # /health/db answers 200 with {"status":"ok"} only while the database
+            # is reachable. The old check grepped for '"status": "ok"' (with a
+            # space), but the API emits compact JSON '"status":"ok"', so it
+            # matched nothing and failed on EVERY run — a false outage alarm.
+            # Compare whitespace-stripped output and the HTTP status instead.
+            resp=$(curl -s -w $'\n%{http_code}' --max-time 90 "$API/health/db" || true)
+            dbcode=$(printf '%s' "$resp" | tail -n1)
+            body=$(printf '%s' "$resp" | sed '$d')
+
+            echo "ping $i/35 $ts — /health=${health} /health/db=${dbcode} ${body}"
+
+            if [ -z "$health" ] || [ "$health" = "000" ]; then
+              echo "::warning::/health unreachable on ping $i (cold start or outage)"
+            fi
+
+            if [ "$dbcode" = "200" ] && printf '%s' "$body" | tr -d '[:space:]' | grep -q '"status":"ok"'; then
+              db_down=0
+            else
+              db_down=$((db_down + 1))
+              echo "::warning::/health/db not ok on ping $i (streak ${db_down}) — ${dbcode} ${body}"
+            fi
+
+            # A single blip is not worth failing the run (and emailing the
+            # owner) over, but the API answering 200 while the database is
+            # unreachable means login/wallet/payments are all 500 — a real
+            # outage. Fail fast then: alert the owner and free the runner
+            # instead of pinging a broken backend for hours.
+            if [ "${db_down:-0}" -ge 3 ]; then
+              echo "::error::Database has been unreachable for 3 consecutive pings — aborting keepalive"
+              exit 1
+            fi
+
+            if [ "$i" -lt 35 ]; then
+              sleep 600
+            fi
+          done
