@@ -756,7 +756,13 @@ export async function googleSignIn(req: Request, res: Response): Promise<void> {
         new Set(
           [
             clientId,
+            // The long-lived "Nabri Web" OAuth client used by the browser flow.
             "411366997531-hnplrt93hpbgssjvhcsknvofgvs9t3oe.apps.googleusercontent.com",
+            // Firebase's auto-created web client, which is what
+            // google-services.json exposes as `default_web_client_id`. The
+            // native Google SDK signs the app's ID token for this audience, so
+            // it must be accepted here too.
+            "411366997531-ofns2kdoq1i5vrdq9i0pf443f9mkfj5o.apps.googleusercontent.com",
           ].filter((id): id is string => Boolean(id)),
         ),
       );

@@ -14,7 +14,23 @@
       },
       "oauth_client": [
         {
-          "client_id": "411366997531-hnplrt93hpbgssjvhcsknvofgvs9t3oe.apps.googleusercontent.com",
+          "client_id": "411366997531-b1ipufhq4ep80fd61ufos4qnsmhq78c1.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "app.rentbuddy.app",
+            "certificate_hash": "52fa0d1b3359946d13fb2f00e6941e9970d89961"
+          }
+        },
+        {
+          "client_id": "411366997531-e2snk19589qf2jp44u4rehhhsomk9qre.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "app.rentbuddy.app",
+            "certificate_hash": "c7888897d25ea9dc4ea5cd0208544076b0bcb61e"
+          }
+        },
+        {
+          "client_id": "411366997531-ofns2kdoq1i5vrdq9i0pf443f9mkfj5o.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
