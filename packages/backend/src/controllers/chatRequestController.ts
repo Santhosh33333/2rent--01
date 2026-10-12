@@ -400,6 +400,109 @@ export async function getChatRequestCounts(req: AuthedRequest, res: Response): P
   }
 }
 
+/**
+ * GET /chat-requests/status/:userId
+ *
+ * The connection state between the caller and one other account, so a chat
+ * screen can decide whether it is a normal thread, a pending invitation, or a
+ * fresh contact. "Connected" means the pair may already chat: an accepted
+ * request, an existing thread with at least one message, or a dating match (a
+ * match is itself an explicit mutual yes, so it opens the conversation without a
+ * second invitation).
+ */
+export async function getConnectionStatus(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const userId = req.user?.userId;
+    const otherId = String(req.params.userId || "");
+    if (!userId) {
+      sendError(res, "Unauthorized.", 401, "UNAUTHORIZED");
+      return;
+    }
+    if (!otherId || otherId === userId) {
+      sendError(res, "Invalid user.", 400, "INVALID_USER");
+      return;
+    }
+
+    const [p1, p2] = [userId, otherId].sort();
+
+    const [accepted, conversation, match, latest, blocked] = await Promise.all([
+      prisma.chatRequest.findFirst({
+        where: {
+          status: "ACCEPTED",
+          OR: [
+            { senderId: userId, receiverId: otherId },
+            { senderId: otherId, receiverId: userId },
+          ],
+        },
+        select: { id: true, acceptedAt: true },
+      }),
+      prisma.conversation.findUnique({
+        where: { participant1Id_participant2Id: { participant1Id: p1, participant2Id: p2 } },
+        select: { id: true, _count: { select: { messages: true } } },
+      }),
+      prisma.match.findFirst({
+        where: {
+          isActive: true,
+          OR: [
+            { userAId: userId, userBId: otherId },
+            { userAId: otherId, userBId: userId },
+          ],
+        },
+        select: { id: true },
+      }),
+      prisma.chatRequest.findFirst({
+        where: {
+          OR: [
+            { senderId: userId, receiverId: otherId },
+            { senderId: otherId, receiverId: userId },
+          ],
+        },
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.userBlock.findFirst({
+        where: {
+          OR: [
+            { blockerId: userId, blockedId: otherId },
+            { blockerId: otherId, blockedId: userId },
+          ],
+        },
+        select: { id: true },
+      }),
+    ]);
+
+    const hasMessages = (conversation?._count.messages ?? 0) > 0;
+    const connected = Boolean(accepted) || hasMessages || Boolean(match);
+    const pendingSent = latest?.status === "PENDING" && latest.senderId === userId;
+
+    sendSuccess(
+      res,
+      {
+        connected,
+        hasMessages,
+        matched: Boolean(match),
+        blocked: Boolean(blocked),
+        // A request can only be raised when there is no existing connection and
+        // no unanswered invitation already in flight from this account.
+        canSendRequest: !connected && !blocked && !pendingSent,
+        request: latest
+          ? {
+              id: latest.id,
+              status: latest.status,
+              direction: latest.senderId === userId ? "SENT" : "RECEIVED",
+              message: latest.message,
+              expiresAt: latest.expiresAt,
+              cooldownUntil: latest.cooldownUntil,
+            }
+          : null,
+      },
+      "Connection status retrieved.",
+    );
+  } catch (err: any) {
+    console.error("getConnectionStatus error:", err);
+    sendError(res, "Failed to load connection status.", 500, "INTERNAL_ERROR");
+  }
+}
+
 export async function expireStaleRequests(_req: AuthedRequest, res: Response): Promise<void> {
   try {
     const stale = await prisma.chatRequest.findMany({

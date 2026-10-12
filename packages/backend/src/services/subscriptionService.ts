@@ -32,7 +32,7 @@ import { getTrialSettings } from "./trialAccessService";
  * that the column exists and is no longer what is being advertised.
  */
 export async function getActivePlans(userId?: string) {
-  const [plans, trial, everSubscribed] = await Promise.all([
+  const [plans, trial, everSubscribed, customOffer] = await Promise.all([
     prisma.subscriptionPlan.findMany({
       where: { isActive: true },
       orderBy: { displayOrder: "asc" },
@@ -53,6 +53,7 @@ export async function getActivePlans(userId?: string) {
     }),
     getTrialSettings(),
     userId ? hasEverSubscribed(userId) : Promise.resolve(false),
+    userId ? getActiveCustomOffer(userId) : Promise.resolve(null),
   ]);
 
   return plans.map((plan) => {
@@ -62,6 +63,24 @@ export async function getActivePlans(userId?: string) {
     // prospective new account, which is what the pricing screen is advertising to.
     // The server still decides again at purchase; this only controls the drawing.
     const eligibleForOffer = !everSubscribed && plan.offerPrice !== null;
+
+    // A personal discount granted to this one account replaces the plan-level
+    // offer. It is also struck through against the regular price, so the saving
+    // the admin actually granted is the one drawn - never a bigger number the
+    // product will not honour.
+    if (customOffer && !everSubscribed) {
+      return {
+        ...plan,
+        planTrialDays: plan.trialDays,
+        trialDays: trial.days,
+        effectivePrice: discountByPercent(plan.price, customOffer.percent),
+        eligibleForOffer: true,
+        listPrice: plan.price,
+        customOfferPercent: customOffer.percent,
+        customOfferNote: customOffer.note,
+        customOfferUntil: customOffer.until,
+      };
+    }
 
     return {
       ...plan,
@@ -97,6 +116,44 @@ export async function hasEverSubscribed(userId: string): Promise<boolean> {
   return count > 0;
 }
 
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/** Apply a whole-percent discount to a price, rounded to paise. */
+function discountByPercent(price: number, percent: number): number {
+  return round2((price * (100 - percent)) / 100);
+}
+
+export interface ActiveCustomOffer {
+  percent: number;
+  note: string | null;
+  until: Date | null;
+}
+
+/**
+ * The targeted first-period discount an admin set on ONE account, if it is still
+ * live. Returns null when nothing is set, the stored percent is out of range, or
+ * the optional expiry has passed - so a stale grant silently stops applying
+ * instead of needing a cleanup job.
+ */
+export async function getActiveCustomOffer(userId: string): Promise<ActiveCustomOffer | null> {
+  if (!userId) return null;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { customOfferPercent: true, customOfferNote: true, customOfferUntil: true },
+  });
+  if (!user || user.customOfferPercent === null) return null;
+  const percent = Number(user.customOfferPercent);
+  if (!Number.isInteger(percent) || percent <= 0 || percent >= 100) return null;
+  if (user.customOfferUntil && user.customOfferUntil.getTime() <= Date.now()) return null;
+  return {
+    percent,
+    note: user.customOfferNote ?? null,
+    until: user.customOfferUntil ?? null,
+  };
+}
+
 export interface FirstPeriodPrice {
   /** What is actually charged for this period. */
   amount: number;
@@ -118,6 +175,18 @@ export async function resolveFirstPeriodPrice(
   plan: { price: number; listPrice: number | null; offerPrice: number | null },
   userId: string,
 ): Promise<FirstPeriodPrice> {
+  // A targeted admin grant takes precedence over the plan-level offer, and is
+  // also struck through against the regular price. Only for a first period: an
+  // account that has ever subscribed is out of both offers, which is what stops
+  // a personal discount from quietly becoming a permanent one.
+  const custom = await getActiveCustomOffer(userId);
+  if (custom && !(await hasEverSubscribed(userId))) {
+    return {
+      amount: discountByPercent(plan.price, custom.percent),
+      listPrice: plan.price,
+      offerApplied: true,
+    };
+  }
   if (plan.offerPrice === null) {
     return { amount: plan.price, listPrice: null, offerApplied: false };
   }

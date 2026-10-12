@@ -552,3 +552,94 @@ export async function setUserLifetime(req: AuthedRequest, res: Response): Promis
     trialError(res, err);
   }
 }
+
+/**
+ * POST /admin/subscriptions/offer/users/:id
+ *
+ * Grant, change or clear a per-account first-period discount. Separate from the
+ * plan catalogue: this affects exactly one account and is therefore a support
+ * tool, not a pricing change. `percent: null` clears it.
+ */
+export async function setUserOffer(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const actorId = req.user?.userId ?? "unknown";
+    const userId = String(req.params.id ?? "");
+    const percentRaw = req.body?.percent;
+    const note = typeof req.body?.note === "string" ? req.body.note.trim() : undefined;
+    const untilDaysRaw = req.body?.untilDays;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, fullName: true, email: true, customOfferPercent: true },
+    });
+    if (!user) {
+      sendError(res, "No account has that id.", 404, "USER_NOT_FOUND");
+      return;
+    }
+
+    if (percentRaw === null) {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { customOfferPercent: null, customOfferNote: null, customOfferUntil: null },
+      });
+      await auditAdminAction({
+        req,
+        actorId,
+        action: "PRICING_USER_OFFER_CLEAR",
+        section: "PRICING",
+        targetType: "User",
+        targetId: userId,
+        oldValue: { percent: user.customOfferPercent },
+      });
+      sendSuccess(res, { userId, cleared: true }, "Personal offer removed.");
+      return;
+    }
+
+    const percent = Number(percentRaw);
+    if (!Number.isInteger(percent) || percent < 1 || percent > 99) {
+      // 100% is a free period and belongs to the trial/lifetime controls, not a
+      // discount; 0 is not a discount at all.
+      sendError(res, "Discount must be a whole number between 1 and 99 percent.", 400, "INVALID_PERCENT");
+      return;
+    }
+
+    let until: Date | null = null;
+    if (untilDaysRaw !== undefined && untilDaysRaw !== null && untilDaysRaw !== "") {
+      const untilDays = Number(untilDaysRaw);
+      if (!Number.isInteger(untilDays) || untilDays < 1 || untilDays > 3650) {
+        sendError(res, "Expiry must be between 1 and 3650 days, or empty for no expiry.", 400, "INVALID_EXPIRY");
+        return;
+      }
+      until = new Date();
+      until.setDate(until.getDate() + untilDays);
+    }
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        customOfferPercent: percent,
+        customOfferNote: note ? note : null,
+        customOfferUntil: until,
+      },
+    });
+
+    await auditAdminAction({
+      req,
+      actorId,
+      action: "PRICING_USER_OFFER_SET",
+      section: "PRICING",
+      targetType: "User",
+      targetId: userId,
+      oldValue: { percent: user.customOfferPercent },
+      newValue: { percent, note: note ?? null, untilDays: untilDaysRaw ?? null },
+    });
+
+    sendSuccess(
+      res,
+      { userId, percent, note: note ?? null, until },
+      `${percent}% off the first period for ${user.fullName || user.email}.`,
+    );
+  } catch (err) {
+    trialError(res, err);
+  }
+}

@@ -406,6 +406,10 @@ export const adminApi = {
   // Permanent "free for life" access for one named account.
   grantUserLifetime: (userId: string, reason?: string) =>
     api.post(`/admin/subscriptions/trial/users/${userId}/lifetime`, { reason }),
+  // Targeted first-period discount for one account. `percent` 1-99 grants it;
+  // null clears it. `untilDays` is optional (empty = no expiry).
+  setUserOffer: (userId: string, data: { percent: number | null; note?: string; untilDays?: number | null }) =>
+    api.post(`/admin/subscriptions/offer/users/${userId}`, data),
   // Subscription plan catalogue. `price` is what a renewal costs; `listPrice`
   // is the higher struck-through "was" and `offerPrice` is the discounted first
   // period shown to a brand-new subscriber. Every amount on the user pricing
@@ -622,4 +626,78 @@ export const callApi = {
     api.get<{ success: boolean; data: { iceServers: IceServerConfig[]; ttl: number; source: string } }>(
       '/calls/ice-servers',
     ),
+}
+
+// ============================================================================
+// CHAT REQUESTS
+//
+// The "can I message you?" layer. The backend has carried the full model
+// (per-account privacy level, daily limits, cooldowns, expiry) and the accept
+// endpoint already provisions the conversation row - but no screen ever called
+// it, so the whole feature was unreachable. These wrappers are the missing UI
+// half.
+// ============================================================================
+
+export type ChatRequestStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED'
+
+export interface ChatRequestPeer {
+  id: string
+  fullName: string
+  avatarUrl: string | null
+  city?: string | null
+  emailVerified?: boolean
+  mobileVerified?: boolean
+}
+
+export interface ChatRequestRecord {
+  id: string
+  senderId: string
+  receiverId: string
+  status: ChatRequestStatus
+  message: string | null
+  acceptedAt: string | null
+  rejectedAt: string | null
+  cooldownUntil: string | null
+  expiresAt: string
+  createdAt: string
+  sender?: ChatRequestPeer
+  receiver?: ChatRequestPeer
+}
+
+export interface ConnectionStatus {
+  connected: boolean
+  hasMessages: boolean
+  matched: boolean
+  blocked: boolean
+  canSendRequest: boolean
+  request: {
+    id: string
+    status: ChatRequestStatus
+    direction: 'SENT' | 'RECEIVED'
+    message: string | null
+    expiresAt: string
+    cooldownUntil: string | null
+  } | null
+}
+
+export const chatRequestApi = {
+  received: () => api.get<{ data: { requests: ChatRequestRecord[] } }>('/chat-requests/received'),
+  sent: () => api.get<{ data: { requests: ChatRequestRecord[] } }>('/chat-requests/sent'),
+  counts: () =>
+    api.get<{ data: { pendingReceived: number; todaySent: number; dailyLimit: number } }>(
+      '/chat-requests/counts',
+    ),
+  status: (userId: string) =>
+    api.get<{ data: {
+      connected: boolean
+      hasMessages: boolean
+      matched: boolean
+      blocked: boolean
+      canSendRequest: boolean
+      request: { id: string; status: ChatRequestStatus; direction: 'SENT' | 'RECEIVED'; message: string | null; expiresAt: string; cooldownUntil: string | null } | null
+    } }>(`/chat-requests/status/${userId}`),
+  send: (receiverId: string, message?: string) =>
+    api.post('/chat-requests', { receiverId, message: message?.trim() || undefined }),
+  accept: (id: string) => api.put(`/chat-requests/${id}/accept`),
+  reject: (id: string) => api.put(`/chat-requests/${id}/reject`),
 }

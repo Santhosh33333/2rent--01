@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link, Navigate, useSearchParams } from 'react-router-dom'
-import { MessageCircle, Search, ChevronRight, Clock, Phone } from 'lucide-react'
-import { api } from '../../lib/api'
+import { MessageCircle, Search, ChevronRight, Clock, Phone, UserPlus } from 'lucide-react'
+import { api, chatRequestApi } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { useSocket } from '../../hooks/useSocket'
 import { AnimatedPage } from '../../components/AnimatedPage'
@@ -70,6 +70,8 @@ export function MessagesPage() {
   const [search, setSearch] = useState('')
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [recentCalls, setRecentCalls] = useState<CallRecord[]>([])
+  /** Pending incoming chat requests, surfaced as a badge on the Requests row. */
+  const [pendingRequests, setPendingRequests] = useState(0)
   const { user } = useAuth()
   const myId = user?.id
   const { on } = useSocket({ autoConnect: true })
@@ -92,6 +94,22 @@ export function MessagesPage() {
   useEffect(() => {
     fetchRecentCalls().catch(() => {})
   }, [fetchRecentCalls])
+
+  // Pending chat requests are their own inbox, but the count belongs on the
+  // Messages screen so they are discoverable at all. Refreshed alongside the
+  // conversation poll below; a failure just leaves the badge at its last value.
+  const fetchRequestCount = useCallback(async () => {
+    try {
+      const res = await chatRequestApi.counts()
+      setPendingRequests(res.data.data?.pendingReceived ?? 0)
+    } catch {
+      // Non-fatal: the row still opens the inbox.
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchRequestCount().catch(() => {})
+  }, [fetchRequestCount])
 
   // A finished call refreshes the history entry.
   useEffect(() => {
@@ -156,10 +174,11 @@ export function MessagesPage() {
     const poll = setInterval(() => {
       if (typeof document === 'undefined' || !document.hidden) {
         fetchConversations().catch(() => {})
+        fetchRequestCount().catch(() => {})
       }
     }, 25000)
     return () => clearInterval(poll)
-  }, [fetchConversations])
+  }, [fetchConversations, fetchRequestCount])
 
   const filtered = conversations.filter(c => c.partnerName.toLowerCase().includes(search.toLowerCase()))
   const unreadCount = conversations.filter(c => c.unreadCount > 0).length
@@ -220,6 +239,33 @@ export function MessagesPage() {
             />
           </div>
         </div>
+      </AnimatedPage>
+
+      {/* Chat requests live in their own inbox. Without this row nothing in the
+          UI ever called the request endpoints, so "asked to chat" was invisible. */}
+      <AnimatedPage delay={60}>
+        <Link
+          to="/messages/requests"
+          className="glass-elevated flex items-center gap-3 px-4 py-3.5 no-underline transition hover:bg-surface-50 dark:hover:bg-surface-800/50"
+        >
+          <div className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-primary-600 text-white shadow-md shadow-primary-500/20">
+            <UserPlus className="h-5 w-5" aria-hidden />
+            {pendingRequests > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-rose-500 px-1 text-[11px] font-bold text-white ring-2 ring-white dark:ring-surface-900">
+                {pendingRequests > 9 ? '9+' : pendingRequests}
+              </span>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold text-surface-900 dark:text-white">Chat requests</p>
+            <p className="truncate text-xs text-surface-500 dark:text-surface-400">
+              {pendingRequests > 0
+                ? `${pendingRequests} ${pendingRequests === 1 ? 'person wants' : 'people want'} to connect`
+                : 'People asking to start a conversation'}
+            </p>
+          </div>
+          <ChevronRight className="h-4 w-4 flex-shrink-0 text-surface-400" aria-hidden />
+        </Link>
       </AnimatedPage>
 
       {/* Conversation List */}

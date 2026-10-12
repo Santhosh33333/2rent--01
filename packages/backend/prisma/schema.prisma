@@ -50,6 +50,14 @@ lastLoginAt                   DateTime?
   // a payment. Null means no access.
   accessUntil                   DateTime?
   accessSource                  String?
+  // Per-account first-period discount set by an admin. Unlike the plan-level
+  // offer this is targeted: support can give one person a deal without changing
+  // the price everyone else sees. A percent (1-99) rather than an absolute
+  // amount so it applies sensibly to whichever plan the account chooses. Null
+  // means no personal offer; customOfferUntil (when set) expires it.
+  customOfferPercent            Int?
+  customOfferNote               String?
+  customOfferUntil              DateTime?
   createdAt                     DateTime  @default(now())
   updatedAt                     DateTime  @updatedAt
 

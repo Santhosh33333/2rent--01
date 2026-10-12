@@ -7,6 +7,7 @@ import {
   getSentRequests,
   getReceivedRequests,
   getChatRequestCounts,
+  getConnectionStatus,
   expireStaleRequests,
 } from "../controllers/chatRequestController";
 
@@ -18,6 +19,7 @@ router.put("/:id/reject", authenticateToken, rejectChatRequest);
 router.get("/sent", authenticateToken, getSentRequests);
 router.get("/received", authenticateToken, getReceivedRequests);
 router.get("/counts", authenticateToken, getChatRequestCounts);
+router.get("/status/:userId", authenticateToken, getConnectionStatus);
 router.post("/expire-stale", authenticateToken, expireStaleRequests);
 
 export default router;

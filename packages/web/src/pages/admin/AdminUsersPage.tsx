@@ -2,7 +2,7 @@ import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AdminPageHeader, AdminShell } from '../../components/admin/AdminPageHeader'
-import { Search, ChevronLeft, ChevronRight, Ban, Unlock, Trash2, Loader2, X, FileDown, Crown, UserMinus, Eye, Phone, PencilLine, CheckSquare, Square, ShieldAlert } from 'lucide-react'
+import { Search, ChevronLeft, ChevronRight, Ban, Unlock, Trash2, Loader2, X, FileDown, Crown, UserMinus, Eye, Phone, PencilLine, CheckSquare, Square, ShieldAlert, BadgePercent } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { adminApi } from '../../lib/api'
 import { exportTableToPdf } from '../../lib/pdfExport'
@@ -49,6 +49,14 @@ export function AdminUsersPage() {
   const [newGender, setNewGender] = useState('OTHER')
   const [profileBusy, setProfileBusy] = useState(false)
   const [lifetimeBusy, setLifetimeBusy] = useState<string | null>(null)
+  // Personal first-period discount for one account. Distinct from the plan-level
+  // "new user offer" on the pricing page: this grants a deal to a single person
+  // (usually because support promised one) without changing what anyone else sees.
+  const [offerTarget, setOfferTarget] = useState<User | null>(null)
+  const [offerPercent, setOfferPercent] = useState('20')
+  const [offerDays, setOfferDays] = useState('30')
+  const [offerNote, setOfferNote] = useState('')
+  const [offerBusy, setOfferBusy] = useState(false)
   // Bulk selection. Cleared whenever the visible page changes, because a
   // selection the admin can no longer see is how accounts get removed by
   // accident.
@@ -294,6 +302,55 @@ export function AdminUsersPage() {
       toast.error(getErrorMessage(err, 'Failed to update name and gender'))
     } finally {
       setProfileBusy(false)
+    }
+  }
+
+  const openOfferEditor = (user: User) => {
+    setOfferTarget(user)
+    setOfferPercent('20')
+    setOfferDays('30')
+    setOfferNote('')
+  }
+
+  const saveOffer = async () => {
+    if (!offerTarget) return
+    const percent = Number(offerPercent)
+    if (!Number.isInteger(percent) || percent < 1 || percent > 99) {
+      toast.error('Discount must be a whole number between 1 and 99')
+      return
+    }
+    const days = offerDays.trim() ? Number(offerDays) : null
+    if (days !== null && (!Number.isInteger(days) || days < 1 || days > 3650)) {
+      toast.error('Expiry must be between 1 and 3650 days, or left empty')
+      return
+    }
+    setOfferBusy(true)
+    try {
+      await adminApi.setUserOffer(offerTarget.id, {
+        percent,
+        note: offerNote.trim() || undefined,
+        untilDays: days,
+      })
+      toast.success(`${percent}% first-period offer applied to ${offerTarget.name || offerTarget.email}`)
+      setOfferTarget(null)
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to apply the offer'))
+    } finally {
+      setOfferBusy(false)
+    }
+  }
+
+  const clearOffer = async (user: User) => {
+    if (!window.confirm(`Remove the personal offer from ${user.name || user.email}?`)) return
+    setOfferBusy(true)
+    try {
+      await adminApi.setUserOffer(user.id, { percent: null })
+      toast.success('Personal offer removed')
+      setOfferTarget(null)
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to remove the offer'))
+    } finally {
+      setOfferBusy(false)
     }
   }
 
@@ -595,6 +652,13 @@ export function AdminUsersPage() {
                                 >
                                   {lifetimeBusy === user.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Crown className="w-3.5 h-3.5" />} Free lifetime
                                 </button>
+                                <button
+                                  onClick={() => openOfferEditor(user)}
+                                  disabled={offerBusy}
+                                  className="flex items-center gap-1.5 px-3 py-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition"
+                                >
+                                  {offerBusy && offerTarget?.id === user.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <BadgePercent className="w-3.5 h-3.5" />} First-month offer
+                                </button>
                                 {user.status === 'SUSPENDED' ? (
                                   <button
                                     onClick={() => doUnblock(user)}
@@ -814,6 +878,69 @@ export function AdminUsersPage() {
                 <button onClick={saveProfile} disabled={profileBusy} className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-medium flex items-center gap-2">
                   {profileBusy && <Loader2 className="w-4 h-4 animate-spin" />} Save
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {offerTarget && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={() => !offerBusy && setOfferTarget(null)}>
+            <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-md border border-teal-800/60" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-white font-semibold flex items-center gap-2">
+                  <BadgePercent className="w-4 h-4 text-teal-400" />
+                  First-month offer — {offerTarget.name || offerTarget.email}
+                </h3>
+                <button onClick={() => setOfferTarget(null)} disabled={offerBusy} className="text-gray-400 hover:text-white">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mb-3">
+                A discount on this account's first subscription period only, on top of the public pricing.
+                It stops applying once they have ever subscribed. Leave expiry empty to keep it open.
+              </p>
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Discount %</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={99}
+                    value={offerPercent}
+                    onChange={(e) => setOfferPercent(e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Expires in (days)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={3650}
+                    value={offerDays}
+                    onChange={(e) => setOfferDays(e.target.value)}
+                    placeholder="No expiry"
+                    className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm"
+                  />
+                </div>
+              </div>
+              <label className="block text-xs text-gray-400 mb-1">Internal note (optional)</label>
+              <input
+                value={offerNote}
+                onChange={(e) => setOfferNote(e.target.value)}
+                maxLength={200}
+                placeholder="Why this account has an offer"
+                className="w-full mb-4 px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm"
+              />
+              <div className="flex justify-between gap-2">
+                <button onClick={() => clearOffer(offerTarget)} disabled={offerBusy} className="px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-gray-300 text-sm">
+                  Remove offer
+                </button>
+                <div className="flex gap-2">
+                  <button onClick={() => setOfferTarget(null)} disabled={offerBusy} className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm">Cancel</button>
+                  <button onClick={saveOffer} disabled={offerBusy} className="px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white text-sm font-medium flex items-center gap-2">
+                    {offerBusy && <Loader2 className="w-4 h-4 animate-spin" />} Apply
+                  </button>
+                </div>
               </div>
             </div>
           </div>

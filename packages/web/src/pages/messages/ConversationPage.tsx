@@ -6,9 +6,9 @@ import {
   ArrowLeft, Send, Loader2, AlertTriangle,
   CheckCheck, MessageCircle, ImagePlus, Mic, Square,
   Trash2, Flag, Ban, X, MessageCircleReply, Phone,
-  Compass, Calendar
+  Compass, Calendar, UserPlus
 } from 'lucide-react'
-import { api, assetUrl } from '../../lib/api'
+import { api, assetUrl, chatRequestApi, type ConnectionStatus } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { useChat } from '../../hooks/useSocket'
 import { useCallLauncher } from '../../hooks/useCallLauncher'
@@ -99,6 +99,12 @@ export function ConversationPage() {
   const [reportDesc, setReportDesc] = useState('')
   const [modBusy, setModBusy] = useState(false)
   const [replyTarget, setReplyTarget] = useState<Message | null>(null)
+  // Chat-request state for a brand-new contact. The empty thread offers to ask
+  // before messaging, but only when there is no existing connection (a dating
+  // match or an existing thread already opens the chat).
+  const [connection, setConnection] = useState<ConnectionStatus | null>(null)
+  const [requestNote, setRequestNote] = useState('')
+  const [requestBusy, setRequestBusy] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
@@ -140,8 +146,60 @@ export function ConversationPage() {
     setText('')
     setReplyTarget(null)
     setError(null)
+    setConnection(null)
+    setRequestNote('')
     setLoading(true)
   }, [userId])
+
+  // Connection state for the (possibly) fresh thread. `connected` is true when
+  // the pair can already chat - an accepted request, existing messages, or a
+  // dating match - so the request panel is only offered to a genuinely new
+  // contact and never to someone you already matched with.
+  useEffect(() => {
+    if (!userId) return
+    let alive = true
+    chatRequestApi
+      .status(userId)
+      .then((res) => {
+        if (alive) setConnection(res.data.data)
+      })
+      .catch(() => {
+        if (alive) setConnection(null)
+      })
+    return () => {
+      alive = false
+    }
+  }, [userId])
+
+  const sendChatRequest = async () => {
+    if (!userId || requestBusy) return
+    setRequestBusy(true)
+    try {
+      await chatRequestApi.send(userId, requestNote.trim() || undefined)
+      setConnection((prev) =>
+        prev
+          ? {
+              ...prev,
+              canSendRequest: false,
+              request: {
+                id: 'pending',
+                status: 'PENDING',
+                direction: 'SENT',
+                message: requestNote.trim() || null,
+                expiresAt: '',
+                cooldownUntil: null,
+              },
+            }
+          : prev,
+      )
+      setRequestNote('')
+      toast.success('Chat request sent.')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Could not send the request'))
+    } finally {
+      setRequestBusy(false)
+    }
+  }
 
   /** Drop the ack watchdog for an optimistic bubble (reconciled or failed). */
   const clearPending = (tempId: string) => {
@@ -647,6 +705,56 @@ export function ConversationPage() {
                   Join an event
                 </Link>
               </div>
+
+              {/* Ask-before-you-message. Only offered for a genuinely new
+                  contact: a dating match, an accepted request or an existing
+                  thread already has `connected: true` and never shows this. */}
+              {connection && !connection.connected && !connection.blocked && (
+                <div className="mt-6 w-full max-w-[34ch] rounded-3xl border border-surface-200 bg-white p-4 text-left shadow-sm dark:border-surface-700 dark:bg-surface-800/60">
+                  {connection.canSendRequest ? (
+                    <>
+                      <p className="text-sm font-semibold text-surface-900 dark:text-white">
+                        Want to chat? Send a request.
+                      </p>
+                      <p className="mt-1 text-xs text-surface-500 dark:text-surface-400">
+                        They can accept before either of you can message.
+                      </p>
+                      <input
+                        value={requestNote}
+                        onChange={(e) => setRequestNote(e.target.value)}
+                        placeholder="Add a short note (optional)"
+                        maxLength={200}
+                        className="input mt-3 text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void sendChatRequest()}
+                        disabled={requestBusy}
+                        className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-violet-500 to-primary-600 px-4 py-2.5 text-sm font-semibold text-white transition active:scale-[0.98] disabled:opacity-50"
+                      >
+                        {requestBusy ? (
+                          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                        ) : (
+                          <UserPlus className="h-4 w-4" aria-hidden />
+                        )}
+                        Send chat request
+                      </button>
+                    </>
+                  ) : connection.request?.direction === 'SENT' && connection.request.status === 'PENDING' ? (
+                    <p className="text-sm text-surface-500 dark:text-surface-400">
+                      Chat request sent. You can message once they accept.
+                    </p>
+                  ) : connection.request?.direction === 'RECEIVED' && connection.request.status === 'PENDING' ? (
+                    <p className="text-sm text-surface-500 dark:text-surface-400">
+                      This person sent you a chat request.{' '}
+                      <Link to="/messages/requests" className="font-semibold text-primary-600 dark:text-primary-400">
+                        Review it
+                      </Link>
+                      .
+                    </p>
+                  ) : null}
+                </div>
+              )}
             </div>
           ) : (
             messages.map((msg, idx) => {

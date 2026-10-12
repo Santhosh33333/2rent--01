@@ -370,6 +370,9 @@ router.post("/subscriptions/trial/users/:id", pricingEdit, sanitizeInput, valida
 // Permanent ("lifetime") access for one named account. Separate from the days
 // endpoint because a lifetime grant deliberately bypasses the 365-day cap.
 router.post("/subscriptions/trial/users/:id/lifetime", pricingEdit, sanitizeInput, validateRequest, adminSubscriptionController.setUserLifetime);
+// Targeted first-period discount for one account. percent: null clears it; the
+// controller owns the 1-99 validation because null and absent must be told apart.
+router.post("/subscriptions/offer/users/:id", pricingEdit, sanitizeInput, validateRequest, adminSubscriptionController.setUserOffer);
 
 // Website enquiry forms (beta tester / app feedback / investor). Support VIEW
 // reads all four: they are inbound messages, the same shape as a ticket. The
