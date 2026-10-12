@@ -358,7 +358,7 @@ const handleApprove = async (id: string) => {
                                 {proofFile[w.id] ? proofFile[w.id].name : 'Payout proof (paid)'}
                                 <input
                                   type="file"
-                                  accept="image/jpeg,image/png,image/webp,image/gif"
+                                  accept="image/*"
                                   className="hidden"
                                   onChange={(e) => {
                                     const f = e.target.files?.[0]

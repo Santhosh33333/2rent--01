@@ -6,6 +6,7 @@ import toast from 'react-hot-toast'
 import { api } from '../../lib/api'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
+import { isImageFile, MAX_RAW_UPLOAD_BYTES } from '../../lib/photo'
 
 export function KycStep2GovId() {
   const navigate = useNavigate()
@@ -16,17 +17,21 @@ export function KycStep2GovId() {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
+    // Clear the input first: without this, re-picking the SAME file after a
+    // failed attempt fires no change event and the screen looks frozen.
+    e.target.value = ''
     if (!selectedFile) return
 
-    // Validate file size (max 5MB)
-    if (selectedFile.size > 5 * 1024 * 1024) {
-      toast.error('File size must be less than 5MB')
+    // The 5 MB server cap is enforced by the shared upload interceptor, which
+    // resizes large photos first. Only a genuinely enormous pick is refused
+    // here, so a normal phone photo is never rejected just for being big.
+    if (selectedFile.size > MAX_RAW_UPLOAD_BYTES) {
+      toast.error('That file is too large (over 25 MB). Pick a smaller one.')
       return
     }
 
-    // Validate file type
-    if (!selectedFile.type.startsWith('image/')) {
-      toast.error('Please upload an image file')
+    if (!isImageFile(selectedFile)) {
+      toast.error('Please choose a JPEG, PNG or WebP image.')
       return
     }
 

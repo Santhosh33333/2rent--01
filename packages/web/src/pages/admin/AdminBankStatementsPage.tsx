@@ -267,6 +267,7 @@ export function AdminBankStatementsPage() {
                 onChange={(e) => {
                   setFile(e.target.files?.[0] ?? null)
                   setError('')
+                  e.target.value = ''
                 }}
                 className="block w-full text-sm text-surface-600 file:mr-3 file:rounded-xl file:border-0 file:bg-primary-600 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-primary-500 dark:text-surface-300"
               />

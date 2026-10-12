@@ -3,8 +3,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { ImagePlus, Video, X } from "lucide-react";
 import { postApi } from "../../lib/api";
 import { useFeatureFlag } from "../../hooks/useFeatureFlag";
+import { isImageFile, MAX_RAW_UPLOAD_BYTES } from "../../lib/photo";
 
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // backend MAX_FILE_SIZE
 const MAX_VIDEO_BYTES = 25 * 1024 * 1024; // backend MAX_VIDEO_SIZE
 
 const VISIBILITIES = [
@@ -56,8 +56,14 @@ export function NewPostPage() {
 
   const pickImage = (file?: File | null) => {
     if (!file) return;
-    if (file.size > MAX_IMAGE_BYTES) {
-      setError("Photos are limited to 5 MB on this build.");
+    if (!isImageFile(file)) {
+      setError("Please choose a JPEG, PNG or WebP image.");
+      return;
+    }
+    // The 5 MB server cap is enforced by the upload interceptor, which resizes
+    // large phone photos first. Only a truly enormous pick is refused here.
+    if (file.size > MAX_RAW_UPLOAD_BYTES) {
+      setError("That photo is too large (over 25 MB).");
       return;
     }
     if (media?.kind === "image") URL.revokeObjectURL(media.url);
@@ -164,14 +170,14 @@ export function NewPostPage() {
             type="file"
             accept="image/*"
             className="hidden"
-            onChange={(e) => pickImage(e.target.files?.[0])}
+            onChange={(e) => { pickImage(e.target.files?.[0]); e.target.value = ""; }}
           />
           <input
             ref={videoInputRef}
             type="file"
             accept="video/*"
             className="hidden"
-            onChange={(e) => pickVideo(e.target.files?.[0])}
+            onChange={(e) => { pickVideo(e.target.files?.[0]); e.target.value = ""; }}
           />
           <button
             type="button"

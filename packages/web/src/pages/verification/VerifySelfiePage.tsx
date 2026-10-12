@@ -7,6 +7,7 @@ import { api } from '../../lib/api'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
 import { AuthImage } from '../../components/AuthImage'
+import { isImageFile, MAX_RAW_UPLOAD_BYTES } from '../../lib/photo'
 
 type OverallStatus = 'UNVERIFIED' | 'PENDING' | 'VERIFIED' | 'REJECTED'
 
@@ -39,19 +40,24 @@ export function VerifySelfiePage() {
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
+    // Clear first so picking the same file again still fires onChange.
+    e.target.value = ''
     if (!file) return
 
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('File size must be under 5MB')
+    // The 5 MB cap is the interceptor's job, which resizes large photos first.
+    // Refusing here at 5 MB refused ordinary phone photos that upload fine.
+    if (file.size > MAX_RAW_UPLOAD_BYTES) {
+      toast.error('That file is too large (over 25 MB). Pick a smaller one.')
+      return
+    }
+
+    if (!isImageFile(file)) {
+      toast.error('Please choose a JPEG, PNG or WebP image.')
       return
     }
 
     setSelectedFile(file)
-    if (file.type.startsWith('image/')) {
-      setPreviewUrl(URL.createObjectURL(file))
-    } else {
-      setPreviewUrl(null)
-    }
+    setPreviewUrl(URL.createObjectURL(file))
   }
 
   const handleUpload = async () => {

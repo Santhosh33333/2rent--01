@@ -9,6 +9,31 @@ const MAX_INPUT_BYTES = 12 * 1024 * 1024
 const AVATAR_SIZE = 1024
 
 /**
+ * The largest pick we will even try to handle.
+ *
+ * Deliberately generous. A pick between this and the 5 MB server cap is not
+ * rejected: the shared axios interceptor downscales it before the request goes
+ * out. Refusing at 5 MB instead (as the KYC screens used to) rejected ordinary
+ * phone photos that would have uploaded fine after resizing, and the user saw
+ * "file too large" for a photo that was never actually too large to send.
+ */
+export const MAX_RAW_UPLOAD_BYTES = 25 * 1024 * 1024
+
+/**
+ * Whether a picked file is an image we can upload.
+ *
+ * Extension-tolerant on purpose, matching the server's own filter: Android's
+ * picker routinely hands back a valid JPEG with an empty or generic
+ * (`application/octet-stream`) MIME, and a strict `type.startsWith('image/')`
+ * check turned those into "please upload an image file" for a perfectly good
+ * photo. MIME wins when it is a real image type; otherwise the name decides.
+ */
+export function isImageFile(file: File): boolean {
+  if (/^image\//i.test(file.type || '')) return true
+  return /\.(jpe?g|png|webp|gif|bmp|heic|heif)$/i.test(file.name || '')
+}
+
+/**
  * Android's document/camera picker can return a valid JPEG with an empty MIME
  * type, which the strict `file.type` allow-list rejected before the user even
  * saw a preview ("image upload does not work"). Fall back to the extension.

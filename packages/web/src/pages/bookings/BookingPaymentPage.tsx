@@ -10,6 +10,7 @@ import { api } from '../../lib/api'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { UpiQrPanel } from '../../components/UpiQrPanel'
 import { UpiLookupInput } from '../../components/UpiLookupInput'
+import { isImageFile } from '../../lib/photo'
 import { GlassCard } from '../../components/GlassCard'
 import { SkeletonLoader } from '../../components/SkeletonLoader'
 
@@ -139,7 +140,9 @@ export function BookingPaymentPage() {
 
   const pickProof = (file: File | undefined) => {
     if (!file) return
-    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+    // Extension-tolerant: Android's picker often hands back a valid JPEG with an
+    // empty or generic MIME, which the old strict allow-list rejected.
+    if (!isImageFile(file)) {
       toast.error('Please choose an image file.')
       return
     }

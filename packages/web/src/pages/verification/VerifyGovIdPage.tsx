@@ -7,6 +7,7 @@ import { api } from '../../lib/api'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
 import { AuthImage } from '../../components/AuthImage'
+import { isImageFile, MAX_RAW_UPLOAD_BYTES } from '../../lib/photo'
 
 const GOV_ID_TYPES = [
   { value: 'AADHAAR', label: 'Aadhaar Card' },
@@ -51,19 +52,24 @@ export function VerifyGovIdPage() {
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
+    // Clear first so picking the same file again still fires onChange.
+    e.target.value = ''
     if (!file) return
 
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('File size must be under 5MB')
+    // The 5 MB cap is the interceptor's job, which resizes large photos first.
+    // Refusing here at 5 MB refused ordinary phone photos that upload fine.
+    if (file.size > MAX_RAW_UPLOAD_BYTES) {
+      toast.error('That file is too large (over 25 MB). Pick a smaller one.')
+      return
+    }
+
+    if (!isImageFile(file)) {
+      toast.error('Please choose a JPEG, PNG or WebP image.')
       return
     }
 
     setSelectedFile(file)
-    if (file.type.startsWith('image/')) {
-      setPreviewUrl(URL.createObjectURL(file))
-    } else {
-      setPreviewUrl(null)
-    }
+    setPreviewUrl(URL.createObjectURL(file))
   }
 
   const handleUpload = async () => {
@@ -260,7 +266,7 @@ export function VerifyGovIdPage() {
 
               <input
                 type="file"
-                accept="image/*,.pdf"
+                accept="image/*"
                 onChange={handleFileSelect}
                 className="block w-full text-sm text-surface-500 file:mr-4 file:py-2.5 file:px-5 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 dark:file:bg-primary-500/10 dark:file:text-primary-400 hover:file:bg-primary-100 dark:hover:file:bg-primary-500/20 file:cursor-pointer file:transition-colors"
               />

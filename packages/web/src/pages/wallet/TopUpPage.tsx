@@ -422,7 +422,7 @@ export function TopUpPage() {
                       type="file"
                       accept="image/*"
                       className="hidden"
-                      onChange={(e) => setProof(e.target.files?.[0] ?? null)}
+                      onChange={(e) => { setProof(e.target.files?.[0] ?? null); e.target.value = '' }}
                     />
                   </label>
                 </div>

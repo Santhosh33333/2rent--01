@@ -6,6 +6,7 @@ import toast from 'react-hot-toast'
 import { api } from '../../lib/api'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
+import { isImageFile, MAX_RAW_UPLOAD_BYTES } from '../../lib/photo'
 
 export function KycStep4AddressProof() {
   const navigate = useNavigate()
@@ -15,15 +16,18 @@ export function KycStep4AddressProof() {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
+    // Clear the input first: without this, re-picking the SAME file after a
+    // failed attempt fires no change event and the screen looks frozen.
+    e.target.value = ''
     if (!selectedFile) return
 
-    if (selectedFile.size > 5 * 1024 * 1024) {
-      toast.error('File size must be less than 5MB')
+    if (selectedFile.size > MAX_RAW_UPLOAD_BYTES) {
+      toast.error('That file is too large (over 25 MB). Pick a smaller one.')
       return
     }
 
-    if (!selectedFile.type.startsWith('image/')) {
-      toast.error('Please upload an image file')
+    if (!isImageFile(selectedFile)) {
+      toast.error('Please choose a JPEG, PNG or WebP image.')
       return
     }
 

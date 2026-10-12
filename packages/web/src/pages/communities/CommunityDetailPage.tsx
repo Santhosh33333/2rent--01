@@ -8,6 +8,7 @@ import {
 import toast from 'react-hot-toast'
 import { api, assetUrl } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
+import { isImageFile } from '../../lib/photo'
 
 interface Member {
   id: string
@@ -217,7 +218,9 @@ export function CommunityDetailPage() {
 
   const pickComposerImage = (file: File | undefined) => {
     if (!file) return
-    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+    // Extension-tolerant: Android's picker often hands back a valid JPEG with an
+    // empty or generic MIME, which the old strict allow-list rejected.
+    if (!isImageFile(file)) {
       toast.error('Please choose an image file.')
       return
     }
@@ -535,7 +538,7 @@ export function CommunityDetailPage() {
               <input
                 ref={composerFileRef}
                 type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif"
+                accept="image/*"
                 className="hidden"
                 onChange={(e) => {
                   pickComposerImage(e.target.files?.[0])
