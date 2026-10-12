@@ -17,6 +17,7 @@ import {
 } from './datingApi'
 import { Tilt } from '../../components/motion/Tilt'
 import { assetUrl } from '../../lib/api'
+import { getErrorDetail, getErrorMessage } from '../../lib/error'
 import { MatchSongPrompt } from '../landing/components/MusicToggle'
 
 /**
@@ -64,6 +65,8 @@ export function DiscoverPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  /** A failed swipe was rejected for lack of funds, so offer a top-up. */
+  const [needsTopUp, setNeedsTopUp] = useState(false)
   const [match, setMatch] = useState<DiscoverProfile | null>(null)
   /** Which gallery photo the current card is showing. */
   const [photoIndex, setPhotoIndex] = useState(0)
@@ -113,6 +116,7 @@ export function DiscoverPage() {
     async (signal?: AbortSignal) => {
       setLoading(true)
       setError(null)
+      setNeedsTopUp(false)
       try {
         const page = await fetchDiscover(
           showMe === 'everyone' ? filters : { ...filters, gender: showMe },
@@ -166,13 +170,20 @@ export function DiscoverPage() {
       const current = queue[0]
       if (!current || busy) return
       setBusy(true)
+      setError(null)
+      setNeedsTopUp(false)
       setQueue((q) => q.slice(1))
       resetOffsets()
       try {
         const res = await sendSwipe(current.id, type)
         if (res.isMatch) setMatch(current)
-      } catch {
-        setError('That action did not go through.')
+      } catch (err) {
+        // Surface the server's own explanation instead of a blanket failure. The
+        // paid-request case (402 INSUFFICIENT_BALANCE) carries a readable
+        // "costs ₹X and your wallet has ₹Y" message that is far more useful than
+        // "that action did not go through", plus a top-up CTA.
+        setError(getErrorMessage(err, 'That action did not go through.'))
+        if (getErrorDetail(err) === 'INSUFFICIENT_BALANCE') setNeedsTopUp(true)
         // The directive was never recorded, so put the card back: dropping it
         // silently loses a profile until a full refresh and makes the failure
         // look like a stale deck. The id guard avoids duplicating a card if a
@@ -421,9 +432,18 @@ export function DiscoverPage() {
 
       <main className="relative z-10 mx-auto max-w-md px-4 pb-32">
         {error && (
-          <p className="mb-4 rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-            {error}
-          </p>
+          <div className="mb-4 rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+            <p>{error}</p>
+            {needsTopUp && (
+              <button
+                type="button"
+                onClick={() => navigate('/wallet')}
+                className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-4 py-2 text-xs font-semibold text-white transition hover:bg-white/15 active:scale-95"
+              >
+                Top up wallet
+              </button>
+            )}
+          </div>
         )}
 
         {loading && !current ? (
