@@ -67,7 +67,10 @@ router.post(
 );
 router.post(
   "/:id/posts",
-  [body("content").notEmpty().trim().isLength({ min: 1, max: 2000 }), body("imageUrl").optional().isString().trim()],
+  // A post may be text, an image, or both. An image-only post is valid (the
+  // global feed already allows one), so `content` is optional here; the
+  // controller rejects only the truly empty case.
+  [body("content").optional({ nullable: true }).isString().trim().isLength({ max: 2000 }), body("imageUrl").optional({ nullable: true }).isString().trim()],
   sanitizeInput,
   validateRequest,
   communityPostController.createPost

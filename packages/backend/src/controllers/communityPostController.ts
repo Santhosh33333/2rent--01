@@ -42,8 +42,13 @@ export async function createPost(req: AuthedRequest, res: Response): Promise<voi
   try {
     const { id } = req.params;
     const { content, imageUrl } = req.body;
-    if (!content || !String(content).trim()) {
-      sendError(res, "Post content is required.", 400, "VALIDATION_ERROR");
+    const text = typeof content === "string" ? content.trim() : "";
+    const image = typeof imageUrl === "string" ? imageUrl.trim() : "";
+    // A post may be text, an image, or both. The global feed already supports an
+    // image-only post, so requiring text here made "attach a photo, hit post"
+    // silently do nothing.
+    if (!text && !image) {
+      sendError(res, "Add some text or a photo before posting.", 400, "VALIDATION_ERROR");
       return;
     }
     const { community, member } = await membership(id, req.user!.userId);
@@ -60,8 +65,8 @@ export async function createPost(req: AuthedRequest, res: Response): Promise<voi
       data: {
         communityId: id,
         authorId: req.user!.userId,
-        content: String(content).trim().slice(0, 2000),
-        imageUrl: typeof imageUrl === "string" ? imageUrl.slice(0, 500) : null,
+        content: text.slice(0, 2000),
+        imageUrl: image ? image.slice(0, 500) : null,
       },
       include: { author: { select: AUTHOR_SELECT } },
     });

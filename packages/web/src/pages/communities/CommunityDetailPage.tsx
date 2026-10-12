@@ -182,7 +182,10 @@ export function CommunityDetailPage() {
   }
 
   const publishPost = async () => {
-    if (!composer.trim()) return
+    // A post may be text, an image, or both (the global feed already allows an
+    // image-only post). Requiring text here silently swallowed an image-only
+    // post: the button stayed disabled and tapping it did nothing.
+    if (!composer.trim() && !composerImage) return
     setPosting(true)
     try {
       let imageUrl: string | undefined
@@ -530,7 +533,7 @@ export function CommunityDetailPage() {
               <input
                 value={composer}
                 onChange={(e) => setComposer(e.target.value)}
-                placeholder="Share something with the community..."
+                placeholder="Share something, or attach a photo..."
                 maxLength={2000}
                 className="input flex-1"
                 disabled={posting}
@@ -554,7 +557,7 @@ export function CommunityDetailPage() {
               >
                 <ImagePlus className="w-5 h-5" />
               </button>
-              <button onClick={publishPost} disabled={posting || !composer.trim()} className="btn-gradient px-4 disabled:opacity-50">
+              <button onClick={publishPost} disabled={posting || (!composer.trim() && !composerImage)} className="btn-gradient px-4 disabled:opacity-50">
                 {posting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               </button>
             </div>
