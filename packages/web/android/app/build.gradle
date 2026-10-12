@@ -42,8 +42,12 @@ android {
         // and an invalid step refuses to advance. Before this, a duplicate
         // email (or any failed OTP request) re-rendered the Send button with no
         // message, and a rejection on the final step was only a toast.
-        versionCode 22
-        versionName "1.0.21"
+        // 23 / 1.0.22 unblocks native Google sign-in. The release keystore
+        // SHA-1 is registered in the Firebase project, which produced the
+        // Android OAuth clients now in google-services.json; the backend
+        // accepts the ID-token audience those clients sign.
+        versionCode 23
+        versionName "1.0.22"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
