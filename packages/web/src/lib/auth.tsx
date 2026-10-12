@@ -126,7 +126,47 @@ function clearSessionData(): void {
   // logout forced returning users through onboarding + profile setup again
   // on every re-login. 'theme' / UI prefs persist for the same reason.
   localStorage.removeItem('impersonating')
+  localStorage.removeItem('sessionStartedAt')
   sessionStorage.removeItem('rb_admin_session')
+}
+
+/**
+ * Hard cap on how long one sign-in may last before the user must authenticate
+ * again. Sign-in persists across app restarts for this window; past it the
+ * session is dropped on the next launch. Anchored to the moment of login rather
+ * than refreshed on every token rotation, so a long-lived refresh token can't
+ * silently keep a device signed in forever.
+ */
+export const SESSION_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000
+const SESSION_STARTED_KEY = 'sessionStartedAt'
+
+/** Anchor the 2-week window. Called on every fresh sign-in / impersonation. */
+function markSessionStart(): void {
+  try {
+    localStorage.setItem(SESSION_STARTED_KEY, String(Date.now()))
+  } catch {
+    // Storage unavailable — the session still works for this launch.
+  }
+}
+
+/**
+ * True when the current sign-in has outlived the 2-week cap. A missing anchor
+ * (accounts signed in before this shipped) is backfilled rather than treated as
+ * expired, so the change never logs an active user out on upgrade.
+ */
+function isSessionExpired(): boolean {
+  try {
+    const started = Number(localStorage.getItem(SESSION_STARTED_KEY))
+    if (!started || Number.isNaN(started)) {
+      if (localStorage.getItem('token') || localStorage.getItem('refreshToken')) {
+        markSessionStart()
+      }
+      return false
+    }
+    return Date.now() - started > SESSION_MAX_AGE_MS
+  } catch {
+    return false
+  }
 }
 
 // Server is the source of truth for completed steps: if the profile already
@@ -182,6 +222,11 @@ function isDemoSessionToken(value: string | null): boolean {
 
 function loadUser(): User | null {
   try {
+    // Drop a sign-in older than the 2-week cap before trusting any stored user.
+    if (isSessionExpired()) {
+      clearSessionData()
+      return null
+    }
     const token = localStorage.getItem('token')
     if (isDemoSessionToken(token)) {
       clearSessionData()
@@ -316,6 +361,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const token = localStorage.getItem('token')
     const refreshToken = localStorage.getItem('refreshToken')
 
+    // A sign-in past its 2-week cap is over: clear it and show the login screen
+    // rather than silently minting a fresh access token from the refresh token.
+    if (isSessionExpired()) {
+      clearSessionData()
+      setUser(null)
+      setLoading(false)
+      return
+    }
+
     // No credential at all -> definitely a fresh/anonymous visitor.
     if (!token && !refreshToken) {
       setLoading(false)
@@ -391,6 +445,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('refreshToken', refreshToken)
     localStorage.setItem('user', JSON.stringify(u))
     localStorage.setItem('activeRole', u.activeRole || u.role || 'USER')
+    markSessionStart()
     setUser(u)
     setImpersonating(null)
     reconcileCompletionFlags(u)
@@ -416,6 +471,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('refreshToken', refreshToken)
     localStorage.setItem('user', JSON.stringify(u))
     localStorage.setItem('activeRole', u.activeRole || u.role || 'USER')
+    markSessionStart()
     setUser(u)
     reconcileCompletionFlags(u)
   }
@@ -490,6 +546,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('refreshToken', refreshToken)
     localStorage.setItem('user', JSON.stringify(u))
     localStorage.setItem('activeRole', u.activeRole || u.role || 'USER')
+    markSessionStart()
     setUser(u)
     reconcileCompletionFlags(u)
     return {
@@ -544,6 +601,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('refreshToken', payload.refreshToken)
     localStorage.setItem('user', JSON.stringify(u))
     localStorage.setItem('activeRole', u.activeRole || u.role || 'USER')
+    markSessionStart()
     const info: ImpersonationInfo = {
       userName: u.fullName || u.name || 'this user',
       userEmail: u.email,

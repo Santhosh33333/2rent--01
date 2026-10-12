@@ -641,8 +641,12 @@ export function DiscoverPage() {
               <button
                 type="button"
                 onClick={() => {
+                  const target = match.id
                   setMatch(null)
-                  navigate('/messages')
+                  // Open the conversation with the person you just matched with.
+                  // Sending this to '/messages' dropped the user on the inbox
+                  // list instead, which read as "chat does not open".
+                  navigate(`/messages/${target}`)
                 }}
                 className="prism-ring inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-br from-violet-500 to-primary-600 px-8 py-3 font-semibold text-white transition active:scale-95"
               >
