@@ -603,7 +603,7 @@ export function ConversationPage() {
 
   if (loading) {
     return (
-      <div className="max-w-3xl mx-auto h-[calc(100vh-15rem)] h-[calc(100dvh-15rem)] lg:h-[calc(100vh-10rem)] lg:h-[calc(100dvh-10rem)] flex flex-col animate-fadeInUp">
+      <div className="max-w-3xl mx-auto chat-viewport flex flex-col animate-fadeInUp">
         <div className="glass-card p-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-surface-100 dark:bg-surface-800 animate-pulse" />
           <div className="flex-1">
@@ -634,7 +634,7 @@ export function ConversationPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto h-[calc(100vh-15rem)] h-[calc(100dvh-15rem)] lg:h-[calc(100vh-10rem)] lg:h-[calc(100dvh-10rem)] flex flex-col animate-fadeInUp">
+    <div className="max-w-3xl mx-auto chat-viewport flex flex-col animate-fadeInUp">
       {/* Chat Header */}
       <div className="glass-card p-4 flex items-center gap-3 flex-shrink-0">
         <button
