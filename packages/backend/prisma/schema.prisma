@@ -152,6 +152,7 @@ supportMessages                SupportMessage[]
   passesReceived                 Pass[]               @relation("PassReceived")
   matchesAsA                     Match[]              @relation("MatchUserA")
   matchesAsB                     Match[]              @relation("MatchUserB")
+  photos                         UserPhoto[]
   subscriptions                  Subscription[]
   subscriptionPayments          SubscriptionPayment[]
 
@@ -2813,6 +2814,21 @@ model UploadedFile {
   createdAt DateTime @default(now())
 
   @@index([createdAt])
+}
+
+// Extra profile gallery photos, beyond the single `User.avatarUrl`. Dating
+// discovery shows these as a swipeable set, so the order is explicit rather
+// than implied by creation time.
+model UserPhoto {
+  id        String   @id @default(uuid())
+  userId    String
+  url       String
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, position])
 }
 
 // ============================================================

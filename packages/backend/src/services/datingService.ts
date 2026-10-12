@@ -517,6 +517,7 @@ export async function discover(viewerId: string, filters: DiscoveryFilters) {
       mobileVerified: true,
       latitude: true,
       longitude: true,
+      photos: { orderBy: { position: "asc" }, select: { url: true } },
     },
   });
 
@@ -590,6 +591,15 @@ export async function discover(viewerId: string, filters: DiscoveryFilters) {
       age: preferenceService.ageFrom(row.dateOfBirth),
       language: row.language,
       mobileVerified: row.mobileVerified,
+      // The full ordered set the card swipes through: the avatar first (it is
+      // the photo most accounts actually have), then gallery photos, de-duped
+      // in case the same file was uploaded to both. Coordinates stay absent.
+      photos: Array.from(
+        new Set([
+          ...(row.avatarUrl ? [row.avatarUrl] : []),
+          ...(row.photos ?? []).map((p) => p.url),
+        ])
+      ),
       // Coordinates are deliberately absent from this projection.
       distance: distanceBand(result.distanceKm),
       matchScore: result.score,

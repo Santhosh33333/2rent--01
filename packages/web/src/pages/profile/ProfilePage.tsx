@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom'
 import { VerificationBadge } from '../../components/VerificationBadge'
 import { TrustScoreDisplay } from '../../components/TrustScoreDisplay'
 import { ReferralCard } from '../../components/account/ReferralCard'
+import { ProfilePhotosCard } from '../../components/account/ProfilePhotosCard'
 import { Reveal } from '../../components/motion/Reveal'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
@@ -243,6 +244,10 @@ export function ProfilePage() {
             </div>
           ))}
         </div>
+      </AnimatedPage>
+
+      <AnimatedPage delay={150}>
+        <ProfilePhotosCard />
       </AnimatedPage>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

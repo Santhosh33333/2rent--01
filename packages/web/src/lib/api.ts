@@ -468,6 +468,27 @@ export const agreementApi = {
   accept: (id: string) => api.post(`/users/agreements/${id}/accept`),
 }
 
+// Profile gallery: the extra photos a dating card swipes through, beyond the
+// single avatar. The server owns the order and the count cap.
+export interface GalleryPhoto {
+  id: string
+  url: string
+  position: number
+}
+
+export const photoApi = {
+  list: () => api.get<{ data: { photos: GalleryPhoto[]; max: number } }>('/users/photos'),
+  upload: (blob: Blob) => {
+    const form = new FormData()
+    form.append('photo', blob, 'photo.jpg')
+    return api.post<{ data: { photo: GalleryPhoto } }>('/users/photos', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
+    })
+  },
+  remove: (id: string) => api.delete(`/users/photos/${id}`),
+}
+
 // Versioned legal documents + signed consent capture.
 // `accept` records a real signature; the server seals it with the document
 // version, a content hash, the IP and the user agent, then mails copies.

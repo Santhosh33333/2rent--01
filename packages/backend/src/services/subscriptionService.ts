@@ -95,6 +95,13 @@ export async function getActivePlans(userId?: string) {
        * claims a discount they are not being given.
        */
       listPrice: eligibleForOffer ? plan.listPrice : null,
+      // Present, always, so every caller sees one shape whether or not a personal
+      // offer is in play - a union return type made the presence of these fields
+      // depend on the branch, which is exactly the kind of thing clients index
+      // into and crash on.
+      customOfferPercent: null as number | null,
+      customOfferNote: null as string | null,
+      customOfferUntil: null as Date | null,
     };
   });
 }

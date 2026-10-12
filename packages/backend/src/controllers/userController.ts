@@ -44,6 +44,10 @@ export async function getProfile(req: AuthedRequest, res: Response): Promise<voi
         createdAt: true,
         verification: { select: { status: true, rejectionReason: true } },
         partner: { select: { status: true, rejectionReason: true } },
+        photos: {
+          orderBy: { position: "asc" },
+          select: { id: true, url: true, position: true },
+        },
       },
     });
     if (!user) {
@@ -189,6 +193,73 @@ export async function uploadProfilePhoto(req: AuthedRequest, res: Response): Pro
     sendSuccess(res, { avatarUrl }, "Profile photo uploaded.", 200);
   } catch (err) {
     sendError(res, "Failed to upload photo.", 500, "INTERNAL_ERROR");
+  }
+}
+
+/** Upper bound on gallery photos, so a profile stays browsable. */
+export const MAX_GALLERY_PHOTOS = 6;
+
+export async function listMyPhotos(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const photos = await prisma.userPhoto.findMany({
+      where: { userId: req.user!.userId },
+      orderBy: { position: "asc" },
+      select: { id: true, url: true, position: true },
+    });
+    sendSuccess(res, { photos, max: MAX_GALLERY_PHOTOS }, "Photos retrieved.");
+  } catch (err) {
+    sendError(res, "Failed to retrieve photos.", 500, "INTERNAL_ERROR");
+  }
+}
+
+export async function uploadGalleryPhoto(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    if (!req.file) {
+      sendError(res, "No file uploaded.", 400, "NO_FILE");
+      return;
+    }
+    const userId = req.user!.userId;
+    const count = await prisma.userPhoto.count({ where: { userId } });
+    // Counted, not trusted from the client, so two parallel uploads cannot both
+    // squeeze past a client-side limit.
+    if (count >= MAX_GALLERY_PHOTOS) {
+      sendError(res, `You can show up to ${MAX_GALLERY_PHOTOS} photos.`, 400, "PHOTO_LIMIT_REACHED");
+      return;
+    }
+    const photo = await prisma.userPhoto.create({
+      data: { userId, url: `/uploads/${req.file.filename}`, position: count },
+      select: { id: true, url: true, position: true },
+    });
+    sendSuccess(res, { photo }, "Photo added.", 201);
+  } catch (err) {
+    sendError(res, "Failed to upload photo.", 500, "INTERNAL_ERROR");
+  }
+}
+
+export async function deleteGalleryPhoto(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const photo = await prisma.userPhoto.findUnique({ where: { id } });
+    if (!photo || photo.userId !== req.user!.userId) {
+      sendError(res, "Photo not found.", 404, "PHOTO_NOT_FOUND");
+      return;
+    }
+    await prisma.userPhoto.delete({ where: { id } });
+    // Re-pack positions after a delete so the stored order matches what is shown.
+    // Leaving gaps would still sort correctly but makes "position" lie.
+    const remaining = await prisma.userPhoto.findMany({
+      where: { userId: req.user!.userId },
+      orderBy: { position: "asc" },
+      select: { id: true },
+    });
+    await prisma.$transaction(
+      remaining.map((p, i) =>
+        prisma.userPhoto.update({ where: { id: p.id }, data: { position: i } })
+      )
+    );
+    sendSuccess(res, undefined, "Photo removed.");
+  } catch (err) {
+    sendError(res, "Failed to remove photo.", 500, "INTERNAL_ERROR");
   }
 }
 

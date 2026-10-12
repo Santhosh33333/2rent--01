@@ -39,6 +39,11 @@ router.put(
 // Upload profile photo
 router.post("/profile-photo", upload.single("photo"), userController.uploadProfilePhoto);
 
+// Profile gallery (extra photos shown on the dating card)
+router.get("/photos", userController.listMyPhotos);
+router.post("/photos", upload.single("photo"), userController.uploadGalleryPhoto);
+router.delete("/photos/:id", userController.deleteGalleryPhoto);
+
 // Account management
 router.delete("/account", userController.deleteAccount);
 

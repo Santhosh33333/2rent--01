@@ -12,6 +12,11 @@ export interface DiscoverProfile {
   id: string;
   fullName: string;
   avatarUrl?: string | null;
+  /**
+   * Ordered set the card swipes through: the avatar first, then gallery photos.
+   * Composed server-side so every client shows the same set in the same order.
+   */
+  photos?: string[] | null;
   bio?: string | null;
   city?: string | null;
   gender?: string | null;

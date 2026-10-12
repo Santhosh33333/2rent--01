@@ -7,7 +7,7 @@ import {
   useSpring,
   useTransform,
 } from 'motion/react'
-import { RefreshCw, Star, X, Heart, MessageCircle, ShieldCheck, SlidersHorizontal, MapPin } from 'lucide-react'
+import { RefreshCw, Star, X, Heart, MessageCircle, ShieldCheck, SlidersHorizontal, MapPin, ChevronLeft, ChevronRight } from 'lucide-react'
 import {
   fetchDiscover,
   sendSwipe,
@@ -65,6 +65,10 @@ export function DiscoverPage() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [match, setMatch] = useState<DiscoverProfile | null>(null)
+  /** Which gallery photo the current card is showing. */
+  const [photoIndex, setPhotoIndex] = useState(0)
+  /** Full profile overlay: the photos plus the bio, and nothing private. */
+  const [detailOpen, setDetailOpen] = useState(false)
 
   /**
    * Per-request filters. Empty by default, which now means "use my saved
@@ -100,6 +104,10 @@ export function DiscoverPage() {
   const passScale = useTransform(passOpacity, [0, 1], [0.85, 1])
 
   const dragStart = useRef<{ x: number; y: number } | null>(null)
+  // Whether the current gesture moved far enough to be a drag. A tap that never
+  // moved must open the profile rather than be mistaken for a (zero-length)
+  // swipe, so the click handler consults this instead of guessing.
+  const moved = useRef(false)
 
   const load = useCallback(
     async (signal?: AbortSignal) => {
@@ -192,8 +200,13 @@ export function DiscoverPage() {
   useEffect(() => {
     const onMove = (e: PointerEvent) => {
       if (!dragStart.current) return
-      x.set(e.clientX - dragStart.current.x)
-      y.set(e.clientY - dragStart.current.y)
+      const dx = e.clientX - dragStart.current.x
+      const dy = e.clientY - dragStart.current.y
+      // Past a few pixels this is a drag, not a tap. 6px tolerates the small
+      // jitter of a finger on glass without turning it into a swipe.
+      if (Math.hypot(dx, dy) > 6) moved.current = true
+      x.set(dx)
+      y.set(dy)
     }
     const onUp = () => {
       if (!dragStart.current) return
@@ -222,9 +235,26 @@ export function DiscoverPage() {
   // person's birth date to every viewer to display one integer. The server no
   // longer sends it, so there is nothing to fall back to.
   const age = current?.age ?? null
+  // The ordered photo set for the top card. The server already composes it
+  // (avatar first, then gallery), but fall back to the avatar alone so an older
+  // cached response still renders something.
+  const gallery =
+    current?.photos && current.photos.length > 0
+      ? current.photos
+      : current?.avatarUrl
+        ? [current.avatarUrl]
+        : []
+  const safeIndex = gallery.length > 0 ? Math.min(photoIndex, gallery.length - 1) : 0
   const activeFilterCount = Object.values(filters).filter(
     (v) => v !== undefined && v !== '',
   ).length
+
+  // A new card starts at its first photo and never inherits the previous card's
+  // index or an open overlay.
+  useEffect(() => {
+    setPhotoIndex(0)
+    setDetailOpen(false)
+  }, [current?.id])
 
   return (
     // Full-bleed dark surface. The height tracks the shell's content box
@@ -462,7 +492,12 @@ export function DiscoverPage() {
             <motion.div
               onPointerDown={(e: React.PointerEvent<HTMLDivElement>) => {
                 dragStart.current = { x: e.clientX, y: e.clientY }
+                moved.current = false
                 dragging.set(1)
+              }}
+              onClick={() => {
+                // A tap (no drag) opens the full profile. A swipe never does.
+                if (!moved.current) setDetailOpen(true)
               }}
               style={{
                 x: springX,
@@ -472,9 +507,9 @@ export function DiscoverPage() {
               }}
               className="absolute inset-0 touch-none overflow-hidden rounded-3xl shadow-2xl will-change-transform"
             >
-              {current.avatarUrl ? (
+              {gallery.length > 0 ? (
                 <img
-                  src={assetUrl(current.avatarUrl) || ''}
+                  src={assetUrl(gallery[safeIndex]) || ''}
                   alt={current.fullName}
                   className="h-full w-full object-cover"
                   draggable={false}
@@ -493,6 +528,55 @@ export function DiscoverPage() {
                     {current.fullName.charAt(0).toUpperCase()}
                   </span>
                 </div>
+              )}
+
+              {/* Photo navigation. Deliberately its own tap targets rather than
+                  "tap the left half": a bare tap opens the profile, so the same
+                  gesture must not also mean "previous photo". */}
+              {gallery.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    aria-label="Previous photo"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setPhotoIndex((i) => (i - 1 + gallery.length) % gallery.length)
+                    }}
+                    className="absolute left-3 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur transition hover:bg-black/65 active:scale-95"
+                  >
+                    <ChevronLeft className="h-5 w-5" aria-hidden />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Next photo"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setPhotoIndex((i) => (i + 1) % gallery.length)
+                    }}
+                    className="absolute right-3 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur transition hover:bg-black/65 active:scale-95"
+                  >
+                    <ChevronRight className="h-5 w-5" aria-hidden />
+                  </button>
+                  <div className="absolute inset-x-0 top-3 z-10 flex justify-center gap-1.5">
+                    {gallery.map((url, i) => (
+                      <button
+                        key={`${url}-${i}`}
+                        type="button"
+                        aria-label={`Photo ${i + 1} of ${gallery.length}`}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setPhotoIndex(i)
+                        }}
+                        className={`h-1.5 rounded-full transition-all ${
+                          i === safeIndex ? 'w-5 bg-white' : 'w-1.5 bg-white/50'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </>
               )}
 
               {/* Intent stamps. Opacity is a transform-linked motion value, so
@@ -554,11 +638,142 @@ export function DiscoverPage() {
                     {current.bio}
                   </p>
                 )}
+                <button
+                  type="button"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setDetailOpen(true)
+                  }}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/25 active:scale-95"
+                >
+                  View profile
+                  <ChevronRight className="h-4 w-4" aria-hidden />
+                </button>
               </div>
             </motion.div>
           </div>
         )}
       </main>
+
+      {/* Full profile: the photos and the bio, and deliberately nothing a viewer
+          should not have. No phone, no email, and no precise location - only what
+          the card already shows, given room to breathe. */}
+      {detailOpen && current && (
+        <motion.div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${current.fullName}'s profile`}
+          initial={reduce ? false : { opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="fixed inset-0 z-50 flex flex-col bg-slate-950/97 backdrop-blur-sm"
+        >
+          <div className="relative flex-1 overflow-hidden">
+            {gallery.length > 0 ? (
+              <img
+                src={assetUrl(gallery[safeIndex]) || ''}
+                alt={current.fullName}
+                className="h-full w-full object-cover"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none'
+                }}
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center bg-gradient-to-br from-violet-900 to-slate-900">
+                <span className="font-display text-8xl font-bold text-white/15">
+                  {current.fullName.charAt(0).toUpperCase()}
+                </span>
+              </div>
+            )}
+            <div className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-black/70 to-transparent" />
+            <button
+              type="button"
+              onClick={() => setDetailOpen(false)}
+              aria-label="Close profile"
+              className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur transition hover:bg-black/70 active:scale-95"
+              style={{ marginTop: 'var(--safe-top, 0px)' }}
+            >
+              <X className="h-5 w-5" aria-hidden />
+            </button>
+            {gallery.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  aria-label="Previous photo"
+                  onClick={() => setPhotoIndex((i) => (i - 1 + gallery.length) % gallery.length)}
+                  className="absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur transition hover:bg-black/70 active:scale-95"
+                >
+                  <ChevronLeft className="h-5 w-5" aria-hidden />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Next photo"
+                  onClick={() => setPhotoIndex((i) => (i + 1) % gallery.length)}
+                  className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur transition hover:bg-black/70 active:scale-95"
+                >
+                  <ChevronRight className="h-5 w-5" aria-hidden />
+                </button>
+                <div className="absolute inset-x-0 bottom-3 flex justify-center gap-1.5">
+                  {gallery.map((url, i) => (
+                    <button
+                      key={`d-${url}-${i}`}
+                      type="button"
+                      aria-label={`Photo ${i + 1} of ${gallery.length}`}
+                      onClick={() => setPhotoIndex(i)}
+                      className={`h-1.5 rounded-full transition-all ${
+                        i === safeIndex ? 'w-5 bg-white' : 'w-1.5 bg-white/50'
+                      }`}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="max-h-[45vh] overflow-y-auto px-5 pb-8 pt-4">
+            <div className="flex items-center gap-2">
+              <h2 className="font-display text-2xl font-bold text-white">
+                {current.fullName}
+                {age !== null && <span className="font-normal text-white/60">, {age}</span>}
+              </h2>
+              {current.mobileVerified && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[11px] font-semibold text-emerald-300">
+                  <ShieldCheck className="h-3 w-3" aria-hidden />
+                  Verified
+                </span>
+              )}
+            </div>
+            {current.city && <p className="mt-0.5 text-sm text-white/70">{current.city}</p>}
+            {current.distance && (
+              <p className="mt-1 inline-flex items-center gap-1 text-sm text-white/70">
+                <MapPin className="h-3.5 w-3.5" aria-hidden />
+                {current.distance} away
+              </p>
+            )}
+            {current.bio ? (
+              <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-white/85">
+                {current.bio}
+              </p>
+            ) : (
+              <p className="mt-3 text-sm italic text-white/50">
+                {current.fullName.split(' ')[0]} has not written a bio yet.
+              </p>
+            )}
+            {current.reasons && current.reasons.length > 0 && (
+              <div className="mt-4 flex flex-wrap gap-1.5">
+                {current.reasons.map((reason) => (
+                  <span
+                    key={reason.code}
+                    className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-medium text-white/85"
+                  >
+                    {reason.label}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </motion.div>
+      )}
 
       {current && !loading && (
         <nav className="above-tabbar fixed inset-x-0 z-20 border-t border-white/10 bg-slate-950/85 px-4 py-4 backdrop-blur-lg">
