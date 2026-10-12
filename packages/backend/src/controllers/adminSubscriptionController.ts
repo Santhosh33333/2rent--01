@@ -9,6 +9,7 @@ import {
   setTrialDays,
   grantTrialToAllUsers,
   setUserAccess,
+  setUserLifetimeAccess,
   normaliseTrialDays,
   TRIAL_DAYS_KEY,
   MAX_TRIAL_DAYS,
@@ -520,6 +521,33 @@ export async function setUserTrial(req: AuthedRequest, res: Response): Promise<v
       result,
       days === null ? "Access revoked." : `Access granted until ${result.accessUntil?.toISOString()}.`,
     );
+  } catch (err) {
+    trialError(res, err);
+  }
+}
+
+/**
+ * POST /admin/subscriptions/trial/users/:id/lifetime
+ * Grants a named account permanent access ("free for life").
+ */
+export async function setUserLifetime(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const actorId = req.user?.userId ?? "unknown";
+    const reason = typeof req.body?.reason === "string" ? req.body.reason : undefined;
+    const result = await setUserLifetimeAccess(String(req.params.id ?? ""), actorId, reason);
+
+    await auditAdminAction({
+      req,
+      actorId,
+      action: "ACCESS_GRANTED_LIFETIME",
+      section: "PRICING",
+      targetType: "User",
+      targetId: result.userId,
+      newValue: result,
+      reason,
+    });
+
+    sendSuccess(res, result, "Lifetime access granted.");
   } catch (err) {
     trialError(res, err);
   }

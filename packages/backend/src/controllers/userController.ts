@@ -14,6 +14,11 @@ import {
 } from "../services/phoneVisibility";
 import { selfDeletionGate, resolveFreezeUntil } from "../services/accountDeletionPolicy";
 
+/** Rejection when a user tries to self-edit an identity field (name, gender). */
+const IDENTITY_CHANGE_ADMIN_ONLY_MESSAGE =
+  "Name and gender can only be changed by Nabri support or an administrator. Please raise a support request.";
+const IDENTITY_CHANGE_ADMIN_ONLY_CODE = "IDENTITY_CHANGE_ADMIN_ONLY";
+
 export async function getProfile(req: AuthedRequest, res: Response): Promise<void> {
   try {
     // Single round-trip: user + KYC + partner state via relation includes.
@@ -75,6 +80,33 @@ export async function updateProfile(req: AuthedRequest, res: Response): Promise<
     if (req.body && Object.prototype.hasOwnProperty.call(req.body, "phone")) {
       sendError(res, PHONE_CHANGE_ADMIN_ONLY_MESSAGE, 403, PHONE_CHANGE_ADMIN_ONLY_CODE);
       return;
+    }
+
+    // Name and gender are identity fields: set once during onboarding, then
+    // frozen. After that only an administrator can change them (via
+    // PUT /admin/users/:id/profile). Letting an owner rewrite their own name
+    // made a "verified" profile trivially spoofable, so the supported path is a
+    // support request, not a silent self-edit.
+    //
+    // "Onboarded" is tracked by a stored city - the same signal the client uses
+    // to stop forcing the completion screen - so first-time completion and later
+    // edits are told apart without a new column. Values equal to what is already
+    // stored are allowed through so a full-form save that echoes the current
+    // name/gender keeps working.
+    const current = await prisma.user.findUnique({
+      where: { id: req.user!.userId },
+      select: { fullName: true, gender: true, city: true },
+    });
+    const identityLocked = Boolean(current?.city && current.city.trim());
+    if (identityLocked) {
+      if (fullName !== undefined && typeof fullName === 'string' && fullName.trim() !== current!.fullName) {
+        sendError(res, IDENTITY_CHANGE_ADMIN_ONLY_MESSAGE, 403, IDENTITY_CHANGE_ADMIN_ONLY_CODE);
+        return;
+      }
+      if (gender !== undefined && gender !== current!.gender) {
+        sendError(res, IDENTITY_CHANGE_ADMIN_ONLY_MESSAGE, 403, IDENTITY_CHANGE_ADMIN_ONLY_CODE);
+        return;
+      }
     }
 
     // Input validation with length limits

@@ -28,6 +28,10 @@ export function ProfilePage() {
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const saveLock = useRef(false)
+  // Name and gender are frozen once onboarding is done (a city is stored). Only
+  // support / an administrator can change them afterwards, so the fields render
+  // locked and the user is pointed at support instead.
+  const identityLocked = Boolean(user?.city && user.city.trim())
   const avatar = useAvatarUpload((avatarUrl) => updateUser({ avatarUrl }))
   const [profileStats, setProfileStats] = useState<{ walksCompleted?: number; eventsJoined?: number; averageRating?: number; joinedYear?: number } | null>(null)
   const [verificationStatus, setVerificationStatus] = useState<Record<string, unknown> | null>(null)
@@ -72,22 +76,25 @@ export function ProfilePage() {
     saveLock.current = true
     setSaving(true)
     try {
+      // Once onboarding is done the name/gender inputs are disabled, which makes
+      // react-hook-form report them as undefined. Sending those fields anyway
+      // would either wipe the name or trip the server's identity lock, so they
+      // are omitted entirely on a locked save.
       await api.put('/users/profile', {
-        fullName: data.name?.trim(),
+        ...(identityLocked ? {} : { fullName: data.name?.trim() }),
         ...(data.dateOfBirth ? { dateOfBirth: data.dateOfBirth } : {}),
         bio: data.bio || '',
         city: data.city || '',
         country: data.country || '',
-        gender: data.gender || 'OTHER',
+        ...(identityLocked ? {} : { gender: data.gender || 'OTHER' }),
       })
       updateUser({
-        name: data.name?.trim(),
-        fullName: data.name?.trim(),
+        ...(identityLocked ? {} : { name: data.name?.trim(), fullName: data.name?.trim() }),
         dateOfBirth: data.dateOfBirth,
         bio: data.bio,
         city: data.city,
         country: data.country,
-        gender: data.gender,
+        ...(identityLocked ? {} : { gender: data.gender }),
       })
       reset({ ...data, name: data.name?.trim() || '' })
       setEditing(false)
@@ -259,9 +266,14 @@ export function ProfilePage() {
                 <label className="label">Full Name</label>
                 <div className="relative">
                   <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 shrink-0 pointer-events-none text-surface-400" />
-                  <input {...register('name', { required: 'Name is required' })} disabled={!editing} className="input pl-11" placeholder="Your full name" />
+                  <input {...register('name', { required: 'Name is required' })} disabled={!editing || identityLocked} className="input pl-11" placeholder="Your full name" />
                 </div>
                 {errors.name && <p className="mt-2 text-xs text-danger-500 font-medium">{errors.name.message}</p>}
+                {editing && identityLocked && (
+                  <p className="mt-1 text-xs text-surface-500">
+                    Your name is locked after registration. To change it, <Link to="/support" className="text-primary-500 hover:underline">contact support</Link>.
+                  </p>
+                )}
               </div>
 
               <div>
@@ -314,7 +326,7 @@ export function ProfilePage() {
 
               <div>
                 <label className="label">Gender</label>
-                <select {...register('gender')} disabled={!editing} className="input">
+                <select {...register('gender')} disabled={!editing || identityLocked} className="input">
                   <option value="MALE">Male</option>
                   <option value="FEMALE">Female</option>
                   <option value="OTHER">Other</option>

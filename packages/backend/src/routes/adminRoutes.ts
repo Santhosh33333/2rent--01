@@ -98,6 +98,20 @@ router.put("/users/:id/status", usersEdit, [body("status").isIn(["ACTIVE", "SUSP
 // Shape only - the controller applies the number rule so the admin gets the
 // specific reason. `isLength({ min: 10, max: 15 })` here accepted "abcdefghij".
 router.put("/users/:id/phone", usersEdit, [body("phone").isString().trim().isLength({ min: 1, max: 20 })], sanitizeInput, validateRequest, adminController.updateUserPhone);
+// Identity fields (name/gender) the user cannot self-serve after onboarding.
+// The controller owns the gender allowlist so an admin gets the specific
+// reason, not a generic validation error.
+router.put(
+  "/users/:id/profile",
+  usersEdit,
+  [
+    body("fullName").optional().isString().trim().isLength({ min: 1, max: 100 }),
+    body("gender").optional().isIn(["MALE", "FEMALE", "OTHER", "PREFER_NOT_TO_SAY"]),
+  ],
+  sanitizeInput,
+  validateRequest,
+  adminController.updateUserProfile
+);
 router.post("/users/:id/impersonate", usersEdit, adminController.impersonateUser);
 router.post(
   "/users/:id/block",
@@ -353,6 +367,9 @@ router.post("/subscriptions/trial/grant-all", pricingEdit, [body("days").optiona
 // account. express-validator's isInt rejects null, so the check is done in the
 // controller where null and absent can be told apart.
 router.post("/subscriptions/trial/users/:id", pricingEdit, sanitizeInput, validateRequest, adminSubscriptionController.setUserTrial);
+// Permanent ("lifetime") access for one named account. Separate from the days
+// endpoint because a lifetime grant deliberately bypasses the 365-day cap.
+router.post("/subscriptions/trial/users/:id/lifetime", pricingEdit, sanitizeInput, validateRequest, adminSubscriptionController.setUserLifetime);
 
 // Website enquiry forms (beta tester / app feedback / investor). Support VIEW
 // reads all four: they are inbound messages, the same shape as a ticket. The

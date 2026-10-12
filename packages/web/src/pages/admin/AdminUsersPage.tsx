@@ -17,6 +17,7 @@ interface User {
   createdAt: string
   role?: string
   fullName?: string
+  gender?: string
   suspendedUntil?: string | null
 }
 
@@ -43,6 +44,11 @@ export function AdminUsersPage() {
   const [phoneTarget, setPhoneTarget] = useState<User | null>(null)
   const [newPhone, setNewPhone] = useState('')
   const [phoneBusy, setPhoneBusy] = useState(false)
+  const [profileTarget, setProfileTarget] = useState<User | null>(null)
+  const [newFullName, setNewFullName] = useState('')
+  const [newGender, setNewGender] = useState('OTHER')
+  const [profileBusy, setProfileBusy] = useState(false)
+  const [lifetimeBusy, setLifetimeBusy] = useState<string | null>(null)
   // Bulk selection. Cleared whenever the visible page changes, because a
   // selection the admin can no longer see is how accounts get removed by
   // accident.
@@ -263,6 +269,45 @@ export function AdminUsersPage() {
   const openPhoneEditor = (user: User) => {
     setPhoneTarget(user)
     setNewPhone(user.phone || '')
+  }
+
+  const openProfileEditor = (user: User) => {
+    setProfileTarget(user)
+    setNewFullName(user.fullName || user.name || '')
+    setNewGender(user.gender || 'OTHER')
+  }
+
+  const saveProfile = async () => {
+    if (!profileTarget) return
+    const fullName = newFullName.trim()
+    if (!fullName) {
+      toast.error('Name cannot be empty')
+      return
+    }
+    setProfileBusy(true)
+    try {
+      await adminApi.updateUserProfile(profileTarget.id, { fullName, gender: newGender })
+      toast.success(`Name and gender updated for ${fullName}`)
+      setProfileTarget(null)
+      fetchUsers()
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to update name and gender'))
+    } finally {
+      setProfileBusy(false)
+    }
+  }
+
+  const grantLifetime = async (user: User) => {
+    if (!window.confirm(`Give ${user.name || user.email} free lifetime access to the app?`)) return
+    setLifetimeBusy(user.id)
+    try {
+      await adminApi.grantUserLifetime(user.id, 'Granted from admin users list')
+      toast.success(`${user.name || user.email} now has lifetime access`)
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to grant lifetime access'))
+    } finally {
+      setLifetimeBusy(null)
+    }
   }
 
   const savePhone = async () => {
@@ -536,6 +581,20 @@ export function AdminUsersPage() {
                                 >
                                   {phoneBusy && phoneTarget?.id === user.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PencilLine className="w-3.5 h-3.5" />} Change phone
                                 </button>
+                                <button
+                                  onClick={() => openProfileEditor(user)}
+                                  disabled={profileBusy}
+                                  className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition"
+                                >
+                                  {profileBusy && profileTarget?.id === user.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PencilLine className="w-3.5 h-3.5" />} Edit name/gender
+                                </button>
+                                <button
+                                  onClick={() => grantLifetime(user)}
+                                  disabled={lifetimeBusy !== null}
+                                  className="flex items-center gap-1.5 px-3 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition"
+                                >
+                                  {lifetimeBusy === user.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Crown className="w-3.5 h-3.5" />} Free lifetime
+                                </button>
                                 {user.status === 'SUSPENDED' ? (
                                   <button
                                     onClick={() => doUnblock(user)}
@@ -715,6 +774,45 @@ export function AdminUsersPage() {
                   className="px-4 py-2.5 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-gray-300 text-sm font-medium rounded-lg transition"
                 >
                   Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {profileTarget && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={() => !profileBusy && setProfileTarget(null)}>
+            <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-md border border-indigo-800/60" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-white font-semibold">Edit name &amp; gender — {profileTarget.name || profileTarget.email}</h3>
+                <button onClick={() => setProfileTarget(null)} disabled={profileBusy} className="text-gray-400 hover:text-white">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mb-3">
+                Users cannot change these themselves after registration. Apply a change only when they have asked support.
+              </p>
+              <label className="block text-xs text-gray-400 mb-1">Full name</label>
+              <input
+                value={newFullName}
+                onChange={(e) => setNewFullName(e.target.value)}
+                maxLength={100}
+                className="w-full mb-3 px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm"
+              />
+              <label className="block text-xs text-gray-400 mb-1">Gender</label>
+              <select
+                value={newGender}
+                onChange={(e) => setNewGender(e.target.value)}
+                className="w-full mb-4 px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm"
+              >
+                <option value="MALE">Male</option>
+                <option value="FEMALE">Female</option>
+                <option value="OTHER">Other</option>
+                <option value="PREFER_NOT_TO_SAY">Prefer not to say</option>
+              </select>
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setProfileTarget(null)} disabled={profileBusy} className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm">Cancel</button>
+                <button onClick={saveProfile} disabled={profileBusy} className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-medium flex items-center gap-2">
+                  {profileBusy && <Loader2 className="w-4 h-4 animate-spin" />} Save
                 </button>
               </div>
             </div>

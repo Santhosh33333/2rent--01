@@ -173,7 +173,7 @@ export async function getUsers(req: AuthedRequest, res: Response): Promise<void>
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * limit,
         take: limit,
-        select: { id: true, email: true, phone: true, fullName: true, role: true, activeRole: true, status: true, suspendedUntil: true, emailVerified: true, mobileVerified: true, createdAt: true },
+        select: { id: true, email: true, phone: true, fullName: true, gender: true, role: true, activeRole: true, status: true, suspendedUntil: true, emailVerified: true, mobileVerified: true, createdAt: true },
       }),
       prisma.user.count({ where }),
     ]);
@@ -417,6 +417,74 @@ export async function updateUserPhone(req: AuthedRequest, res: Response): Promis
   } catch (err) {
     console.error("updateUserPhone error:", err);
     sendError(res, "Failed to update mobile number.", 500, "INTERNAL_ERROR");
+  }
+}
+
+// Admin edits the identity fields the user can no longer self-serve: full name
+// and gender. Users can only *request* such a change (via support); this is the
+// counterpart that actually applies it, guarded by USERS.EDIT.
+export async function updateUserProfile(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const { fullName, gender } = req.body;
+
+    const data: Record<string, any> = {};
+    if (fullName !== undefined) {
+      if (typeof fullName !== "string" || fullName.trim().length === 0 || fullName.length > 100) {
+        sendError(res, "Full name must be between 1 and 100 characters.", 400, "VALIDATION_ERROR");
+        return;
+      }
+      data.fullName = fullName.trim();
+    }
+    if (gender !== undefined) {
+      if (!["MALE", "FEMALE", "OTHER", "PREFER_NOT_TO_SAY"].includes(gender)) {
+        sendError(res, "Invalid gender value.", 400, "VALIDATION_ERROR");
+        return;
+      }
+      data.gender = gender;
+    }
+    if (Object.keys(data).length === 0) {
+      sendError(res, "No valid fields to update.", 400, "VALIDATION_ERROR");
+      return;
+    }
+
+    const target = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true, role: true, activeRole: true, fullName: true, gender: true },
+    });
+    if (!target) {
+      sendError(res, "User not found.", 404, "USER_NOT_FOUND");
+      return;
+    }
+    const guard = await assertCanMutateTarget(req.user!, target.role, target.activeRole);
+    if (!guard.ok) {
+      sendError(res, guard.error.message, 403, guard.error.code);
+      return;
+    }
+
+    const updated = await prisma.user.update({ where: { id }, data });
+    // Both previous and new values recorded so an admin can see exactly what was
+    // replaced - a name change is not something to discover later with no trail.
+    await prisma.auditLog.create({
+      data: {
+        actorId: req.user!.userId,
+        actorType: "ADMIN",
+        action: "UPDATE_USER_PROFILE",
+        entityType: "User",
+        entityId: id,
+        metadata: JSON.stringify({
+          previousFullName: target.fullName,
+          fullName: updated.fullName,
+          previousGender: target.gender,
+          gender: updated.gender,
+        }),
+      },
+    });
+
+    sendSuccess(res, { id, fullName: updated.fullName, gender: updated.gender }, "User profile updated.");
+  } catch (err) {
+    console.error("updateUserProfile error:", err);
+    sendError(res, "Failed to update user profile.", 500, "INTERNAL_ERROR");
   }
 }
 

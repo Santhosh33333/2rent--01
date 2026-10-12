@@ -298,6 +298,9 @@ export const adminApi = {
   getUserDetail: (id: string) => api.get(`/admin/users/${id}`),
   updateUserStatus: (id: string, status: string) => api.put(`/admin/users/${id}/status`, { status }),
   updateUserPhone: (id: string, phone: string) => api.put(`/admin/users/${id}/phone`, { phone }),
+  // Name/gender are frozen for the account owner after onboarding; this is the
+  // admin counterpart that applies a requested change.
+  updateUserProfile: (id: string, data: { fullName?: string; gender?: string }) => api.put(`/admin/users/${id}/profile`, data),
   getKycQueue: (params?: PaginationParams) => api.get('/admin/kyc-queue', { params }),
   approveKyc: (id: string) => api.post(`/admin/kyc/${id}/approve`),
   rejectKyc: (id: string, data: KycRejectReason) => api.post(`/admin/kyc/${id}/reject`, data),
@@ -399,6 +402,9 @@ export const adminApi = {
     api.post('/admin/subscriptions/trial/grant-all', { days, reason }),
   setUserTrial: (userId: string, days: number | null, reason?: string) =>
     api.post(`/admin/subscriptions/trial/users/${userId}`, { days, reason }),
+  // Permanent "free for life" access for one named account.
+  grantUserLifetime: (userId: string, reason?: string) =>
+    api.post(`/admin/subscriptions/trial/users/${userId}/lifetime`, { reason }),
   // Website enquiry forms (beta tester / feedback / investor). The sheet is
   // built server-side so an export and an emailed copy are the same rows.
   getFormReplies: (params?: PaginationParams) => api.get('/admin/forms', { params }),

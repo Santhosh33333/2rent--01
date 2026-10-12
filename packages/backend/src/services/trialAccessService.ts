@@ -306,3 +306,53 @@ export async function setUserAccess(
 
   return { userId, accessUntil };
 }
+
+/** accessSource recorded on a permanent ("lifetime") admin grant. */
+export const LIFETIME_SOURCE = "ADMIN_LIFETIME";
+
+/**
+ * A year that reads as "never" to a human without inventing a new column. Access
+ * is decided everywhere by `accessUntil > now` (see hasAccess); a separate
+ * boolean flag would be a second source of truth, and the classic way a
+ * "lifetime" member one day finds themselves paywalled is those two disagreeing.
+ */
+const LIFETIME_ACCESS_UNTIL = new Date("2999-12-31T23:59:59.000Z");
+
+/**
+ * Grant one named account permanent access - the "give this person the app for
+ * free, forever" case support gets asked for. Counterpart to setUserAccess,
+ * which is capped at MAX_TRIAL_DAYS and is not meant to outlive a promo.
+ */
+export async function setUserLifetimeAccess(
+  userId: string,
+  actorId: string,
+  reason?: string,
+): Promise<{ userId: string; accessUntil: Date | null }> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, accessUntil: true },
+  });
+  if (!user) throw new Error("USER_NOT_FOUND");
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { accessUntil: LIFETIME_ACCESS_UNTIL, accessSource: LIFETIME_SOURCE },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      actorId,
+      actorType: "ADMIN",
+      action: "ACCESS_GRANTED_LIFETIME",
+      entityType: "User",
+      entityId: userId,
+      metadata: JSON.stringify({
+        reason: reason ?? null,
+        previousAccessUntil: user.accessUntil?.toISOString() ?? null,
+        accessUntil: LIFETIME_ACCESS_UNTIL.toISOString(),
+      }),
+    },
+  });
+
+  return { userId, accessUntil: LIFETIME_ACCESS_UNTIL };
+}
