@@ -39,7 +39,12 @@ export function isImageFile(file: File): boolean {
  * saw a preview ("image upload does not work"). Fall back to the extension.
  */
 function looksLikeAcceptedImage(file: File): boolean {
-  if (file.type) return ACCEPTED_TYPES.includes(file.type)
+  if (file.type && ACCEPTED_TYPES.includes(file.type)) return true
+  // A valid image can still arrive with a generic or stale MIME
+  // (`application/octet-stream`, `image/heic`, ...). Android's picker does this
+  // routinely, and only trusting `file.type` rejected a perfectly good photo
+  // with "Please choose a JPEG, PNG, WebP or GIF image". The extension is the
+  // tie-breaker whenever the declared type is not one we accept.
   return ACCEPTED_EXT.test(file.name || '')
 }
 

@@ -5,7 +5,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Send, Loader2, AlertTriangle,
   CheckCheck, MessageCircle, ImagePlus, Mic, Square,
-  Trash2, Flag, Ban, X, MessageCircleReply, Phone,
+  Trash2, Flag, Ban, X, MessageCircleReply, Phone, Video,
   Compass, Calendar, UserPlus
 } from 'lucide-react'
 import { api, assetUrl, chatRequestApi, type ConnectionStatus } from '../../lib/api'
@@ -652,17 +652,29 @@ export function ConversationPage() {
             {otherTyping ? 'typing…' : 'Online'}
           </p>
         </div>
-        {/* In-app call: the chat never reveals or dials a phone number. */}
-        <button
-          type="button"
-          onClick={() => startCall({ id: userId ?? '', fullName: partnerName, avatarUrl: partnerAvatar })}
-          disabled={!userId}
-          title={`Call ${partnerName} inside the app`}
-          aria-label={`Call ${partnerName} inside the app`}
-          className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center hover:bg-emerald-200 transition-colors disabled:opacity-50"
-        >
-          <Phone className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-        </button>
+        {/* In-app calls: the chat never reveals or dials a phone number. */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => startCall({ id: userId ?? '', fullName: partnerName, avatarUrl: partnerAvatar }, 'VOICE')}
+            disabled={!userId}
+            title={`Call ${partnerName} inside the app`}
+            aria-label={`Voice call ${partnerName} inside the app`}
+            className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center hover:bg-emerald-200 transition-colors disabled:opacity-50"
+          >
+            <Phone className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+          </button>
+          <button
+            type="button"
+            onClick={() => startCall({ id: userId ?? '', fullName: partnerName, avatarUrl: partnerAvatar }, 'VIDEO')}
+            disabled={!userId}
+            title={`Video call ${partnerName} inside the app`}
+            aria-label={`Video call ${partnerName} inside the app`}
+            className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center hover:bg-emerald-200 transition-colors disabled:opacity-50"
+          >
+            <Video className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+          </button>
+        </div>
       </div>
 
       {/* Messages Area */}

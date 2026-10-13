@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   Footprints, Package, MapPin, Navigation, Clock, Calendar, Star,
-  CreditCard, CheckCircle, XCircle, User, Loader2, AlertTriangle, KeyRound, Download, MessageCircle, Phone
+  CreditCard, CheckCircle, XCircle, User, Loader2, AlertTriangle, KeyRound, Download, MessageCircle, Phone, Video
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { api, assetUrl, bookingApi } from '../../lib/api'
@@ -395,19 +395,34 @@ export function BookingDetailPage() {
               {/* In-app call instead of a tel: link - the partner's number is
                   never shown to the customer or dialled. */}
               {booking.partnerId && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    startCall({
-                      id: booking.partnerId as string,
-                      fullName: booking.partnerName ?? 'Partner',
-                      avatarUrl: booking.partnerAvatar,
-                    })
-                  }
-                  className="btn-outline btn-sm flex items-center gap-1.5"
-                >
-                  <Phone className="w-3.5 h-3.5" /> Call in app
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      startCall({
+                        id: booking.partnerId as string,
+                        fullName: booking.partnerName ?? 'Partner',
+                        avatarUrl: booking.partnerAvatar,
+                      }, 'VOICE')
+                    }
+                    className="btn-outline btn-sm flex items-center gap-1.5"
+                  >
+                    <Phone className="w-3.5 h-3.5" /> Call in app
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      startCall({
+                        id: booking.partnerId as string,
+                        fullName: booking.partnerName ?? 'Partner',
+                        avatarUrl: booking.partnerAvatar,
+                      }, 'VIDEO')
+                    }
+                    className="btn-outline btn-sm flex items-center gap-1.5"
+                  >
+                    <Video className="w-3.5 h-3.5" /> Video call
+                  </button>
+                </>
               )}
             </div>
           </GlassCard>

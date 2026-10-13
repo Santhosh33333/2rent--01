@@ -408,15 +408,26 @@ app.use("/api/movies", moviesRoutes);
     }
     console.error("Unhandled error:", err);
     if (err.code === "LIMIT_FILE_SIZE") {
-      const maxMb = Math.round(env.MAX_FILE_SIZE / 1048576);
+      // Video posts legitimately carry a larger cap than images, so report the
+      // limit that actually applied to the field being uploaded.
+      const isVideo = err.field === "video";
+      const limit = isVideo ? env.MAX_VIDEO_SIZE : env.MAX_FILE_SIZE;
+      const maxMb = Math.round(limit / 1048576);
       sendError(res, `File is too large. Maximum ${maxMb} MB.`, 413, "FILE_TOO_LARGE");
+      return;
+    }
+    if (err.code === "LIMIT_UNEXPECTED_FILE") {
+      // multer rejects a part whose field name it did not expect. Previously
+      // this fell through to a 500, so a mis-named upload looked like a server
+      // crash instead of "re-select your file".
+      sendError(res, "Unexpected file upload. Please re-select your file and try again.", 400, "FILE_UPLOAD_ERROR");
       return;
     }
     if (err.type === "entity.too.large") {
       sendError(res, "Payload too large.", 413, "PAYLOAD_TOO_LARGE");
       return;
     }
-    if (err.message && /image/i.test(err.message)) {
+    if (err.message && /files are allowed|not an image/i.test(err.message)) {
       sendError(res, err.message, 400, "FILE_UPLOAD_ERROR");
       return;
     }

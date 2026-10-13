@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
-  Navigation, XCircle, AlertTriangle, Loader2, MapPin, Clock, Star, MessageCircle, Siren, Phone
+  Navigation, XCircle, AlertTriangle, Loader2, MapPin, Clock, Star, MessageCircle, Siren, Phone, Video
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { api, assetUrl } from '../../lib/api'
@@ -350,6 +350,22 @@ export function BookingTrackingPage() {
                       className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center hover:bg-emerald-200 transition-colors disabled:opacity-50"
                     >
                       <Phone className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                    </button>
+                    {/* In-app video call, same private path as voice. */}
+                    <button
+                      onClick={() =>
+                        startPartnerCall(
+                          partnerUserId
+                            ? { id: partnerUserId, fullName: partnerName, avatarUrl: partnerAvatar ?? null }
+                            : null,
+                          'VIDEO'
+                        )
+                      }
+                      disabled={!partnerUserId}
+                      title={partnerUserId ? 'Video call partner inside the app' : 'Partner is not available for calls'}
+                      className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center hover:bg-emerald-200 transition-colors disabled:opacity-50"
+                    >
+                      <Video className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                     </button>
                   </div>
                 </div>

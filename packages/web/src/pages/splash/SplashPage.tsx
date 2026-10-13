@@ -31,18 +31,20 @@ export function SplashPage() {
     const profileComplete = localStorage.getItem('profile_complete') === 'true'
 
     const innerTimer = setTimeout(() => {
-      if (!onboardingComplete) {
-        navigate('/onboarding', { replace: true })
-      } else if (user) {
-        // Admin-tier accounts always resume on their own console. Resolving from
-        // `activeRole` here is what dropped administrators on the customer home
-        // screen and made it look like the account had been demoted.
+      if (user) {
+        // A resolved session always wins: an existing account is never walked
+        // back through the "choose account type" onboarding, even if the
+        // device-level flag was lost. Admin-tier accounts resume on their own
+        // console. Resolving from `activeRole` here is what dropped
+        // administrators on the customer home screen.
         const role = resolveLandingRole(user)
         if (role === 'USER' && !user.city && !profileComplete) {
           navigate('/profile/complete', { replace: true })
         } else {
           navigate(dashboardForRole(role), { replace: true })
         }
+      } else if (!onboardingComplete) {
+        navigate('/onboarding', { replace: true })
       } else {
         navigate('/account-type', { replace: true })
       }

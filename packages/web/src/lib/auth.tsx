@@ -174,7 +174,14 @@ function isSessionExpired(): boolean {
 // regardless of which device/browser they sign in from.
 function reconcileCompletionFlags(u: { city?: string | null } | null | undefined): void {
   try {
-    if (u?.city) localStorage.setItem('profile_complete', 'true')
+    if (!u) return
+    // A resolved session means this account already exists, so the device must
+    // never be walked back through the "choose account type" onboarding on the
+    // next launch. Without this, a signed-in user whose flag was missing (fresh
+    // install, cleared cache, restored backup) was sent to onboarding every cold
+    // start — which read as "it keeps asking me to pick an account again".
+    localStorage.setItem('onboarding_complete', 'true')
+    if (u.city) localStorage.setItem('profile_complete', 'true')
   } catch {
     // storage unavailable — gates fall back to server fields
   }
