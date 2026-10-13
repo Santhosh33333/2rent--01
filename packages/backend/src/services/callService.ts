@@ -17,9 +17,23 @@ import {
   isUserOnlineShared,
   type SharedCall,
 } from "./redisClient";
+import {
+  getCallTerms,
+  holdForCall,
+  settleCall,
+  releaseHold,
+  isExemptFromCallBilling,
+  getSpendableBalance,
+  BillingError,
+} from "./callBillingService";
 
 const RING_TIMEOUT_MS = 30_000;
 const VALID_CALL_TYPES = ["VOICE", "VIDEO"] as const;
+
+/** What a call must be able to reserve up front: rate x the per-call ceiling. */
+function requiredHold(terms: { ratePerMinute: number; maxBillableMinutes: number }): number {
+  return Math.round(terms.ratePerMinute * terms.maxBillableMinutes * 100) / 100;
+}
 
 /**
  * Ring timers stay local because a setTimeout handle cannot be shared, but the
@@ -29,6 +43,16 @@ const VALID_CALL_TYPES = ["VOICE", "VIDEO"] as const;
  * answer CALL_GONE to a perfectly valid call.
  */
 const ringTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+/**
+ * Per-call ceiling timers for metered calls. The hold taken at accept sets the
+ * maximum this call can ever be charged, so the call is force-ended when that
+ * ceiling is reached instead of leaving the meter running past what the caller
+ * reserved. Process-local like the ring timers: a restart drops the timer, but
+ * the settlement still clamps to the hold and reconcileOrphanedHolds sweeps any
+ * hold left behind.
+ */
+const maxDurationTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 interface PeerIdentity {
   id: string;
@@ -82,6 +106,11 @@ async function clearLiveCall(call: SharedCall): Promise<void> {
     clearTimeout(timer);
     ringTimers.delete(call.id);
   }
+  const maxTimer = maxDurationTimers.get(call.id);
+  if (maxTimer) {
+    clearTimeout(maxTimer);
+    maxDurationTimers.delete(call.id);
+  }
   await dropLiveCall(call);
 }
 
@@ -124,6 +153,25 @@ export function registerCallHandlers(
         return;
       }
 
+      // Affordability is settled before the phone rings. The hold itself is
+      // taken at accept (below); this only stops a caller who cannot cover the
+      // reservation from ringing somebody and then failing mid-answer.
+      const inviteTerms = await getCallTerms();
+      if (inviteTerms.enabled && !(await isExemptFromCallBilling(userId))) {
+        const required = requiredHold(inviteTerms);
+        const spendable = await getSpendableBalance(userId);
+        if (!spendable || spendable.available < required) {
+          emitToSelf("call:unavailable", {
+            reason: "INSUFFICIENT_BALANCE",
+            ratePerMinute: inviteTerms.ratePerMinute,
+            maxBillableMinutes: inviteTerms.maxBillableMinutes,
+            required,
+            available: spendable?.available ?? 0,
+          });
+          return;
+        }
+      }
+
       const receiver = await peerIdentity(receiverId);
       const caller = await peerIdentity(userId);
 
@@ -149,6 +197,9 @@ export function registerCallHandlers(
         const ringing = await getLiveCall(call.id);
         if (!ringing) return; // already accepted or ended
         await dropLiveCall(ringing);
+        // Never answered, so nothing should be held; a release is a no-op when
+        // there is no reservation and refunds it if one somehow exists.
+        await releaseHold(call.id, "ABANDONED").catch(() => {});
         await prisma.callLog
           .update({
             where: { id: call.id, status: "RINGING" },
@@ -201,6 +252,41 @@ export function registerCallHandlers(
       return;
     }
 
+    // Reserve the caller's funds before the call is marked accepted. The hold is
+    // the only thing that makes "prepaid" true: without it a zero-balance caller
+    // could talk for the whole ceiling and then be unable to pay.
+    const terms = await getCallTerms();
+    if (terms.enabled && !(await isExemptFromCallBilling(call.callerId))) {
+      try {
+        await holdForCall({ callId, callerId: call.callerId, receiverId: userId, terms });
+      } catch (err) {
+        const reason = err instanceof BillingError ? err.code : "INTERNAL_ERROR";
+        const message = err instanceof BillingError ? err.message : undefined;
+        await clearLiveCall(call);
+        await prisma.callLog
+          .update({ where: { id: callId }, data: { status: "FAILED", endedAt: new Date() } })
+          .catch(() => {});
+        emitToPeer(call.callerId, "call:unavailable", { callId, reason, message });
+        emitToSelf("call:unavailable", { callId, reason, message });
+        return;
+      }
+
+      // The reservation sets the ceiling on what may be charged, so end the call
+      // when it is reached rather than leaving the meter running unbacked.
+      const maxTimer = setTimeout(() => {
+        maxDurationTimers.delete(callId);
+        void (async () => {
+          const live = await getLiveCall(callId);
+          if (!live) return;
+          await clearLiveCall(live);
+          await settleCall(callId, "MAX_DURATION").catch(() => {});
+          emitToPeer(live.callerId, "call:ended", { callId, reason: "MAX_DURATION" });
+          emitToPeer(live.receiverId, "call:ended", { callId, reason: "MAX_DURATION" });
+        })();
+      }, terms.maxBillableMinutes * 60_000);
+      maxDurationTimers.set(callId, maxTimer);
+    }
+
     const timer = ringTimers.get(callId);
     if (timer) {
       clearTimeout(timer);
@@ -221,6 +307,9 @@ export function registerCallHandlers(
     if (call.receiverId !== userId && call.callerId !== userId) return;
 
     await clearLiveCall(call);
+    // Never connected, so there is no reservation to capture; releasing is a
+    // no-op when there is none and refunds one if a hold raced the reject.
+    await releaseHold(callId, "ABANDONED").catch(() => {});
     await prisma.callLog.update({ where: { id: callId }, data: { status: "REJECTED", endedAt: new Date() } }).catch(() => {});
     emitToPeer(call.callerId, "call:rejected", { callId });
     emitToPeer(call.receiverId, "call:rejected", { callId });
@@ -239,6 +328,11 @@ export function registerCallHandlers(
     if (call.callerId !== userId && call.receiverId !== userId) return;
 
     await clearLiveCall(call);
+    // An accepted call is charged for its minutes; an unanswered one was never
+    // held. settleCall is idempotent and a no-op when nothing was reserved.
+    if (call.startedAt > 0) {
+      await settleCall(callId, "CLIENT_END").catch(() => {});
+    }
     const endedAt = new Date();
     const wasAccepted = call.startedAt > 0;
     const duration = wasAccepted ? Math.max(0, Math.floor((endedAt.getTime() - call.startedAt) / 1000)) : null;
@@ -276,6 +370,9 @@ export function registerCallHandlers(
     if (call.receiverId !== userId) return;
 
     await clearLiveCall(call);
+    // The callee never joined, so there is nothing to charge; release any
+    // reservation that was taken before the media failure was reported.
+    await releaseHold(callId, "ABANDONED").catch(() => {});
     await prisma.callLog.update({ where: { id: callId }, data: { status: "FAILED", endedAt: new Date() } }).catch(() => {});
     emitToPeer(call.callerId, "call:unavailable", { callId, reason: data?.reason || "MEDIA_FAILED" });
   });
@@ -295,6 +392,11 @@ export function registerCallHandlers(
         if (!call) continue;
         if (call.callerId !== userId && call.receiverId !== userId) continue;
         await clearLiveCall(call);
+        // A dropped connection still ends a connected call, so capture the
+        // minutes actually used before writing the ledger row.
+        if (call.startedAt > 0) {
+          await settleCall(callId, "CLIENT_END").catch(() => {});
+        }
         const endedAt = new Date();
         const duration = call.startedAt > 0 ? Math.max(0, Math.floor((endedAt.getTime() - call.startedAt) / 1000)) : null;
         void prisma.callLog

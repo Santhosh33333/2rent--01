@@ -197,6 +197,9 @@ const UNAVAILABLE_MESSAGES: Record<string, string> = {
   // alone cannot get through symmetric NAT or carrier-grade NAT, which is what
   // mobile/corporate networks use.
   NO_RELAY: 'No audio path could be found on this network. Try switching networks or contact support.',
+  // The caller could not cover the reservation a metered call takes up front.
+  // Surfaced before the phone rings, so the fix is a top-up, not a retry.
+  INSUFFICIENT_BALANCE: 'Not enough balance to start this call. Top up your wallet and try again.',
 };
 
 export function useInAppCall(): InAppCall {

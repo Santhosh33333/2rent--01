@@ -25,7 +25,9 @@ import {
   releaseHold,
   getSpendableBalance,
   reconcileOrphanedHolds,
+  isExemptFromCallBilling,
 } from "../services/callBillingService";
+import { LIFETIME_ACCESS_UNTIL } from "../services/trialAccessService";
 
 const TEST_RATE = 1;
 const TEST_MAX_MINUTES = 60;
@@ -95,6 +97,39 @@ describe("call billing terms", () => {
     expect(terms.ratePerMinute).toBeGreaterThanOrEqual(0);
     expect(terms.maxBillableMinutes).toBeGreaterThan(0);
     expect(terms.maxBillableMinutes).toBeLessThanOrEqual(600);
+  });
+});
+
+describe("call billing exemption", () => {
+  it("exempts an admin-tier role", async () => {
+    const user = await makeUserWithBalance("exempt-admin", 0);
+    created.push(user.id);
+    await prisma.user.update({ where: { id: user.id }, data: { role: "SUPER_ADMIN" } });
+    expect(await isExemptFromCallBilling(user.id)).toBe(true);
+  });
+
+  it("exempts an account holding the free-lifetime grant", async () => {
+    const user = await makeUserWithBalance("exempt-lifetime", 0);
+    created.push(user.id);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { accessUntil: LIFETIME_ACCESS_UNTIL, accessSource: "ADMIN_LIFETIME" },
+    });
+    expect(await isExemptFromCallBilling(user.id)).toBe(true);
+  });
+
+  it("does not exempt an ordinary paying account with a current window", async () => {
+    const user = await makeUserWithBalance("exempt-plain", 100);
+    created.push(user.id);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { accessUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), accessSource: "TOPUP" },
+    });
+    expect(await isExemptFromCallBilling(user.id)).toBe(false);
+  });
+
+  it("returns false for an account that does not exist", async () => {
+    expect(await isExemptFromCallBilling("does-not-exist")).toBe(false);
   });
 });
 

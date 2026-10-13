@@ -4,6 +4,7 @@ import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
 import { canCall } from "../services/callService";
 import { getIceConfig } from "../services/iceService";
+import { getCallTerms, isExemptFromCallBilling } from "../services/callBillingService";
 
 export async function createCall(req: AuthedRequest, res: Response): Promise<void> {
   try {
@@ -182,5 +183,35 @@ export async function getIceServers(_req: AuthedRequest, res: Response): Promise
     );
   } catch (err) {
     sendError(res, "Failed to retrieve call configuration.", 500, "INTERNAL_ERROR");
+  }
+}
+
+/**
+ * GET /calls/terms — what this caller would be charged for a call.
+ *
+ * Fetched at call time (like the ICE list) rather than hardcoded in the app, so
+ * the admin-editable rate reaches users without rebuilding the client. `enabled`
+ * is resolved per caller: an exempt account (admin or a free-lifetime grant)
+ * reads as free even while metered billing is switched on, so the UI never
+ * quotes a price it will not charge.
+ */
+export async function getCallTermsHandler(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const terms = await getCallTerms();
+    const exempt = await isExemptFromCallBilling(req.user!.userId);
+    sendSuccess(
+      res,
+      {
+        ratePerMinute: terms.ratePerMinute,
+        maxBillableMinutes: terms.maxBillableMinutes,
+        currency: "INR",
+        exempt,
+        // What this caller actually pays. False for an exempt account.
+        enabled: terms.enabled && !exempt,
+      },
+      "Call terms retrieved."
+    );
+  } catch (err) {
+    sendError(res, "Failed to retrieve call terms.", 500, "INTERNAL_ERROR");
   }
 }

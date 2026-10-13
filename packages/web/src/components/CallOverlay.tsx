@@ -1,7 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mic, MicOff, PhoneOff, Phone, Volume2, VolumeX } from 'lucide-react';
 import { useInAppCall, formatCallDuration, registerCallController, type CallPeer } from '../hooks/useInAppCall';
+import { callApi, type CallTerms } from '../lib/api';
+import { useAuth } from '../lib/auth';
 import { Avatar } from './Avatar';
 
 function PeerAvatar({ peer, size }: { peer: CallPeer | null; size: 'lg' | 'sm' }) {
@@ -96,6 +98,27 @@ export default function CallOverlay() {
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
+
+  // What a call costs this user. Fetched once (the rate is admin-edited rarely)
+  // so the price is shown before the meter starts, and an exempt account is told
+  // its call is free rather than quoted a price it will not be charged.
+  const { user } = useAuth();
+  const [terms, setTerms] = useState<CallTerms | null>(null);
+  useEffect(() => {
+    // Only after sign-in: the overlay is mounted at the app root, so fetching
+    // before a session exists would be a guaranteed 401 on every public page.
+    if (!user?.id) return;
+    let alive = true;
+    callApi
+      .terms()
+      .then((res) => {
+        if (alive) setTerms(res.data.data);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [user?.id]);
 
   const navigate = useNavigate();
 
@@ -199,6 +222,14 @@ export default function CallOverlay() {
           </p>
           {state === 'active' ? (
             <p className="text-xs text-white/50">Private app call · no numbers shared</p>
+          ) : null}
+          {(state === 'calling' || state === 'connecting' || state === 'active') && terms?.enabled ? (
+            <p className="text-xs text-amber-300/90">
+              ₹{terms.ratePerMinute.toFixed(2)}/min · billed per started minute
+            </p>
+          ) : null}
+          {(state === 'calling' || state === 'connecting' || state === 'active') && terms?.exempt ? (
+            <p className="text-xs text-emerald-300/90">Free call · verified access</p>
           ) : null}
         </div>
       </div>

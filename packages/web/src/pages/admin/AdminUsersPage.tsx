@@ -355,7 +355,11 @@ export function AdminUsersPage() {
   }
 
   const grantLifetime = async (user: User) => {
-    if (!window.confirm(`Give ${user.name || user.email} free lifetime access to the app?`)) return
+    if (!window.confirm(
+      `Give ${user.name || user.email} free lifetime access?\n\n` +
+      'This comps the paid app and also removes the per-minute call charge. ' +
+      'Intended for verified girls and other accounts you want to keep free.',
+    )) return
     setLifetimeBusy(user.id)
     try {
       await adminApi.grantUserLifetime(user.id, 'Granted from admin users list')

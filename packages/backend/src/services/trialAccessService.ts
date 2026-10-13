@@ -315,8 +315,13 @@ export const LIFETIME_SOURCE = "ADMIN_LIFETIME";
  * is decided everywhere by `accessUntil > now` (see hasAccess); a separate
  * boolean flag would be a second source of truth, and the classic way a
  * "lifetime" member one day finds themselves paywalled is those two disagreeing.
+ *
+ * Exported because it is also the signal that a metered call must not be
+ * charged: a later top-up extends this date (it never moves it back), so the
+ * far-future timestamp stays a durable marker even though a top-up rewrites
+ * accessSource. See isExemptFromCallBilling.
  */
-const LIFETIME_ACCESS_UNTIL = new Date("2999-12-31T23:59:59.000Z");
+export const LIFETIME_ACCESS_UNTIL = new Date("2999-12-31T23:59:59.000Z");
 
 /**
  * Grant one named account permanent access - the "give this person the app for

@@ -25,6 +25,8 @@ router.post("/:id/end", callController.endCall);
 router.get("/", callController.getCallHistory);
 // Must be declared before "/:id", or Express matches "ice-servers" as an id.
 router.get("/ice-servers", callController.getIceServers);
+// Static too, so it must also precede "/:id".
+router.get("/terms", callController.getCallTermsHandler);
 router.get("/:id", callController.getCallLog);
 
 export default router;

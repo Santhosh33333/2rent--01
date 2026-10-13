@@ -642,11 +642,25 @@ export interface IceServerConfig {
 // In-app calling. ICE servers are fetched at call time rather than baked into
 // the bundle, so a TURN relay can be configured or rotated server-side without
 // rebuilding the app, and the relay credentials never ship in the JavaScript.
+export interface CallTerms {
+  /** Rupees charged per started minute. */
+  ratePerMinute: number
+  /** Ceiling on a single call, in minutes. */
+  maxBillableMinutes: number
+  currency: string
+  /** True when this caller pays nothing (admin, or a free-lifetime grant). */
+  exempt: boolean
+  /** What this caller actually pays; false for an exempt account. */
+  enabled: boolean
+}
+
 export const callApi = {
   iceServers: () =>
     api.get<{ success: boolean; data: { iceServers: IceServerConfig[]; ttl: number; source: string } }>(
       '/calls/ice-servers',
     ),
+  // Admin-editable price, resolved per caller (an exempt account reads as free).
+  terms: () => api.get<{ success: boolean; data: CallTerms }>('/calls/terms'),
 }
 
 // ============================================================================

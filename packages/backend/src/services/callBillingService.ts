@@ -28,6 +28,8 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../config/database";
 import { getConfig } from "./pricingEngine";
+import { ADMIN_ROLES, type AdminRoleName } from "../rbac/sections";
+import { LIFETIME_ACCESS_UNTIL } from "./trialAccessService";
 
 /** Transaction ledger type for an actual capture. A hold is not a movement of
  *  money, so it deliberately writes no Transaction row: the CallCharge row is
@@ -91,6 +93,34 @@ export async function getCallTerms(): Promise<CallBillingTerms> {
         : 60,
     enabled: Number(enabled) === 1,
   };
+}
+
+/**
+ * True when this account must never be charged for a metered call.
+ *
+ * Two cases, both deliberate:
+ *
+ * - Admin-tier staff. `hasAccess` already exempts them from the paywall, and
+ *   charging the people who operate the platform is a lockout waiting to
+ *   happen (they are also the ones who would have to repair it).
+ * - Accounts holding the admin "free lifetime" grant. That grant parks
+ *   accessUntil in the year 2999 (see trialAccessService), and a later top-up
+ *   only extends that date, so the far-future timestamp survives even though a
+ *   top-up rewrites accessSource. This is the grant behind "verified girls get
+ *   free access": an admin flips it once and the account pays for nothing,
+ *   metered calls included.
+ *
+ * Read fresh on every call rather than cached, so a grant or a revoke takes
+ * effect on the very next call instead of after a deploy.
+ */
+export async function isExemptFromCallBilling(userId: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { role: true, accessUntil: true },
+  });
+  if (!user) return false;
+  if (ADMIN_ROLES.includes(user.role as AdminRoleName)) return true;
+  return Boolean(user.accessUntil && user.accessUntil >= LIFETIME_ACCESS_UNTIL);
 }
 
 /**
