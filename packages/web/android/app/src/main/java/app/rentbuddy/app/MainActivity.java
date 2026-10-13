@@ -4,6 +4,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Process;
 import android.util.Log;
+import android.view.WindowManager;
 
 import com.getcapacitor.BridgeActivity;
 
@@ -17,6 +18,12 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         installCrashReporter();
         super.onCreate(savedInstanceState);
+        // Privacy: refuse screenshots and screen recording of this app. FLAG_SECURE
+        // also blanks the app in the Android recents/overview thumbnail, so a
+        // signed-in session is never left exposed there.
+        getWindow().setFlags(
+                WindowManager.LayoutParams.FLAG_SECURE,
+                WindowManager.LayoutParams.FLAG_SECURE);
         if (getBridge() != null && getBridge().getWebView() != null) {
             getBridge().getWebView().getSettings().setMediaPlaybackRequiresUserGesture(false);
         }

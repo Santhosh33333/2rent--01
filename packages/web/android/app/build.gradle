@@ -46,8 +46,14 @@ android {
         // SHA-1 is registered in the Firebase project, which produced the
         // Android OAuth clients now in google-services.json; the backend
         // accepts the ID-token audience those clients sign.
-        versionCode 23
-        versionName "1.0.22"
+        //
+        // 24 / 1.0.23 ships video calling in chat/bookings (the WebRTC client
+        // already carried the video path), FLAG_SECURE so the app cannot be
+        // screenshotted or screen-recorded, the returning-user onboarding fix
+        // (signed-in users were re-shown the account-type chooser), and the
+        // image/upload picker fixes (HEIC-era MIME fallback + upload filters).
+        versionCode 24
+        versionName "1.0.23"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
