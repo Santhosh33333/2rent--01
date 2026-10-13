@@ -28,6 +28,13 @@ export const SOS_ADMIN_ROLES = ["ADMIN", "SUPER_ADMIN", "MODERATOR", "SUPPORT", 
 
 export interface SosNotifyInput {
   bookingId: string;
+  /**
+   * The persisted `SosAlert.id` when one was filed. This is what makes the
+   * notification tappable into the live alert page: without it a recipient can
+   * only be taken to the booking, and an admin - who is not a party on that
+   * booking at all - has nothing to open.
+   */
+  alertId?: string | null;
   /** Whoever pressed the button. Never notified about their own emergency. */
   triggeredBy: string;
   /** The two parties on the booking; either may be absent (unassigned). */
@@ -44,7 +51,7 @@ export interface SosNotifyInput {
  *          "nobody was notified" apart from "this returned quietly".
  */
 export async function notifySosRecipients(input: SosNotifyInput): Promise<string[]> {
-  const { bookingId, triggeredBy, partyUserIds, message, latitude, longitude } = input;
+  const { bookingId, alertId, triggeredBy, partyUserIds, message, latitude, longitude } = input;
 
   const recipients = new Set<string>(
     partyUserIds.filter((id): id is string => Boolean(id)),
@@ -71,10 +78,15 @@ export async function notifySosRecipients(input: SosNotifyInput): Promise<string
   const body = `${message} (booking ${bookingId}).${location}`;
   const data = JSON.stringify({
     type: "SOS",
+    alertId: alertId ?? null,
     bookingId,
     latitude: latitude ?? null,
     longitude: longitude ?? null,
     triggeredBy,
+    // An explicit route is the first thing the client resolver reads, and it
+    // keeps the deep-link decision in one place: the live alert view when the
+    // alert was filed, otherwise the booking the alert came from.
+    route: alertId ? `/sos/${alertId}` : `/bookings/${bookingId}`,
   });
 
   const results = await Promise.all(

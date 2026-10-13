@@ -132,6 +132,21 @@ describe("notifySosRecipients - how it is written", () => {
     });
   });
 
+  it("deep-links the live alert page when the alert was filed", async () => {
+    // The id is the whole point of filing the row: tapping the notification has
+    // to open the live alert, which is the only view an admin (not a party on
+    // the booking) can act on.
+    await notifySosRecipients(base({ alertId: "sos_1" }));
+    const data = JSON.parse(prismaMock.notification.create.mock.calls[0][0].data.data);
+    expect(data).toMatchObject({ alertId: "sos_1", route: "/sos/sos_1" });
+  });
+
+  it("falls back to the booking when no alert row was filed", async () => {
+    await notifySosRecipients(base());
+    const data = JSON.parse(prismaMock.notification.create.mock.calls[0][0].data.data);
+    expect(data).toMatchObject({ alertId: null, route: `/bookings/${BOOKING}` });
+  });
+
   it("puts coordinates in the body, where a responder actually reads them", async () => {
     await notifySosRecipients(base({ latitude: 13.0827, longitude: 80.2707 }));
     const body = prismaMock.notification.create.mock.calls[0][0].data.body;

@@ -530,7 +530,27 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
           return;
         }
 
+        // File the alert before broadcasting. The persisted id is what turns
+        // the push/tray notification into a deep-link into the live alert page
+        // (`/sos/:alertId`) for the other party and for admins - an admin is
+        // not a party on this booking, so a booking-only link leaves them with
+        // nowhere to open. A failed write must not stop the alert going out -
+        // an SOS with no row is still an SOS - so it is absorbed and the
+        // deep-link falls back to the booking.
+        const sosAlert = await prisma.sosAlert
+          .create({
+            data: {
+              userId,
+              latitude: latitude ?? null,
+              longitude: longitude ?? null,
+              message: message || "Emergency SOS",
+              status: "ACTIVE",
+            },
+          })
+          .catch(() => null);
+
         const alert = {
+          alertId: sosAlert?.id ?? null,
           bookingId,
           userId: booking.userId,
           partnerUserId: booking.partner?.userId ?? null,
@@ -567,6 +587,7 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
         try {
           await notifySosRecipients({
             bookingId,
+            alertId: sosAlert?.id ?? null,
             triggeredBy: userId,
             partyUserIds: [booking.userId, booking.partner?.userId],
             message: alert.message,
