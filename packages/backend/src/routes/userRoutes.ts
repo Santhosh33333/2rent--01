@@ -38,6 +38,8 @@ router.put(
 
 // Upload profile photo
 router.post("/profile-photo", upload.single("photo"), userController.uploadProfilePhoto);
+// Remove the profile photo. Owners may do this at any time.
+router.delete("/profile-photo", userController.deleteProfilePhoto);
 
 // Profile gallery (extra photos shown on the dating card)
 router.get("/photos", userController.listMyPhotos);

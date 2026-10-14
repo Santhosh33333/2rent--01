@@ -115,6 +115,11 @@ export async function uploadAvatar(blob: Blob): Promise<string> {
   return avatarUrl
 }
 
+/** Remove the profile photo. Owners may do this at any time. */
+export async function removeAvatar(): Promise<void> {
+  await api.delete('/users/profile-photo')
+}
+
 const COVER_MAX_W = 1600
 const COVER_MAX_BYTES = 8 * 1024 * 1024
 
@@ -147,18 +152,30 @@ export async function prepareCover(file: File): Promise<{ blob: Blob; previewUrl
 interface AvatarUpload {
   previewUrl: string | null
   uploading: boolean
+  /** Set while the member is framing a freshly-picked photo. */
+  cropFile: File | null
   pick: (file: File | undefined) => Promise<void>
+  /** Accept the cropped result from the framing dialog. */
+  applyCrop: (blob: Blob) => void
+  cancelCrop: () => void
   confirm: () => Promise<string | null>
   cancel: () => void
+  /** Clear the stored photo. Resolves false when the server refused. */
+  remove: () => Promise<boolean>
 }
 
 /**
- * Shared avatar flow: pick -> validate/process -> preview -> confirm/upload.
+ * Shared avatar flow: pick -> frame -> preview -> confirm/upload.
  * `onUploaded(avatarUrl)` must persist the URL (updateUser) — the hook
  * never reports fake success: confirm() returns null on any failure.
+ * `onRemoved()` runs after the stored photo is cleared.
  */
-export function useAvatarUpload(onUploaded: (avatarUrl: string) => void): AvatarUpload {
+export function useAvatarUpload(
+  onUploaded: (avatarUrl: string) => void,
+  onRemoved?: () => void,
+): AvatarUpload {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [cropFile, setCropFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
   const blobRef = useRef<Blob | null>(null)
   const toastId = useRef<string | undefined>(undefined)
@@ -171,17 +188,29 @@ export function useAvatarUpload(onUploaded: (avatarUrl: string) => void): Avatar
 
   const pick = useCallback(async (file: File | undefined) => {
     if (!file) return
-    try {
-      const { blob, previewUrl: url } = await prepareAvatar(file)
-      blobRef.current = blob
-      setPreviewUrl((prev) => {
-        if (prev) URL.revokeObjectURL(prev)
-        return url
-      })
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Could not use that photo.'))
+    if (!looksLikeAcceptedImage(file)) {
+      toast.error('Please choose a JPEG, PNG, WebP or GIF image.')
+      return
     }
+    if (file.size > MAX_RAW_UPLOAD_BYTES) {
+      toast.error('That image is too large (over 25 MB). Pick a smaller one.')
+      return
+    }
+    // Frame first, render on confirm: the member chooses the crop instead of
+    // the old silent centre-crop.
+    setCropFile(file)
   }, [])
+
+  const applyCrop = useCallback((blob: Blob) => {
+    blobRef.current = blob
+    setPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev)
+      return URL.createObjectURL(blob)
+    })
+    setCropFile(null)
+  }, [])
+
+  const cancelCrop = useCallback(() => setCropFile(null), [])
 
   const cancel = useCallback(() => {
     blobRef.current = null
@@ -212,5 +241,23 @@ export function useAvatarUpload(onUploaded: (avatarUrl: string) => void): Avatar
     }
   }, [onUploaded, cancel])
 
-  return { previewUrl, uploading, pick, confirm, cancel }
+  const remove = useCallback(async () => {
+    setUploading(true)
+    toastId.current = toast.loading('Removing photo…')
+    try {
+      await removeAvatar()
+      onRemoved?.()
+      toast.success('Photo removed.', { id: toastId.current })
+      return true
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Could not remove your photo.'), {
+        id: toastId.current,
+      })
+      return false
+    } finally {
+      setUploading(false)
+    }
+  }, [onRemoved])
+
+  return { previewUrl, uploading, cropFile, pick, applyCrop, cancelCrop, confirm, cancel, remove }
 }

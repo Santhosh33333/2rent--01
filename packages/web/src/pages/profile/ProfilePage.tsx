@@ -15,9 +15,10 @@ import { isAdminTierRole } from '../../lib/roles'
 import {
   User, Mail, Phone, Camera, Save, X, Shield, Check,
   LogOut, ChevronRight, MapPin, Calendar, Award, Edit3,
-  Clock, AlertTriangle, Sparkles, Settings, Lock, Repeat
+  Clock, AlertTriangle, Sparkles, Settings, Lock, Repeat, Trash2
 } from 'lucide-react'
 import { useAvatarUpload } from '../../lib/photo'
+import { AvatarCropper } from '../../components/AvatarCropper'
 import toast from 'react-hot-toast'
 import { api } from '../../lib/api'
 import { Avatar } from '../../components/Avatar'
@@ -62,7 +63,10 @@ export function ProfilePage() {
   // number themselves; once a real number is stored it is admin-only, like the
   // rest of the identity fields. Mirrors services/phonePolicy.ts.
   const phoneEditable = isPlaceholderPhone(user?.phone)
-  const avatar = useAvatarUpload((avatarUrl) => updateUser({ avatarUrl }))
+  const avatar = useAvatarUpload(
+    (avatarUrl) => updateUser({ avatarUrl }),
+    () => updateUser({ avatarUrl: '' }),
+  )
   const [profileStats, setProfileStats] = useState<{ walksCompleted?: number; eventsJoined?: number; averageRating?: number; joinedYear?: number } | null>(null)
   const [verificationStatus, setVerificationStatus] = useState<Record<string, unknown> | null>(null)
   const [statsLoading, setStatsLoading] = useState(true)
@@ -185,6 +189,9 @@ export function ProfilePage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
+      {avatar.cropFile && (
+        <AvatarCropper file={avatar.cropFile} onCancel={avatar.cancelCrop} onDone={avatar.applyCrop} />
+      )}
       {/* Profile Header */}
       <AnimatedPage>
         <div className="hero-indigo">
@@ -267,6 +274,20 @@ export function ProfilePage() {
               {!editing && (
                 <button onClick={() => setEditing(true)} className="px-4 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-sm font-semibold transition-colors flex items-center gap-2">
                   <Edit3 className="w-4 h-4" /> Edit
+                </button>
+              )}
+              {user?.avatarUrl && !avatar.previewUrl && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm('Remove your profile photo? You can add a new one any time.')) {
+                      void avatar.remove()
+                    }
+                  }}
+                  disabled={avatar.uploading}
+                  className="px-4 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-sm font-semibold transition-colors flex items-center gap-2 disabled:opacity-50"
+                >
+                  <Trash2 className="w-4 h-4" /> Remove photo
                 </button>
               )}
             </div>

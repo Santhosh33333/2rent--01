@@ -20,6 +20,7 @@ import {
 } from "../services/dateOfBirthPolicy";
 import { isPlaceholderPhone } from "../services/phonePolicy";
 import { normaliseIndianPhone, phoneErrorBody, phoneLookupCandidates } from "../services/phoneNumber";
+import { removeBlob } from "../services/blobStorage";
 
 /** Rejection when a user tries to self-edit an identity field (name, gender). */
 const IDENTITY_CHANGE_ADMIN_ONLY_MESSAGE =
@@ -238,6 +239,37 @@ export async function uploadProfilePhoto(req: AuthedRequest, res: Response): Pro
     sendSuccess(res, { avatarUrl }, "Profile photo uploaded.", 200);
   } catch (err) {
     sendError(res, "Failed to upload photo.", 500, "INTERNAL_ERROR");
+  }
+}
+
+/**
+ * Remove the profile photo entirely.
+ *
+ * Clearing `avatarUrl` is what the UI reads, so that is the source of truth;
+ * the stored blob is dropped best-effort afterwards. A failure there must not
+ * fail the request — the user asked for the photo to be gone, and it is gone
+ * from every screen the moment the column is null.
+ */
+export async function deleteProfilePhoto(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const current = await prisma.user.findUnique({
+      where: { id: req.user!.userId },
+      select: { avatarUrl: true },
+    });
+    await prisma.user.update({
+      where: { id: req.user!.userId },
+      data: { avatarUrl: null },
+    });
+    if (current?.avatarUrl) {
+      try {
+        await removeBlob(current.avatarUrl);
+      } catch {
+        // Orphaned blob — harmless, and re-removing later is still safe.
+      }
+    }
+    sendSuccess(res, { avatarUrl: null }, "Profile photo removed.", 200);
+  } catch (err) {
+    sendError(res, "Failed to remove photo.", 500, "INTERNAL_ERROR");
   }
 }
 

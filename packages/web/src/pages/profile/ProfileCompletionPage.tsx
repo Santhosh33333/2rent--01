@@ -9,6 +9,7 @@ import { useAuth } from '../../lib/auth'
 import { api } from '../../lib/api'
 import { Avatar } from '../../components/Avatar'
 import { useAvatarUpload } from '../../lib/photo'
+import { AvatarCropper } from '../../components/AvatarCropper'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { LocationInput } from '../../components/LocationInput'
 import { isPlaceholderPhone, toTenDigits } from '../../lib/phone'
@@ -177,6 +178,9 @@ export function ProfileCompletionPage() {
 
   return (
     <div className="flex items-center justify-center bg-surface-50 dark:bg-surface-950 px-4 py-12 transition-colors duration-400 rounded-3xl">
+      {avatar.cropFile && (
+        <AvatarCropper file={avatar.cropFile} onCancel={avatar.cancelCrop} onDone={avatar.applyCrop} />
+      )}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-32 -right-32 w-[500px] h-[500px] bg-primary-400/10 rounded-full blur-[128px]" />
         <div className="absolute -bottom-32 -left-32 w-[500px] h-[500px] bg-accent-400/10 rounded-full blur-[128px]" />

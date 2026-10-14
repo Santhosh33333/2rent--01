@@ -8,6 +8,7 @@ import { useAuth } from '../../lib/auth'
 import { api } from '../../lib/api'
 import { Avatar } from '../../components/Avatar'
 import { useAvatarUpload } from '../../lib/photo'
+import { AvatarCropper } from '../../components/AvatarCropper'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
 import { SkeletonLoader } from '../../components/SkeletonLoader'
@@ -76,6 +77,9 @@ export function PartnerProfilePage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
+      {avatar.cropFile && (
+        <AvatarCropper file={avatar.cropFile} onCancel={avatar.cancelCrop} onDone={avatar.applyCrop} />
+      )}
       <AnimatedPage>
         <div className="hero-indigo">
           <div className="hero-sheen pointer-events-none absolute inset-0" />
