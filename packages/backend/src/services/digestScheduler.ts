@@ -78,6 +78,19 @@ function taxRoles(): DigestRole[] {
  */
 const runMarkers = new Set<string>();
 
+/**
+ * Periods this process has already handed to the send chain.
+ *
+ * Deliberately a SEPARATE set from `runMarkers`. `claimPeriod` consults
+ * `runMarkers` to decide whether to build and send; the scheduler marks a period
+ * as queued *before* the chain runs it. When both used one set the claim saw the
+ * scheduler's own queued mark, decided the period had already been sent, and
+ * returned without sending - so no report ever went out, on any cadence, while
+ * every tick logged "is due - sending". `runMarkers` now means "attempted", this
+ * one only stops the scheduler re-queuing a period whose report is still building.
+ */
+const queuedMarkers = new Set<string>();
+
 export function hasRun(period: ReportPeriod, window: ReportWindow): boolean {
   return runMarkers.has(`${period}|${window.key}`);
 }
@@ -86,9 +99,18 @@ export function markRun(period: ReportPeriod, window: ReportWindow): void {
   runMarkers.add(`${period}|${window.key}`);
 }
 
+function hasQueued(period: ReportPeriod, window: ReportWindow): boolean {
+  return queuedMarkers.has(`${period}|${window.key}`);
+}
+
+function markQueued(period: ReportPeriod, window: ReportWindow): void {
+  queuedMarkers.add(`${period}|${window.key}`);
+}
+
 /** Exposed for tests: clears every marker so each case starts from a cold boot. */
 export function resetRunMarkers(): void {
   runMarkers.clear();
+  queuedMarkers.clear();
 }
 
 /** Rows older than this can never describe a period that is due again. */
@@ -155,7 +177,10 @@ export function isDue(period: ReportPeriod, now: Date): boolean {
   const sched = SCHEDULES.find((s) => s.period === period);
   if (!sched) return false;
   if (!isPeriodDue(period, now, sched.hour)) return false;
-  return !hasRun(period, periodWindow(period, now));
+  const window = periodWindow(period, now);
+  // Claimed/sent OR already queued in this process. Either way it must not be
+  // queued a second time.
+  return !hasRun(period, window) && !hasQueued(period, window);
 }
 
 /** Every cadence not yet sent for its current period. */
@@ -244,6 +269,33 @@ export async function runDailyDigest(now = new Date()): Promise<void> {
   await runReport("DAILY", now);
 }
 
+/** Marks every currently-due cadence as queued and returns them. Synchronous so
+ *  the next 60-second tick cannot re-queue a period still being sent. */
+function claimDuePeriods(now: Date): ReportPeriod[] {
+  const due = pendingPeriods(now);
+  for (const period of due) markQueued(period, periodWindow(period, now));
+  return due;
+}
+
+async function sendDue(periods: ReportPeriod[], now: Date): Promise<void> {
+  for (const period of periods) {
+    console.log(`[REPORT] ${periodTitle(period)} is due - sending`);
+    await runReport(period, now);
+  }
+}
+
+/**
+ * Builds and sends every cadence due at `now`.
+ *
+ * Exposed so the tick body can be driven directly in tests: the behaviours that
+ * matter here (a period is marked queued and then ACTUALLY sent) only failed in
+ * production, because every existing test called runReport directly and so never
+ * went through the queue-then-claim path.
+ */
+export async function runDueReports(now = new Date()): Promise<void> {
+  await sendDue(claimDuePeriods(now), now);
+}
+
 let timer: ReturnType<typeof setInterval> | null = null;
 /** Serialises the cadences of one tick so their report builds do not compete. */
 let chain: Promise<unknown> = Promise.resolve();
@@ -252,18 +304,13 @@ export function startDigestScheduler(): void {
   if (timer) return;
   timer = setInterval(() => {
     const now = new Date();
-    const due = pendingPeriods(now);
+    // Marked as queued synchronously so the next tick does not queue the same
+    // period a second time while this one is still building. Note: queued, NOT
+    // claimed - the claim is what decides to send, and marking it here is what
+    // used to make the claim skip every report.
+    const due = claimDuePeriods(now);
     if (!due.length) return;
-    // Serialised through one chain so the cadences of a single tick do not run
-    // their report builds concurrently, and marked synchronously here so the next
-    // tick does not queue the same period a second time while this one runs.
-    for (const period of due) markRun(period, periodWindow(period, now));
-    chain = chain.then(async () => {
-      for (const period of due) {
-        console.log(`[REPORT] ${periodTitle(period)} is due - sending`);
-        await runReport(period, now);
-      }
-    });
+    chain = chain.then(() => sendDue(due, now));
   }, TICK_MS);
   timer.unref?.();
 }

@@ -211,13 +211,24 @@ export function inWindow(window: ReportWindow, extra: Record<string, unknown> = 
 /**
  * Is this period due right now?
  *
- * True only inside the hour after `until`, which is what stops a weekly report
- * firing on every midnight of the week. `hour` is the configured send time so
- * the schedules can be staggered and cannot collide mid-send.
+ * Two conditions, and both matter:
+ *
+ *   - `midnight(now) === until` pins the period to its boundary DAY. A weekly
+ *     report's `until` is Monday's midnight, so it can only ever be due on a
+ *     Monday - drop this and a weekly report starts firing every midnight.
+ *   - `now.getHours() >= hour` is the configured send time, and it is a
+ *     threshold on purpose. Requiring the exact hour meant the report was only
+ *     sent if the process happened to be alive during that single hour: a host
+ *     that sleeps overnight, or a deploy that restarts at 06:00, silently lost
+ *     the entire period's report with nothing but an absence to show for it.
+ *     "The send hour has arrived" lets a late process catch up on the same
+ *     boundary day, and the durable DigestRun claim still guarantees at-most-
+ *     once. The stagger survives: at 00:00 only the hour-0 cadences are due, and
+ *     the outlook (hour 1) and tax (hour 2) reports follow an hour and two later.
  */
 export function isPeriodDue(period: ReportPeriod, now: Date, hour: number): boolean {
   const window = periodWindow(period, now);
-  return now.getHours() === hour && midnight(now).getTime() === window.until.getTime();
+  return now.getHours() >= hour && midnight(now).getTime() === window.until.getTime();
 }
 
 /** Human subject prefix, e.g. "Nabri weekly report". */

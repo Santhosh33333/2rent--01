@@ -804,10 +804,15 @@ describe("scheduler", () => {
 
   const load = () => import("../services/digestScheduler.js");
 
-  it("fires the daily report only in the hour after midnight", async () => {
+  it("keeps the daily report due for the rest of its boundary day so a sleeping host catches up", async () => {
     const { isDue } = await load();
+    // Due the moment the midnight hour arrives...
     expect(isDue("DAILY", new Date(2026, 9, 4, 0, 5))).toBe(true);
-    expect(isDue("DAILY", new Date(2026, 9, 4, 13, 5))).toBe(false);
+    // ...and still due later the same day. The process may have been asleep (or
+    // mid-deploy) at 00:00, and a report that only fires inside that one hour is
+    // a report a spun-down host never sends. The durable claim still makes it
+    // at-most-once, so "still due" can never become "sent twice".
+    expect(isDue("DAILY", new Date(2026, 9, 4, 13, 5))).toBe(true);
   });
 
   it("does not fire twice for the same period", async () => {
@@ -818,6 +823,38 @@ describe("scheduler", () => {
     expect(isDue("DAILY", new Date(2026, 9, 4, 0, 30))).toBe(false);
     // ...but the next day is a new period and fires again.
     expect(isDue("DAILY", new Date(2026, 9, 5, 0, 1))).toBe(true);
+  });
+
+  it("actually sends a due period - the queue mark must not suppress the claim", async () => {
+    const { runDueReports } = await load();
+    const { sendEmail } = await import("../services/emailService.js");
+    (sendEmail as any).mockClear();
+    (sendEmail as any).mockResolvedValue({ ok: true, provider: "test" });
+    process.env.DIGEST_EMAIL_SUPER_ADMIN = "boss@example.com";
+    healthy();
+
+    await runDueReports(new Date(2026, 9, 4, 0, 5));
+
+    // Regression: the scheduler marked a period in the very set claimPeriod
+    // consults, so every tick logged "is due - sending" and then sent nothing -
+    // no report ever left the box. Driving the real tick path must reach the
+    // mailer. The direct runReport tests above never caught it because they skip
+    // the queue-then-claim sequence entirely.
+    expect((sendEmail as any).mock.calls.length).toBeGreaterThan(0);
+
+    delete process.env.DIGEST_EMAIL_SUPER_ADMIN;
+  });
+
+  it("does not re-queue a period the scheduler already queued", async () => {
+    const { runDueReports, isDue } = await load();
+    healthy();
+    const now = new Date(2026, 9, 4, 0, 5);
+
+    await runDueReports(now);
+
+    // After the tick has run, the daily period is both queued and claimed, so the
+    // next tick must see it as no longer due.
+    expect(isDue("DAILY", new Date(2026, 9, 4, 0, 6))).toBe(false);
   });
 
   it("fires a weekly report only on a Monday", async () => {
