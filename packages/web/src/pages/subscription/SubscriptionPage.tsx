@@ -223,6 +223,14 @@ export function SubscriptionPage() {
   const savings = savingsPercent(monthly, yearly);
   const trialActive = mine ? isTrialState(mine.state) : false;
 
+  // Someone who has already paid must never be shown a payment button again.
+  // Keyed on the paid plan (isActive), NOT on access.hasAccess: the free trial
+  // also opens the access window, and a trialing user still needs the button to
+  // convert. The server refuses a second charge for a live plan
+  // (SUBSCRIPTION_EXISTS), so a button shown here could only ever error - which
+  // is exactly the "paid, and asked to pay again" loop this closes.
+  const hasPaidPlan = Boolean(mine?.isActive);
+
   return (
     <div className="min-h-screen bg-slate-950 px-4 pb-24 text-white">
       <div className="mx-auto max-w-3xl py-10">
@@ -439,6 +447,11 @@ export function SubscriptionPage() {
           </div>
         ) : (
           <section className="mt-10 grid gap-5 sm:grid-cols-2">
+            {hasPaidPlan && (
+              <p className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-3 text-center text-sm text-emerald-300 sm:col-span-2">
+                You already have an active plan, so there is nothing to pay now.
+              </p>
+            )}
             {plans.map((plan) => {
               const isYearly = billingLabel(plan) === "year";
               // effectivePrice carries the new-user price for an account that
@@ -499,21 +512,29 @@ export function SubscriptionPage() {
                     payments already made are not refunded.
                   </p>
 
-                  <button
-                    onClick={() => subscribe(plan)}
-                    disabled={busy !== null}
-                    className={`mt-6 rounded-full px-6 py-3 text-sm font-medium disabled:opacity-40 ${
-                      isYearly
-                        ? "bg-emerald-500 text-white hover:bg-emerald-600"
-                        : "bg-white text-slate-900 hover:bg-slate-200"
-                    }`}
-                  >
-                    {busy === plan.code
-                      ? "Starting…"
-                      : plan.trialDays > 0
-                        ? "Start trial"
-                        : "Subscribe"}
-                  </button>
+                  {hasPaidPlan ? (
+                    <p className="mt-6 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-6 py-3 text-center text-sm text-emerald-300">
+                      {mine?.plan?.code === plan.code
+                        ? "Your current plan"
+                        : "You're already subscribed"}
+                    </p>
+                  ) : (
+                    <button
+                      onClick={() => subscribe(plan)}
+                      disabled={busy !== null}
+                      className={`mt-6 rounded-full px-6 py-3 text-sm font-medium disabled:opacity-40 ${
+                        isYearly
+                          ? "bg-emerald-500 text-white hover:bg-emerald-600"
+                          : "bg-white text-slate-900 hover:bg-slate-200"
+                      }`}
+                    >
+                      {busy === plan.code
+                        ? "Starting…"
+                        : plan.trialDays > 0
+                          ? "Start trial"
+                          : "Subscribe"}
+                    </button>
+                  )}
                 </div>
               );
             })}
