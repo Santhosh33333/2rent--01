@@ -31,6 +31,7 @@ import eventRoutes from "./routes/eventRoutes";
 import publicEventRoutes from "./routes/publicEventRoutes";
 import publicMovieRoutes from "./routes/publicMovieRoutes";
 import messageRoutes from "./routes/messageRoutes";
+import chatGroupRoutes from "./routes/chatGroupRoutes";
 import datingRoutes from "./routes/datingRoutes";
 import preferenceRoutes from "./routes/preferenceRoutes";
 import subscriptionRoutes from "./routes/subscriptionRoutes";
@@ -341,6 +342,7 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
   // one, at which point it is served by the routes above.
   app.use("/api/public/movies", publicMovieRoutes);
   app.use("/api/messages", messageRoutes);
+  app.use("/api/chat-groups", chatGroupRoutes);
 app.use("/api/dating", datingRoutes);
 // Preferences are mounted at the top level, not under /api/dating: they describe
 // the person, not a dating session, and gating them behind KYC or paid access

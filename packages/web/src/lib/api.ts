@@ -736,3 +736,95 @@ export const chatRequestApi = {
   accept: (id: string) => api.put(`/chat-requests/${id}/accept`),
   reject: (id: string) => api.put(`/chat-requests/${id}/reject`),
 }
+
+// ============================================================================
+// GROUP CHAT
+// ============================================================================
+
+export interface ChatGroupRecord {
+  groupId: string
+  name: string
+  avatarUrl: string | null
+  memberCount: number
+  myRole: 'OWNER' | 'ADMIN' | 'MEMBER'
+  lastMessage: string | null
+  lastMessageAt: string | null
+  lastSenderName: string | null
+  unreadCount: number
+}
+
+export interface ChatGroupInviteRecord {
+  inviteId: string
+  groupId: string
+  groupName: string
+  groupAvatar: string | null
+  memberCount: number
+  message: string | null
+  inviter: { id: string; fullName?: string | null; avatarUrl?: string | null }
+  createdAt: string
+}
+
+export interface ChatGroupMessageRecord {
+  id: string
+  groupId: string
+  content: string
+  messageType: 'TEXT' | 'IMAGE' | 'VOICE'
+  mediaUrl: string | null
+  replyToId: string | null
+  replyTo: { id: string; content: string; senderId: string; messageType: string } | null
+  reactions: Record<string, string[]>
+  status: string
+  createdAt: string
+  sender: { id: string; fullName?: string | null; avatarUrl?: string | null }
+  isMine: boolean
+}
+
+export interface ChatGroupDetail {
+  id: string
+  name: string
+  description: string | null
+  avatarUrl: string | null
+  createdById: string
+  createdAt: string
+  myRole: 'OWNER' | 'ADMIN' | 'MEMBER'
+  memberCount: number
+  messageCount: number
+  members: Array<{
+    userId: string
+    role: 'OWNER' | 'ADMIN' | 'MEMBER'
+    joinedAt: string
+    user: { id: string; fullName?: string | null; avatarUrl?: string | null }
+  }>
+}
+
+export const chatGroupApi = {
+  list: () => api.get<{ data: { items: ChatGroupRecord[]; total: number } }>('/chat-groups'),
+  create: (payload: { name: string; description?: string; memberIds?: string[] }) =>
+    api.post('/chat-groups', payload),
+  detail: (groupId: string) => api.get<{ data: ChatGroupDetail }>(`/chat-groups/${groupId}`),
+  update: (groupId: string, patch: { name?: string; description?: string; avatarUrl?: string }) =>
+    api.patch(`/chat-groups/${groupId}`, patch),
+  remove: (groupId: string) => api.delete(`/chat-groups/${groupId}`),
+  invites: () => api.get<{ data: { items: ChatGroupInviteRecord[]; total: number } }>('/chat-groups/invites'),
+  invite: (groupId: string, userIds: string[], message?: string) =>
+    api.post(`/chat-groups/${groupId}/invites`, { userIds, message: message?.trim() || undefined }),
+  respond: (inviteId: string, action: 'accept' | 'decline') =>
+    api.post(`/chat-groups/invites/${inviteId}/respond`, { action }),
+  addMembers: (groupId: string, userIds: string[]) =>
+    api.post(`/chat-groups/${groupId}/members`, { userIds }),
+  removeMember: (groupId: string, userId: string) =>
+    api.delete(`/chat-groups/${groupId}/members/${userId}`),
+  leave: (groupId: string) => api.post(`/chat-groups/${groupId}/leave`),
+  messages: (groupId: string, page = 1, limit = 50) =>
+    api.get<{ data: { items: ChatGroupMessageRecord[]; page: number; limit: number; total: number } }>(
+      `/chat-groups/${groupId}/messages`,
+      { params: { page, limit } },
+    ),
+  send: (groupId: string, payload: { content?: string; messageType?: string; mediaUrl?: string; replyToId?: string; clientId?: string }) =>
+    api.post<{ data: ChatGroupMessageRecord & { isMine: boolean } }>(`/chat-groups/${groupId}/messages`, payload),
+  removeMessage: (groupId: string, messageId: string) =>
+    api.delete(`/chat-groups/${groupId}/messages/${messageId}`),
+  react: (groupId: string, messageId: string, emoji: string) =>
+    api.post(`/chat-groups/${groupId}/messages/${messageId}/react`, { emoji }),
+  markRead: (groupId: string) => api.post(`/chat-groups/${groupId}/read`),
+}

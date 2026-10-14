@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link, Navigate, useSearchParams } from 'react-router-dom'
-import { MessageCircle, Search, ChevronRight, Clock, Phone, UserPlus } from 'lucide-react'
+import { MessageCircle, Search, ChevronRight, Clock, Phone, UserPlus, Users } from 'lucide-react'
 import { api, chatRequestApi } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { useSocket } from '../../hooks/useSocket'
@@ -10,6 +10,7 @@ import { SkeletonLoader } from '../../components/SkeletonLoader'
 import { useAsync } from '../../hooks/useAsync'
 import CallUserButton from '../../components/CallUserButton'
 import { Avatar } from '../../components/Avatar'
+import { GroupsSection } from './GroupsSection'
 
 interface Conversation {
   conversationId: string
@@ -81,6 +82,11 @@ export function MessagesPage() {
   // thread route, which handles a brand-new (empty) conversation too.
   const [searchParams] = useSearchParams()
   const targetUserId = searchParams.get('user')
+  // Chats (1:1) and Groups share the Messages screen but, like their data
+  // models, stay on separate tabs. `?tab=groups` deep-links to the groups side
+  // (used by group notifications and after creating/leaving a group).
+  const [tab, setTab] = useState<'chats' | 'groups'>(searchParams.get('tab') === 'groups' ? 'groups' : 'chats')
+  const [groupInviteCount, setGroupInviteCount] = useState(0)
 
   // Recent calls, so a missed call can be returned without leaving the app.
   // The API returns identities only - never phone numbers.
@@ -167,6 +173,14 @@ export function MessagesPage() {
     return () => off && off()
   }, [myId, on, fetchConversations])
 
+  // A group invitation can arrive while the Chats tab is showing, where
+  // GroupsSection is not mounted to watch for it — so the badge is incremented
+  // here too. Switching to the Groups tab re-reads the authoritative count.
+  useEffect(() => {
+    const off = on('chat_group_invite', () => setGroupInviteCount((n) => n + 1))
+    return () => off && off()
+  }, [on])
+
   // Keep the list fresh as a safety net behind the socket (which pushes
   // new_message live). Backed off + hidden-tab aware: the old 8s hot poll
   // hammered the API from every open tab.
@@ -187,29 +201,9 @@ export function MessagesPage() {
     return <Navigate to={`/messages/${targetUserId}`} replace />
   }
 
-  if (loading) {
-    return (
-      <div className="max-w-3xl mx-auto space-y-6">
-        <div className="space-y-4">
-          <div className="skeleton h-8 w-48 rounded-2xl" />
-          <div className="skeleton h-12 rounded-2xl" />
-        </div>
-        <SkeletonLoader lines={5} variant="list" />
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <EmptyState 
-        icon={MessageCircle} 
-        title="Failed to load messages" 
-        description="Please check your connection and try again"
-        action={<button onClick={retry} className="btn btn-primary btn-sm">Retry</button>} 
-      />
-    )
-  }
-
+  // Loading and error are handled inside the Chats branch below rather than as
+  // early returns: the tab switcher has to stay on screen, otherwise a failed
+  // conversation load locks the user out of Group chat completely.
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       {/* Header */}
@@ -234,13 +228,68 @@ export function MessagesPage() {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
             <input
               type="text" value={search} onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search conversations..."
+              placeholder={tab === 'groups' ? 'Search groups...' : 'Search conversations...'}
               className="input bg-white/15 border-white/20 text-white placeholder:text-white/40 pl-11 focus:bg-white/20 focus:border-white/30"
             />
           </div>
         </div>
       </AnimatedPage>
 
+      {/* Chats / Groups switcher */}
+      <div className="flex rounded-2xl bg-surface-100 p-1 dark:bg-surface-800">
+        <button
+          type="button"
+          onClick={() => setTab('chats')}
+          className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold transition ${
+            tab === 'chats'
+              ? 'bg-white text-surface-900 shadow-sm dark:bg-surface-900 dark:text-white'
+              : 'text-surface-500 dark:text-surface-400'
+          }`}
+        >
+          <MessageCircle className="h-4 w-4" aria-hidden /> Chats
+          {unreadCount > 0 && (
+            <span className="flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-primary-500 px-1 text-[11px] font-bold text-white">
+              {unreadCount}
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('groups')}
+          className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold transition ${
+            tab === 'groups'
+              ? 'bg-white text-surface-900 shadow-sm dark:bg-surface-900 dark:text-white'
+              : 'text-surface-500 dark:text-surface-400'
+          }`}
+        >
+          <Users className="h-4 w-4" aria-hidden /> Groups
+          {groupInviteCount > 0 && (
+            <span className="flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-rose-500 px-1 text-[11px] font-bold text-white">
+              {groupInviteCount}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {tab === 'groups' ? (
+        <AnimatedPage delay={60}>
+          <GroupsSection search={search} onInviteCountChange={setGroupInviteCount} />
+        </AnimatedPage>
+      ) : loading ? (
+        <div className="space-y-4">
+          <div className="skeleton h-8 w-48 rounded-2xl" />
+          <div className="skeleton h-12 rounded-2xl" />
+          <SkeletonLoader lines={5} variant="list" />
+        </div>
+      ) : error ? (
+        <EmptyState
+          icon={MessageCircle}
+          title="Failed to load messages"
+          description="Please check your connection and try again"
+          action={<button onClick={retry} className="btn btn-primary btn-sm">Retry</button>}
+        />
+      ) : (
+        <>
       {/* Chat requests live in their own inbox. Without this row nothing in the
           UI ever called the request endpoints, so "asked to chat" was invisible. */}
       <AnimatedPage delay={60}>
@@ -359,6 +408,8 @@ export function MessagesPage() {
             </div>
           </div>
         </AnimatedPage>
+      )}
+        </>
       )}
     </div>
   )

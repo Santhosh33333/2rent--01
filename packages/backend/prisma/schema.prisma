@@ -95,6 +95,11 @@ lastLoginAt                   DateTime?
   sentMessages                   Message[]            @relation("MessageSender")
   receivedMessages               Message[]            @relation("MessageReceiver")
   eventGroupMessages             EventGroupMessage[]  @relation("EventGroupSender")
+  chatGroupsCreated              ChatGroup[]          @relation("ChatGroupCreator")
+  chatGroupMemberships           ChatGroupMember[]    @relation("ChatGroupMemberUser")
+  chatGroupMessages              ChatGroupMessage[]   @relation("ChatGroupMessageSender")
+  chatGroupInvitesSent           ChatGroupInvite[]    @relation("ChatGroupInviteInviter")
+  chatGroupInvitesReceived       ChatGroupInvite[]    @relation("ChatGroupInviteInvitee")
   reportsFiled                   Report[]             @relation("ReportFiledBy")
   reportsAgainst                 Report[]             @relation("ReportAgainst")
   ratingsGiven                   Rating[]             @relation("RatingGivenBy")
@@ -1362,6 +1367,89 @@ model EventGroupMessage {
   sender User  @relation("EventGroupSender", fields: [senderId], references: [id], onDelete: Cascade)
 
   @@index([eventId, createdAt])
+}
+
+// A general-purpose group chat: a named, persistent set of members that anyone
+// can create and invite others into. Like EventGroupMessage this is deliberately
+// NOT built on Conversation, which is strictly two-party (see the note above).
+// Membership here is by invitation rather than by event attendance.
+model ChatGroup {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  avatarUrl   String?
+  createdById String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy User              @relation("ChatGroupCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  members   ChatGroupMember[]
+  messages  ChatGroupMessage[]
+  invites   ChatGroupInvite[]
+
+  @@index([createdById])
+}
+
+// One member of a group. `lastReadAt` is the unread watermark: a group's unread
+// count is the messages newer than this that the member did not send. Per-message
+// receipts would cost a row per member per message for no user-visible gain in a
+// group, so the watermark is the whole read model.
+model ChatGroupMember {
+  id         String    @id @default(uuid())
+  groupId    String
+  userId     String
+  role       String    @default("MEMBER") // OWNER | ADMIN | MEMBER
+  lastReadAt DateTime?
+  joinedAt   DateTime  @default(now())
+
+  group ChatGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User      @relation("ChatGroupMemberUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([userId])
+}
+
+model ChatGroupMessage {
+  id          String   @id @default(uuid())
+  groupId     String
+  senderId    String
+  content     String
+  messageType String   @default("TEXT") // TEXT | IMAGE | VOICE
+  mediaUrl    String?
+  replyToId   String?
+  reactions   Json?
+  status      String   @default("SENT")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  group   ChatGroup          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  sender  User               @relation("ChatGroupMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  replyTo ChatGroupMessage?  @relation("ChatGroupMessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies ChatGroupMessage[] @relation("ChatGroupMessageReplies")
+
+  @@index([groupId, createdAt])
+}
+
+// An invitation to join a group. The invitee accepts to become a ChatGroupMember;
+// until then it is a pending row the invitee can see and answer, mirroring the
+// existing 1:1 ChatRequest flow so the two feel like one system.
+model ChatGroupInvite {
+  id          String    @id @default(uuid())
+  groupId     String
+  inviterId   String
+  inviteeId   String
+  status      String    @default("PENDING") // PENDING | ACCEPTED | DECLINED | CANCELLED
+  message     String?
+  createdAt   DateTime  @default(now())
+  respondedAt DateTime?
+
+  group   ChatGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  inviter User      @relation("ChatGroupInviteInviter", fields: [inviterId], references: [id], onDelete: Cascade)
+  invitee User      @relation("ChatGroupInviteInvitee", fields: [inviteeId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, inviteeId])
+  @@index([inviteeId, status])
 }
 
 model TypingStatus {

@@ -60,3 +60,67 @@ export async function notifyNewMessage(
     console.error("[notifyNewMessage] failed to create notification:", err);
   }
 }
+
+/**
+ * Inbox entry + push for a group message. Same contract as notifyNewMessage,
+ * but the route opens the group thread and several members may be notified for
+ * one message. Fire-and-forget from the send path.
+ */
+export async function notifyGroupMessage(
+  receiverId: string,
+  sender: { id: string; fullName?: string | null } | null,
+  groupId: string,
+  groupName: string,
+  preview: string,
+): Promise<void> {
+  const name = sender?.fullName?.trim() || "Someone";
+  const title = `${groupName || "Group"}: ${name}`;
+  const trimmed = (preview || "").trim();
+  const text = trimmed || "Sent a message";
+  const body = text.length > 140 ? `${text.slice(0, 137)}...` : text;
+  try {
+    await prisma.notification.create({
+      data: {
+        userId: receiverId,
+        title,
+        body,
+        data: JSON.stringify({
+          type: "group_message",
+          groupId,
+          route: `/messages/group/${groupId}`,
+        }),
+      },
+    });
+  } catch (err) {
+    console.error("[notifyGroupMessage] failed to create notification:", err);
+  }
+}
+
+/**
+ * Inbox entry + push for a group invitation. The invitee taps through to the
+ * groups area of Messages, where pending invitations are listed.
+ */
+export async function notifyGroupInvite(
+  inviteeId: string,
+  inviter: { id: string; fullName?: string | null } | null,
+  groupId: string,
+  groupName: string,
+): Promise<void> {
+  const name = inviter?.fullName?.trim() || "Someone";
+  try {
+    await prisma.notification.create({
+      data: {
+        userId: inviteeId,
+        title: "Group invitation",
+        body: `${name} invited you to join "${groupName}".`,
+        data: JSON.stringify({
+          type: "group_invite",
+          groupId,
+          route: `/messages?tab=groups`,
+        }),
+      },
+    });
+  } catch (err) {
+    console.error("[notifyGroupInvite] failed to create notification:", err);
+  }
+}

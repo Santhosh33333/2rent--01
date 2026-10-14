@@ -835,6 +835,77 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
     });
 
     // =====================================================================
+    // GROUP CHAT EVENTS
+    // =====================================================================
+
+    /** Membership check shared by the group handlers below. */
+    const groupMembership = async (groupId: string) =>
+      prisma.chatGroupMember.findUnique({
+        where: { groupId_userId: { groupId, userId } },
+        select: { id: true, group: { select: { isActive: true } } },
+      });
+
+    /**
+     * Join a group's realtime room so typing indicators reach the room.
+     * AUTHZ: members only.
+     */
+    socket.on("join_group", async (groupId: string) => {
+      try {
+        const gid = String(groupId || "");
+        if (!gid) return;
+        const membership = await groupMembership(gid);
+        if (!membership || !membership.group.isActive) {
+          socket.emit("error", { message: "Unauthorized to join this group" });
+          return;
+        }
+        socket.join(`group_${gid}`);
+        socket.to(`group_${gid}`).emit("group_user_active", { groupId: gid, userId, timestamp: Date.now() });
+      } catch (err) {
+        console.error("[SOCKET] join_group error:", err);
+      }
+    });
+
+    socket.on("leave_group", (groupId: string) => {
+      const gid = String(groupId || "");
+      if (!gid) return;
+      socket.leave(`group_${gid}`);
+      socket.to(`group_${gid}`).emit("group_user_inactive", { groupId: gid, userId, timestamp: Date.now() });
+    });
+
+    /**
+     * Typing indicator for a group. Room membership already proved access, and
+     * an auto-clear timer is set the same way as the 1:1 path so a dropped
+     * stop event cannot leave "typing…" stuck on.
+     */
+    socket.on("group_typing", (groupId: string) => {
+      const gid = String(groupId || "");
+      const room = `group_${gid}`;
+      if (!gid || !socket.rooms.has(room)) return;
+      const key = `group_${gid}:${userId}`;
+      if (typingTimers.has(key)) clearTimeout(typingTimers.get(key)!);
+      typingTimers.set(
+        key,
+        setTimeout(() => {
+          socket.to(room).emit("group_user_stopped_typing", { groupId: gid, userId, timestamp: Date.now() });
+          typingTimers.delete(key);
+        }, 5000)
+      );
+      socket.to(room).emit("group_user_typing", { groupId: gid, userId, timestamp: Date.now() });
+    });
+
+    socket.on("group_stop_typing", (groupId: string) => {
+      const gid = String(groupId || "");
+      const room = `group_${gid}`;
+      const key = `group_${gid}:${userId}`;
+      if (typingTimers.has(key)) {
+        clearTimeout(typingTimers.get(key)!);
+        typingTimers.delete(key);
+      }
+      if (!gid || !socket.rooms.has(room)) return;
+      socket.to(room).emit("group_user_stopped_typing", { groupId: gid, userId, timestamp: Date.now() });
+    });
+
+    // =====================================================================
     // NOTIFICATIONS
     // =====================================================================
 

@@ -65,6 +65,7 @@ const EventDetailPage = lazy(() => import('./pages/events/EventDetailPage').then
 const MessagesPage = lazy(() => import('./pages/messages/MessagesPage').then(m => ({ default: m.MessagesPage })))
 const ConversationPage = lazy(() => import('./pages/messages/ConversationPage').then(m => ({ default: m.ConversationPage })))
 const ChatRequestsPage = lazy(() => import('./pages/messages/ChatRequestsPage').then(m => ({ default: m.ChatRequestsPage })))
+const GroupChatPage = lazy(() => import('./pages/messages/GroupChatPage').then(m => ({ default: m.GroupChatPage })))
 const PartnerJobsPage = lazy(() => import('./pages/partner/PartnerJobsPage').then(m => ({ default: m.PartnerJobsPage })))
 const PartnerJobDetailPage = lazy(() => import('./pages/partner/PartnerJobDetailPage').then(m => ({ default: m.PartnerJobDetailPage })))
 const PartnerWalletPage = lazy(() => import('./pages/partner/PartnerWalletPage').then(m => ({ default: m.PartnerWalletPage })))
@@ -307,6 +308,7 @@ export function App() {
             <Route element={<Layout />}>
               <Route path="/messages" element={<MessagesPage />} />
               <Route path="/messages/requests" element={<ChatRequestsPage />} />
+              <Route path="/messages/group/:groupId" element={<GroupChatPage />} />
               <Route path="/messages/:userId" element={<ConversationPage />} />
               <Route path="/sos/:alertId" element={<SosAlertPage />} />
             </Route>
