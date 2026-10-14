@@ -28,5 +28,8 @@ router.post("/:id/members", sanitizeInput, musicRoomController.addMembers);
 router.post("/:id/media", mediaUpload.single("file"), musicRoomController.uploadRoomMedia);
 router.post("/:id/leave", musicRoomController.leaveRoom);
 router.post("/:id/end", musicRoomController.endRoom);
+// Remove the room entirely (host only) — distinct from ending it, which keeps
+// the row and its code.
+router.delete("/:id", musicRoomController.deleteRoom);
 
 export default router;

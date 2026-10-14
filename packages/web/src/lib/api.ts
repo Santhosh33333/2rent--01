@@ -846,6 +846,10 @@ export interface MusicRoomSummary {
   mediaKind: 'AUDIO' | 'VIDEO' | 'YOUTUBE'
   mediaUrl: string | null
   mediaTitle: string | null
+  /** Creator-chosen lifetime for an uploaded file; 0 = keep until the room ends. */
+  retentionDays: number
+  /** When the current upload is purged, or null to keep it. */
+  mediaExpiresAt: string | null
   isPlaying: boolean
   positionSec: number
   version: number
@@ -869,12 +873,14 @@ export interface MusicRoomDetail extends MusicRoomSummary {
 
 export const musicRoomApi = {
   list: () => api.get<{ data: { items: MusicRoomSummary[]; total: number } }>('/music-rooms'),
-  create: (payload: { name: string; mediaUrl?: string; mediaTitle?: string }) =>
+  create: (payload: { name: string; mediaUrl?: string; mediaTitle?: string; retentionDays?: number }) =>
     api.post<{ data: MusicRoomSummary }>('/music-rooms', payload),
   detail: (roomId: string) => api.get<{ data: MusicRoomDetail }>(`/music-rooms/${roomId}`),
   join: (code: string) => api.post<{ data: { roomId: string; name: string } }>('/music-rooms/join', { code }),
-  update: (roomId: string, patch: { name?: string; mediaUrl?: string | null; mediaTitle?: string | null }) =>
-    api.patch<{ data: MusicRoomSummary }>(`/music-rooms/${roomId}`, patch),
+  update: (
+    roomId: string,
+    patch: { name?: string; mediaUrl?: string | null; mediaTitle?: string | null; retentionDays?: number },
+  ) => api.patch<{ data: MusicRoomSummary }>(`/music-rooms/${roomId}`, patch),
   addMembers: (roomId: string, userIds: string[]) =>
     api.post<{ data: { added: number; memberCount: number } }>(`/music-rooms/${roomId}/members`, { userIds }),
   /** Host uploads a file from their device to play in the room. */
@@ -888,4 +894,6 @@ export const musicRoomApi = {
   },
   leave: (roomId: string) => api.post(`/music-rooms/${roomId}/leave`),
   end: (roomId: string) => api.post(`/music-rooms/${roomId}/end`),
+  /** Host removes the room entirely (distinct from ending it, which keeps the row). */
+  remove: (roomId: string) => api.delete(`/music-rooms/${roomId}`),
 }

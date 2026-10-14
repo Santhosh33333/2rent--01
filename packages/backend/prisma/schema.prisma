@@ -1472,9 +1472,13 @@ model MusicRoom {
   name        String
   hostId      String
   isActive    Boolean  @default(true)
-  mediaKind   String   @default("AUDIO") // AUDIO | VIDEO
+  mediaKind   String   @default("AUDIO") // AUDIO | VIDEO | YOUTUBE
   mediaUrl    String?
   mediaTitle  String?
+  // Creator-chosen lifetime for an *uploaded* file: 0 keeps it until the room
+  // ends. `mediaExpiresAt` is when the current upload is purged (null = never).
+  retentionDays  Int       @default(0)
+  mediaExpiresAt DateTime?
   isPlaying   Boolean  @default(false)
   positionSec Float    @default(0)
   version     Int      @default(0)

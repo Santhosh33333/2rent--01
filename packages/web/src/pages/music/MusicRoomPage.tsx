@@ -78,6 +78,25 @@ function formatTime(sec: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
+/** "in 3 days" style countdown to an upload's expiry. */
+function formatExpiry(iso: string): string {
+  const when = new Date(iso)
+  if (Number.isNaN(when.getTime())) return ''
+  const days = Math.ceil((when.getTime() - Date.now()) / (24 * 60 * 60 * 1000))
+  if (days <= 0) return 'soon'
+  return days === 1 ? 'in 1 day' : `in ${days} days`
+}
+
+/** The upload-lifetime choices offered in the room, mirroring the create dialog. */
+const RETENTION_OPTIONS: { value: number; label: string }[] = [
+  { value: 0, label: 'Keep until the room ends' },
+  { value: 1, label: '1 day' },
+  { value: 3, label: '3 days' },
+  { value: 7, label: '7 days' },
+  { value: 14, label: '14 days' },
+  { value: 30, label: '30 days' },
+]
+
 export function MusicRoomPage() {
   const { roomId } = useParams<{ roomId: string }>()
   const navigate = useNavigate()
@@ -423,6 +442,33 @@ export function MusicRoomPage() {
     }
   }
 
+  const removeRoom = async () => {
+    if (!roomId) return
+    setBusy(true)
+    try {
+      await musicRoomApi.remove(roomId)
+      toast.success('Room removed')
+      navigate('/music')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Could not remove the room'))
+      setBusy(false)
+    }
+  }
+
+  const changeRetention = async (days: number) => {
+    if (!roomId) return
+    setBusy(true)
+    try {
+      await musicRoomApi.update(roomId, { retentionDays: days })
+      await load()
+      toast.success('Upload lifetime updated')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Could not change the upload lifetime'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const copyCode = () => {
     if (!room?.code) return
     navigator.clipboard?.writeText(room.code).then(
@@ -526,6 +572,11 @@ export function MusicRoomPage() {
                   {playing ? 'Playing' : 'Paused'} · {formatTime(position)}
                   {duration > 0 ? ` / ${formatTime(duration)}` : ''}
                 </p>
+                {room.mediaUrl?.startsWith('/uploads/') && room.mediaExpiresAt && (
+                  <p className="text-xs text-surface-400">
+                    Upload is removed {formatExpiry(room.mediaExpiresAt)}
+                  </p>
+                )}
               </div>
               {!isHost && (
                 <button
@@ -660,6 +711,33 @@ export function MusicRoomPage() {
             </div>
           ))}
         </div>
+        {isHost && (
+          <div className="mt-4 space-y-1.5">
+            <label
+              htmlFor="room-retention-edit"
+              className="text-xs font-semibold uppercase tracking-wide text-surface-500"
+            >
+              Upload lifetime
+            </label>
+            <select
+              id="room-retention-edit"
+              value={room.retentionDays}
+              disabled={busy}
+              onChange={(e) => void changeRetention(Number(e.target.value))}
+              className="input"
+            >
+              {RETENTION_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-surface-400">
+              Applies to a file you upload. Links and our own tracks are unaffected.
+            </p>
+          </div>
+        )}
+
         <div className="mt-4 flex flex-wrap gap-2">
           {isHost && (
             <button type="button" onClick={() => setAddOpen(true)} className="btn btn-primary btn-sm">
@@ -677,6 +755,16 @@ export function MusicRoomPage() {
               className="btn btn-sm text-red-600 hover:bg-red-500/10"
             >
               <Trash2 className="h-4 w-4" /> End room
+            </button>
+          )}
+          {isHost && (
+            <button
+              type="button"
+              onClick={() => void removeRoom()}
+              disabled={busy}
+              className="btn btn-sm text-red-700 hover:bg-red-500/10"
+            >
+              <Trash2 className="h-4 w-4" /> Remove room
             </button>
           )}
         </div>

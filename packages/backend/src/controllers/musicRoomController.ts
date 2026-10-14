@@ -18,10 +18,16 @@ import { prisma } from "../config/database";
 import { sendError, sendSuccess } from "../utils/response";
 import { emitToMusicRoom } from "../services/socketService";
 import { checkMediaUrl, describeMediaProblem } from "../services/mediaUrl";
+import { removeBlob } from "../services/blobStorage";
 
 const USER_SELECT = { id: true, fullName: true, avatarUrl: true } as const;
 const MAX_NAME = 60;
 const MAX_MEMBERS = 50;
+/**
+ * The creator decides how long an uploaded file lives. Bounded because the
+ * value drives a stored date and a UI menu, not because anything breaks at 91.
+ */
+const MAX_RETENTION_DAYS = 90;
 // Unambiguous alphabet: no O/0, I/1/L, so a spoken or hand-typed code is not a
 // coin toss between two characters.
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -32,8 +38,89 @@ type Membership = NonNullable<Awaited<ReturnType<typeof findMembership>>>;
 function findMembership(roomId: string, userId: string) {
   return prisma.musicRoomMember.findUnique({
     where: { roomId_userId: { roomId, userId } },
-    include: { room: { select: { id: true, name: true, isActive: true, hostId: true } } },
+    include: {
+      room: {
+        select: {
+          id: true,
+          name: true,
+          isActive: true,
+          hostId: true,
+          mediaUrl: true,
+          mediaExpiresAt: true,
+          retentionDays: true,
+        },
+      },
+    },
   });
+}
+
+/**
+ * The creator's chosen upload lifetime: whole days, 0 meaning "keep until the
+ * room ends". Absent means 0. Returns null for anything else, so a bad value is
+ * refused rather than silently coerced into a lifetime nobody asked for.
+ */
+function normaliseRetentionDays(raw: unknown): number | null {
+  if (raw === undefined || raw === null || raw === "") return 0;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 0 || value > MAX_RETENTION_DAYS) return null;
+  return value;
+}
+
+/** When an upload taken now should be purged, or null to keep it. */
+function expiryFor(retentionDays: number | undefined): Date | null {
+  if (!retentionDays || retentionDays <= 0) return null;
+  return new Date(Date.now() + retentionDays * 24 * 60 * 60 * 1000);
+}
+
+/** True for a file this app stores, as opposed to a catalogue path or a link. */
+function isUploadedMedia(url: string | null | undefined): url is string {
+  return typeof url === "string" && url.startsWith("/uploads/");
+}
+
+/**
+ * Delete a room's uploaded file, if it has one.
+ *
+ * The catalogue (/audio) is shared and owned by us — deleting it would break
+ * every other room — and a link (https) is not ours to delete. Only a
+ * `/uploads/...` blob belongs to this room.
+ */
+async function clearUploadedMedia(mediaUrl: string | null | undefined): Promise<void> {
+  if (isUploadedMedia(mediaUrl)) await removeBlob(mediaUrl);
+}
+
+/**
+ * Drop an upload whose retention window has passed.
+ *
+ * Lazy rather than scheduled: a cron would need its own deploy target and would
+ * still race the read that follows it, and a room nobody opens has no one to
+ * surprise. The purge runs on the read paths, so the first person to look at an
+ * expired room sees it already cleared. Returns true when something was dropped.
+ */
+async function purgeExpiredMedia(room: {
+  id: string;
+  mediaUrl: string | null;
+  mediaExpiresAt: Date | null;
+}): Promise<boolean> {
+  if (!room.mediaExpiresAt || room.mediaExpiresAt.getTime() > Date.now()) return false;
+
+  await clearUploadedMedia(room.mediaUrl);
+
+  const updated = await prisma.musicRoom
+    .update({
+      where: { id: room.id },
+      data: {
+        mediaUrl: null,
+        mediaTitle: null,
+        mediaKind: "AUDIO",
+        mediaExpiresAt: null,
+        isPlaying: false,
+        positionSec: 0,
+        version: { increment: 1 },
+      },
+    })
+    .catch(() => null);
+  if (updated) emitRoomSync(updated);
+  return true;
 }
 
 function makeCode(): string {
@@ -93,6 +180,8 @@ function memberSummary(room: {
   mediaKind: string;
   mediaUrl: string | null;
   mediaTitle: string | null;
+  retentionDays: number;
+  mediaExpiresAt: Date | null;
   isPlaying: boolean;
   positionSec: number;
   version: number;
@@ -108,6 +197,8 @@ function memberSummary(room: {
     mediaKind: room.mediaKind,
     mediaUrl: room.mediaUrl,
     mediaTitle: room.mediaTitle,
+    retentionDays: room.retentionDays,
+    mediaExpiresAt: room.mediaExpiresAt,
     isPlaying: room.isPlaying,
     positionSec: room.positionSec,
     version: room.version,
@@ -151,6 +242,17 @@ export async function createRoom(req: AuthedRequest, res: Response): Promise<voi
     }
 
     const code = await uniqueCode();
+    const retentionDays = normaliseRetentionDays(req.body?.retentionDays);
+    if (retentionDays === null) {
+      sendError(
+        res,
+        `Choose how long uploads last, between 0 and ${MAX_RETENTION_DAYS} days (0 keeps them until the room ends).`,
+        400,
+        "VALIDATION_ERROR"
+      );
+      return;
+    }
+
     const room = await prisma.musicRoom.create({
       data: {
         code,
@@ -159,6 +261,8 @@ export async function createRoom(req: AuthedRequest, res: Response): Promise<voi
         mediaKind,
         mediaUrl,
         mediaTitle,
+        retentionDays,
+        mediaExpiresAt: isUploadedMedia(mediaUrl) ? expiryFor(retentionDays) : null,
         members: { create: [{ userId, role: "HOST" }] },
       },
     });
@@ -185,6 +289,18 @@ export async function getRooms(req: AuthedRequest, res: Response): Promise<void>
       },
     });
 
+    // Uploads past their retention window are dropped as the list is read, so
+    // an expiry needs no scheduler and the owner never sees a stale track.
+    for (const m of memberships) {
+      if (await purgeExpiredMedia(m.room)) {
+        m.room.mediaUrl = null;
+        m.room.mediaTitle = null;
+        m.room.mediaKind = "AUDIO";
+        m.room.mediaExpiresAt = null;
+        m.room.isPlaying = false;
+      }
+    }
+
     const items = memberships
       .map((m) => ({
         ...memberSummary(m.room, m.room._count.members, m.role),
@@ -207,6 +323,10 @@ export async function getRoom(req: AuthedRequest, res: Response): Promise<void> 
       sendError(res, "Room not found.", 404, "ROOM_NOT_FOUND");
       return;
     }
+
+    // Drop an expired upload before reading the room, so nobody is handed a
+    // media URL that is about to disappear.
+    await purgeExpiredMedia(membership.room);
 
     const room = await prisma.musicRoom.findUnique({
       where: { id: req.params.id },
@@ -353,6 +473,7 @@ export async function leaveRoom(req: AuthedRequest, res: Response): Promise<void
     if (remaining.length === 0) {
       // Last person out ends the room rather than leaving an empty shell that
       // still holds a code nobody is listening on.
+      await clearUploadedMedia(membership.room.mediaUrl);
       await prisma.musicRoom.update({ where: { id: req.params.id }, data: { isActive: false, isPlaying: false } });
       emitToMusicRoom(req.params.id, "music_room_ended", { roomId: req.params.id });
       sendSuccess(res, { roomId: req.params.id, left: true, ended: true }, "You left the room.");
@@ -394,12 +515,49 @@ export async function endRoom(req: AuthedRequest, res: Response): Promise<void> 
       return;
     }
 
+    // The room is over, so its uploaded file has no reason to remain.
+    await clearUploadedMedia(membership.room.mediaUrl);
+
     await prisma.musicRoom.update({ where: { id: req.params.id }, data: { isActive: false, isPlaying: false } });
     emitToMusicRoom(req.params.id, "music_room_ended", { roomId: req.params.id });
     sendSuccess(res, { roomId: req.params.id, ended: true }, "Room ended.");
   } catch (err: any) {
     console.error("[endMusicRoom]", err?.message);
     sendError(res, "Failed to end the room.", 500, "INTERNAL_ERROR");
+  }
+}
+
+/**
+ * Remove a room for good (host only).
+ *
+ * `endRoom` closes a room but keeps the row, so its code cannot be reused and
+ * its history survives; this is the creator deciding the room should not exist
+ * at all. Memberships cascade with it, and its uploaded file is deleted.
+ */
+export async function deleteRoom(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const membership = await findMembership(req.params.id, req.user!.userId);
+    if (!membership) {
+      sendError(res, "Room not found.", 404, "ROOM_NOT_FOUND");
+      return;
+    }
+    if (membership.role !== "HOST") {
+      sendError(res, "Only the host can remove the room.", 403, "FORBIDDEN");
+      return;
+    }
+
+    await clearUploadedMedia(membership.room.mediaUrl);
+
+    await prisma.$transaction([
+      prisma.musicRoomMember.deleteMany({ where: { roomId: req.params.id } }),
+      prisma.musicRoom.delete({ where: { id: req.params.id } }),
+    ]);
+
+    emitToMusicRoom(req.params.id, "music_room_ended", { roomId: req.params.id });
+    sendSuccess(res, { roomId: req.params.id, deleted: true }, "Room removed.");
+  } catch (err: any) {
+    console.error("[deleteMusicRoom]", err?.message);
+    sendError(res, "Failed to remove the room.", 500, "INTERNAL_ERROR");
   }
 }
 
@@ -421,7 +579,14 @@ export async function setRoomMedia(req: AuthedRequest, res: Response): Promise<v
       return;
     }
 
-    const data: { name?: string; mediaKind?: string; mediaUrl?: string | null; mediaTitle?: string | null } = {};
+    const data: {
+      name?: string;
+      mediaKind?: string;
+      mediaUrl?: string | null;
+      mediaTitle?: string | null;
+      mediaExpiresAt?: Date | null;
+      retentionDays?: number;
+    } = {};
     if (typeof req.body?.name === "string") {
       const name = req.body.name.trim();
       if (!name || name.length > MAX_NAME) {
@@ -431,11 +596,25 @@ export async function setRoomMedia(req: AuthedRequest, res: Response): Promise<v
       data.name = name;
     }
 
+    // The creator can shorten or extend how long the upload lasts without
+    // touching what is playing.
+    let retentionDays = membership.room.retentionDays;
+    if (req.body?.retentionDays !== undefined) {
+      const parsed = normaliseRetentionDays(req.body.retentionDays);
+      if (parsed === null) {
+        sendError(res, `Uploads can last between 0 and ${MAX_RETENTION_DAYS} days.`, 400, "VALIDATION_ERROR");
+        return;
+      }
+      retentionDays = parsed;
+      data.retentionDays = parsed;
+    }
+
     const clearing = req.body?.mediaUrl === null || req.body?.mediaUrl === "";
     if (clearing) {
       data.mediaUrl = null;
       data.mediaTitle = null;
       data.mediaKind = "AUDIO";
+      data.mediaExpiresAt = null;
     } else if (typeof req.body?.mediaUrl === "string") {
       const check = checkMediaUrl(req.body.mediaUrl);
       if (!check.ok) {
@@ -446,6 +625,17 @@ export async function setRoomMedia(req: AuthedRequest, res: Response): Promise<v
       data.mediaKind = check.kind;
       data.mediaTitle =
         typeof req.body?.mediaTitle === "string" ? req.body.mediaTitle.trim().slice(0, 200) : null;
+      // Only an uploaded file ages out; a catalogue path and a link do not.
+      data.mediaExpiresAt = isUploadedMedia(check.url) ? expiryFor(retentionDays) : null;
+    } else if (data.retentionDays !== undefined && isUploadedMedia(membership.room.mediaUrl)) {
+      // Retention changed on its own — re-base the existing upload's clock.
+      data.mediaExpiresAt = expiryFor(retentionDays);
+    }
+
+    // A replaced (or cleared) upload's blob is removed rather than orphaned.
+    const previous = membership.room.mediaUrl;
+    if (data.mediaUrl !== undefined && isUploadedMedia(previous) && previous !== data.mediaUrl) {
+      await removeBlob(previous);
     }
 
     const updated = await prisma.musicRoom.update({
@@ -503,12 +693,18 @@ export async function uploadRoomMedia(req: AuthedRequest, res: Response): Promis
     const fallback = file.originalname ? path.parse(file.originalname).name : check.kind === "VIDEO" ? "Video" : "Song";
     const mediaTitle = (titleInput || fallback).slice(0, 200);
 
+    // Replace the previous upload instead of orphaning its blob. Only an
+    // upload is deleted — a catalogue path is shared and a link is not ours.
+    const previous = membership.room.mediaUrl;
+    if (isUploadedMedia(previous) && previous !== mediaUrl) await removeBlob(previous);
+
     const updated = await prisma.musicRoom.update({
       where: { id: req.params.id },
       data: {
         mediaUrl,
         mediaKind: check.kind,
         mediaTitle,
+        mediaExpiresAt: expiryFor(membership.room.retentionDays),
         positionSec: 0,
         isPlaying: false,
         version: { increment: 1 },

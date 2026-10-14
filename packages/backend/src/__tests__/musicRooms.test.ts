@@ -4,15 +4,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // are hoisted, so the mock object itself is hoisted with them.
 const prismaMock = vi.hoisted(() => ({
   user: { findMany: vi.fn() },
-  musicRoom: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
+  musicRoom: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn(), delete: vi.fn() },
   musicRoomMember: {
     findUnique: vi.fn(),
     findMany: vi.fn(),
     upsert: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
+    deleteMany: vi.fn(),
     count: vi.fn(),
   },
+  uploadedFile: { delete: vi.fn() },
   $transaction: vi.fn(),
 }));
 
@@ -27,6 +29,8 @@ import {
   setRoomMedia,
   addMembers,
   uploadRoomMedia,
+  getRoom,
+  deleteRoom,
 } from '../controllers/musicRoomController';
 import { emitToMusicRoom } from '../services/socketService';
 
@@ -79,7 +83,19 @@ function room(extra: Record<string, unknown> = {}) {
 }
 // The shape findMembership() returns: role plus the room fields it selects.
 function membership(role = 'HOST', extra: Record<string, unknown> = {}) {
-  return { role, room: { id: ROOM, name: 'Chill', isActive: true, hostId: ME, ...extra } };
+  return {
+    role,
+    room: {
+      id: ROOM,
+      name: 'Chill',
+      isActive: true,
+      hostId: ME,
+      mediaUrl: null,
+      mediaExpiresAt: null,
+      retentionDays: 0,
+      ...extra,
+    },
+  };
 }
 
 beforeEach(() => {
@@ -335,5 +351,100 @@ describe('uploadRoomMedia', () => {
     const arg = prismaMock.musicRoom.update.mock.calls[0][0];
     expect(arg.data.mediaKind).toBe('VIDEO');
     expect(arg.data.mediaTitle).toBe('holiday');
+  });
+});
+
+describe('music-room upload retention', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+
+  it('gives an upload an expiry from the creator-chosen days', async () => {
+    prismaMock.musicRoomMember.findUnique.mockResolvedValue(membership('HOST', { retentionDays: 7 }));
+    prismaMock.musicRoom.update.mockResolvedValue(room({ mediaUrl: '/uploads/a.mp3', mediaKind: 'AUDIO' }));
+    const res = makeRes();
+    await uploadRoomMedia(
+      makeReq({ params: { id: ROOM }, file: { filename: 'a.mp3', originalname: 'a.mp3' } }),
+      res
+    );
+
+    expect(statusOf(res)).toBe(200);
+    const arg = prismaMock.musicRoom.update.mock.calls[0][0];
+    const expiry = arg.data.mediaExpiresAt as Date;
+    expect(expiry).toBeInstanceOf(Date);
+    const days = (expiry.getTime() - Date.now()) / DAY;
+    expect(days).toBeGreaterThan(6.9);
+    expect(days).toBeLessThanOrEqual(7);
+  });
+
+  it('keeps an upload with no expiry when retention is 0', async () => {
+    prismaMock.musicRoomMember.findUnique.mockResolvedValue(membership('HOST', { retentionDays: 0 }));
+    prismaMock.musicRoom.update.mockResolvedValue(room({ mediaUrl: '/uploads/a.mp3', mediaKind: 'AUDIO' }));
+    const res = makeRes();
+    await uploadRoomMedia(
+      makeReq({ params: { id: ROOM }, file: { filename: 'a.mp3', originalname: 'a.mp3' } }),
+      res
+    );
+    const arg = prismaMock.musicRoom.update.mock.calls[0][0];
+    expect(arg.data.mediaExpiresAt).toBeNull();
+  });
+
+  it('deletes a replaced upload rather than orphaning its blob', async () => {
+    prismaMock.musicRoomMember.findUnique.mockResolvedValue(
+      membership('HOST', { mediaUrl: '/uploads/old.mp3' })
+    );
+    prismaMock.musicRoom.update.mockResolvedValue(room({ mediaUrl: '/uploads/new.mp3', mediaKind: 'AUDIO' }));
+    const res = makeRes();
+    await uploadRoomMedia(
+      makeReq({ params: { id: ROOM }, file: { filename: 'new.mp3', originalname: 'new.mp3' } }),
+      res
+    );
+    expect(prismaMock.uploadedFile.delete).toHaveBeenCalledWith({ where: { key: 'old.mp3' } });
+  });
+
+  it('clears an expired upload the next time the room is read', async () => {
+    prismaMock.musicRoomMember.findUnique.mockResolvedValue(
+      membership('HOST', { mediaUrl: '/uploads/gone.mp3', mediaExpiresAt: new Date(Date.now() - 1000) })
+    );
+    prismaMock.musicRoom.update.mockResolvedValue(room({ mediaUrl: null, mediaKind: 'AUDIO' }));
+    prismaMock.musicRoom.findUnique.mockResolvedValue(
+      room({
+        mediaUrl: null,
+        mediaKind: 'AUDIO',
+        members: [],
+        host: { id: ME, fullName: 'Me', avatarUrl: null },
+        _count: { members: 1 },
+      })
+    );
+
+    const res = makeRes();
+    await getRoom(makeReq({ params: { id: ROOM } }), res);
+
+    expect(statusOf(res)).toBe(200);
+    expect(prismaMock.uploadedFile.delete).toHaveBeenCalledWith({ where: { key: 'gone.mp3' } });
+    const update = prismaMock.musicRoom.update.mock.calls[0][0];
+    expect(update.data.mediaUrl).toBeNull();
+    expect(update.data.mediaExpiresAt).toBeNull();
+  });
+});
+
+describe('deleteRoom', () => {
+  it('refuses a non-host', async () => {
+    prismaMock.musicRoomMember.findUnique.mockResolvedValue(membership('GUEST'));
+    const res = makeRes();
+    await deleteRoom(makeReq({ params: { id: ROOM } }), res);
+    expect(statusOf(res)).toBe(403);
+    expect(prismaMock.musicRoom.delete).not.toHaveBeenCalled();
+  });
+
+  it('removes the room and its upload for the host', async () => {
+    prismaMock.musicRoomMember.findUnique.mockResolvedValue(
+      membership('HOST', { mediaUrl: '/uploads/bye.mp3' })
+    );
+    const res = makeRes();
+    await deleteRoom(makeReq({ params: { id: ROOM } }), res);
+
+    expect(statusOf(res)).toBe(200);
+    expect(prismaMock.uploadedFile.delete).toHaveBeenCalledWith({ where: { key: 'bye.mp3' } });
+    expect(prismaMock.musicRoom.delete).toHaveBeenCalledWith({ where: { id: ROOM } });
+    expect(emitToMusicRoom).toHaveBeenCalledWith(ROOM, 'music_room_ended', { roomId: ROOM });
   });
 });

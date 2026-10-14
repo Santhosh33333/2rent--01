@@ -5,11 +5,9 @@
  * members, media picking) lives in MusicRoomPage, so the expensive realtime
  * machinery is only mounted while someone is actually in a room.
  *
- * Why rooms only use our own media: see the note in MusicRoomPage and
- * backend/src/services/mediaUrl.ts. The short version is that the one thing a
- * room must do — keep everyone on the same playhead — is exactly what YouTube's
- * terms forbid doing with their player, so a room built on YouTube would be a
- * promise the product cannot keep.
+ * A room plays our own catalogue, a host-uploaded file, or a single YouTube
+ * video (embedded in YouTube's own player, kept in sync with the host). See the
+ * notes in MusicRoomPage and backend/src/services/mediaUrl.ts for the rules.
  */
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
@@ -19,12 +17,28 @@ import { musicRoomApi, type MusicRoomSummary } from '../../lib/api'
 import { getErrorMessage } from '../../lib/error'
 import { Modal } from '../../components/ui'
 
+/**
+ * The upload lifetimes a creator can choose. 0 keeps the file until the room
+ * ends; anything else is the number of days it survives. Deliberately a short
+ * list rather than a free-text field — a wrong number here silently destroys
+ * someone's upload.
+ */
+const RETENTION_OPTIONS: { value: number; label: string }[] = [
+  { value: 0, label: 'Keep until the room ends' },
+  { value: 1, label: '1 day' },
+  { value: 3, label: '3 days' },
+  { value: 7, label: '7 days' },
+  { value: 14, label: '14 days' },
+  { value: 30, label: '30 days' },
+]
+
 export function MusicRoomsSection() {
   const navigate = useNavigate()
   const [rooms, setRooms] = useState<MusicRoomSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [createOpen, setCreateOpen] = useState(false)
   const [name, setName] = useState('')
+  const [retentionDays, setRetentionDays] = useState(0)
   const [creating, setCreating] = useState(false)
   const [code, setCode] = useState('')
   const [joining, setJoining] = useState(false)
@@ -51,7 +65,7 @@ export function MusicRoomsSection() {
     if (!trimmed || creating) return
     setCreating(true)
     try {
-      const res = await musicRoomApi.create({ name: trimmed })
+      const res = await musicRoomApi.create({ name: trimmed, retentionDays })
       const room = res.data.data
       toast.success('Room created — add what to play')
       navigate(`/music/room/${room.id}`)
@@ -184,6 +198,28 @@ export function MusicRoomsSection() {
           autoFocus
           className="input"
         />
+
+        <div className="mt-4 space-y-1.5">
+          <label htmlFor="room-retention" className="text-xs font-semibold uppercase tracking-wide text-surface-500">
+            Upload lifetime
+          </label>
+          <select
+            id="room-retention"
+            value={retentionDays}
+            onChange={(e) => setRetentionDays(Number(e.target.value))}
+            className="input"
+          >
+            {RETENTION_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-surface-400">
+            A file you upload is removed automatically after this. Links and our own tracks are
+            unaffected. You can still end or remove the room at any time.
+          </p>
+        </div>
       </Modal>
     </div>
   )
