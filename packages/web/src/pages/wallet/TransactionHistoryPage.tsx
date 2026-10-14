@@ -31,10 +31,27 @@ export function TransactionHistoryPage() {
 
   const { loading, error, retry } = useAsync(
     async (signal) => {
-      const res = await api.get('/wallet/transactions', { signal, timeout: 15000 })
-      const raw = res.data?.data || res.data || []
-      const rows = Array.isArray(raw) ? raw : (raw.items || [])
-      const data: Transaction[] = rows.map((row: any) => {
+      // The API paginates (default limit 20). This page used to request a single
+      // page and render only those rows with no way to reach the rest, so a user
+      // with more than 20 transactions saw a truncated history and the
+      // credit/debit filters filtered an already-incomplete set. Load every page
+      // so the history is actually complete.
+      const pageSize = 100
+      const maxPages = 50
+      const collected: any[] = []
+      let total = Infinity
+      let page = 1
+      while (collected.length < total && page <= maxPages) {
+        const res = await api.get(`/wallet/transactions?page=${page}&limit=${pageSize}`, { signal, timeout: 15000 })
+        const raw = res.data?.data || res.data || []
+        const rows: any[] = Array.isArray(raw) ? raw : (raw.items || [])
+        if (typeof raw?.total === 'number') total = raw.total
+        else if (Array.isArray(raw)) total = rows.length
+        collected.push(...rows)
+        if (rows.length < pageSize) break
+        page += 1
+      }
+      const data: Transaction[] = collected.map((row: any) => {
         const rawType = String(row.type || '').toUpperCase()
         return {
           id: String(row.id),
@@ -112,7 +129,7 @@ export function TransactionHistoryPage() {
             description="Your transactions will appear here"
           />
         ) : (
-          <div className="glass-card overflow-hidden">
+          <div className="glass-card overflow-x-auto">
             <table className="min-w-full divide-y divide-surface-200 dark:divide-surface-700">
               <thead className="bg-surface-50 dark:bg-surface-800/50">
                 <tr>
