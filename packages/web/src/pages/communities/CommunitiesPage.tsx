@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
-  Users, Search, UserPlus, UserMinus, MapPin, Hash, Plus, X
+  Users, Search, UserPlus, UserMinus, MapPin, Hash, Plus, X, BadgeCheck, Check
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { api } from '../../lib/api'
@@ -20,6 +20,7 @@ interface Community {
   joined: boolean
   category?: string
   location?: string
+  official?: boolean
 }
 
 export function CommunitiesPage() {
@@ -45,6 +46,7 @@ export function CommunitiesPage() {
         joined: !!c.isMember,
         category: c.category,
         location: c.city ?? c.location,
+        official: !!c.isOfficial,
       })))
       return items
     },
@@ -224,6 +226,11 @@ export function CommunitiesPage() {
                         <Link to={`/communities/${community.id}`} className="font-bold font-display text-surface-900 dark:text-white hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
                           {community.name}
                         </Link>
+                        {community.official && (
+                          <span className="ml-2 inline-flex items-center gap-1 badge-primary text-[10px]">
+                            <BadgeCheck className="w-3 h-3" /> Official
+                          </span>
+                        )}
                         {community.category && (
                           <span className="ml-2 badge-primary text-[10px]">{community.category}</span>
                         )}
@@ -237,21 +244,27 @@ export function CommunitiesPage() {
                       {community.location && <span className="text-xs text-surface-400 flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {community.location}</span>}
                     </div>
                   </div>
-                  <button
-                    onClick={() => toggleJoin(community.id)}
-                    disabled={joining.includes(community.id)}
-                    className={`flex-shrink-0 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 ${
-                      community.joined
-                        ? 'bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 hover:bg-danger-50 dark:hover:bg-danger-500/10 hover:text-danger-500 border border-surface-200 dark:border-surface-700'
-                        : 'btn-gradient'
-                    }`}
-                  >
-                    {community.joined ? (
-                      <span className="flex items-center gap-1.5"><UserMinus className="w-3.5 h-3.5" /> Leave</span>
-                    ) : (
-                      <span className="flex items-center gap-1.5"><UserPlus className="w-3.5 h-3.5" /> Join</span>
-                    )}
-                  </button>
+                  {community.official ? (
+                    <span className="flex-shrink-0 px-4 py-2.5 rounded-xl text-sm font-semibold text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 flex items-center gap-1.5">
+                      <Check className="w-3.5 h-3.5" /> Member
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => toggleJoin(community.id)}
+                      disabled={joining.includes(community.id)}
+                      className={`flex-shrink-0 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 ${
+                        community.joined
+                          ? 'bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 hover:bg-danger-50 dark:hover:bg-danger-500/10 hover:text-danger-500 border border-surface-200 dark:border-surface-700'
+                          : 'btn-gradient'
+                      }`}
+                    >
+                      {community.joined ? (
+                        <span className="flex items-center gap-1.5"><UserMinus className="w-3.5 h-3.5" /> Leave</span>
+                      ) : (
+                        <span className="flex items-center gap-1.5"><UserPlus className="w-3.5 h-3.5" /> Join</span>
+                      )}
+                    </button>
+                  )}
                 </div>
               </div>
             ))}

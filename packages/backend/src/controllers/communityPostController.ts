@@ -2,6 +2,7 @@ import { Response } from "express";
 import { prisma } from "../config/database";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
+import { canPostInOfficialCommunity } from "../services/officialCommunity";
 
 // ============================================================================
 // COMMUNITY POSTS + COMMENTS (spec 104-105) — real DB rows, backend-enforced
@@ -11,6 +12,8 @@ import { AuthedRequest } from "../middleware/authTypes";
 // - Delete post/comment: author, MODERATOR+, or owner.
 // - Roles: owner or ADMIN may assign MODERATOR/MEMBER; only owner may
 //   assign ADMIN or remove members.
+// - The official community is read-only for regular members: only
+//   SUPER_ADMIN/ADMIN accounts may write there.
 // ============================================================================
 
 const AUTHOR_SELECT = { id: true, fullName: true, avatarUrl: true } as const;
@@ -23,6 +26,67 @@ async function membership(communityId: string, userId: string) {
     prisma.communityMember.findUnique({ where: { communityId_userId: { communityId, userId } } }),
   ]);
   return { community, member };
+}
+
+/**
+ * Is this write refused because the community is the official one and the
+ * caller is not a Nabri admin? Regular members read the official community,
+ * they do not post in it.
+ */
+function officialWriteBlocked(
+  community: { isOfficial?: boolean } | null,
+  role?: string | null,
+): boolean {
+  return Boolean(community?.isOfficial) && !canPostInOfficialCommunity(role);
+}
+
+const OFFICIAL_READ_ONLY_MESSAGE =
+  "The official community is read-only. Only Nabri admins can post here.";
+
+/**
+ * Tell every other member a new post landed. Best-effort and fire-and-forget:
+ * a notification failure must never fail the post, and the post response must
+ * not wait on a fan-out that can touch thousands of rows in the official
+ * community. Rows are written in chunks via `createMany`, which the notification
+ * fan-out middleware still picks up for realtime + push.
+ */
+async function notifyNewCommunityPost(
+  communityId: string,
+  communityName: string,
+  authorId: string,
+  postId: string,
+  postPreview: string,
+): Promise<void> {
+  try {
+    const members = await prisma.communityMember.findMany({
+      where: { communityId, userId: { not: authorId } },
+      select: { userId: true },
+    });
+    if (members.length === 0) return;
+    const body = postPreview
+      ? `New post in "${communityName}": ${postPreview}`
+      : `New post in "${communityName}".`;
+    const data = JSON.stringify({
+      type: "COMMUNITY_POST",
+      communityId,
+      postId,
+      route: `/communities/${communityId}`,
+    });
+    const CHUNK = 500;
+    for (let i = 0; i < members.length; i += CHUNK) {
+      await prisma.notification.createMany({
+        data: members.slice(i, i + CHUNK).map((m) => ({
+          userId: m.userId,
+          title: "New community post",
+          body,
+          data,
+          isRead: false,
+        })),
+      });
+    }
+  } catch {
+    /* never fail the post */
+  }
 }
 
 function roleOf(community: { ownerId: string } | null, member: { role: string } | null, userId: string): Role | null {
@@ -61,6 +125,10 @@ export async function createPost(req: AuthedRequest, res: Response): Promise<voi
       sendError(res, "Join this community to post.", 403, "NOT_MEMBER");
       return;
     }
+    if (officialWriteBlocked(community, req.user!.role)) {
+      sendError(res, OFFICIAL_READ_ONLY_MESSAGE, 403, "OFFICIAL_READ_ONLY");
+      return;
+    }
     const post = await prisma.communityPost.create({
       data: {
         communityId: id,
@@ -70,6 +138,17 @@ export async function createPost(req: AuthedRequest, res: Response): Promise<voi
       },
       include: { author: { select: AUTHOR_SELECT } },
     });
+
+    // Notify the rest of the community. Fire-and-forget: the poster gets their
+    // confirmation immediately.
+    void notifyNewCommunityPost(
+      id,
+      community.name,
+      req.user!.userId,
+      post.id,
+      text.slice(0, 120),
+    );
+
     sendSuccess(res, post, "Post published.", 201);
   } catch {
     sendError(res, "Failed to publish post.", 500, "INTERNAL_ERROR");
@@ -90,6 +169,10 @@ export async function uploadPostImage(req: AuthedRequest, res: Response): Promis
     }
     if (!roleOf(community, member, req.user!.userId)) {
       sendError(res, "Join this community to post images.", 403, "NOT_MEMBER");
+      return;
+    }
+    if (officialWriteBlocked(community, req.user!.role)) {
+      sendError(res, OFFICIAL_READ_ONLY_MESSAGE, 403, "OFFICIAL_READ_ONLY");
       return;
     }
     sendSuccess(
@@ -120,7 +203,8 @@ export async function listPosts(req: AuthedRequest, res: Response): Promise<void
     const [items, total] = await Promise.all([
       prisma.communityPost.findMany({
         where: { communityId: id },
-        orderBy: { createdAt: "desc" },
+        // Pinned posts (the official welcome) always lead the feed.
+        orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }],
         skip: (page - 1) * limit,
         take: limit,
         include: {
@@ -168,6 +252,10 @@ export async function deletePost(req: AuthedRequest, res: Response): Promise<voi
       sendError(res, "Only the author or a moderator can delete this post.", 403, "FORBIDDEN");
       return;
     }
+    if (officialWriteBlocked(community, req.user!.role)) {
+      sendError(res, OFFICIAL_READ_ONLY_MESSAGE, 403, "OFFICIAL_READ_ONLY");
+      return;
+    }
     await prisma.communityPost.delete({ where: { id: postId } });
     sendSuccess(res, undefined, "Post deleted.");
   } catch {
@@ -191,6 +279,10 @@ export async function createComment(req: AuthedRequest, res: Response): Promise<
     const role = roleOf(community, member, req.user!.userId);
     if (!role) {
       sendError(res, "Join this community to comment.", 403, "NOT_MEMBER");
+      return;
+    }
+    if (officialWriteBlocked(community, req.user!.role)) {
+      sendError(res, OFFICIAL_READ_ONLY_MESSAGE, 403, "OFFICIAL_READ_ONLY");
       return;
     }
     const post = await prisma.communityPost.findFirst({ where: { id: postId, communityId: id }, select: { id: true } });
@@ -279,6 +371,10 @@ export async function deleteComment(req: AuthedRequest, res: Response): Promise<
     const isAuthor = comment.authorId === req.user!.userId;
     if (!isAuthor && !(role === "OWNER" || role === "ADMIN" || role === "MODERATOR")) {
       sendError(res, "Only the author or a moderator can delete this comment.", 403, "FORBIDDEN");
+      return;
+    }
+    if (officialWriteBlocked(community, req.user!.role)) {
+      sendError(res, OFFICIAL_READ_ONLY_MESSAGE, 403, "OFFICIAL_READ_ONLY");
       return;
     }
     await prisma.communityComment.delete({ where: { id: commentId } });
@@ -431,6 +527,10 @@ export async function createPoll(req: AuthedRequest, res: Response): Promise<voi
       sendError(res, membership.error === "COMMUNITY_NOT_FOUND" ? "Community not found." : "Join this community to create polls.", membership.error === "COMMUNITY_NOT_FOUND" ? 404 : 403, membership.error);
       return;
     }
+    if (officialWriteBlocked(membership.community, req.user!.role)) {
+      sendError(res, OFFICIAL_READ_ONLY_MESSAGE, 403, "OFFICIAL_READ_ONLY");
+      return;
+    }
     let closes: Date | null = null;
     if (closesAt) {
       closes = new Date(closesAt);
@@ -568,6 +668,10 @@ export async function deletePoll(req: AuthedRequest, res: Response): Promise<voi
     const isAuthor = poll.authorId === req.user!.userId;
     if (!isAuthor && !(role === "OWNER" || role === "ADMIN" || role === "MODERATOR")) {
       sendError(res, "Only the author or a moderator can delete this poll.", 403, "FORBIDDEN");
+      return;
+    }
+    if (officialWriteBlocked(community, req.user!.role)) {
+      sendError(res, OFFICIAL_READ_ONLY_MESSAGE, 403, "OFFICIAL_READ_ONLY");
       return;
     }
     await prisma.communityPoll.delete({ where: { id: pollId } });

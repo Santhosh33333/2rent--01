@@ -7,23 +7,17 @@ import { notifyNewMessage } from "../services/messageNotifications";
 import { chatUpload, classifyChatFile, resolveChatMedia, type ResolvedChatMedia } from "../services/chatUploadService";
 import { readBlob, removeBlob } from "../services/blobStorage";
 import { canDirectChat } from "../services/chatAccess";
+import { ensureConversation } from "../services/conversation";
 
 // ============================================================================
 // CONVERSATION HELPERS
 // ============================================================================
 
-/** Find-or-create the canonical Conversation row for a pair of users.
- *  Uses an atomic upsert on the unique (participant1Id, participant2Id) pair so
- *  two concurrent first messages between the same pair can never create duplicate
- *  Conversation rows (the previous find-then-create had a TOCTOU race that 500'd). */
-export async function ensureConversation(a: string, b: string) {
-  const [p1, p2] = [a, b].sort();
-  return prisma.conversation.upsert({
-    where: { participant1Id_participant2Id: { participant1Id: p1, participant2Id: p2 } },
-    create: { participant1Id: p1, participant2Id: p2 },
-    update: {},
-  });
-}
+// `ensureConversation` is re-exported so existing importers (bookingController,
+// partnerController) keep working; the implementation now lives in
+// services/conversation.ts so lightweight callers can use it without pulling in
+// this controller's full dependency graph.
+export { ensureConversation };
 
 const USER_SELECT = { id: true, fullName: true, avatarUrl: true } as const;
 

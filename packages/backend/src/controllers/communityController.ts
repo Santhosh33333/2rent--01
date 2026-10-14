@@ -2,6 +2,7 @@ import { Response } from "express";
 import { prisma } from "../config/database";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
+import { ensureOfficialMembership } from "../services/officialCommunity";
 
 // ============================================================================
 // CREATE COMMUNITY
@@ -64,13 +65,20 @@ export async function getCommunities(req: AuthedRequest, res: Response): Promise
     const limit = Number(req.query.limit) || 20;
     const where: any = {};
 
+    // Every account belongs to the official community. Joining it lazily here
+    // means a pre-existing account is picked up the first time it opens this
+    // list, without a backfill migration. Best-effort: a failure must not stop
+    // the list from loading.
+    await ensureOfficialMembership(req.user!.userId).catch(() => {});
+
     if (req.query.privacy) where.privacy = req.query.privacy;
     if (req.query.city) where.city = req.query.city;
 
     const [items, total] = await Promise.all([
       prisma.community.findMany({
         where,
-        orderBy: { createdAt: "desc" },
+        // The official community leads the list.
+        orderBy: [{ isOfficial: "desc" }, { createdAt: "desc" }],
         skip: (page - 1) * limit,
         take: limit,
         include: {
@@ -126,6 +134,12 @@ export async function getCommunityById(req: AuthedRequest, res: Response): Promi
     if (!community) {
       sendError(res, "Community not found.", 404, "COMMUNITY_NOT_FOUND");
       return;
+    }
+
+    // Opening the official community directly (a deep link) joins the viewer
+    // first, so `isMember` is never false for an account that should belong.
+    if (community.isOfficial) {
+      await ensureOfficialMembership(req.user!.userId).catch(() => {});
     }
 
     // Check if user is member
@@ -246,6 +260,11 @@ export async function deleteCommunity(req: AuthedRequest, res: Response): Promis
       return;
     }
 
+    if (community.isOfficial) {
+      sendError(res, "The official community cannot be deleted.", 403, "FORBIDDEN");
+      return;
+    }
+
     await performCommunityDelete(id, req.user!.userId, "USER");
 
     sendSuccess(res, undefined, "Community deleted.");
@@ -266,6 +285,11 @@ export async function adminDeleteCommunity(req: AuthedRequest, res: Response): P
     const community = await prisma.community.findUnique({ where: { id } });
     if (!community) {
       sendError(res, "Community not found.", 404, "COMMUNITY_NOT_FOUND");
+      return;
+    }
+
+    if (community.isOfficial) {
+      sendError(res, "The official community cannot be deleted.", 403, "FORBIDDEN");
       return;
     }
 
@@ -344,6 +368,11 @@ export async function leaveCommunity(req: AuthedRequest, res: Response): Promise
 
     // Can't leave if you're the only owner
     const community = await prisma.community.findUnique({ where: { id } });
+    if (community?.isOfficial) {
+      sendError(res, "Everyone is a member of the official community.", 400, "INVALID_OPERATION");
+      return;
+    }
+    // Can't leave if you're the only owner
     if (community?.ownerId === req.user!.userId) {
       const adminCount = await prisma.communityMember.count({
         where: { communityId: id, role: "ADMIN" },

@@ -3,7 +3,8 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   Users, ArrowLeft, Loader2, AlertTriangle,
   Hash, MapPin, Calendar, Globe, Shield,
-  UserPlus, UserMinus, Send, Trash2, MessageSquare, Flag, BarChart3, Plus, X, ImagePlus
+  UserPlus, UserMinus, Send, Trash2, MessageSquare, Flag, BarChart3, Plus, X, ImagePlus,
+  BadgeCheck, Check
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { api, assetUrl } from '../../lib/api'
@@ -22,6 +23,7 @@ interface Post {
   authorId: string
   createdAt: string
   imageUrl?: string | null
+  isPinned?: boolean
   author?: { fullName: string; avatarUrl?: string | null }
   _count?: { comments: number }
 }
@@ -69,6 +71,7 @@ interface Community {
   memberCount: number
   isMember: boolean
   isOwner: boolean
+  isOfficial?: boolean
 }
 
 function initials(name: string): string {
@@ -393,6 +396,11 @@ export function CommunityDetailPage() {
     )
   }
 
+  // Who may write here: in the official community only Nabri admins; elsewhere
+  // any member. Everyone reads the official community.
+  const isNabriAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
+  const canWrite = !!community && (community.isOfficial ? isNabriAdmin : community.isMember)
+
   if (loading) {
     return (
       <div className="max-w-3xl mx-auto space-y-4 animate-fadeInUp">
@@ -446,6 +454,11 @@ export function CommunityDetailPage() {
                 <h1 className="text-2xl font-bold font-display text-surface-900 dark:text-white">
                   {community.name}
                 </h1>
+                {community.isOfficial && (
+                  <span className="inline-flex items-center gap-1 mt-1 text-[11px] px-2 py-0.5 rounded-full font-bold bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300">
+                    <BadgeCheck className="w-3.5 h-3.5" /> Official
+                  </span>
+                )}
               </div>
             </div>
             {community.description ? (
@@ -482,46 +495,55 @@ export function CommunityDetailPage() {
           </div>
 
           <div className="flex flex-col items-end gap-2 flex-shrink-0">
-            {community.isOwner && (
-              <button
-                onClick={requestDelete}
-                title="Delete community"
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 border border-surface-200 dark:border-surface-700 transition-colors"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span className="hidden sm:inline">Delete</span>
-              </button>
+            {community.isOfficial ? (
+              <span className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800">
+                <Check className="w-4 h-4" />
+                <span className="hidden sm:inline">Member</span>
+              </span>
+            ) : (
+              <>
+                {community.isOwner && (
+                  <button
+                    onClick={requestDelete}
+                    title="Delete community"
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 border border-surface-200 dark:border-surface-700 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span className="hidden sm:inline">Delete</span>
+                  </button>
+                )}
+                <button
+                  onClick={toggleJoin}
+                  disabled={joining}
+                  className={`px-5 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+                    community.isMember
+                      ? 'bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 hover:bg-red-50 dark:hover:red-900/20 hover:text-red-600 dark:hover:text-red-400 border border-surface-200 dark:border-surface-700'
+                      : 'bg-gradient-to-r from-primary-500 to-accent-500 text-white shadow-lg shadow-primary-500/20 hover:shadow-xl hover:shadow-primary-500/30'
+                  }`}
+                >
+                  {joining ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : community.isMember ? (
+                    <span className="flex items-center gap-1.5">
+                      <UserMinus className="w-4 h-4" />
+                      Leave
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1.5">
+                      <UserPlus className="w-4 h-4" />
+                      Join
+                    </span>
+                  )}
+                </button>
+              </>
             )}
-            <button
-              onClick={toggleJoin}
-              disabled={joining}
-              className={`px-5 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
-                community.isMember
-                  ? 'bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 hover:bg-red-50 dark:hover:red-900/20 hover:text-red-600 dark:hover:text-red-400 border border-surface-200 dark:border-surface-700'
-                  : 'bg-gradient-to-r from-primary-500 to-accent-500 text-white shadow-lg shadow-primary-500/20 hover:shadow-xl hover:shadow-primary-500/30'
-              }`}
-            >
-              {joining ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : community.isMember ? (
-                <span className="flex items-center gap-1.5">
-                  <UserMinus className="w-4 h-4" />
-                  Leave
-                </span>
-              ) : (
-                <span className="flex items-center gap-1.5">
-                  <UserPlus className="w-4 h-4" />
-                  Join
-                </span>
-              )}
-            </button>
           </div>
         </div>
         {/* `leaveCommunity` refuses while the viewer is the only ADMIN, which is
             the normal case for the person who just created the community. That
             used to surface as a bare 400 after a full page of dead-end taps; say
             so up front instead. */}
-        {community.isMember && community.isOwner && (
+        {community.isMember && community.isOwner && !community.isOfficial && (
           <p className="mt-3 text-sm text-surface-500">
             You own this community. Promote another member to admin before you can leave it.
           </p>
@@ -564,7 +586,7 @@ export function CommunityDetailPage() {
           Posts
         </h2>
 
-        {community.isMember ? (
+        {canWrite ? (
           <div className="mb-6 space-y-2">
             <div className="flex gap-2">
               <input
@@ -612,6 +634,10 @@ export function CommunityDetailPage() {
               </div>
             )}
           </div>
+        ) : community.isOfficial ? (
+          <p className="text-sm text-surface-400 mb-6">
+            Only Nabri admins post here. Announcements and updates appear below.
+          </p>
         ) : (
           <p className="text-sm text-surface-400 mb-6">Join this community to post and comment.</p>
         )}
@@ -634,12 +660,17 @@ export function CommunityDetailPage() {
                     {(post as any).isAnnouncement && (
                       <span className="ml-2 text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">📢 Announcement</span>
                     )}
+                    {post.isPinned && (
+                      <span className="ml-2 text-[10px] px-2 py-0.5 rounded-full font-bold bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400">📌 Pinned</span>
+                    )}
                   </div>
                   {(() => {
                     const myMembership = members.find((m) => m.user?.id === user?.id)
                     const myRole = community.isOwner ? 'OWNER' : myMembership?.role
-                    const canDelete =
-                      post.authorId === user?.id || myRole === 'OWNER' || myRole === 'ADMIN' || myRole === 'MODERATOR'
+                    // In the official community only Nabri admins may remove posts.
+                    const canDelete = community.isOfficial
+                      ? isNabriAdmin
+                      : post.authorId === user?.id || myRole === 'OWNER' || myRole === 'ADMIN' || myRole === 'MODERATOR'
                     if (!canDelete) return null
                     return (
                       <button onClick={() => removePost(post.id)} title="Delete post" className="w-8 h-8 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-700 flex items-center justify-center text-surface-400">
@@ -664,13 +695,15 @@ export function CommunityDetailPage() {
                           <p className="text-xs font-medium text-surface-900 dark:text-white">{c.author?.fullName || 'Member'}</p>
                           <p className="text-sm text-surface-600 dark:text-surface-400">{c.content}</p>
                         </div>
-                        <button onClick={() => removeComment(post.id, c.id)} title="Delete comment" className="text-surface-400 hover:text-red-500">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {canWrite && (
+                          <button onClick={() => removeComment(post.id, c.id)} title="Delete comment" className="text-surface-400 hover:text-red-500">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         {reportBox(`comment-${c.id}`, 'comment', post.id, c.id)}
                       </div>
                     ))}
-                    {community.isMember && (
+                    {canWrite && (
                       <div className="flex gap-2 pt-1">
                         <input
                           value={drafts[post.id] || ''}
@@ -698,7 +731,7 @@ export function CommunityDetailPage() {
             <BarChart3 className="w-5 h-5 text-primary-500" />
             Polls
           </h2>
-          {community.isMember && (
+          {canWrite && (
             <button onClick={() => setShowPollForm((v) => !v)} className="btn-gradient btn-sm flex items-center gap-1.5">
               {showPollForm ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
               {showPollForm ? 'Close' : 'New Poll'}
@@ -706,7 +739,7 @@ export function CommunityDetailPage() {
           )}
         </div>
 
-        {showPollForm && community.isMember && (
+        {showPollForm && canWrite && (
           <div className="mb-5 p-4 rounded-2xl bg-surface-50 dark:bg-surface-800/50 space-y-2.5">
             <input
               value={pollQ}
@@ -752,9 +785,11 @@ export function CommunityDetailPage() {
                         {poll.author?.fullName || 'Member'} • {total} vote{total === 1 ? '' : 's'}{closed ? ' • Closed' : ''}
                       </p>
                     </div>
-                    <button onClick={() => removePoll(poll.id)} title="Delete poll" className="w-8 h-8 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-700 flex items-center justify-center text-surface-400 flex-shrink-0">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {canWrite && (
+                      <button onClick={() => removePoll(poll.id)} title="Delete poll" className="w-8 h-8 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-700 flex items-center justify-center text-surface-400 flex-shrink-0">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                   <div className="space-y-2 mt-3">
                     {poll.options.map((opt) => {

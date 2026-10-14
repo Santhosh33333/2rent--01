@@ -31,6 +31,7 @@ import {
 import { resolveSessionActiveRole } from "../rbac/activeRole";
 import { kycSessionFields } from "../services/kycStatus";
 import { placeholderPhone } from "../services/phonePolicy";
+import { welcomeToOfficialCommunity } from "../services/officialCommunity";
 
 function maskPhone(phone: string): string {
   return maskIdentifier("SMS", phone);
@@ -365,6 +366,11 @@ export async function register(req: Request, res: Response): Promise<void> {
     // querying a row this transaction has not committed - it would not see the
     // user at all and would report USER_NOT_FOUND.
     await grantSignupTrial(user.id);
+
+    // Every account joins the official Nabri Community, with a built-in welcome
+    // message. Fire-and-forget: community membership must never be able to fail
+    // a signup, and the welcome can arrive a moment after the account exists.
+    void welcomeToOfficialCommunity(user.id);
 
     // Verification codes go through the DB-backed OTP service (hashed,
     // purpose-bound, rate-limited). Delivery honesty is enforced there:

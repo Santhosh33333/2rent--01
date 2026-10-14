@@ -923,6 +923,11 @@ model Community {
   ownerId     String
   city        String?
   memberCount Int      @default(0)
+  /// The one official "Nabri Community". Exactly one row should carry this.
+  /// It is auto-joined for every account and read-only for regular members:
+  /// only SUPER_ADMIN/ADMIN accounts may post there. See
+  /// services/officialCommunity.ts.
+  isOfficial  Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -933,6 +938,7 @@ model Community {
 
   @@index([privacy])
   @@index([city])
+  @@index([isOfficial])
 }
 
 model CommunityMember {
@@ -955,6 +961,8 @@ model CommunityPost {
   authorId    String
   content     String
   imageUrl    String?
+  /// Pinned posts sort first. Used for the official community's welcome post.
+  isPinned    Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
