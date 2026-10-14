@@ -301,7 +301,7 @@ export const adminApi = {
   updateUserPhone: (id: string, phone: string) => api.put(`/admin/users/${id}/phone`, { phone }),
   // Name/gender are frozen for the account owner after onboarding; this is the
   // admin counterpart that applies a requested change.
-  updateUserProfile: (id: string, data: { fullName?: string; gender?: string }) => api.put(`/admin/users/${id}/profile`, data),
+  updateUserProfile: (id: string, data: { fullName?: string; gender?: string; dateOfBirth?: string }) => api.put(`/admin/users/${id}/profile`, data),
   getKycQueue: (params?: PaginationParams) => api.get('/admin/kyc-queue', { params }),
   approveKyc: (id: string) => api.post(`/admin/kyc/${id}/approve`),
   rejectKyc: (id: string, data: KycRejectReason) => api.post(`/admin/kyc/${id}/reject`, data),

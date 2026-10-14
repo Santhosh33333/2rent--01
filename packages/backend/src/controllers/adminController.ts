@@ -16,6 +16,7 @@ import { invalidateConfigCache } from "../services/pricingEngine";
 import { settleTopupRequest, AlreadySettledError } from "../services/topupSettlement";
 import { findReferenceConflict, referenceConflictMessage } from "../services/referenceUniqueness";
 import * as subscriptionBilling from "../services/subscriptionBillingService";
+import { parseDateOfBirth, toIsoDate } from "../services/dateOfBirthPolicy";
 // Aliased: both services export an AlreadySettledError and they are different
 // classes for different claims. Collapsing them into one import would make
 // `instanceof` accept a top-up error where a UPI error was meant.
@@ -420,13 +421,14 @@ export async function updateUserPhone(req: AuthedRequest, res: Response): Promis
   }
 }
 
-// Admin edits the identity fields the user can no longer self-serve: full name
-// and gender. Users can only *request* such a change (via support); this is the
-// counterpart that actually applies it, guarded by USERS.EDIT.
+// Admin edits the identity fields the user can no longer self-serve: full name,
+// gender, and date of birth. Users can only *request* such a change (via
+// support); this is the counterpart that actually applies it, guarded by
+// USERS.EDIT.
 export async function updateUserProfile(req: AuthedRequest, res: Response): Promise<void> {
   try {
     const { id } = req.params;
-    const { fullName, gender } = req.body;
+    const { fullName, gender, dateOfBirth } = req.body;
 
     const data: Record<string, any> = {};
     if (fullName !== undefined) {
@@ -443,6 +445,16 @@ export async function updateUserProfile(req: AuthedRequest, res: Response): Prom
       }
       data.gender = gender;
     }
+    if (dateOfBirth !== undefined) {
+      // Same 18+ rule as everywhere else. An admin corrects a wrong date; they do
+      // not create an under-age account through the side door.
+      const parsedDob = parseDateOfBirth(dateOfBirth);
+      if (!parsedDob.ok) {
+        sendError(res, parsedDob.reason, 400, "VALIDATION_ERROR");
+        return;
+      }
+      data.dateOfBirth = parsedDob.date;
+    }
     if (Object.keys(data).length === 0) {
       sendError(res, "No valid fields to update.", 400, "VALIDATION_ERROR");
       return;
@@ -450,7 +462,7 @@ export async function updateUserProfile(req: AuthedRequest, res: Response): Prom
 
     const target = await prisma.user.findUnique({
       where: { id },
-      select: { id: true, role: true, activeRole: true, fullName: true, gender: true },
+      select: { id: true, role: true, activeRole: true, fullName: true, gender: true, dateOfBirth: true },
     });
     if (!target) {
       sendError(res, "User not found.", 404, "USER_NOT_FOUND");
@@ -464,7 +476,7 @@ export async function updateUserProfile(req: AuthedRequest, res: Response): Prom
 
     const updated = await prisma.user.update({ where: { id }, data });
     // Both previous and new values recorded so an admin can see exactly what was
-    // replaced - a name change is not something to discover later with no trail.
+    // replaced - an identity change is not something to discover later with no trail.
     await prisma.auditLog.create({
       data: {
         actorId: req.user!.userId,
@@ -477,11 +489,13 @@ export async function updateUserProfile(req: AuthedRequest, res: Response): Prom
           fullName: updated.fullName,
           previousGender: target.gender,
           gender: updated.gender,
+          previousDateOfBirth: target.dateOfBirth ? toIsoDate(target.dateOfBirth) : null,
+          dateOfBirth: updated.dateOfBirth ? toIsoDate(updated.dateOfBirth) : null,
         }),
       },
     });
 
-    sendSuccess(res, { id, fullName: updated.fullName, gender: updated.gender }, "User profile updated.");
+    sendSuccess(res, { id, fullName: updated.fullName, gender: updated.gender, dateOfBirth: updated.dateOfBirth }, "User profile updated.");
   } catch (err) {
     console.error("updateUserProfile error:", err);
     sendError(res, "Failed to update user profile.", 500, "INTERNAL_ERROR");

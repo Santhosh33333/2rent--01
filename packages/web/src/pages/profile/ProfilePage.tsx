@@ -23,6 +23,24 @@ import { api } from '../../lib/api'
 import { Avatar } from '../../components/Avatar'
 import { getErrorMessage } from '../../lib/error'
 
+/** Latest date of birth that still satisfies the 18+ rule. */
+const MAX_DOB = (() => {
+  const d = new Date()
+  d.setFullYear(d.getFullYear() - 18)
+  return d.toISOString().slice(0, 10)
+})()
+
+/** Whole years between a YYYY-MM-DD date and today. */
+function ageYears(dob: string): number {
+  const d = new Date(dob)
+  if (Number.isNaN(d.getTime())) return -1
+  const now = new Date()
+  let age = now.getFullYear() - d.getFullYear()
+  const m = now.getMonth() - d.getMonth()
+  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age -= 1
+  return age
+}
+
 export function ProfilePage() {
   const { user, updateUser, logout } = useAuth()
   const { approvedRoles, activeRole } = useRole()
@@ -33,6 +51,11 @@ export function ProfilePage() {
   // support / an administrator can change them afterwards, so the fields render
   // locked and the user is pointed at support instead.
   const identityLocked = Boolean(user?.city && user.city.trim())
+  // Date of birth is frozen once chosen - only an admin may change it. The
+  // social/OTP signup placeholder (2000-01-01) does not count as a choice, so
+  // those members may still set their real date once. Mirrors the server rule in
+  // services/dateOfBirthPolicy.ts.
+  const dobLocked = Boolean(user?.dateOfBirth && user.dateOfBirth.slice(0, 10) !== '2000-01-01')
   const avatar = useAvatarUpload((avatarUrl) => updateUser({ avatarUrl }))
   const [profileStats, setProfileStats] = useState<{ walksCompleted?: number; eventsJoined?: number; averageRating?: number; joinedYear?: number } | null>(null)
   const [verificationStatus, setVerificationStatus] = useState<Record<string, unknown> | null>(null)
@@ -73,6 +96,12 @@ export function ProfilePage() {
   }, [])
 
   const onSubmit = async (data: { name?: string; email?: string; phone?: string; dateOfBirth?: string; bio?: string; city?: string; country?: string; gender?: string }) => {
+    // 18+ only. The server enforces this too; checking here avoids a round trip
+    // and gives the message next to the field.
+    if (!dobLocked && data.dateOfBirth && ageYears(data.dateOfBirth) < 18) {
+      toast.error('You must be at least 18 years old.')
+      return
+    }
     if (saveLock.current) return
     saveLock.current = true
     setSaving(true)
@@ -80,10 +109,11 @@ export function ProfilePage() {
       // Once onboarding is done the name/gender inputs are disabled, which makes
       // react-hook-form report them as undefined. Sending those fields anyway
       // would either wipe the name or trip the server's identity lock, so they
-      // are omitted entirely on a locked save.
+      // are omitted entirely on a locked save. Date of birth is omitted the same
+      // way once it has been chosen.
       await api.put('/users/profile', {
         ...(identityLocked ? {} : { fullName: data.name?.trim() }),
-        ...(data.dateOfBirth ? { dateOfBirth: data.dateOfBirth } : {}),
+        ...(!dobLocked && data.dateOfBirth ? { dateOfBirth: data.dateOfBirth } : {}),
         bio: data.bio || '',
         city: data.city || '',
         country: data.country || '',
@@ -91,7 +121,7 @@ export function ProfilePage() {
       })
       updateUser({
         ...(identityLocked ? {} : { name: data.name?.trim(), fullName: data.name?.trim() }),
-        dateOfBirth: data.dateOfBirth,
+        ...(dobLocked ? {} : { dateOfBirth: data.dateOfBirth }),
         bio: data.bio,
         city: data.city,
         country: data.country,
@@ -310,7 +340,12 @@ export function ProfilePage() {
 
               <div>
                 <label className="label">Date of Birth</label>
-                <input {...register('dateOfBirth')} type="date" disabled={!editing} className="input" />
+                <input {...register('dateOfBirth')} type="date" disabled={!editing || dobLocked} max={MAX_DOB} className="input" />
+                {editing && dobLocked && (
+                  <p className="mt-1 text-xs text-surface-500">
+                    Your date of birth can only be changed by Nabri support or an administrator. Please contact us.
+                  </p>
+                )}
               </div>
 
               <div>

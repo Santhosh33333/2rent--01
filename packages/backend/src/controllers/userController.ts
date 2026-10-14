@@ -13,11 +13,21 @@ import {
   phoneVerificationState,
 } from "../services/phoneVisibility";
 import { selfDeletionGate, resolveFreezeUntil } from "../services/accountDeletionPolicy";
+import {
+  isDateOfBirthLocked,
+  parseDateOfBirth,
+  toIsoDate,
+} from "../services/dateOfBirthPolicy";
 
 /** Rejection when a user tries to self-edit an identity field (name, gender). */
 const IDENTITY_CHANGE_ADMIN_ONLY_MESSAGE =
   "Name and gender can only be changed by Nabri support or an administrator. Please raise a support request.";
 const IDENTITY_CHANGE_ADMIN_ONLY_CODE = "IDENTITY_CHANGE_ADMIN_ONLY";
+
+/** Rejection when a user tries to self-edit their date of birth. */
+const DOB_CHANGE_ADMIN_ONLY_MESSAGE =
+  "Your date of birth can only be changed by Nabri support or an administrator. Please raise a support request.";
+const DOB_CHANGE_ADMIN_ONLY_CODE = "DATE_OF_BIRTH_CHANGE_ADMIN_ONLY";
 
 export async function getProfile(req: AuthedRequest, res: Response): Promise<void> {
   try {
@@ -99,7 +109,7 @@ export async function updateProfile(req: AuthedRequest, res: Response): Promise<
     // name/gender keeps working.
     const current = await prisma.user.findUnique({
       where: { id: req.user!.userId },
-      select: { fullName: true, gender: true, city: true },
+      select: { fullName: true, gender: true, city: true, dateOfBirth: true },
     });
     const identityLocked = Boolean(current?.city && current.city.trim());
     if (identityLocked) {
@@ -123,16 +133,24 @@ export async function updateProfile(req: AuthedRequest, res: Response): Promise<
       sanitized.fullName = fullName.trim();
     }
     if (dateOfBirth !== undefined) {
-      if (typeof dateOfBirth !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth)) {
-        sendError(res, "Date of birth must use YYYY-MM-DD format.", 400, "VALIDATION_ERROR");
+      // Enforces the 18+ rule as well as the format and the "not in the future"
+      // check. This path used to skip all three, which is how an account could
+      // carry a date of birth that breaks the legal minimum age.
+      const parsedDob = parseDateOfBirth(dateOfBirth);
+      if (!parsedDob.ok) {
+        sendError(res, parsedDob.reason, 400, "VALIDATION_ERROR");
         return;
       }
-      const parsedDate = new Date(`${dateOfBirth}T00:00:00.000Z`);
-      if (Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== dateOfBirth || parsedDate > new Date()) {
-        sendError(res, "Date of birth must be a valid date in the past.", 400, "VALIDATION_ERROR");
+      // Frozen once chosen. A value equal to what is already stored is allowed
+      // through so a full-form save that echoes the current date keeps working.
+      if (
+        isDateOfBirthLocked(current?.dateOfBirth) &&
+        toIsoDate(current!.dateOfBirth) !== toIsoDate(parsedDob.date)
+      ) {
+        sendError(res, DOB_CHANGE_ADMIN_ONLY_MESSAGE, 403, DOB_CHANGE_ADMIN_ONLY_CODE);
         return;
       }
-      sanitized.dateOfBirth = parsedDate;
+      sanitized.dateOfBirth = parsedDob.date;
     }
     if (bio !== undefined) {
       if (typeof bio !== 'string' || bio.length > 500) {

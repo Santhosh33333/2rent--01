@@ -15,6 +15,24 @@ import {
   User, MapPin, Check, ArrowRight, ArrowLeft, Camera, Calendar,
 } from 'lucide-react'
 
+/** Latest date of birth that still satisfies the 18+ rule. */
+const MAX_DOB = (() => {
+  const d = new Date()
+  d.setFullYear(d.getFullYear() - 18)
+  return d.toISOString().slice(0, 10)
+})()
+
+/** Whole years between a YYYY-MM-DD date and today. */
+function ageYears(dob: string): number {
+  const d = new Date(dob)
+  if (Number.isNaN(d.getTime())) return -1
+  const now = new Date()
+  let age = now.getFullYear() - d.getFullYear()
+  const m = now.getMonth() - d.getMonth()
+  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age -= 1
+  return age
+}
+
 const profileSchema = z.object({
   fullName: z.string().min(2, 'Name must be at least 2 characters'),
   bio: z.string().max(200, 'Bio must be 200 characters or less').optional().or(z.literal('')),
@@ -22,6 +40,9 @@ const profileSchema = z.object({
   city: z.string().optional().or(z.literal('')),
   country: z.string().optional().or(z.literal('')),
   gender: z.enum(['MALE', 'FEMALE', 'OTHER']).optional(),
+}).refine((data) => !data.dateOfBirth || ageYears(data.dateOfBirth) >= 18, {
+  message: 'You must be at least 18 years old',
+  path: ['dateOfBirth'],
 })
 
 type ProfileForm = z.infer<typeof profileSchema>
@@ -251,9 +272,11 @@ export function ProfileCompletionPage() {
                             <input
                               {...register('dateOfBirth')}
                               type="date"
+                              max={MAX_DOB}
                               className="input pl-11"
                             />
                           </div>
+                          {errors.dateOfBirth && <p className="mt-1 text-xs text-danger-500 font-medium">{errors.dateOfBirth.message}</p>}
                         </div>
                       </div>
                     </div>

@@ -18,10 +18,33 @@ interface User {
   role?: string
   fullName?: string
   gender?: string
+  dateOfBirth?: string | null
   suspendedUntil?: string | null
 }
 
 type BlockMode = 'days' | 'years' | 'permanent'
+
+/** Latest date of birth that still satisfies the 18+ rule. */
+const MAX_DOB = (() => {
+  const d = new Date()
+  d.setFullYear(d.getFullYear() - 18)
+  return d.toISOString().slice(0, 10)
+})()
+
+/** Whole years between a YYYY-MM-DD date and today. */
+function ageYears(dob: string): number {
+  const d = new Date(dob)
+  if (Number.isNaN(d.getTime())) return -1
+  const now = new Date()
+  let age = now.getFullYear() - d.getFullYear()
+  const m = now.getMonth() - d.getMonth()
+  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age -= 1
+  return age
+}
+
+function isAdult(dob: string): boolean {
+  return ageYears(dob) >= 18
+}
 
 export function AdminUsersPage() {
   const { impersonate, user: currentAdmin } = useAuth()
@@ -47,6 +70,7 @@ export function AdminUsersPage() {
   const [profileTarget, setProfileTarget] = useState<User | null>(null)
   const [newFullName, setNewFullName] = useState('')
   const [newGender, setNewGender] = useState('OTHER')
+  const [newDateOfBirth, setNewDateOfBirth] = useState('')
   const [profileBusy, setProfileBusy] = useState(false)
   const [lifetimeBusy, setLifetimeBusy] = useState<string | null>(null)
   // Personal first-period discount for one account. Distinct from the plan-level
@@ -283,6 +307,7 @@ export function AdminUsersPage() {
     setProfileTarget(user)
     setNewFullName(user.fullName || user.name || '')
     setNewGender(user.gender || 'OTHER')
+    setNewDateOfBirth(user.dateOfBirth ? user.dateOfBirth.slice(0, 10) : '')
   }
 
   const saveProfile = async () => {
@@ -292,14 +317,22 @@ export function AdminUsersPage() {
       toast.error('Name cannot be empty')
       return
     }
+    if (newDateOfBirth && !isAdult(newDateOfBirth)) {
+      toast.error('The account holder must be at least 18 years old')
+      return
+    }
     setProfileBusy(true)
     try {
-      await adminApi.updateUserProfile(profileTarget.id, { fullName, gender: newGender })
-      toast.success(`Name and gender updated for ${fullName}`)
+      await adminApi.updateUserProfile(profileTarget.id, {
+        fullName,
+        gender: newGender,
+        ...(newDateOfBirth ? { dateOfBirth: newDateOfBirth } : {}),
+      })
+      toast.success(`Profile updated for ${fullName}`)
       setProfileTarget(null)
       fetchUsers()
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to update name and gender'))
+      toast.error(getErrorMessage(err, 'Failed to update profile'))
     } finally {
       setProfileBusy(false)
     }
@@ -851,13 +884,13 @@ export function AdminUsersPage() {
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={() => !profileBusy && setProfileTarget(null)}>
             <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-md border border-indigo-800/60" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-white font-semibold">Edit name &amp; gender — {profileTarget.name || profileTarget.email}</h3>
+                <h3 className="text-white font-semibold">Edit identity — {profileTarget.name || profileTarget.email}</h3>
                 <button onClick={() => setProfileTarget(null)} disabled={profileBusy} className="text-gray-400 hover:text-white">
                   <X className="w-4 h-4" />
                 </button>
               </div>
               <p className="text-xs text-gray-500 mb-3">
-                Users cannot change these themselves after registration. Apply a change only when they have asked support.
+                Users cannot change their name, gender or date of birth themselves after registration. Apply a change only when they have asked support. The account must stay 18+.
               </p>
               <label className="block text-xs text-gray-400 mb-1">Full name</label>
               <input
@@ -870,13 +903,21 @@ export function AdminUsersPage() {
               <select
                 value={newGender}
                 onChange={(e) => setNewGender(e.target.value)}
-                className="w-full mb-4 px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm"
+                className="w-full mb-3 px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm"
               >
                 <option value="MALE">Male</option>
                 <option value="FEMALE">Female</option>
                 <option value="OTHER">Other</option>
                 <option value="PREFER_NOT_TO_SAY">Prefer not to say</option>
               </select>
+              <label className="block text-xs text-gray-400 mb-1">Date of birth</label>
+              <input
+                type="date"
+                value={newDateOfBirth}
+                max={MAX_DOB}
+                onChange={(e) => setNewDateOfBirth(e.target.value)}
+                className="w-full mb-4 px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm"
+              />
               <div className="flex justify-end gap-2">
                 <button onClick={() => setProfileTarget(null)} disabled={profileBusy} className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm">Cancel</button>
                 <button onClick={saveProfile} disabled={profileBusy} className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-medium flex items-center gap-2">
