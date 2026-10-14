@@ -97,7 +97,12 @@ router.get("/users/:id", users, adminController.getUserById);
 router.put("/users/:id/status", usersEdit, [body("status").isIn(["ACTIVE", "SUSPENDED", "BANNED", "DEACTIVATED"])], validateRequest, adminController.updateUserStatus);
 // Shape only - the controller applies the number rule so the admin gets the
 // specific reason. `isLength({ min: 10, max: 15 })` here accepted "abcdefghij".
-router.put("/users/:id/phone", usersEdit, [body("phone").isString().trim().isLength({ min: 1, max: 20 })], sanitizeInput, validateRequest, adminController.updateUserPhone);
+router.put("/users/:id/phone", usersEdit, [
+  // Either a new number, or `reset: true` to clear it back to unset. The two are
+  // mutually exclusive; a request with neither is rejected in the controller.
+  body("phone").optional().isString().trim().isLength({ min: 1, max: 20 }),
+  body("reset").optional().isBoolean(),
+], sanitizeInput, validateRequest, adminController.updateUserPhone);
 // Identity fields (name/gender) the user cannot self-serve after onboarding.
 // The controller owns the gender allowlist so an admin gets the specific
 // reason, not a generic validation error.

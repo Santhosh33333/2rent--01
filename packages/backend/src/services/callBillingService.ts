@@ -73,13 +73,22 @@ function toMoney(value: unknown): number {
   return Math.round(n * 100) / 100;
 }
 
+/**
+ * Fallback ceiling on a single call, in minutes. Deliberately modest: this value
+ * is also the amount reserved from the caller's wallet the moment a call
+ * connects (`ratePerMinute * maxBillableMinutes`), so a large default withholds
+ * a large sum up front. An admin can raise or lower it in Admin -> Pricing &
+ * Fees, where it is seeded as `CALL_MAX_BILLABLE_MINUTES`.
+ */
+const DEFAULT_MAX_BILLABLE_MINUTES = 20;
+
 /** Reads the admin-configurable terms. Missing or nonsensical config falls back
  *  to a safe default rather than throwing: billing must not be what takes the
  *  call API down. */
 export async function getCallTerms(): Promise<CallBillingTerms> {
   const [rate, maxMinutes, enabled] = await Promise.all([
     getConfig("CALL_RATE_PER_MINUTE", 1),
-    getConfig("CALL_MAX_BILLABLE_MINUTES", 60),
+    getConfig("CALL_MAX_BILLABLE_MINUTES", DEFAULT_MAX_BILLABLE_MINUTES),
     getConfig("CALL_BILLING_ENABLED", 0),
   ]);
   const r = Number(rate);
@@ -90,7 +99,7 @@ export async function getCallTerms(): Promise<CallBillingTerms> {
     maxBillableMinutes:
       Number.isFinite(Number(maxMinutes)) && Number(maxMinutes) > 0
         ? Math.min(600, Math.floor(Number(maxMinutes)))
-        : 60,
+        : DEFAULT_MAX_BILLABLE_MINUTES,
     enabled: Number(enabled) === 1,
   };
 }

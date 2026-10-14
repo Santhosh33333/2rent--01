@@ -37,6 +37,7 @@ import {
   phoneLookupCandidates,
   phoneErrorBody,
 } from "../services/phoneNumber";
+import { placeholderPhone } from "../services/phonePolicy";
 import { renderEmail, paragraphHtml } from "../services/emailTemplate";
 import { ADMIN_ROLES, SUPER_ADMIN_ROLE } from "../rbac/sections";
 import { readBlob } from "../services/blobStorage";
@@ -322,23 +323,17 @@ export async function updateUserStatus(req: AuthedRequest, res: Response): Promi
   }
 }
 
-// Admin edits a user's mobile number (support escalation for number changes the
-// user can't do self-serve). Guarded by USERS.EDIT so support can't touch admins.
+// Admin edits a user's mobile number, or clears it so the member can set their
+// own. Guarded by USERS.EDIT so support can't touch admins.
 export async function updateUserPhone(req: AuthedRequest, res: Response): Promise<void> {
   try {
     const { id } = req.params;
-    const { phone } = req.body;
-    // Canonicalised through the shared parser rather than a local regex. This is
-    // the only supported way to change a number on an account, so it has to obey
-    // exactly the same rules as the number the user typed at registration -
-    // otherwise an admin can install a shape that no user could ever enter.
-    const parsedPhone = normaliseIndianPhone(phone);
-    if (!parsedPhone.ok) {
-      const { message, code } = phoneErrorBody(parsedPhone);
-      sendError(res, message, 400, code);
-      return;
-    }
-    const canonicalPhone = parsedPhone.e164;
+    // A reset is the explicit "clear this number" action: it stores the unset
+    // placeholder so the member can supply a real number once. It is the escape
+    // hatch for accounts that predate the placeholder policy and still carry a
+    // fabricated +91 number from a social sign-up.
+    const reset = req.body?.reset === true;
+
     const target = await prisma.user.findUnique({ where: { id }, select: { id: true, role: true, activeRole: true, phone: true, mobileVerified: true } });
     if (!target) {
       sendError(res, "User not found.", 404, "USER_NOT_FOUND");
@@ -349,6 +344,63 @@ export async function updateUserPhone(req: AuthedRequest, res: Response): Promis
       sendError(res, guard.error.message, 403, guard.error.code);
       return;
     }
+
+    if (reset) {
+      const placeholder = placeholderPhone(id);
+      const [, , verification] = await prisma.$transaction([
+        prisma.user.update({
+          where: { id },
+          data: { phone: placeholder, mobileVerified: false },
+        }),
+        prisma.auditLog.create({
+          data: {
+            actorId: req.user!.userId,
+            actorType: "ADMIN",
+            action: "RESET_USER_PHONE",
+            entityType: "User",
+            entityId: id,
+            // `phone: null` records the intent: there is no number on the account
+            // now, and the previous value is kept so an admin can see what went.
+            metadata: JSON.stringify({
+              previousPhone: target.phone,
+              phone: null,
+              previousMobileVerified: target.mobileVerified,
+              mobileVerifiedReset: Boolean(target.mobileVerified),
+            }),
+          },
+        }),
+        prisma.verification.updateMany({
+          where: { userId: id, confirmedPhone: { not: null } },
+          data: { confirmedPhone: null },
+        }),
+      ]);
+
+      sendSuccess(
+        res,
+        {
+          id,
+          phone: null,
+          phoneUnset: true,
+          phoneVerified: false,
+          phoneVerificationNotice: PHONE_VERIFICATION_UNAVAILABLE_MESSAGE,
+          kycPhoneConfirmationCleared: verification.count > 0,
+        },
+        "Mobile number cleared. The member can set a new one from their profile."
+      );
+      return;
+    }
+
+    // Canonicalised through the shared parser rather than a local regex. This is
+    // the only supported way to change a number on an account, so it has to obey
+    // exactly the same rules as the number the user typed at registration -
+    // otherwise an admin can install a shape that no user could ever enter.
+    const parsedPhone = normaliseIndianPhone(req.body?.phone);
+    if (!parsedPhone.ok) {
+      const { message, code } = phoneErrorBody(parsedPhone);
+      sendError(res, message, 400, code);
+      return;
+    }
+    const canonicalPhone = parsedPhone.e164;
     // Checked across every equivalent spelling, so an admin cannot create a
     // second account on a number that already has an owner under another format.
     const dup = await prisma.user.findFirst({

@@ -299,6 +299,10 @@ export const adminApi = {
   getUserDetail: (id: string) => api.get(`/admin/users/${id}`),
   updateUserStatus: (id: string, status: string) => api.put(`/admin/users/${id}/status`, { status }),
   updateUserPhone: (id: string, phone: string) => api.put(`/admin/users/${id}/phone`, { phone }),
+  // Clears the number back to unset (the placeholder) so the member can supply
+  // their own exactly once. Used for accounts that predate the placeholder
+  // policy and still hold a fabricated number from a social sign-up.
+  resetUserPhone: (id: string) => api.put(`/admin/users/${id}/phone`, { reset: true }),
   // Name/gender are frozen for the account owner after onboarding; this is the
   // admin counterpart that applies a requested change.
   updateUserProfile: (id: string, data: { fullName?: string; gender?: string; dateOfBirth?: string }) => api.put(`/admin/users/${id}/profile`, data),

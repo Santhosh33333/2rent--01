@@ -7,6 +7,7 @@ import toast from 'react-hot-toast'
 import { adminApi } from '../../lib/api'
 import { exportTableToPdf } from '../../lib/pdfExport'
 import { useAuth } from '../../lib/auth'
+import { isPlaceholderPhone } from '../../lib/phone'
 
 interface User {
   id: string
@@ -21,6 +22,17 @@ interface User {
   dateOfBirth?: string | null
   suspendedUntil?: string | null
 }
+
+/**
+ * The number to show an admin. A social sign-up with no real number stores a
+ * `pending:<id>` placeholder, which must never be rendered as if it were a
+ * phone (or dialled). Rendering it as empty lets every call site fall back to
+ * its own "not provided" text.
+ */
+function shownPhone(phone?: string | null): string {
+  return isPlaceholderPhone(phone) ? '' : phone || ''
+}
+
 
 type BlockMode = 'days' | 'years' | 'permanent'
 
@@ -300,7 +312,7 @@ export function AdminUsersPage() {
 
   const openPhoneEditor = (user: User) => {
     setPhoneTarget(user)
-    setNewPhone(user.phone || '')
+    setNewPhone(shownPhone(user.phone))
   }
 
   const openProfileEditor = (user: User) => {
@@ -428,6 +440,26 @@ export function AdminUsersPage() {
     }
   }
 
+  // Clears the number back to unset so the member can supply their own once.
+  // The escape hatch for accounts created before the placeholder policy, which
+  // still carry a fabricated number from a social sign-up.
+  const resetPhone = async () => {
+    if (!phoneTarget) return
+    setPhoneBusy(true)
+    try {
+      await adminApi.resetUserPhone(phoneTarget.id)
+      toast.success(
+        `Mobile number cleared for ${phoneTarget.name || phoneTarget.email}. They can set a new one from their profile.`
+      )
+      setPhoneTarget(null)
+      fetchUsers()
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to clear mobile number'))
+    } finally {
+      setPhoneBusy(false)
+    }
+  }
+
   return (
     <AdminShell>
       <AdminPageHeader
@@ -443,7 +475,7 @@ export function AdminUsersPage() {
                 rows: users.map((u) => [
                   u.fullName || u.name || '-',
                   u.email || '-',
-                  u.phone || '-',
+                  shownPhone(u.phone) || '-',
                   u.role || 'USER',
                   (u.status || '-') + (u.suspendedUntil ? ` (until ${new Date(u.suspendedUntil).toLocaleDateString('en-IN')})` : ''),
                   u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-IN') : '-',
@@ -613,7 +645,7 @@ export function AdminUsersPage() {
                                 </div>
                               </div>
                               <div className="flex items-center gap-4">
-                                <span className="hidden sm:block text-gray-400 text-xs">{user.phone || '-'}</span>
+                                <span className="hidden sm:block text-gray-400 text-xs">{shownPhone(user.phone) || '-'}</span>
                                 <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${user.role && user.role !== 'USER' ? 'bg-purple-900/30 text-purple-400' : 'bg-gray-700 text-gray-400'}`}>
                                   {user.role || 'USER'}
                                 </span>
@@ -640,7 +672,7 @@ export function AdminUsersPage() {
                                 </div>
                                 <div>
                                   <p className="text-gray-500 text-xs">Phone</p>
-                                  <p className="text-white">{user.phone || 'Not provided'}</p>
+                                  <p className="text-white">{shownPhone(user.phone) || 'Not provided'}</p>
                                 </div>
                                 <div>
                                   <p className="text-gray-500 text-xs">Joined</p>
@@ -660,9 +692,9 @@ export function AdminUsersPage() {
                                 >
                                   {impersonateBusy === user.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Eye className="w-3.5 h-3.5" />} Login as
                                 </button>
-                                {user.phone && (
+                                {shownPhone(user.phone) && (
                                   <a
-                                    href={`tel:${user.phone.replace(/[^+\d]/g, '')}`}
+                                    href={`tel:${shownPhone(user.phone).replace(/[^+\d]/g, '')}`}
                                     className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium rounded-lg transition"
                                   >
                                     <Phone className="w-3.5 h-3.5" /> Call
@@ -848,7 +880,7 @@ export function AdminUsersPage() {
                   <X className="w-4 h-4" />
                 </button>
               </div>
-              <p className="text-xs text-gray-500 mb-3">Current number: <span className="text-gray-300">{phoneTarget.phone || 'Not provided'}</span></p>
+              <p className="text-xs text-gray-500 mb-3">Current number: <span className="text-gray-300">{shownPhone(phoneTarget.phone) || 'Not provided'}</span></p>
               <p className="text-xs text-amber-400/80 mb-3">
                 Phone verification is currently unavailable. The new number will be saved
                 as unverified and the account will not be able to use verified-only features.
@@ -877,6 +909,16 @@ export function AdminUsersPage() {
                   Cancel
                 </button>
               </div>
+              {shownPhone(phoneTarget.phone) && (
+                <button
+                  onClick={resetPhone}
+                  disabled={phoneBusy}
+                  className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 border border-red-800/60 hover:bg-red-950/40 disabled:opacity-50 text-red-300 text-sm font-medium rounded-lg transition"
+                  title="Clear this number so the member can enter their own"
+                >
+                  <Trash2 className="w-4 h-4" /> Clear number
+                </button>
+              )}
             </div>
           </div>
         )}
