@@ -8,6 +8,7 @@ import {
   phoneErrorBody,
 } from "../services/phoneNumber";
 import { maskPhone } from "../services/phoneVisibility";
+import { isPlaceholderPhone } from "../services/phonePolicy";
 
 // ============================================================================
 // HELPER: Get or create verification record
@@ -118,7 +119,16 @@ export async function submitPersonalDetails(req: AuthedRequest, res: Response): 
       );
       return;
     }
-    if (!phoneMatches(parsedPhone.e164, account.phone)) {
+
+    // A placeholder (`pending:<provider id>`) is not a number the user could ever
+    // type, so requiring a match made step 1 impossible to pass for a sign-up
+    // that never supplied a real number: every attempt came back "does not match
+    // your profile" and the user was stuck re-entering the same details. Treat a
+    // placeholder as "no number on file" and let this declaration SET it, exactly
+    // as the profile flow already allows for placeholder accounts. A real stored
+    // number stays admin-only.
+    const adoptingPhone = isPlaceholderPhone(account.phone);
+    if (!adoptingPhone && !phoneMatches(parsedPhone.e164, account.phone)) {
       // Masked rather than echoed. This string can reach logs and admin
       // surfaces, and two visible digits are enough for the user to recognise
       // their own number - the point is which number to type, not to prove it.
@@ -143,6 +153,9 @@ export async function submitPersonalDetails(req: AuthedRequest, res: Response): 
           gender: personal.gender,
           ...(personal.city ? { city: personal.city } : {}),
           ...(personal.country ? { country: personal.country } : {}),
+          // Only when the account held a placeholder: this is the owner supplying
+          // their number, not a silent self-edit of a real one.
+          ...(adoptingPhone ? { phone: parsedPhone.e164 } : {}),
         },
       }),
       prisma.verification.update({

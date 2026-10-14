@@ -5,6 +5,7 @@ import { ArrowLeft, ArrowRight, User } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
+import { isPlaceholderPhone } from '../../lib/phone'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
 
@@ -75,7 +76,9 @@ export function KycStep1PersonalDetails() {
     country: user?.country || 'India',
     address: '',
     // Pre-filled from the account, so the common case needs no typing at all.
-    phone: toTenDigits(user?.phone ?? ''),
+    // A placeholder (`pending:...`) is not a number: strip it to empty rather
+    // than pre-filling the digits it happens to contain.
+    phone: isPlaceholderPhone(user?.phone) ? '' : toTenDigits(user?.phone ?? ''),
   }))
 
   useEffect(() => {
