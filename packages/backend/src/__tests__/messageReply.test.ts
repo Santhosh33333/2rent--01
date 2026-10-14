@@ -6,9 +6,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const prismaMock = vi.hoisted(() => ({
   user: { findUnique: vi.fn() },
   userBlock: { findFirst: vi.fn() },
-  conversation: { upsert: vi.fn(), update: vi.fn() },
+  conversation: { upsert: vi.fn(), update: vi.fn(), findUnique: vi.fn() },
   message: { findUnique: vi.fn(), create: vi.fn() },
-  booking: { findUnique: vi.fn() },
+  booking: { findUnique: vi.fn(), findFirst: vi.fn() },
+  chatRequest: { findFirst: vi.fn() },
+  friendship: { findFirst: vi.fn() },
+  match: { findFirst: vi.fn() },
   auditLog: { create: vi.fn() },
 }));
 
@@ -39,6 +42,13 @@ describe('sendMessage reply handling', () => {
     vi.clearAllMocks();
     prismaMock.user.findUnique.mockResolvedValue({ id: RECEIVER });
     prismaMock.userBlock.findFirst.mockResolvedValue(null);
+    // The pair already has a thread, so the ask-before-you-message gate treats
+    // them as connected and the reply-handling under test is what runs.
+    prismaMock.conversation.findUnique.mockResolvedValue({ id: CONVO, _count: { messages: 1 } });
+    prismaMock.booking.findFirst.mockResolvedValue(null);
+    prismaMock.chatRequest.findFirst.mockResolvedValue(null);
+    prismaMock.friendship.findFirst.mockResolvedValue(null);
+    prismaMock.match.findFirst.mockResolvedValue(null);
     prismaMock.conversation.upsert.mockResolvedValue({ id: CONVO });
     prismaMock.conversation.update.mockResolvedValue({});
     prismaMock.auditLog.create.mockResolvedValue({});
@@ -160,6 +170,30 @@ describe('sendMessage reply handling', () => {
       const body = res.json.mock.calls[0][0];
       expect(body.data.clientId).toBeNull();
     }
+  });
+
+  it('refuses a stranger until a request is accepted', async () => {
+    // No thread, no accepted request/friendship, no match, no booking.
+    prismaMock.conversation.findUnique.mockResolvedValue(null);
+    const res = makeRes();
+    await sendMessage(makeReq({ receiverId: RECEIVER, content: 'hi' }), res);
+
+    expect(prismaMock.message.create).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json.mock.calls[0][0].error).toBe('CHAT_REQUEST_REQUIRED');
+  });
+
+  it('lets an admin message a stranger', async () => {
+    prismaMock.conversation.findUnique.mockResolvedValue(null);
+    const req = {
+      body: { receiverId: RECEIVER, content: 'hi' },
+      user: { userId: SENDER, role: 'SUPER_ADMIN' },
+    } as any;
+    const res = makeRes();
+    await sendMessage(req, res);
+
+    expect(prismaMock.message.create).toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(201);
   });
 });
 

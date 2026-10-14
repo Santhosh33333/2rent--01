@@ -2,6 +2,7 @@ import { Response } from "express";
 import { prisma } from "../config/database";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
+import { canDirectChat } from "../services/chatAccess";
 
 const MAX_REQUESTS_PER_DAY_DEFAULT = 10;
 const COOLDOWN_DAYS_AFTER_REJECT_DEFAULT = 5;
@@ -458,17 +459,11 @@ export async function getConnectionStatus(req: AuthedRequest, res: Response): Pr
 
     const [p1, p2] = [userId, otherId].sort();
 
-    const [accepted, conversation, match, latest, blocked] = await Promise.all([
-      prisma.chatRequest.findFirst({
-        where: {
-          status: "ACCEPTED",
-          OR: [
-            { senderId: userId, receiverId: otherId },
-            { senderId: otherId, receiverId: userId },
-          ],
-        },
-        select: { id: true, acceptedAt: true },
-      }),
+    // One source of truth for "may these two chat": the same helper the send
+    // paths enforce, so the UI can never offer a composer the server will refuse
+    // (or hide one it would have allowed).
+    const [access, conversation, match, latest, blocked] = await Promise.all([
+      canDirectChat(userId, otherId, req.user?.role),
       prisma.conversation.findUnique({
         where: { participant1Id_participant2Id: { participant1Id: p1, participant2Id: p2 } },
         select: { id: true, _count: { select: { messages: true } } },
@@ -504,7 +499,7 @@ export async function getConnectionStatus(req: AuthedRequest, res: Response): Pr
     ]);
 
     const hasMessages = (conversation?._count.messages ?? 0) > 0;
-    const connected = Boolean(accepted) || hasMessages || Boolean(match);
+    const connected = access.allowed;
     const pendingSent = latest?.status === "PENDING" && latest.senderId === userId;
 
     sendSuccess(

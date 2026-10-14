@@ -6,6 +6,7 @@ import { emitToUser } from "../services/socketService";
 import { notifyNewMessage } from "../services/messageNotifications";
 import { chatUpload, classifyChatFile, resolveChatMedia, type ResolvedChatMedia } from "../services/chatUploadService";
 import { readBlob, removeBlob } from "../services/blobStorage";
+import { canDirectChat } from "../services/chatAccess";
 
 // ============================================================================
 // CONVERSATION HELPERS
@@ -94,6 +95,21 @@ export async function sendMessage(req: AuthedRequest, res: Response): Promise<vo
 
     if (isBlocked) {
       sendError(res, "Unable to message this user.", 403, "BLOCKED");
+      return;
+    }
+
+    // Ask-before-you-message. A brand-new thread needs an explicit, mutual yes
+    // (an accepted chat request, an accepted friendship, a dating match, or a
+    // shared booking); an existing thread is grandfathered in. Admin-tier
+    // accounts bypass this. See services/chatAccess.ts.
+    const access = await canDirectChat(req.user!.userId, receiverId, req.user!.role);
+    if (!access.allowed) {
+      sendError(
+        res,
+        "Send a chat request first — you can message once it's accepted.",
+        403,
+        "CHAT_REQUEST_REQUIRED"
+      );
       return;
     }
 

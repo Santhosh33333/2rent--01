@@ -105,6 +105,10 @@ export function ConversationPage() {
   const [connection, setConnection] = useState<ConnectionStatus | null>(null)
   const [requestNote, setRequestNote] = useState('')
   const [requestBusy, setRequestBusy] = useState(false)
+  // A brand-new contact cannot message until a request is accepted — the same
+  // rule the server enforces on both send paths. While the status is still
+  // loading (`null`) the composer stays usable and the server is the backstop.
+  const chatLocked = Boolean(connection && !connection.connected)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
@@ -395,7 +399,7 @@ export function ConversationPage() {
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!text.trim() || !userId) return
+    if (!text.trim() || !userId || chatLocked) return
     setSending(true)
     // Collision-free placeholder id. `Date.now()` alone repeats when two
     // messages are sent inside the same millisecond, which would make both
@@ -954,7 +958,7 @@ export function ConversationPage() {
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              disabled={uploading || recording}
+              disabled={uploading || recording || chatLocked}
               title="Send photo"
               className="w-11 h-11 rounded-2xl flex items-center justify-center text-surface-500 hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors disabled:opacity-50 flex-shrink-0"
             >
@@ -963,7 +967,7 @@ export function ConversationPage() {
             <button
               type="button"
               onClick={toggleRecording}
-              disabled={uploading}
+              disabled={uploading || chatLocked}
               title={recording ? 'Stop recording' : 'Record voice note'}
               className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-colors flex-shrink-0 ${recording ? 'bg-red-500 text-white animate-pulse' : 'text-surface-500 hover:bg-surface-100 dark:hover:bg-surface-800'}`}
             >
@@ -974,16 +978,16 @@ export function ConversationPage() {
                 type="text"
                 value={text}
                 onChange={handleInput}
-                placeholder="Type a message..."
+                placeholder={chatLocked ? 'Send a chat request to start messaging' : 'Type a message...'}
                 className="input pr-20 py-3"
-                disabled={sending}
+                disabled={sending || chatLocked}
               />
               <div className="absolute right-2 bottom-1/2 translate-y-1/2 flex items-center gap-1">
               </div>
             </div>
             <button
               type="submit"
-              disabled={!text.trim() || sending}
+              disabled={!text.trim() || sending || chatLocked}
               className="w-11 h-11 rounded-2xl bg-gradient-to-r from-primary-500 to-accent-500 flex items-center justify-center text-white shadow-lg shadow-primary-500/20 hover:shadow-xl hover:shadow-primary-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {sending ? (

@@ -8,8 +8,9 @@ import { notifySosRecipients } from "./sosNotifications";
 import { notifyNewMessage } from "./messageNotifications";
 import { redisAdapterClients, markUserOnline, clearUserOnline } from "./redisClient";
 import { checkMediaUrl, describeMediaProblem } from "./mediaUrl";
+import { canDirectChat } from "./chatAccess";
 
-type AuthSocket = Socket & { userId?: string; userRole?: string };
+type AuthSocket = Socket & { userId?: string; userRole?: string; accountRole?: string };
 
 /** Great-circle distance in km between two lat/lng points. */
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -209,8 +210,13 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
           select: { role: true, activeRole: true },
         });
         socket.userRole = (dbUser?.activeRole || dbUser?.role || "USER") as string;
+        // The account's real role, independent of any USER/PARTNER preview, for
+        // checks that must key off what the account *is* (e.g. the admin bypass
+        // on direct messaging), not the surface it is currently viewing.
+        socket.accountRole = (dbUser?.role || "USER") as string;
       } catch {
         socket.userRole = "USER";
+        socket.accountRole = "USER";
       }
       next();
     } catch (err) {
@@ -667,6 +673,17 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
           const receiver = await prisma.user.findUnique({ where: { id: receiverId }, select: { id: true } });
           if (!receiver) {
             socket.emit("error", { message: "Receiver not found" });
+            return;
+          }
+          // Ask-before-you-message: creating a brand-new thread needs an explicit
+          // yes. An existing conversation (membership above) is already allowed,
+          // so this only guards the first contact. Mirrors the REST gate.
+          const access = await canDirectChat(userId, receiverId, socket.accountRole);
+          if (!access.allowed) {
+            socket.emit("error", {
+              code: "CHAT_REQUEST_REQUIRED",
+              message: "Send a chat request first — you can message once it's accepted.",
+            });
             return;
           }
           const conv = await prisma.conversation.upsert({
