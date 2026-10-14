@@ -146,6 +146,7 @@ const SearchPage = lazy(() => import('./pages/search/SearchPage').then(m => ({ d
 const SportsPage = lazy(() => import('./pages/sports/SportsPage').then(m => ({ default: m.SportsPage })))
 const MoviesPage = lazy(() => import('./pages/movies/MoviesPage').then(m => ({ default: m.MoviesPage })))
 const MusicPage = lazy(() => import('./pages/music/MusicPage').then(m => ({ default: m.MusicPage })))
+const MusicRoomPage = lazy(() => import('./pages/music/MusicRoomPage').then(m => ({ default: m.MusicRoomPage })))
 const AiAssistantPage = lazy(() => import('./pages/ai/AiAssistantPage').then(m => ({ default: m.AiAssistantPage })))
 const SosAlertPage = lazy(() => import('./pages/sos/SosAlertPage').then(m => ({ default: m.SosAlertPage })))
 
@@ -259,6 +260,7 @@ export function App() {
                   provider sits above Routes, so this page is a control surface
                   for audio that already exists rather than a second player. */}
               <Route path="/music" element={<MusicPage />} />
+              <Route path="/music/room/:roomId" element={<MusicRoomPage />} />
               <Route path="/ai" element={<AiAssistantPage />} />
 
               {/* New Booking System */}

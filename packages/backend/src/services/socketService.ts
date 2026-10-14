@@ -7,6 +7,7 @@ import { registerCallHandlers } from "./callService";
 import { notifySosRecipients } from "./sosNotifications";
 import { notifyNewMessage } from "./messageNotifications";
 import { redisAdapterClients, markUserOnline, clearUserOnline } from "./redisClient";
+import { checkMediaUrl, describeMediaProblem } from "./mediaUrl";
 
 type AuthSocket = Socket & { userId?: string; userRole?: string };
 
@@ -140,6 +141,24 @@ export function emitToUserSockets(userId: string, event: string, payload: unknow
   // Room-based, not socket-id based, so the Redis adapter can deliver to this
   // user's sockets held by other instances.
   ioInstance.to(userRoom(userId)).emit(event, payload);
+}
+
+/** Room name holding every live socket watching one music room. */
+export function musicRoomName(roomId: string): string {
+  return `music_${roomId}`;
+}
+
+/**
+ * Emit a playback update to everyone in a music room, including the sender.
+ *
+ * Includes the sender on purpose: unlike a chat bubble (where the poster already
+ * has the row), a playback broadcast is the single source of truth for the
+ * playhead, so the host's own player is corrected from it too — a host that
+ * seeks twice quickly ends up on the server's clock, not its own guess.
+ */
+export function emitToMusicRoom(roomId: string, event: string, payload: unknown): void {
+  if (!ioInstance) return;
+  ioInstance.to(musicRoomName(roomId)).emit(event, payload);
 }
 
 export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
@@ -903,6 +922,184 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
       }
       if (!gid || !socket.rooms.has(room)) return;
       socket.to(room).emit("group_user_stopped_typing", { groupId: gid, userId, timestamp: Date.now() });
+    });
+
+    // =====================================================================
+    // MUSIC ROOM EVENTS
+    // =====================================================================
+
+    /** A playhead, clamped the same way the controller clamps it on write. */
+    const musicClampPosition = (value: unknown): number => {
+      const n = Number(value);
+      if (!Number.isFinite(n) || n < 0) return 0;
+      return Math.min(n, 86400);
+    };
+
+    const musicRoomMembership = async (roomId: string) =>
+      prisma.musicRoomMember.findUnique({
+        where: { roomId_userId: { roomId, userId } },
+        select: { role: true },
+      });
+
+    /** The sync payload shared by every broadcast below. */
+    const musicSyncPayload = (room: {
+      id: string;
+      hostId: string;
+      version: number;
+      mediaKind: string;
+      mediaUrl: string | null;
+      mediaTitle: string | null;
+      isPlaying: boolean;
+      positionSec: number;
+      updatedAt: Date;
+    }) => ({
+      roomId: room.id,
+      version: room.version,
+      hostId: room.hostId,
+      mediaKind: room.mediaKind,
+      mediaUrl: room.mediaUrl,
+      mediaTitle: room.mediaTitle,
+      isPlaying: room.isPlaying,
+      positionSec: room.positionSec,
+      updatedAt: room.updatedAt,
+    });
+
+    /**
+     * Join a room's realtime channel and hand the joiner the current playhead.
+     * AUTHZ: members only.
+     */
+    socket.on("music_room_join", async (rawId: unknown) => {
+      try {
+        const roomId = String(rawId || "").slice(0, 64);
+        if (!roomId) return;
+        const membership = await musicRoomMembership(roomId);
+        if (!membership) {
+          socket.emit("error", { message: "You are not in this room." });
+          return;
+        }
+        const room = await prisma.musicRoom.findUnique({ where: { id: roomId } });
+        if (!room || !room.isActive) {
+          socket.emit("error", { message: "This room has ended." });
+          return;
+        }
+        socket.join(musicRoomName(roomId));
+
+        // Sent raw, with `updatedAt`, so the client applies one uniform rule
+        // (position + elapsed since updatedAt) to both this and a live sync —
+        // pre-adding elapsed here would double-count on a playing track.
+        const memberCount = await prisma.musicRoomMember.count({ where: { roomId } });
+
+        socket.emit("music_room_state", {
+          ...musicSyncPayload(room),
+          myRole: membership.role,
+          memberCount,
+        });
+      } catch (err) {
+        console.error("[SOCKET] music_room_join error:", err);
+      }
+    });
+
+    socket.on("music_room_leave", (rawId: unknown) => {
+      const roomId = String(rawId || "").slice(0, 64);
+      if (roomId) socket.leave(musicRoomName(roomId));
+    });
+
+    /**
+     * A playback change from the host. Host-authoritative: only the host may
+     * play/pause/seek/change track, and the resulting state is broadcast to the
+     * whole room (including the host, so everyone shares one clock).
+     */
+    socket.on("music_room_control", async (payload: any) => {
+      try {
+        const roomId = String(payload?.roomId || "").slice(0, 64);
+        if (!roomId) return;
+        const membership = await musicRoomMembership(roomId);
+        if (!membership) {
+          socket.emit("error", { message: "You are not in this room." });
+          return;
+        }
+        if (membership.role !== "HOST") {
+          socket.emit("error", { message: "Only the host controls playback." });
+          return;
+        }
+        const room = await prisma.musicRoom.findUnique({ where: { id: roomId } });
+        if (!room || !room.isActive) {
+          socket.emit("error", { message: "This room has ended." });
+          return;
+        }
+
+        const action = String(payload?.action || "");
+        const position = musicClampPosition(payload?.positionSec ?? room.positionSec);
+        const data: Record<string, unknown> = { version: { increment: 1 } };
+
+        switch (action) {
+          case "play":
+            data.isPlaying = true;
+            data.positionSec = position;
+            break;
+          case "pause":
+            data.isPlaying = false;
+            data.positionSec = position;
+            break;
+          case "seek":
+            data.positionSec = position;
+            break;
+          case "stop":
+            data.isPlaying = false;
+            data.positionSec = 0;
+            break;
+          case "track": {
+            const check = checkMediaUrl(payload?.mediaUrl);
+            if (!check.ok) {
+              socket.emit("error", { message: describeMediaProblem(check.problem) });
+              return;
+            }
+            data.mediaUrl = check.url;
+            data.mediaKind = check.kind;
+            data.mediaTitle =
+              typeof payload?.mediaTitle === "string" ? payload.mediaTitle.slice(0, 200) : null;
+            data.positionSec = 0;
+            data.isPlaying = payload?.isPlaying === true;
+            break;
+          }
+          default:
+            return;
+        }
+
+        const updated = await prisma.musicRoom.update({ where: { id: roomId }, data });
+        emitToMusicRoom(roomId, "music_room_sync", musicSyncPayload(updated));
+      } catch (err) {
+        console.error("[SOCKET] music_room_control error:", err);
+      }
+    });
+
+    /**
+     * The host's own playhead, sent periodically. Guests apply it to correct any
+     * drift that built up from buffering, and it keeps the persisted position
+     * close to reality for the next person who joins.
+     */
+    socket.on("music_room_heartbeat", async (payload: any) => {
+      try {
+        const roomId = String(payload?.roomId || "").slice(0, 64);
+        if (!roomId) return;
+        const membership = await musicRoomMembership(roomId);
+        if (!membership || membership.role !== "HOST") return;
+
+        const updated = await prisma.musicRoom
+          .update({
+            where: { id: roomId },
+            data: {
+              positionSec: musicClampPosition(payload?.positionSec),
+              isPlaying: payload?.isPlaying === true,
+              version: { increment: 1 },
+            },
+          })
+          .catch(() => null);
+        if (!updated) return;
+        emitToMusicRoom(roomId, "music_room_sync", musicSyncPayload(updated));
+      } catch (err) {
+        console.error("[SOCKET] music_room_heartbeat error:", err);
+      }
     });
 
     // =====================================================================

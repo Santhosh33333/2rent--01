@@ -27,6 +27,7 @@ import { PageHeader } from '../../components/PageHeader'
 import { EmptyState } from '../../components/EmptyState'
 import { useSongPlayer } from '../../lib/songPlayer'
 import { YouTubePlaylistPlayer } from './YouTubePlaylistPlayer'
+import { MusicRoomsSection } from './MusicRoomsSection'
 import type { SongTrack } from '../../lib/songLibrary'
 
 /**
@@ -111,6 +112,13 @@ export function MusicPage() {
         title="Music"
         subtitle="Instrumental love songs. Tamil first, with a language picker for the rest."
       />
+
+      {/* Listen together. Given the top slot because it is the one thing on this
+          page two people do at once: everything below it is a single listener's
+          own player. */}
+      <AnimatedPage delay={40}>
+        <MusicRoomsSection />
+      </AnimatedPage>
 
       <AnimatedPage delay={50}>
         {/* Now playing. Absent entirely when there is nothing to play, rather

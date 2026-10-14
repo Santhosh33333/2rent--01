@@ -100,6 +100,8 @@ lastLoginAt                   DateTime?
   chatGroupMessages              ChatGroupMessage[]   @relation("ChatGroupMessageSender")
   chatGroupInvitesSent           ChatGroupInvite[]    @relation("ChatGroupInviteInviter")
   chatGroupInvitesReceived       ChatGroupInvite[]    @relation("ChatGroupInviteInvitee")
+  musicRoomsHosted               MusicRoom[]          @relation("MusicRoomHost")
+  musicRoomMemberships           MusicRoomMember[]    @relation("MusicRoomMemberUser")
   reportsFiled                   Report[]             @relation("ReportFiledBy")
   reportsAgainst                 Report[]             @relation("ReportAgainst")
   ratingsGiven                   Rating[]             @relation("RatingGivenBy")
@@ -1450,6 +1452,54 @@ model ChatGroupInvite {
 
   @@unique([groupId, inviteeId])
   @@index([inviteeId, status])
+}
+
+// A synchronized listening / watch-together room.
+//
+// The media is always our own: a track from the licensed catalogue (which the
+// web app reads from public/audio/manifest.json) or a file the host supplies
+// under our own origin, plus an https link to a plain audio/video file. YouTube
+// page links are refused — YouTube forbids synchronising playback across
+// devices, so promising a synced YouTube room would be a feature we cannot keep.
+//
+// Playback is host-authoritative: only the host changes play/pause/seek/track,
+// and the resulting state is broadcast to the room. `positionSec` is the
+// position at `updatedAt`, and `version` orders updates so a late-arriving
+// broadcast can never overwrite a newer one.
+model MusicRoom {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  hostId      String
+  isActive    Boolean  @default(true)
+  mediaKind   String   @default("AUDIO") // AUDIO | VIDEO
+  mediaUrl    String?
+  mediaTitle  String?
+  isPlaying   Boolean  @default(false)
+  positionSec Float    @default(0)
+  version     Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  host    User              @relation("MusicRoomHost", fields: [hostId], references: [id], onDelete: Cascade)
+  members MusicRoomMember[]
+
+  @@index([hostId])
+  @@index([isActive])
+}
+
+model MusicRoomMember {
+  id       String   @id @default(uuid())
+  roomId   String
+  userId   String
+  role     String   @default("GUEST") // HOST | GUEST
+  joinedAt DateTime @default(now())
+
+  room MusicRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User      @relation("MusicRoomMemberUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, userId])
+  @@index([userId])
 }
 
 model TypingStatus {

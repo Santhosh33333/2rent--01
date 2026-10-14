@@ -828,3 +828,51 @@ export const chatGroupApi = {
     api.post(`/chat-groups/${groupId}/messages/${messageId}/react`, { emoji }),
   markRead: (groupId: string) => api.post(`/chat-groups/${groupId}/read`),
 }
+
+// ============================================================================
+// LISTEN / WATCH TOGETHER (music rooms)
+// ============================================================================
+
+export interface MusicRoomSummary {
+  id: string
+  code: string
+  name: string
+  hostId: string
+  isActive: boolean
+  mediaKind: 'AUDIO' | 'VIDEO'
+  mediaUrl: string | null
+  mediaTitle: string | null
+  isPlaying: boolean
+  positionSec: number
+  version: number
+  createdAt: string
+  updatedAt: string
+  memberCount: number
+  myRole: 'HOST' | 'GUEST'
+  host?: { id: string; fullName?: string | null; avatarUrl?: string | null }
+}
+
+export interface MusicRoomMemberRecord {
+  userId: string
+  role: 'HOST' | 'GUEST'
+  joinedAt: string
+  user: { id: string; fullName?: string | null; avatarUrl?: string | null }
+}
+
+export interface MusicRoomDetail extends MusicRoomSummary {
+  members: MusicRoomMemberRecord[]
+}
+
+export const musicRoomApi = {
+  list: () => api.get<{ data: { items: MusicRoomSummary[]; total: number } }>('/music-rooms'),
+  create: (payload: { name: string; mediaUrl?: string; mediaTitle?: string }) =>
+    api.post<{ data: MusicRoomSummary }>('/music-rooms', payload),
+  detail: (roomId: string) => api.get<{ data: MusicRoomDetail }>(`/music-rooms/${roomId}`),
+  join: (code: string) => api.post<{ data: { roomId: string; name: string } }>('/music-rooms/join', { code }),
+  update: (roomId: string, patch: { name?: string; mediaUrl?: string | null; mediaTitle?: string | null }) =>
+    api.patch<{ data: MusicRoomSummary }>(`/music-rooms/${roomId}`, patch),
+  addMembers: (roomId: string, userIds: string[]) =>
+    api.post<{ data: { added: number; memberCount: number } }>(`/music-rooms/${roomId}/members`, { userIds }),
+  leave: (roomId: string) => api.post(`/music-rooms/${roomId}/leave`),
+  end: (roomId: string) => api.post(`/music-rooms/${roomId}/end`),
+}
