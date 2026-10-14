@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Bookmark, BookmarkCheck, Calendar, Clapperboard, MapPin, Search, Star, Users } from 'lucide-react'
+import { Bookmark, BookmarkCheck, Calendar, Clapperboard, Loader2, MapPin, Search, Star, Users } from 'lucide-react'
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
 import { api } from '../../lib/api'
@@ -45,6 +45,15 @@ export function MoviesPage() {
   const [unconfigured, setUnconfigured] = useState(false)
   const [meetups, setMeetups] = useState<MovieMeetup[]>([])
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set())
+  // Typeahead. Typing a title shows matching films to choose from, because
+  // the old form only searched on Enter and read as "no options appeared".
+  const [suggestions, setSuggestions] = useState<Movie[]>([])
+  const [suggestOpen, setSuggestOpen] = useState(false)
+  const [suggestLoading, setSuggestLoading] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(-1)
+  const searchBoxRef = useRef<HTMLDivElement>(null)
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>()
+  const suggestAbortRef = useRef<AbortController | null>(null)
 
   const loadWatchlistIds = async (signal?: AbortSignal) => {
     try {
@@ -168,22 +177,140 @@ export function MoviesPage() {
     }
   }
 
+  /** Load typeahead matches for the typed title (debounced). */
+  useEffect(() => {
+    const q = query.trim()
+    clearTimeout(debounceRef.current)
+    suggestAbortRef.current?.abort()
+    if (q.length < 2) {
+      setSuggestions([])
+      setSuggestOpen(false)
+      setSuggestLoading(false)
+      return
+    }
+    debounceRef.current = setTimeout(async () => {
+      const controller = new AbortController()
+      suggestAbortRef.current = controller
+      setSuggestLoading(true)
+      try {
+        const res = await api.get('/movies/search', { params: { q }, signal: controller.signal })
+        if (controller.signal.aborted) return
+        const d = res.data?.data || res.data || {}
+        const list: Movie[] = Array.isArray(d.movies) ? d.movies : []
+        setSuggestions(list.slice(0, 8))
+        setSuggestOpen(list.length > 0)
+        setActiveIndex(-1)
+        setUnconfigured(false)
+      } catch (err) {
+        if ((err as any)?.response?.status === 503) setUnconfigured(true)
+        if (!controller.signal.aborted) {
+          setSuggestions([])
+          setSuggestOpen(false)
+        }
+      } finally {
+        if (!controller.signal.aborted) setSuggestLoading(false)
+      }
+    }, 300)
+    return () => clearTimeout(debounceRef.current)
+  }, [query])
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (searchBoxRef.current && !searchBoxRef.current.contains(e.target as Node)) {
+        setSuggestOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  /** Show one film's results without another round trip. */
+  const pickSuggestion = (m: Movie) => {
+    setQuery(m.title)
+    setMovies(suggestions)
+    setUnconfigured(false)
+    setSuggestOpen(false)
+    setActiveIndex(-1)
+  }
+
+  /** Enter runs a full search; arrows move through the suggestions first. */
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (suggestOpen && suggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setActiveIndex((i) => Math.min(i + 1, suggestions.length - 1))
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setActiveIndex((i) => Math.max(i - 1, 0))
+        return
+      }
+      if (e.key === 'Enter' && activeIndex >= 0) {
+        e.preventDefault()
+        pickSuggestion(suggestions[activeIndex])
+        return
+      }
+      if (e.key === 'Escape') {
+        setSuggestOpen(false)
+        return
+      }
+    }
+    if (e.key === 'Enter') runSearch()
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader title="Movies" subtitle="Real listings, meetups and movie partners" />
 
       <AnimatedPage delay={50}>
-        <div className="relative">
+        <div className="relative" ref={searchBoxRef}>
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-surface-400" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') runSearch()
-            }}
-            placeholder="Search movies..."
-            className="input pl-12 py-3.5"
+            onKeyDown={handleSearchKeyDown}
+            onFocus={() => suggestions.length > 0 && setSuggestOpen(true)}
+            placeholder="Type a movie name..."
+            autoComplete="off"
+            className="input pl-12 pr-12 py-3.5"
           />
+          {suggestLoading && (
+            <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-surface-400 animate-spin" />
+          )}
+          {suggestOpen && suggestions.length > 0 && (
+            <ul className="absolute z-30 left-0 right-0 mt-1 glass-card overflow-hidden shadow-lg max-h-96 overflow-y-auto">
+              {suggestions.map((m, i) => (
+                <li key={m.id}>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => pickSuggestion(m)}
+                    className={`w-full text-left px-4 py-2.5 flex items-center gap-3 text-sm transition-colors ${
+                      i === activeIndex
+                        ? 'bg-rose-50 dark:bg-rose-500/10'
+                        : 'hover:bg-surface-50 dark:hover:bg-surface-800'
+                    }`}
+                  >
+                    {m.posterUrl ? (
+                      <img src={m.posterUrl} alt="" className="w-9 h-13 rounded-md object-cover flex-shrink-0" style={{ height: '3.25rem' }} />
+                    ) : (
+                      <span className="w-9 rounded-md bg-surface-100 dark:bg-surface-800 flex items-center justify-center flex-shrink-0" style={{ height: '3.25rem' }}>
+                        <Clapperboard className="w-4 h-4 text-surface-300" />
+                      </span>
+                    )}
+                    <span className="min-w-0">
+                      <span className="block font-semibold truncate">{m.title}</span>
+                      <span className="block text-xs text-surface-500">
+                        {m.releaseDate ? m.releaseDate.slice(0, 4) : ''}
+                        {m.rating != null ? ` · ★ ${m.rating.toFixed(1)}` : ''}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
         <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
           {TABS.map((t) => (
