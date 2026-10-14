@@ -18,6 +18,8 @@ import {
   parseDateOfBirth,
   toIsoDate,
 } from "../services/dateOfBirthPolicy";
+import { isPlaceholderPhone } from "../services/phonePolicy";
+import { normaliseIndianPhone, phoneErrorBody, phoneLookupCandidates } from "../services/phoneNumber";
 
 /** Rejection when a user tries to self-edit an identity field (name, gender). */
 const IDENTITY_CHANGE_ADMIN_ONLY_MESSAGE =
@@ -85,16 +87,7 @@ export async function getProfile(req: AuthedRequest, res: Response): Promise<voi
 
 export async function updateProfile(req: AuthedRequest, res: Response): Promise<void> {
   try {
-    const { fullName, dateOfBirth, bio, city, country, gender } = req.body;
-
-    // The mobile number is deliberately not editable by the account owner.
-    // `phone` is not in the allowlist below, so it would be silently ignored;
-    // saying so explicitly is better than letting someone believe they changed
-    // it. Only an administrator can update a number.
-    if (req.body && Object.prototype.hasOwnProperty.call(req.body, "phone")) {
-      sendError(res, PHONE_CHANGE_ADMIN_ONLY_MESSAGE, 403, PHONE_CHANGE_ADMIN_ONLY_CODE);
-      return;
-    }
+    const { fullName, dateOfBirth, bio, city, country, gender, phone } = req.body;
 
     // Name and gender are identity fields: set once during onboarding, then
     // frozen. After that only an administrator can change them (via
@@ -109,7 +102,7 @@ export async function updateProfile(req: AuthedRequest, res: Response): Promise<
     // name/gender keeps working.
     const current = await prisma.user.findUnique({
       where: { id: req.user!.userId },
-      select: { fullName: true, gender: true, city: true, dateOfBirth: true },
+      select: { fullName: true, gender: true, city: true, dateOfBirth: true, phone: true },
     });
     const identityLocked = Boolean(current?.city && current.city.trim());
     if (identityLocked) {
@@ -125,6 +118,40 @@ export async function updateProfile(req: AuthedRequest, res: Response): Promise<
 
     // Input validation with length limits
     const sanitized: Record<string, any> = {};
+
+    // The mobile number is admin-only EXCEPT for one case: an account that never
+    // had a real number (a social sign-up placeholder) may set it exactly once.
+    // Once a real number is stored the field is frozen, the same rule already
+    // applied to name, gender and date of birth. The value is stored unverified,
+    // because SMS OTP is switched off - a self-entered number is never proof of
+    // ownership.
+    if (phone !== undefined) {
+      if (!isPlaceholderPhone(current?.phone)) {
+        sendError(res, PHONE_CHANGE_ADMIN_ONLY_MESSAGE, 403, PHONE_CHANGE_ADMIN_ONLY_CODE);
+        return;
+      }
+      const parsedPhone = normaliseIndianPhone(phone);
+      if (!parsedPhone.ok) {
+        const body = phoneErrorBody(parsedPhone);
+        sendError(res, body.message, 400, body.code);
+        return;
+      }
+      // Match every spelling so a number already held in a legacy format still
+      // counts as taken.
+      const taken = await prisma.user.findFirst({
+        where: {
+          phone: { in: phoneLookupCandidates(parsedPhone.e164) },
+          NOT: { id: req.user!.userId },
+        },
+        select: { id: true },
+      });
+      if (taken) {
+        sendError(res, "That mobile number is already registered.", 409, "PHONE_TAKEN");
+        return;
+      }
+      sanitized.phone = parsedPhone.e164;
+      sanitized.mobileVerified = false;
+    }
     if (fullName !== undefined) {
       if (typeof fullName !== 'string' || fullName.length > 100) {
         sendError(res, "Full name must be 100 characters or less.", 400, "VALIDATION_ERROR");
@@ -189,7 +216,7 @@ export async function updateProfile(req: AuthedRequest, res: Response): Promise<
     const updated = await prisma.user.update({
       where: { id: req.user!.userId },
       data: sanitized,
-      select: { id: true, fullName: true, dateOfBirth: true, bio: true, city: true, country: true, gender: true, role: true, activeRole: true },
+      select: { id: true, fullName: true, dateOfBirth: true, bio: true, city: true, country: true, gender: true, phone: true, mobileVerified: true, role: true, activeRole: true },
     });
     sendSuccess(res, updated, "Profile updated.");
   } catch (err) {

@@ -11,8 +11,9 @@ import { Avatar } from '../../components/Avatar'
 import { useAvatarUpload } from '../../lib/photo'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { LocationInput } from '../../components/LocationInput'
+import { isPlaceholderPhone, toTenDigits } from '../../lib/phone'
 import {
-  User, MapPin, Check, ArrowRight, ArrowLeft, Camera, Calendar,
+  User, MapPin, Check, ArrowRight, ArrowLeft, Camera, Calendar, Phone,
 } from 'lucide-react'
 
 /** Latest date of birth that still satisfies the 18+ rule. */
@@ -40,9 +41,13 @@ const profileSchema = z.object({
   city: z.string().optional().or(z.literal('')),
   country: z.string().optional().or(z.literal('')),
   gender: z.enum(['MALE', 'FEMALE', 'OTHER']).optional(),
+  phone: z.string().optional().or(z.literal('')),
 }).refine((data) => !data.dateOfBirth || ageYears(data.dateOfBirth) >= 18, {
   message: 'You must be at least 18 years old',
   path: ['dateOfBirth'],
+}).refine((data) => !data.phone || /^[6-9]\d{9}$/.test(toTenDigits(data.phone)), {
+  message: 'Enter a valid 10-digit Indian mobile number',
+  path: ['phone'],
 })
 
 type ProfileForm = z.infer<typeof profileSchema>
@@ -82,8 +87,14 @@ export function ProfileCompletionPage() {
       city: user?.city || '',
       country: user?.country || 'India',
       gender: (user?.gender as ProfileForm['gender']) || undefined,
+      // Never pre-fill the synthetic `pending:` placeholder as if it were a number.
+      phone: isPlaceholderPhone(user?.phone) ? '' : user?.phone || '',
     },
   })
+
+  // A Google/social account arrives with no real number, so this is the one
+  // place it can be supplied (the profile editor offers it too, but only once).
+  const showPhoneField = isPlaceholderPhone(user?.phone)
 
   const watchedGender = watch('gender')
   const watchedBio = watch('bio')
@@ -129,6 +140,7 @@ export function ProfileCompletionPage() {
       const response = await api.put('/users/profile', {
         fullName: data.fullName.trim(),
         ...(data.dateOfBirth ? { dateOfBirth: data.dateOfBirth } : {}),
+        ...(showPhoneField && data.phone ? { phone: data.phone } : {}),
         bio: data.bio || '',
         city: data.city.trim(),
         country: data.country || '',
@@ -278,6 +290,27 @@ export function ProfileCompletionPage() {
                           </div>
                           {errors.dateOfBirth && <p className="mt-1 text-xs text-danger-500 font-medium">{errors.dateOfBirth.message}</p>}
                         </div>
+
+                        {showPhoneField && (
+                          <div>
+                            <label className="label">Mobile Number</label>
+                            <div className="relative">
+                              <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 shrink-0 pointer-events-none text-surface-400" />
+                              <input
+                                {...register('phone')}
+                                type="tel"
+                                inputMode="numeric"
+                                maxLength={13}
+                                className="input pl-11"
+                                placeholder="98765 43210"
+                              />
+                            </div>
+                            <p className="mt-1 text-xs text-surface-400">
+                              We'll use this to reach you. Verification is not available yet, so it will be saved as unverified.
+                            </p>
+                            {errors.phone && <p className="mt-1 text-xs text-danger-500 font-medium">{errors.phone.message}</p>}
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -392,6 +425,15 @@ export function ProfileCompletionPage() {
                             <span className="text-surface-500">Gender</span>
                             <span className="font-semibold text-surface-900 dark:text-white">{watch('gender') || '—'}</span>
                           </div>
+                          {showPhoneField && (
+                            <>
+                              <div className="h-px bg-surface-200 dark:bg-surface-700" />
+                              <div className="flex justify-between items-center">
+                                <span className="text-surface-500">Mobile</span>
+                                <span className="font-semibold text-surface-900 dark:text-white">{watch('phone') || '—'}</span>
+                              </div>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>

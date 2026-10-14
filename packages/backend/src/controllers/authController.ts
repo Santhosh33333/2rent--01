@@ -30,6 +30,7 @@ import {
 } from "../rbac/adminSecurity";
 import { resolveSessionActiveRole } from "../rbac/activeRole";
 import { kycSessionFields } from "../services/kycStatus";
+import { placeholderPhone } from "../services/phonePolicy";
 
 function maskPhone(phone: string): string {
   return maskIdentifier("SMS", phone);
@@ -812,7 +813,10 @@ export async function googleSignIn(req: Request, res: Response): Promise<void> {
         const u = await tx.user.create({
           data: {
             email: email || `google-${uid}@Sidebud.app`,
-            phone: phone_number || `+91${uid.slice(0, 10)}`,
+            // Never fabricate a dialable number for a social sign-up. Google does
+            // not return a phone number, so the account stores a clearly synthetic
+            // placeholder and the owner is asked for their real number once.
+            phone: phone_number || placeholderPhone(uid),
             passwordHash,
             fullName: name || "Google User",
             dateOfBirth: new Date("2000-01-01"),

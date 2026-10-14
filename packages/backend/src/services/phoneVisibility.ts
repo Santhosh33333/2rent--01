@@ -19,6 +19,8 @@
 // has proven they control.
 // ============================================================================
 
+import { isPlaceholderPhone } from "./phonePolicy";
+
 /** Why the number is unverified, so the UI can explain rather than just show a red dot. */
 export const PHONE_VERIFICATION_UNAVAILABLE_MESSAGE =
   "Phone number verification is not available right now. Your number is saved but unverified. Verification will be enabled in a future update.";
@@ -42,7 +44,9 @@ export const PHONE_VERIFICATION_ENABLED = false;
  * visible digits is enough for a human to recognise their own contact.
  */
 export function maskPhone(phone?: string | null): string | null {
-  if (!phone) return null;
+  // A social sign-up placeholder is not a number and must never be rendered as
+  // one, even partially.
+  if (!phone || isPlaceholderPhone(phone)) return null;
   const str = String(phone);
   const digits = str.replace(/\D/g, "");
   if (digits.length === 0) return null;
@@ -63,6 +67,9 @@ export function phoneForViewer(
   ownerId: string
 ): { phone: string | null; phoneVisible: boolean; phoneMasked: boolean } {
   const isOwner = Boolean(viewerId) && viewerId === ownerId;
+  if (isPlaceholderPhone(phone)) {
+    return { phone: null, phoneVisible: false, phoneMasked: false };
+  }
   if (isOwner) {
     return { phone: phone ?? null, phoneVisible: true, phoneMasked: false };
   }

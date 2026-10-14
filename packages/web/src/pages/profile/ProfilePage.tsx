@@ -22,6 +22,7 @@ import toast from 'react-hot-toast'
 import { api } from '../../lib/api'
 import { Avatar } from '../../components/Avatar'
 import { getErrorMessage } from '../../lib/error'
+import { isPlaceholderPhone } from '../../lib/phone'
 
 /** Latest date of birth that still satisfies the 18+ rule. */
 const MAX_DOB = (() => {
@@ -56,6 +57,11 @@ export function ProfilePage() {
   // those members may still set their real date once. Mirrors the server rule in
   // services/dateOfBirthPolicy.ts.
   const dobLocked = Boolean(user?.dateOfBirth && user.dateOfBirth.slice(0, 10) !== '2000-01-01')
+  // A social sign-up that never supplied a number holds a `pending:` placeholder
+  // rather than a real number. That is the ONE case where the owner may set the
+  // number themselves; once a real number is stored it is admin-only, like the
+  // rest of the identity fields. Mirrors services/phonePolicy.ts.
+  const phoneEditable = isPlaceholderPhone(user?.phone)
   const avatar = useAvatarUpload((avatarUrl) => updateUser({ avatarUrl }))
   const [profileStats, setProfileStats] = useState<{ walksCompleted?: number; eventsJoined?: number; averageRating?: number; joinedYear?: number } | null>(null)
   const [verificationStatus, setVerificationStatus] = useState<Record<string, unknown> | null>(null)
@@ -66,7 +72,7 @@ export function ProfilePage() {
     defaultValues: {
       name: user?.name || '',
       email: user?.email || '',
-      phone: user?.phone || '',
+      phone: phoneEditable ? '' : user?.phone || '',
       dateOfBirth: user?.dateOfBirth?.slice(0, 10) || '',
       bio: user?.bio || '',
       city: user?.city || '',
@@ -102,6 +108,11 @@ export function ProfilePage() {
       toast.error('You must be at least 18 years old.')
       return
     }
+    // The server validates too; this keeps the message next to the field.
+    if (phoneEditable && data.phone && !/^[6-9]\d{9}$/.test(data.phone.replace(/\D/g, ''))) {
+      toast.error('Enter a valid 10-digit Indian mobile number.')
+      return
+    }
     if (saveLock.current) return
     saveLock.current = true
     setSaving(true)
@@ -114,6 +125,7 @@ export function ProfilePage() {
       await api.put('/users/profile', {
         ...(identityLocked ? {} : { fullName: data.name?.trim() }),
         ...(!dobLocked && data.dateOfBirth ? { dateOfBirth: data.dateOfBirth } : {}),
+        ...(phoneEditable && data.phone ? { phone: data.phone } : {}),
         bio: data.bio || '',
         city: data.city || '',
         country: data.country || '',
@@ -122,6 +134,7 @@ export function ProfilePage() {
       updateUser({
         ...(identityLocked ? {} : { name: data.name?.trim(), fullName: data.name?.trim() }),
         ...(dobLocked ? {} : { dateOfBirth: data.dateOfBirth }),
+        ...(phoneEditable && data.phone ? { phone: data.phone } : {}),
         bio: data.bio,
         city: data.city,
         country: data.country,
@@ -142,7 +155,7 @@ export function ProfilePage() {
     reset({
       name: user?.name || '',
       email: user?.email || '',
-      phone: user?.phone || '',
+      phone: phoneEditable ? '' : user?.phone || '',
       dateOfBirth: user?.dateOfBirth?.slice(0, 10) || '',
       bio: user?.bio || '',
       city: user?.city || '',
@@ -246,7 +259,7 @@ export function ProfilePage() {
               <p className="text-white/60 text-sm mb-3">@{user?.email?.split('@')[0] || 'user'}</p>
               <div className="flex items-center justify-center sm:justify-start gap-4 text-sm text-white/60">
                 <span className="flex items-center gap-1.5"><Mail className="w-3.5 h-3.5" />{user?.email || 'No email'}</span>
-                <span className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5" />{user?.phone || 'No phone'}</span>
+                <span className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5" />{phoneEditable ? 'No phone' : user?.phone}</span>
               </div>
             </div>
 
@@ -324,14 +337,33 @@ export function ProfilePage() {
                 <label className="label">Phone Number</label>
                 <div className="relative">
                   <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 shrink-0 pointer-events-none text-surface-400" />
-                  <input {...register('phone')} disabled className="input pl-11" placeholder="+91 98765 43210" />
+                  <input
+                    {...register('phone')}
+                    disabled={!editing || !phoneEditable}
+                    inputMode="numeric"
+                    maxLength={13}
+                    className="input pl-11"
+                    placeholder="98765 43210"
+                  />
                 </div>
-                {user?.phone && !user?.phoneVerified && (
-                  <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                    Not verified. Phone verification is not available right now &mdash; it will be enabled in a future update.
-                  </p>
+                {phoneEditable ? (
+                  editing ? (
+                    <p className="mt-1 text-xs text-surface-500">
+                      Add the mobile number you actually use. You can set it once.
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                      No mobile number on file yet. Add one from Edit profile.
+                    </p>
+                  )
+                ) : (
+                  !user?.phoneVerified && (
+                    <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                      Not verified. Phone verification is not available right now &mdash; it will be enabled in a future update.
+                    </p>
+                  )
                 )}
-                {editing && (
+                {editing && !phoneEditable && (
                   <p className="mt-1 text-xs text-surface-500">
                     Your mobile number can only be changed by Nabri support or an administrator. Please contact us.
                   </p>
@@ -420,7 +452,7 @@ export function ProfilePage() {
                     // Having a number on file is NOT verification. Report the
                     // server's real flag, so this badge cannot claim a number
                     // was confirmed when it never was.
-                    { label: 'Mobile', status: user?.phoneVerified ? 'verified' as const : user?.phone ? 'pending' as const : 'not-started' as const },
+                    { label: 'Mobile', status: user?.phoneVerified ? 'verified' as const : !phoneEditable ? 'pending' as const : 'not-started' as const },
                     { label: 'Selfie', status: docStatus(has('selfie', 'selfie')) },
                     { label: 'Government ID', status: docStatus(has('govId', 'govId')) },
                     { label: 'Address Proof', status: docStatus(has('addressProof', 'addressProof')) },
