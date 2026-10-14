@@ -226,6 +226,61 @@ async function recipientsFor(period: ReportPeriod): Promise<Map<DigestRole, stri
   return out;
 }
 
+/** Per-recipient outcome of one report, as returned by the mailer. */
+export interface ReportRecipientResult {
+  role: DigestRole;
+  attempted: number;
+  sent: number;
+  skipped: boolean;
+  error?: string;
+}
+
+/** What a report run produced, for the on-demand endpoint to report back. */
+export interface ReportRunSummary {
+  period: ReportPeriod;
+  windowLabel: string;
+  since: string;
+  until: string;
+  /** True when the once-per-period claim was bypassed (the manual trigger). */
+  forced: boolean;
+  recipients: ReportRecipientResult[];
+}
+
+/**
+ * Builds and sends one cadence's sections to every recipient of the period.
+ *
+ * Shared by the scheduler and the on-demand trigger so the two can never drift:
+ * a manual "send now" that builds different numbers than the scheduled mail would
+ * be worse than no manual trigger at all. It does not touch the claim - deciding
+ * whether this period may send is the caller's job.
+ */
+async function deliver(
+  period: ReportPeriod,
+  window: ReportWindow,
+  now: Date,
+): Promise<ReportRecipientResult[]> {
+  const sections = await sectionsForPeriod(period, window, now);
+  const recipients = await recipientsFor(period);
+
+  const results: ReportRecipientResult[] = [];
+  let anyRecipient = false;
+  for (const [role, addrs] of recipients) {
+    if (addrs.length) anyRecipient = true;
+    const res = await sendDigestForRole(role, addrs, sections, window);
+    results.push(res);
+    if (res.skipped) continue;
+    if (res.error) console.error(`[REPORT] ${period} ${role}: ${res.sent}/${res.attempted} sent - ${res.error}`);
+    else console.log(`[REPORT] ${period} ${role}: ${res.sent}/${res.attempted} sent`);
+  }
+
+  if (!anyRecipient) {
+    console.log(
+      `[REPORT] ${periodTitle(period)} (${window.label}): no recipients configured - built the report but sent nothing.`,
+    );
+  }
+  return results;
+}
+
 /**
  * Builds and sends one cadence. Never throws: a scheduler that dies takes every
  * other background job with it.
@@ -239,26 +294,53 @@ export async function runReport(period: ReportPeriod, now = new Date()): Promise
   if (!(await claimPeriod(period, window))) return;
 
   try {
-    const sections = await sectionsForPeriod(period, window, now);
-    const recipients = await recipientsFor(period);
-
-    let anyRecipient = false;
-    for (const [role, addrs] of recipients) {
-      if (addrs.length) anyRecipient = true;
-      const res = await sendDigestForRole(role, addrs, sections, window);
-      if (res.skipped) continue;
-      if (res.error) console.error(`[REPORT] ${period} ${role}: ${res.sent}/${res.attempted} sent - ${res.error}`);
-      else console.log(`[REPORT] ${period} ${role}: ${res.sent}/${res.attempted} sent`);
-    }
-
-    if (!anyRecipient) {
-      console.log(
-        `[REPORT] ${periodTitle(period)} (${window.label}): no recipients configured - built the report but sent nothing.`,
-      );
-    }
+    await deliver(period, window, now);
   } catch (err) {
     console.error(`[REPORT] ${period} run failed:`, (err as Error)?.message ?? err);
   }
+}
+
+/**
+ * Sends a report on demand and returns the per-recipient outcome.
+ *
+ * Exists because "the report did not arrive" is otherwise indistinguishable from
+ * "the report was never sent". Until now the only feedback was an absence, and
+ * the operator had no way to make the scheduler send now and see what happened -
+ * whether the mailer accepted it, whether there were recipients at all, or which
+ * provider rejected it. This runs the same builder and mailer as the schedule and
+ * hands the result back over HTTP, so delivery can be confirmed immediately
+ * instead of waiting for the next boundary.
+ *
+ * It deliberately bypasses the once-per-period claim: a period already sent today
+ * must still be re-sendable, or the diagnostic cannot diagnose the case it exists
+ * for (the one where a report went out and is being questioned). It does record
+ * the claim best-effort after the request, so the 60-second tick does not
+ * immediately fire a second copy for the same period.
+ */
+export async function runReportNow(period: ReportPeriod, now = new Date()): Promise<ReportRunSummary> {
+  const window = periodWindow(period, now);
+
+  // Marked as attempted up front so a tick landing mid-send does not also queue it,
+  // and claimed durably (best effort) so a restart in the same window cannot send a
+  // duplicate. A pre-existing claim (P2002) is expected and ignored - the whole
+  // point of the manual trigger is that it sends regardless.
+  markRun(period, window);
+  try {
+    await prisma.digestRun.create({ data: { period, windowKey: window.key } });
+  } catch {
+    // Already claimed, or the claim table is unreachable. Neither blocks a send the
+    // operator explicitly asked for.
+  }
+
+  const recipients = await deliver(period, window, now);
+  return {
+    period,
+    windowLabel: window.label,
+    since: window.since.toISOString(),
+    until: window.until.toISOString(),
+    forced: true,
+    recipients,
+  };
 }
 
 /**

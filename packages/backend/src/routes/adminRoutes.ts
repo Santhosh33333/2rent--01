@@ -6,6 +6,7 @@ import { sanitizeInput, validateRequest } from "../middleware/validation";
 import { requireSectionAction } from "../rbac/permissions";
 import { upload, privateUpload, statementUpload } from "../middleware/upload";
 import * as adminController from "../controllers/adminController";
+import * as adminReportController from "../controllers/adminReportController";
 import * as bankReconciliationController from "../controllers/bankReconciliationController";
 import * as communityController from "../controllers/communityController";
 import * as eventController from "../controllers/eventController";
@@ -276,6 +277,10 @@ router.post("/withdrawals/:id/approve-with-proof", requireSectionAction("WITHDRA
 router.post("/withdrawals/:id/reject", requireSectionAction("WITHDRAWALS", "REJECT"), [body("reason").optional().isString()], sanitizeInput, validateRequest, adminController.rejectWithdrawal);
 router.get("/reports", reportsManage, adminController.getReports);
 router.post("/reports/:id/resolve", requireSectionAction("REPORTS", "APPROVE"), [body("note").optional().isString()], sanitizeInput, validateRequest, adminController.resolveReport);
+// On-demand send of an admin report email. Super-admin only: it mails real staff,
+// and its purpose is to diagnose "the scheduled report never arrived" by running
+// the same build-and-send path synchronously and returning what the mailer said.
+router.post("/reports/digest/run", requireSuperAdmin, [body("period").optional().isString()], sanitizeInput, validateRequest, adminReportController.runDigestNow);
 router.get("/admins", adminMgmtView, adminController.getAdminAccounts);
 router.post("/admins", requireSuperAdmin, adminController.createAdminAccount);
 router.patch("/admins/:userId", requireSuperAdmin, adminController.updateAdminAccount);

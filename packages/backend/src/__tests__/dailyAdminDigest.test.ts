@@ -857,6 +857,58 @@ describe("scheduler", () => {
     expect(isDue("DAILY", new Date(2026, 9, 4, 0, 6))).toBe(false);
   });
 
+  it("runReportNow sends even when the period was already claimed by the schedule", async () => {
+    const { runReport, runReportNow } = await load();
+    const { sendEmail } = await import("../services/emailService.js");
+    (sendEmail as any).mockResolvedValue({ ok: true, provider: "test" });
+    process.env.DIGEST_EMAIL_SUPER_ADMIN = "boss@example.com";
+    healthy();
+    const now = new Date(2026, 9, 4, 0, 5);
+
+    // The scheduled run claims and sends the period...
+    await runReport("DAILY", now);
+    expect((sendEmail as any).mock.calls.length).toBeGreaterThan(0);
+
+    // ...and the manual trigger must still send a copy. If it went through the
+    // same once-per-period gate, "send now" would be a no-op for every period that
+    // already went out, which is exactly the case an operator asks about.
+    (sendEmail as any).mockClear();
+    const summary = await runReportNow("DAILY", now);
+
+    expect((sendEmail as any).mock.calls.length).toBeGreaterThan(0);
+    expect(summary.period).toBe("DAILY");
+    expect(summary.forced).toBe(true);
+    expect(summary.recipients.some((r) => r.sent > 0)).toBe(true);
+
+    delete process.env.DIGEST_EMAIL_SUPER_ADMIN;
+  });
+
+  it("runReportNow reports the recipient outcome when there is nobody to send to", async () => {
+    const { runReportNow } = await load();
+    delete process.env.DIGEST_EMAIL_SUPER_ADMIN;
+    healthy();
+
+    const summary = await runReportNow("DAILY", new Date(2026, 9, 4, 0, 5));
+
+    // A configured-but-empty recipient list is the silent failure this endpoint
+    // exists to make legible: the caller gets rows back saying "skipped", not an
+    // empty object that looks like success.
+    expect(summary.recipients.length).toBeGreaterThan(0);
+    expect(summary.recipients.every((r) => r.skipped)).toBe(true);
+  });
+
+  it("runReportNow records the claim so the tick does not immediately resend", async () => {
+    const { runReportNow, isDue } = await load();
+    healthy();
+    process.env.DIGEST_EMAIL_SUPER_ADMIN = "boss@example.com";
+    const now = new Date(2026, 9, 4, 0, 5);
+
+    await runReportNow("DAILY", now);
+
+    expect(isDue("DAILY", new Date(2026, 9, 4, 0, 6))).toBe(false);
+    delete process.env.DIGEST_EMAIL_SUPER_ADMIN;
+  });
+
   it("fires a weekly report only on a Monday", async () => {
     const { isDue } = await load();
     // 4 Oct 2026 is a Sunday, 5 Oct a Monday.
