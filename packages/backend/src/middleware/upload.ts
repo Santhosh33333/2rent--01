@@ -90,6 +90,55 @@ export const videoUpload = multer({
   },
 });
 
+// Audio for listening rooms. Same storage and same "extension OR mime" rule as
+// the image/video filters, because Android's picker hands back
+// `application/octet-stream` for many ordinary `.mp3` picks. Audio shares the
+// video cap: a full song is routinely larger than the 5 MB image cap, and the
+// room can play a video too, so one bucket covers both.
+const AUDIO_EXT_BY_MIME: Record<string, string> = {
+  "audio/mpeg": ".mp3",
+  "audio/mp3": ".mp3",
+  "audio/mp4": ".m4a",
+  "audio/x-m4a": ".m4a",
+  "audio/aac": ".aac",
+  "audio/ogg": ".ogg",
+  "audio/opus": ".opus",
+  "audio/wav": ".wav",
+  "audio/x-wav": ".wav",
+  "audio/flac": ".flac",
+  "audio/x-flac": ".flac",
+  "audio/webm": ".webm",
+};
+
+// Anchored, and the same set mediaUrl.ts accepts, so a file this filter stores
+// can never be one the room then refuses to play.
+const MEDIA_EXT = /^\.(mp3|m4a|aac|ogg|opus|wav|flac|mp4|mov|m4v|webm)$/;
+
+export const mediaFilter = (_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (MEDIA_EXT.test(ext)) {
+    cb(null, true);
+    return;
+  }
+  const mime = (file.mimetype || "").toLowerCase();
+  const mimeExt = AUDIO_EXT_BY_MIME[mime] ?? VIDEO_EXT_BY_MIME[mime];
+  if (mimeExt) {
+    file.originalname = `${file.originalname || "media"}${mimeExt}`;
+    cb(null, true);
+    return;
+  }
+  cb(new Error("Only audio or video files are allowed (mp3, m4a, aac, ogg, opus, wav, flac, mp4, mov, m4v, webm)."));
+};
+
+export const mediaUpload = multer({
+  storage: blobStorageEngine("public"),
+  fileFilter: mediaFilter,
+  limits: {
+    fileSize: env.MAX_VIDEO_SIZE,
+    files: 1,
+  },
+});
+
 // KYC documents live under uploads/private and are only served through the
 // authenticated access guard in middleware/fileAccess.ts — never publicly.
 export const privateUpload = multer({

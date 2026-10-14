@@ -26,6 +26,7 @@ import {
   endRoom,
   setRoomMedia,
   addMembers,
+  uploadRoomMedia,
 } from '../controllers/musicRoomController';
 import { emitToMusicRoom } from '../services/socketService';
 
@@ -38,11 +39,17 @@ function makeRes() {
   res.json = vi.fn().mockReturnValue(res);
   return res;
 }
-function makeReq(opts: { body?: Record<string, unknown>; params?: Record<string, string>; userId?: string } = {}) {
+function makeReq(opts: {
+  body?: Record<string, unknown>;
+  params?: Record<string, string>;
+  userId?: string;
+  file?: unknown;
+} = {}) {
   return {
     body: opts.body ?? {},
     params: opts.params ?? {},
     user: { userId: opts.userId ?? ME },
+    file: opts.file,
   } as any;
 }
 function statusOf(res: any) {
@@ -246,5 +253,75 @@ describe('addMembers', () => {
     expect(statusOf(res)).toBe(200);
     expect(body(res).data.memberCount).toBe(3);
     expect(emitToMusicRoom).toHaveBeenCalledWith(ROOM, 'music_room_presence', { roomId: ROOM, memberCount: 3 });
+  });
+});
+
+describe('uploadRoomMedia', () => {
+  it('forbids a non-host', async () => {
+    prismaMock.musicRoomMember.findUnique.mockResolvedValue(membership('GUEST'));
+    const res = makeRes();
+    await uploadRoomMedia(
+      makeReq({ params: { id: ROOM }, file: { filename: 'x.mp3', originalname: 'x.mp3' } }),
+      res
+    );
+    expect(statusOf(res)).toBe(403);
+    expect(prismaMock.musicRoom.update).not.toHaveBeenCalled();
+  });
+
+  it('requires a file', async () => {
+    prismaMock.musicRoomMember.findUnique.mockResolvedValue(membership('HOST'));
+    const res = makeRes();
+    await uploadRoomMedia(makeReq({ params: { id: ROOM } }), res);
+    expect(statusOf(res)).toBe(400);
+    expect(prismaMock.musicRoom.update).not.toHaveBeenCalled();
+  });
+
+  it('stores an audio upload and broadcasts it', async () => {
+    prismaMock.musicRoomMember.findUnique.mockResolvedValue(membership('HOST'));
+    prismaMock.musicRoom.update.mockResolvedValue(
+      room({ mediaUrl: '/uploads/abc.mp3', mediaKind: 'AUDIO', mediaTitle: 'My song', version: 2 })
+    );
+    const res = makeRes();
+    await uploadRoomMedia(
+      makeReq({
+        params: { id: ROOM },
+        body: { title: 'My song' },
+        file: { filename: 'abc.mp3', originalname: 'whatever-9f2.mp3' },
+      }),
+      res
+    );
+
+    expect(statusOf(res)).toBe(200);
+    const arg = prismaMock.musicRoom.update.mock.calls[0][0];
+    expect(arg.data.mediaUrl).toBe('/uploads/abc.mp3');
+    expect(arg.data.mediaKind).toBe('AUDIO');
+    expect(arg.data.mediaTitle).toBe('My song');
+    expect(arg.data.positionSec).toBe(0);
+    expect(arg.data.isPlaying).toBe(false);
+    expect(emitToMusicRoom).toHaveBeenCalledWith(
+      ROOM,
+      'music_room_sync',
+      expect.objectContaining({ mediaUrl: '/uploads/abc.mp3', mediaKind: 'AUDIO' })
+    );
+  });
+
+  it('classifies a video upload as VIDEO and falls back to the file name for a title', async () => {
+    prismaMock.musicRoomMember.findUnique.mockResolvedValue(membership('HOST'));
+    prismaMock.musicRoom.update.mockResolvedValue(
+      room({ mediaUrl: '/uploads/clip.mp4', mediaKind: 'VIDEO', mediaTitle: 'holiday', version: 3 })
+    );
+    const res = makeRes();
+    await uploadRoomMedia(
+      makeReq({
+        params: { id: ROOM },
+        file: { filename: 'clip.mp4', originalname: 'holiday.mp4' },
+      }),
+      res
+    );
+
+    expect(statusOf(res)).toBe(200);
+    const arg = prismaMock.musicRoom.update.mock.calls[0][0];
+    expect(arg.data.mediaKind).toBe('VIDEO');
+    expect(arg.data.mediaTitle).toBe('holiday');
   });
 });

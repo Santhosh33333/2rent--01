@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { authenticateToken } from "../middleware/auth";
 import { sanitizeInput } from "../middleware/validation";
+import { mediaUpload } from "../middleware/upload";
 import * as musicRoomController from "../controllers/musicRoomController";
 
 const router = Router();
@@ -21,6 +22,10 @@ router.get("/:id", musicRoomController.getRoom);
 // the socket, so a rapid play/pause/seek is not a REST round-trip.
 router.patch("/:id", sanitizeInput, musicRoomController.setRoomMedia);
 router.post("/:id/members", sanitizeInput, musicRoomController.addMembers);
+// Host uploads a file from their device to play in the room. multer runs before
+// the controller and parses the multipart body, so `sanitizeInput` is applied by
+// the controller's own reads rather than as middleware here (mirrors socialRoutes).
+router.post("/:id/media", mediaUpload.single("file"), musicRoomController.uploadRoomMedia);
 router.post("/:id/leave", musicRoomController.leaveRoom);
 router.post("/:id/end", musicRoomController.endRoom);
 

@@ -873,6 +873,15 @@ export const musicRoomApi = {
     api.patch<{ data: MusicRoomSummary }>(`/music-rooms/${roomId}`, patch),
   addMembers: (roomId: string, userIds: string[]) =>
     api.post<{ data: { added: number; memberCount: number } }>(`/music-rooms/${roomId}/members`, { userIds }),
+  /** Host uploads a file from their device to play in the room. */
+  uploadMedia: (roomId: string, file: File, title?: string) => {
+    const form = new FormData()
+    form.append('file', file)
+    if (title?.trim()) form.append('title', title.trim())
+    return api.post<{ data: MusicRoomSummary }>(`/music-rooms/${roomId}/media`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
   leave: (roomId: string) => api.post(`/music-rooms/${roomId}/leave`),
   end: (roomId: string) => api.post(`/music-rooms/${roomId}/end`),
 }

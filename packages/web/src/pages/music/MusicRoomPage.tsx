@@ -36,6 +36,7 @@ import {
   Play,
   RefreshCw,
   Trash2,
+  Upload,
   UserPlus,
   Users,
 } from 'lucide-react'
@@ -96,9 +97,12 @@ export function MusicRoomPage() {
   const [membersOpen, setMembersOpen] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [tracks, setTracks] = useState<SongTrack[]>([])
   const [urlInput, setUrlInput] = useState('')
   const [titleInput, setTitleInput] = useState('')
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const mediaRef = useRef<HTMLMediaElement | null>(null)
   const desiredRef = useRef<{ positionSec: number; isPlaying: boolean }>({ positionSec: 0, isPlaying: false })
@@ -326,6 +330,25 @@ export function MusicRoomPage() {
     const url = urlInput.trim()
     if (!url) return
     void pickTrack(url, titleInput.trim() || 'Shared media')
+  }
+
+  const uploadFile = async (file: File) => {
+    if (!roomId || uploading) return
+    setUploading(true)
+    try {
+      await musicRoomApi.uploadMedia(roomId, file, titleInput.trim() || undefined)
+      setMediaOpen(false)
+      setUrlInput('')
+      setTitleInput('')
+      // The server broadcast the new track; refresh so the host's own picker
+      // reflects the stored title and the room summary stays truthful.
+      await load()
+      toast.success('Added to the room')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Could not upload that file'))
+    } finally {
+      setUploading(false)
+    }
   }
 
   const addPeople = async (userIds: string[]) => {
@@ -615,7 +638,7 @@ export function MusicRoomPage() {
         open={mediaOpen}
         onClose={() => setMediaOpen(false)}
         title="What plays"
-        description="Pick a track from the catalogue, or paste a direct audio/video link."
+        description="Upload a file, pick a catalogue track, or paste a direct audio/video link."
       >
         {tracks.length > 0 && (
           <div className="mb-4 max-h-52 space-y-1 overflow-y-auto">
@@ -638,24 +661,60 @@ export function MusicRoomPage() {
         )}
 
         <div className="space-y-2">
+          <label className="text-xs font-semibold uppercase tracking-wide text-surface-500">Title (optional)</label>
+          <input
+            type="text"
+            value={titleInput}
+            onChange={(e) => setTitleInput(e.target.value)}
+            placeholder="e.g. Sunday night song"
+            maxLength={200}
+            className="input"
+          />
+        </div>
+
+        <div className="mt-4 space-y-2">
+          <label className="text-xs font-semibold uppercase tracking-wide text-surface-500">Upload from your device</label>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="audio/*,video/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              // Clear so picking the same file twice still fires onChange.
+              e.target.value = ''
+              if (file) void uploadFile(file)
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={busy || uploading}
+            className="btn btn-primary btn-sm w-full"
+          >
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Choose a file
+          </button>
+          <p className="text-xs text-surface-400">
+            MP3, M4A, WAV, FLAC, OGG, MP4, MOV or WEBM — up to 25 MB. Only upload what you have the right to share.
+          </p>
+        </div>
+
+        <div className="mt-4 space-y-2">
           <label className="text-xs font-semibold uppercase tracking-wide text-surface-500">Direct link</label>
           <input
             type="url"
             value={urlInput}
             onChange={(e) => setUrlInput(e.target.value)}
-            placeholder="https://…/song.mp3 or /audio/… or /uploads/…"
+            placeholder="https://…/song.mp3 or /audio/…"
             className="input"
           />
-          <input
-            type="text"
-            value={titleInput}
-            onChange={(e) => setTitleInput(e.target.value)}
-            placeholder="Title (optional)"
-            maxLength={200}
-            className="input"
-          />
-          <button type="button" onClick={pickUrl} disabled={busy || !urlInput.trim()} className="btn btn-primary btn-sm w-full">
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />} Play this
+          <button
+            type="button"
+            onClick={pickUrl}
+            disabled={busy || uploading || !urlInput.trim()}
+            className="btn btn-ghost btn-sm w-full"
+          >
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />} Play this link
           </button>
         </div>
       </Modal>

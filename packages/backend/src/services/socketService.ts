@@ -928,7 +928,7 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
     // MUSIC ROOM EVENTS
     // =====================================================================
 
-    /** A playhead, clamped the same way the controller clamps it on write. */
+    /** A sane playhead: NaN/negative/absurd now becomes 0, capped at a day. */
     const musicClampPosition = (value: unknown): number => {
       const n = Number(value);
       if (!Number.isFinite(n) || n < 0) return 0;

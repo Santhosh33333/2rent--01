@@ -11,6 +11,7 @@
  * See services/mediaUrl.ts for that rule and the reason behind it.
  */
 import { Response } from "express";
+import path from "path";
 import { AuthedRequest } from "../middleware/authTypes";
 import { prisma } from "../config/database";
 import { sendError, sendSuccess } from "../utils/response";
@@ -52,12 +53,34 @@ async function uniqueCode(): Promise<string> {
   throw new Error("could not allocate a room code");
 }
 
-/** Clamp a reported playhead to something sane; NaN/negative/absurd → 0. */
-function clampPosition(value: unknown): number {
-  const n = Number(value);
-  if (!Number.isFinite(n) || n < 0) return 0;
-  // A day of media is already far past any real track; keep the column honest.
-  return Math.min(n, 86400);
+/**
+ * Push the room's current media + playhead to everyone in it.
+ *
+ * Shared by every path that changes what is playing (REST set-media, upload),
+ * so the payload a guest receives is identical no matter which door the host
+ * came through — the drift this feature can least afford is between its own
+ * two writers.
+ */
+function emitRoomSync(room: {
+  id: string;
+  version: number;
+  mediaKind: string;
+  mediaUrl: string | null;
+  mediaTitle: string | null;
+  isPlaying: boolean;
+  positionSec: number;
+  updatedAt: Date;
+}): void {
+  emitToMusicRoom(room.id, "music_room_sync", {
+    roomId: room.id,
+    version: room.version,
+    mediaKind: room.mediaKind,
+    mediaUrl: room.mediaUrl,
+    mediaTitle: room.mediaTitle,
+    isPlaying: room.isPlaying,
+    positionSec: room.positionSec,
+    updatedAt: room.updatedAt,
+  });
 }
 
 function memberSummary(room: {
@@ -429,21 +452,74 @@ export async function setRoomMedia(req: AuthedRequest, res: Response): Promise<v
       data: { ...data, positionSec: 0, isPlaying: false, version: { increment: 1 } },
     });
 
-    emitToMusicRoom(req.params.id, "music_room_sync", {
-      roomId: req.params.id,
-      version: updated.version,
-      mediaKind: updated.mediaKind,
-      mediaUrl: updated.mediaUrl,
-      mediaTitle: updated.mediaTitle,
-      isPlaying: updated.isPlaying,
-      positionSec: updated.positionSec,
-      updatedAt: updated.updatedAt,
-    });
+    emitRoomSync(updated);
 
     sendSuccess(res, memberSummary(updated, 0, membership.role), "Room updated.");
   } catch (err: any) {
     console.error("[setMusicRoomMedia]", err?.message);
     sendError(res, "Failed to update the room.", 500, "INTERNAL_ERROR");
+  }
+}
+
+/**
+ * Upload a file from the host's device and make it the room's media (host only).
+ *
+ * Exists so a room can be started without the host first finding somewhere to
+ * host a file: the catalogue is licensed content the app does not own, so the
+ * practical way to get real music into a room is the host's own file. The format
+ * is validated against the same rules as a pasted link (`checkMediaUrl`), which
+ * is why an audio upload cannot sneak in a type the player would then refuse.
+ */
+export async function uploadRoomMedia(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const userId = req.user!.userId;
+    const membership = await findMembership(req.params.id, userId);
+    if (!membership || !membership.room.isActive) {
+      sendError(res, "Room not found.", 404, "ROOM_NOT_FOUND");
+      return;
+    }
+    if (membership.role !== "HOST") {
+      sendError(res, "Only the host can change what is playing.", 403, "FORBIDDEN");
+      return;
+    }
+
+    const file = req.file as Express.Multer.File | undefined;
+    if (!file) {
+      sendError(res, "Choose a file to upload.", 400, "VALIDATION_ERROR");
+      return;
+    }
+
+    const mediaUrl = `/uploads/${file.filename}`;
+    const check = checkMediaUrl(mediaUrl);
+    if (!check.ok) {
+      // The multer filter already restricts this, but re-check so a stored blob
+      // can never become room state the player then fails on.
+      sendError(res, describeMediaProblem(check.problem), 400, "INVALID_MEDIA");
+      return;
+    }
+
+    const titleInput = typeof req.body?.title === "string" ? req.body.title.trim() : "";
+    const fallback = file.originalname ? path.parse(file.originalname).name : check.kind === "VIDEO" ? "Video" : "Song";
+    const mediaTitle = (titleInput || fallback).slice(0, 200);
+
+    const updated = await prisma.musicRoom.update({
+      where: { id: req.params.id },
+      data: {
+        mediaUrl,
+        mediaKind: check.kind,
+        mediaTitle,
+        positionSec: 0,
+        isPlaying: false,
+        version: { increment: 1 },
+      },
+    });
+
+    emitRoomSync(updated);
+
+    sendSuccess(res, memberSummary(updated, 0, membership.role), "Media added to the room.");
+  } catch (err: any) {
+    console.error("[uploadMusicRoomMedia]", err?.message);
+    sendError(res, "Failed to upload the media.", 500, "INTERNAL_ERROR");
   }
 }
 

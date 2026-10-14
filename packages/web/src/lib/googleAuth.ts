@@ -145,6 +145,18 @@ export function isNativeApp(): boolean {
  * SDK and returns a Google ID token, which is exchanged for a Buddi session by
  * the very same `/auth/google` endpoint the browser flow uses.
  *
+ * Two deliberate choices, both aimed at the "I tapped it and nothing happened"
+ * failure this button used to have:
+ *
+ *   - `useCredentialManager: false`. The plugin defaults to Android's newer
+ *     Credential Manager, which opens no picker at all on devices where it is
+ *     unavailable or unconfigured — a silent no-op with no error to show. The
+ *     classic `GoogleSignIn` intent is supported on effectively every
+ *     Play-services device and always presents the account picker, so it is
+ *     requested explicitly rather than left to the default.
+ *   - we ask for the ID token on both backends and fail loudly if it is missing,
+ *     rather than returning an empty credential the backend then rejects.
+ *
  * `skipNativeAuth` keeps Firebase Auth out of the loop: we hand the raw Google
  * ID token to our own backend, so no extra Firebase user is created.
  */
@@ -152,6 +164,7 @@ export async function signInWithGoogleNative(): Promise<string> {
   const { FirebaseAuthentication } = await import('@capacitor-firebase/authentication')
   const result = await FirebaseAuthentication.signInWithGoogle({
     skipNativeAuth: true,
+    useCredentialManager: false,
   })
   const idToken = result.credential?.idToken
   if (!idToken) {
