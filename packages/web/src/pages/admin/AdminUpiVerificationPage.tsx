@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
-import { QrCode, Search, Check, X, HelpCircle, IndianRupee, User as UserIcon, Clock } from 'lucide-react'
+import { QrCode, Search, Check, X, HelpCircle, IndianRupee, User as UserIcon, Clock, RefreshCw } from 'lucide-react'
 import { adminApi, assetUrl } from '../../lib/api'
 import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
 import { getErrorMessage } from '../../lib/error'
 import { openExternalUrl } from '../../lib/externalLink'
+import { useAutoRefresh } from '../../lib/useAutoRefresh'
 
 interface UpiRow {
   id: string
@@ -41,8 +42,8 @@ export function AdminUpiVerificationPage() {
 
   const inr = (n: number) => `₹${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
 
-  const load = async () => {
-    setLoading(true)
+  const load = async (silent = false) => {
+    if (!silent) setLoading(true)
     setError('')
     try {
       const params: any = { status: 'VERIFICATION_PENDING', limit: 50 }
@@ -51,9 +52,9 @@ export function AdminUpiVerificationPage() {
       const d = res.data?.data || res.data
       setRows(Array.isArray(d?.items) ? d.items : [])
     } catch (e) {
-      setError(getErrorMessage(e))
+      if (!silent) setError(getErrorMessage(e))
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
@@ -72,6 +73,11 @@ export function AdminUpiVerificationPage() {
     load()
     loadConfig()
   }, [search])
+
+  // Re-run the pending queue every minute (and on focus) so a payment submitted
+  // after the page opened shows up, and one verified elsewhere drops off,
+  // without a manual reload.
+  useAutoRefresh(() => load(true))
 
   const act = async (id: string, action: 'VERIFY' | 'REJECT' | 'REQUEST_INFO') => {
     if ((action === 'REJECT' || action === 'REQUEST_INFO') && !note[id]?.trim()) {
@@ -166,16 +172,28 @@ export function AdminUpiVerificationPage() {
         <div className="mt-4 rounded-xl border border-surface-200 dark:border-surface-800 bg-white dark:bg-surface-900 p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-surface-900 dark:text-white">Pending verification ({rows.length})</h2>
-            <div className="relative">
-              <Search className="w-4 h-4 absolute left-2 top-2.5 text-surface-400" />
-              <input
-                className="rounded-lg border border-surface-300 dark:border-surface-700 bg-surface-50 dark:bg-surface-800 pl-8 pr-3 py-2 text-sm text-surface-900 dark:text-white"
-                placeholder="Search reference / user"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => load()}
+                disabled={loading}
+                title="Refresh the pending queue"
+                className="flex items-center gap-1 rounded-lg border border-surface-300 dark:border-surface-700 px-2.5 py-2 text-sm text-surface-600 dark:text-surface-300 disabled:opacity-60"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">Refresh</span>
+              </button>
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-2 top-2.5 text-surface-400" />
+                <input
+                  className="rounded-lg border border-surface-300 dark:border-surface-700 bg-surface-50 dark:bg-surface-800 pl-8 pr-3 py-2 text-sm text-surface-900 dark:text-white"
+                  placeholder="Search reference / user"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
             </div>
           </div>
+          <p className="text-xs text-surface-400 mb-2">This queue refreshes automatically every minute.</p>
 
           {loading ? <p className="text-sm text-surface-500">Loading…</p> : null}
           {!loading && rows.length === 0 ? (

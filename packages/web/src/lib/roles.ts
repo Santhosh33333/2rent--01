@@ -125,7 +125,12 @@ export function resolveLandingRole(
 ): UserRole {
   const accountRole = resolveAccountRole(user)
   if (isAdminTierRole(accountRole)) return accountRole
-  const preview = normalizeRole(activeRole)
+  // Consume the stored preview from the user object as well as the explicit
+  // argument. Every caller passes only `user`, so reading the argument alone
+  // made `preview` always "USER": an approved partner was routed to /dashboard
+  // on every cold boot and sign-in, which is the "switched to Partner, then it
+  // showed user features" report.
+  const preview = normalizeRole(activeRole ?? user?.activeRole)
   if (SWITCHABLE_ROLES.includes(preview)) return preview
   return accountRole
 }

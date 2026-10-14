@@ -248,7 +248,13 @@ export async function requireSuperAdmin(req: AuthedRequest, res: Response, next:
       sendError(res, "Admin actions are unavailable while impersonating a user.", 403, "IMPERSONATION_FORBIDDEN");
       return;
     }
-    if (!req.user?.activeRole || req.user.activeRole !== "SUPER_ADMIN") {
+    // Authorize on the account role, never the previewed surface. A super admin
+    // inspecting the USER/PARTNER app still holds the SUPER_ADMIN account type,
+    // and `resolveActiveRole` deliberately keeps that preview on purpose. Reading
+    // `activeRole` here matched the preview and returned 403 to the real super
+    // admin, which is the "switching to Admin breaks" report.
+    const accountRole = req.user?.role ?? req.user?.activeRole;
+    if (accountRole !== "SUPER_ADMIN") {
       sendError(res, "Super admin access required.", 403, "FORBIDDEN");
       return;
     }

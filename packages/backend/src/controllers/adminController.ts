@@ -259,8 +259,10 @@ export async function impersonateUser(req: AuthedRequest, res: Response): Promis
     const ADMIN_ROLES = ["SUPER_ADMIN", "ADMIN", "MODERATOR", "SUPPORT", "FINANCE", "SUPPORT_ADMIN", "FINANCE_ADMIN", "KYC_ADMIN", "MARKETING_ADMIN", "PARTNER_ADMIN"];
     const targetIsAdmin = ADMIN_ROLES.includes(target.role || "");
     // Only SUPER_ADMIN may impersonate another admin account; regular admins
-    // can only step into user or partner accounts.
-    if (actor.activeRole !== "SUPER_ADMIN" && targetIsAdmin) {
+    // can only step into user or partner accounts. Authority is the account role:
+    // a super admin previewing USER/PARTNER still is a super admin here.
+    const actorIsSuper = actor.role === SUPER_ADMIN_ROLE || actor.activeRole === SUPER_ADMIN_ROLE;
+    if (!actorIsSuper && targetIsAdmin) {
       sendError(res, "Only a super admin can impersonate an admin account.", 403, "FORBIDDEN");
       return;
     }

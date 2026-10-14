@@ -5,6 +5,7 @@ import { Search, ChevronLeft, ChevronRight, CreditCard, IndianRupee, Clock, XCir
 import { adminApi } from '../../lib/api'
 import { exportTableToPdf } from '../../lib/pdfExport'
 import { saveBlob } from '../../lib/download'
+import { useAutoRefresh } from '../../lib/useAutoRefresh'
 import toast from 'react-hot-toast'
 
 interface PaymentStats {
@@ -88,8 +89,8 @@ export function AdminPaymentsPage() {
   const [noteFor, setNoteFor] = useState<{ id: string; action: 'REJECT' | 'REQUEST_INFO' } | null>(null)
   const [noteText, setNoteText] = useState('')
 
-  const loadSubscriptions = async () => {
-    setSubLoading(true)
+  const loadSubscriptions = async (silent = false) => {
+    if (!silent) setSubLoading(true)
     setSubError('')
     try {
       const params: any = { status: 'VERIFICATION_PENDING', limit: 20 }
@@ -97,9 +98,9 @@ export function AdminPaymentsPage() {
       const d = res.data?.data || res.data
       setSubRows(Array.isArray(d?.items) ? d.items : [])
     } catch (err: unknown) {
-      setSubError(getErrorMessage(err, 'Failed to load subscription payments'))
+      if (!silent) setSubError(getErrorMessage(err, 'Failed to load subscription payments'))
     } finally {
-      setSubLoading(false)
+      if (!silent) setSubLoading(false)
     }
   }
 
@@ -166,6 +167,10 @@ export function AdminPaymentsPage() {
     loadSubscriptions()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // The subscription queue is a live inbox, not history: keep it fresh so a new
+  // proof appears and an already-verified row drops off without a manual reload.
+  useAutoRefresh(() => loadSubscriptions(true))
 
   const csvEscape = (v: unknown) => {
     const s = v === null || v === undefined ? '' : String(v)
@@ -256,7 +261,7 @@ export function AdminPaymentsPage() {
               </p>
             </div>
             <button
-              onClick={loadSubscriptions}
+              onClick={() => loadSubscriptions()}
               disabled={subLoading}
               className="px-3 py-1.5 rounded-lg bg-gray-900 border border-gray-700 text-gray-300 text-xs hover:bg-gray-700 disabled:opacity-50 transition self-start"
             >

@@ -42,7 +42,7 @@ export default function Partner() {
   const callSig = useCallSignaling();
 
   const doSwitch = useMutation({
-    mutationFn: () => post<any>('/role/switch', { role: 'PARTNER' }),
+    mutationFn: () => post<any>('/roles/switch', { role: 'PARTNER' }),
     onSuccess: () => {
       updateUser({ activeRole: 'PARTNER' });
       qc.invalidateQueries();

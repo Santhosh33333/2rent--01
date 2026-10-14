@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
-import { Check, X, HelpCircle, IndianRupee, User as UserIcon, FileDown } from 'lucide-react'
+import { Check, X, HelpCircle, IndianRupee, User as UserIcon, FileDown, RefreshCw } from 'lucide-react'
 import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
 import { adminApi, assetUrl } from '../../lib/api'
 import { getErrorMessage } from '../../lib/error'
 import { exportTableToPdf } from '../../lib/pdfExport'
 import { openExternalUrl } from '../../lib/externalLink'
+import { useAutoRefresh } from '../../lib/useAutoRefresh'
 
 interface TopupRow {
   id: string
@@ -34,8 +35,8 @@ export function AdminTopupsPage() {
 
   const inr = (n: number) => `₹${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
 
-  const load = async () => {
-    setLoading(true)
+  const load = async (silent = false) => {
+    if (!silent) setLoading(true)
     setError('')
     try {
       const params: any = { status: filter, limit: 50 }
@@ -43,15 +44,19 @@ export function AdminTopupsPage() {
       const d = res.data?.data || res.data
       setRows(Array.isArray(d?.items) ? d.items : [])
     } catch (e) {
-      setError(getErrorMessage(e))
+      if (!silent) setError(getErrorMessage(e))
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
   useEffect(() => {
     load()
   }, [filter])
+
+  // Keep the queue current: a UTR submitted after the page opened should appear,
+  // and a request another admin already credited should drop off.
+  useAutoRefresh(() => load(true))
 
   const act = async (id: string, action: 'VERIFY' | 'REJECT' | 'REQUEST_INFO') => {
     if ((action === 'REJECT' || action === 'REQUEST_INFO') && !note[id]?.trim()) {
@@ -89,6 +94,14 @@ export function AdminTopupsPage() {
               {label}
             </button>
           ))}
+          <button
+            onClick={() => load()}
+            disabled={loading}
+            title="Refresh the queue"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-200 dark:bg-surface-800 text-surface-600 dark:text-surface-300 hover:bg-surface-300 dark:hover:bg-surface-700 disabled:opacity-60 text-sm transition"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
+          </button>
           <button
             onClick={() =>
               exportTableToPdf({

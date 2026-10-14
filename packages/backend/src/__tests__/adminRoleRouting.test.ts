@@ -156,6 +156,15 @@ describe('web app resolves the account role, not the preview', () => {
     }
   });
 
+  it('lands a non-admin account on its stored preview, not always the user surface', () => {
+    // resolveLandingRole used to read only its optional second argument, which
+    // no caller ever passed, so `preview` was always "USER" and an approved
+    // partner was routed to /dashboard on every boot - "switched to Partner, then
+    // it showed only user features". The fix consumes `user.activeRole`.
+    const roles = read('lib/roles.ts');
+    expect(roles).toMatch(/activeRole\s*\?\?\s*user\?\.activeRole/);
+  });
+
   it('does not reject an admin at the admin sign-in because of a USER preview', () => {
     // This handler used to read activeRole, print "This account does not have
     // admin access" and call logout() on a legitimate administrator.
