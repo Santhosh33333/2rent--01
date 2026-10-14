@@ -809,10 +809,12 @@ export async function googleSignIn(req: Request, res: Response): Promise<void> {
     });
 
     if (user) {
-      // Update avatar if new
-      if (picture && user.avatarUrl !== picture) {
-        await prisma.user.update({ where: { id: user.id }, data: { avatarUrl: picture } });
-      }
+      // Deliberately do NOT copy the Google picture onto an existing account.
+      // This used to overwrite whatever the member had chosen, so a photo they
+      // had set (or deliberately removed) in their profile was silently replaced
+      // by their Google avatar on the very next sign-in. The profile picture
+      // belongs to the member: it is seeded from Google only when the account is
+      // first created (below) and changed only from the profile screen.
     } else {
       const passwordHash = await bcrypt.hash(generateOTP(32), env.BCRYPT_SALT_ROUNDS);
       user = await prisma.$transaction(async (tx) => {
