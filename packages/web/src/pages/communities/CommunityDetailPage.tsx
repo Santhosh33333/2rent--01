@@ -101,6 +101,8 @@ export function CommunityDetailPage() {
   const [pollQ, setPollQ] = useState('')
   const [pollOpts, setPollOpts] = useState<string[]>(['', ''])
   const [pollBusy, setPollBusy] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deletingCommunity, setDeletingCommunity] = useState(false)
 
   // Monotonic token so a slow earlier refresh cannot overwrite a newer one with
   // stale membership. The page re-fires refresh() on join/leave, and without
@@ -181,6 +183,30 @@ export function CommunityDetailPage() {
     }
   }
 
+  const deleteCommunity = async () => {
+    setDeletingCommunity(true)
+    try {
+      await api.delete(`/communities/${id}`)
+      toast.success('Community deleted')
+      navigate('/communities')
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Cannot delete community')
+      setDeletingCommunity(false)
+      setShowDeleteConfirm(false)
+    }
+  }
+
+  const requestDelete = () => {
+    // No one else to notify: with only the owner in the community the delete
+    // can proceed on the click. With other members aboard, confirm first so the
+    // owner does not silently remove a community other people are using.
+    if ((community?.memberCount ?? 0) <= 1) {
+      void deleteCommunity()
+    } else {
+      setShowDeleteConfirm(true)
+    }
+  }
+
   const publishPost = async () => {
     // A post may be text, an image, or both (the global feed already allows an
     // image-only post). Requiring text here silently swallowed an image-only
@@ -236,8 +262,7 @@ export function CommunityDetailPage() {
     setComposerPreview(URL.createObjectURL(file))
   }
 
-  const removePost = async (postId: string) => {
-    try {
+  const removePost = async (postId: string) => {    try {
       await api.delete(`/communities/${id}/posts/${postId}`)
       setPosts((prev) => prev.filter((p) => p.id !== postId))
       toast.success('Post deleted')
@@ -456,29 +481,41 @@ export function CommunityDetailPage() {
             </div>
           </div>
 
-          <button
-            onClick={toggleJoin}
-            disabled={joining}
-            className={`flex-shrink-0 px-5 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
-              community.isMember
-                ? 'bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 hover:bg-red-50 dark:hover:red-900/20 hover:text-red-600 dark:hover:text-red-400 border border-surface-200 dark:border-surface-700'
-                : 'bg-gradient-to-r from-primary-500 to-accent-500 text-white shadow-lg shadow-primary-500/20 hover:shadow-xl hover:shadow-primary-500/30'
-            }`}
-          >
-            {joining ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : community.isMember ? (
-              <span className="flex items-center gap-1.5">
-                <UserMinus className="w-4 h-4" />
-                Leave
-              </span>
-            ) : (
-              <span className="flex items-center gap-1.5">
-                <UserPlus className="w-4 h-4" />
-                Join
-              </span>
+          <div className="flex flex-col items-end gap-2 flex-shrink-0">
+            {community.isOwner && (
+              <button
+                onClick={requestDelete}
+                title="Delete community"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 border border-surface-200 dark:border-surface-700 transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span className="hidden sm:inline">Delete</span>
+              </button>
             )}
-          </button>
+            <button
+              onClick={toggleJoin}
+              disabled={joining}
+              className={`px-5 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+                community.isMember
+                  ? 'bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 hover:bg-red-50 dark:hover:red-900/20 hover:text-red-600 dark:hover:text-red-400 border border-surface-200 dark:border-surface-700'
+                  : 'bg-gradient-to-r from-primary-500 to-accent-500 text-white shadow-lg shadow-primary-500/20 hover:shadow-xl hover:shadow-primary-500/30'
+              }`}
+            >
+              {joining ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : community.isMember ? (
+                <span className="flex items-center gap-1.5">
+                  <UserMinus className="w-4 h-4" />
+                  Leave
+                </span>
+              ) : (
+                <span className="flex items-center gap-1.5">
+                  <UserPlus className="w-4 h-4" />
+                  Join
+                </span>
+              )}
+            </button>
+          </div>
         </div>
         {/* `leaveCommunity` refuses while the viewer is the only ADMIN, which is
             the normal case for the person who just created the community. That
@@ -769,6 +806,47 @@ export function CommunityDetailPage() {
                 )}
               </Link>
             ))}
+          </div>
+        </div>
+      )}
+
+      {showDeleteConfirm && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          onClick={() => { if (!deletingCommunity) setShowDeleteConfirm(false) }}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl bg-white dark:bg-surface-900 p-5 shadow-2xl animate-fadeInUp"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-3">
+              <span className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
+              </span>
+              <h3 className="text-lg font-semibold text-surface-900 dark:text-white">Delete community?</h3>
+            </div>
+            <p className="text-sm text-surface-600 dark:text-surface-400">
+              {community.memberCount > 1
+                ? `“${community.name}” has ${community.memberCount} members. Deleting it removes the community, its posts and polls for everyone.`
+                : `Delete “${community.name}”? This cannot be undone.`}
+            </p>
+            <div className="flex gap-2 mt-5">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deletingCommunity}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium border border-surface-200 dark:border-surface-700 text-surface-600 dark:text-surface-300 hover:bg-surface-50 dark:hover:bg-surface-800 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={deleteCommunity}
+                disabled={deletingCommunity}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold bg-red-600 text-white hover:bg-red-700 disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {deletingCommunity ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                {deletingCommunity ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
           </div>
         </div>
       )}

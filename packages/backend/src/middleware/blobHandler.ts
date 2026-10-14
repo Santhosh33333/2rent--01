@@ -18,6 +18,14 @@ export async function blobFileHandler(req: Request, res: Response): Promise<void
     res.setHeader("Content-Type", blob.mimeType);
     res.setHeader("Content-Length", String(blob.size));
     res.setHeader("ETag", `"${blob.key}-${blob.size}"`);
+    // The web app and Capacitor shell run on a different origin than the API,
+    // so they embed uploads as cross-origin <img> tags. helmet() sets
+    // Cross-Origin-Resource-Policy: same-origin on every response, which makes
+    // the browser silently refuse to render the image even though the request
+    // succeeds - this is why uploaded avatars/posts never appeared after a
+    // successful upload. Access for private KYC docs is still enforced above by
+    // requireDocumentAccess; CORP only governs who may embed the bytes.
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
     // Private KYC media must not be cached by intermediaries; public files
     // (avatars) keep a long cache lifetime like the previous static server.
     res.setHeader("Cache-Control", isPrivate ? "private, no-store" : "public, max-age=604800");
