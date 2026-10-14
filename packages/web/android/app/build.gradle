@@ -52,8 +52,14 @@ android {
         // screenshotted or screen-recorded, the returning-user onboarding fix
         // (signed-in users were re-shown the account-type chooser), and the
         // image/upload picker fixes (HEIC-era MIME fallback + upload filters).
-        versionCode 24
-        versionName "1.0.23"
+        //
+        // 25 / 1.0.24 fixes the in-app Google button that opened no account
+        // picker: the Firebase Auth plugin defaults to Android Credential
+        // Manager, which silently does nothing where it is unavailable, so the
+        // app now asks for the classic GoogleSignIn intent instead. Also adds
+        // host file uploads to listening/watching rooms.
+        versionCode 25
+        versionName "1.0.24"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
