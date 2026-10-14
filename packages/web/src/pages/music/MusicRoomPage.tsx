@@ -16,9 +16,9 @@
  *     metadata exists is dropped by some browsers, so the target position is
  *     (re)applied on `loadedmetadata` and on every sync, not only on a click.
  *
- * Media is always our own (the licensed catalogue, an uploaded file) or a direct
- * audio/video file the host supplies. YouTube is refused by the backend because
- * its terms forbid exactly the cross-device sync this page exists to do — see
+ * Media is our own (the licensed catalogue, an uploaded file), a direct
+ * audio/video file the host supplies, or a single YouTube video. A YouTube
+ * playlist is refused because it has no one position to synchronise — see
  * backend/src/services/mediaUrl.ts.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -46,6 +46,8 @@ import { useAuth } from '../../lib/auth'
 import { useSocket } from '../../hooks/useSocket'
 import { Avatar } from '../../components/Avatar'
 import { GroupMemberPicker } from '../../components/GroupMemberPicker'
+import { YouTubeRoomPlayer, type YouTubeTransport } from './YouTubeRoomPlayer'
+import { youtubeVideoId } from '../../lib/youtubePlayer'
 import { Modal, ScreenState } from '../../components/ui'
 import { getErrorMessage } from '../../lib/error'
 
@@ -105,6 +107,7 @@ export function MusicRoomPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const mediaRef = useRef<HTMLMediaElement | null>(null)
+  const ytTransportRef = useRef<YouTubeTransport | null>(null)
   const desiredRef = useRef<{ positionSec: number; isPlaying: boolean }>({ positionSec: 0, isPlaying: false })
   const isHostRef = useRef(false)
 
@@ -163,6 +166,12 @@ export function MusicRoomPage() {
    * console error.
    */
   const applyDesired = useCallback(() => {
+    // A YouTube frame is driven through its own API, not through an element.
+    const yt = ytTransportRef.current
+    if (yt) {
+      yt.applyNow()
+      return
+    }
     const el = mediaRef.current
     if (!el) return
     const { positionSec, isPlaying } = desiredRef.current
@@ -259,7 +268,7 @@ export function MusicRoomPage() {
   // correct the drift that buffering introduces, and so a late joiner lands in
   // the right place even if no control event follows.
   useEffect(() => {
-    if (!isHost || !room?.mediaUrl) return
+    if (!isHost || !room?.mediaUrl || room.mediaKind === 'YOUTUBE') return
     const id = window.setInterval(() => {
       const el = mediaRef.current
       if (!el || el.paused) return
@@ -308,6 +317,27 @@ export function MusicRoomPage() {
     if (!el) return
     emit('music_room_control', { roomId, action: 'seek', positionSec: el.currentTime, isPlaying: !el.paused })
   }, [emit, roomId])
+
+  // --- YouTube transport. The frame reports its own calls; these relay them to
+  // the room exactly as the audio element's handlers do. ---
+  const ytControl = useCallback(
+    (action: 'play' | 'pause', positionSec: number) => {
+      emit('music_room_control', { roomId, action, positionSec })
+    },
+    [emit, roomId],
+  )
+  const ytHeartbeat = useCallback(
+    (positionSec: number, isPlaying: boolean) => {
+      emit('music_room_heartbeat', { roomId, positionSec, isPlaying })
+    },
+    [emit, roomId],
+  )
+  const ytProgress = useCallback((positionSec: number, durationSec: number, isPlaying: boolean) => {
+    setPosition(positionSec)
+    if (durationSec > 0) setDuration(durationSec)
+    setPlaying(isPlaying)
+  }, [])
+  const ytRequestTap = useCallback(() => setNeedsTap(true), [])
 
   const pickTrack = async (mediaUrl: string, mediaTitle: string) => {
     if (!roomId || busy) return
@@ -402,6 +432,7 @@ export function MusicRoomPage() {
   }
 
   const resolvedMedia = resolveRoomMedia(room?.mediaUrl)
+  const youTubeId = room?.mediaKind === 'YOUTUBE' ? youtubeVideoId(room.mediaUrl) : null
   const existingMemberIds = useMemo(() => room?.members.map((m) => m.userId) ?? [], [room])
 
   if (loading) {
@@ -507,7 +538,24 @@ export function MusicRoomPage() {
               )}
             </div>
 
-            {room.mediaKind === 'VIDEO' ? (
+            {room.mediaKind === 'YOUTUBE' ? (
+              youTubeId ? (
+                <YouTubeRoomPlayer
+                  videoId={youTubeId}
+                  isHost={isHost}
+                  sync={sync}
+                  transportRef={ytTransportRef}
+                  onControl={ytControl}
+                  onHeartbeat={ytHeartbeat}
+                  onProgress={ytProgress}
+                  onRequestTap={ytRequestTap}
+                />
+              ) : (
+                <p className="text-sm text-surface-500">
+                  This video link could not be read. Ask the host to pick it again.
+                </p>
+              )
+            ) : room.mediaKind === 'VIDEO' ? (
               <video
                 ref={setMediaEl}
                 src={resolvedMedia}
@@ -591,8 +639,9 @@ export function MusicRoomPage() {
       )}
 
       <p className="text-xs text-surface-400">
-        Rooms play our own tracks, uploaded files, or a direct audio/video link. YouTube links
-        can’t be used — YouTube doesn’t allow syncing playback across people.
+        Rooms play our own tracks, uploaded files, a direct audio/video link, or a single YouTube
+        video. Paste a YouTube link to watch it together — playback stays in YouTube&apos;s own
+        player and stays in sync with the host.
       </p>
 
       {/* Members */}
@@ -638,7 +687,7 @@ export function MusicRoomPage() {
         open={mediaOpen}
         onClose={() => setMediaOpen(false)}
         title="What plays"
-        description="Upload a file, pick a catalogue track, or paste a direct audio/video link."
+        description="Upload a file, pick a catalogue track, or paste a direct audio/video or YouTube link."
       >
         {tracks.length > 0 && (
           <div className="mb-4 max-h-52 space-y-1 overflow-y-auto">
@@ -700,12 +749,12 @@ export function MusicRoomPage() {
         </div>
 
         <div className="mt-4 space-y-2">
-          <label className="text-xs font-semibold uppercase tracking-wide text-surface-500">Direct link</label>
+          <label className="text-xs font-semibold uppercase tracking-wide text-surface-500">Direct link or YouTube</label>
           <input
             type="url"
             value={urlInput}
             onChange={(e) => setUrlInput(e.target.value)}
-            placeholder="https://…/song.mp3 or /audio/…"
+            placeholder="https://…/song.mp3, /audio/… or a YouTube video link"
             className="input"
           />
           <button

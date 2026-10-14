@@ -7,8 +7,9 @@
  * pushed over the socket from services/socketService.ts. This file owns
  * membership and setup; the socket handlers own live control.
  *
- * Media is always our own or a direct file the host supplies — never YouTube.
- * See services/mediaUrl.ts for that rule and the reason behind it.
+ * Media is our own catalogue, a direct file the host supplies, or a single
+ * YouTube video. See services/mediaUrl.ts for those rules — a YouTube *playlist*
+ * is refused because it has no single position to synchronise.
  */
 import { Response } from "express";
 import path from "path";

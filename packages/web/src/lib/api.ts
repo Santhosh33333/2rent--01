@@ -843,7 +843,7 @@ export interface MusicRoomSummary {
   name: string
   hostId: string
   isActive: boolean
-  mediaKind: 'AUDIO' | 'VIDEO'
+  mediaKind: 'AUDIO' | 'VIDEO' | 'YOUTUBE'
   mediaUrl: string | null
   mediaTitle: string | null
   isPlaying: boolean

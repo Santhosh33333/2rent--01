@@ -97,9 +97,21 @@ describe('createRoom', () => {
     expect(body(res).success).toBe(false);
   });
 
-  it('refuses a YouTube link so a room never promises a sync it cannot keep', async () => {
+  it('accepts a single YouTube video and stores it as a YOUTUBE track', async () => {
+    prismaMock.musicRoom.create.mockResolvedValue(
+      room({ mediaUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', mediaKind: 'YOUTUBE' })
+    );
     const res = makeRes();
-    await createRoom(makeReq({ body: { name: 'Party', mediaUrl: 'https://youtu.be/abc' } }), res);
+    await createRoom(makeReq({ body: { name: 'Party', mediaUrl: 'https://youtu.be/dQw4w9WgXcQ' } }), res);
+    expect(statusOf(res)).toBe(201);
+    const arg = prismaMock.musicRoom.create.mock.calls[0][0];
+    expect(arg.data.mediaKind).toBe('YOUTUBE');
+    expect(arg.data.mediaUrl).toBe('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+  });
+
+  it('refuses a YouTube playlist, which cannot be synced', async () => {
+    const res = makeRes();
+    await createRoom(makeReq({ body: { name: 'Party', mediaUrl: 'https://www.youtube.com/playlist?list=PLabc' } }), res);
     expect(statusOf(res)).toBe(400);
     expect(body(res).error).toBe('INVALID_MEDIA');
     expect(body(res).message).toMatch(/YouTube/i);
@@ -210,10 +222,10 @@ describe('setRoomMedia', () => {
     expect(statusOf(res)).toBe(403);
   });
 
-  it('refuses a YouTube link', async () => {
+  it('refuses a YouTube playlist', async () => {
     prismaMock.musicRoomMember.findUnique.mockResolvedValue(membership('HOST'));
     const res = makeRes();
-    await setRoomMedia(makeReq({ params: { id: ROOM }, body: { mediaUrl: 'https://youtube.com/watch?v=1' } }), res);
+    await setRoomMedia(makeReq({ params: { id: ROOM }, body: { mediaUrl: 'https://www.youtube.com/playlist?list=PLabc' } }), res);
     expect(statusOf(res)).toBe(400);
     expect(body(res).error).toBe('INVALID_MEDIA');
   });

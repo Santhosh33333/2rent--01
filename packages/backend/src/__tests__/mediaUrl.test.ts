@@ -28,12 +28,25 @@ describe('checkMediaUrl', () => {
   });
 
   it.each([
-    'https://www.youtube.com/watch?v=abc',
-    'https://youtu.be/abc',
-    'https://music.youtube.com/watch?v=abc',
-    'https://www.youtube-nocookie.com/embed/abc',
-  ])('refuses YouTube (%s) so a room never promises a sync it cannot keep', (url) => {
+    ['https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'dQw4w9WgXcQ'],
+    ['https://youtu.be/dQw4w9WgXcQ', 'dQw4w9WgXcQ'],
+    ['https://m.youtube.com/watch?v=dQw4w9WgXcQ', 'dQw4w9WgXcQ'],
+    ['https://music.youtube.com/watch?v=dQw4w9WgXcQ', 'dQw4w9WgXcQ'],
+    ['https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ', 'dQw4w9WgXcQ'],
+    ['https://www.youtube.com/shorts/dQw4w9WgXcQ', 'dQw4w9WgXcQ'],
+    ['https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PL123', 'dQw4w9WgXcQ'],
+  ])('accepts a single YouTube video (%s) and normalises it to its canonical link', (url, id) => {
     const r = checkMediaUrl(url);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.kind).toBe('YOUTUBE');
+      expect(r.videoId).toBe(id);
+      expect(r.url).toBe(`https://www.youtube.com/watch?v=${id}`);
+    }
+  });
+
+  it('refuses a YouTube playlist, which has no single position to sync', () => {
+    const r = checkMediaUrl('https://www.youtube.com/playlist?list=PLabc123');
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.problem).toBe('youtube');
   });
@@ -67,7 +80,7 @@ describe('checkMediaUrl', () => {
     if (!r.ok) expect(r.problem).toBe('empty');
   });
 
-  it('explains a YouTube refusal in a way the host can act on', () => {
+  it('explains a YouTube-playlist refusal in a way the host can act on', () => {
     expect(describeMediaProblem('youtube')).toMatch(/YouTube/i);
     expect(describeMediaProblem('youtube')).toMatch(/sync/i);
   });
