@@ -171,7 +171,7 @@ export async function collectForPeriod(input: {
   );
 
   if (wallet.charged) {
-    await activatePeriod({ subscriptionId, start, end, kind });
+    await activatePeriod({ subscriptionId, userId, start, end, kind });
     await emailConfirmation({ userId, planName, amount: price, start, end, kind, method: "wallet", walletBalance: wallet.balance });
     return { source: "WALLET", subscriptionId, amount: price, periodStart: start, periodEnd: end, walletBalance: wallet.balance };
   }
@@ -227,11 +227,17 @@ async function openManualUpiRequest(input: {
  */
 export async function activatePeriod(input: {
   subscriptionId: string;
+  /**
+   * The account the plan belongs to. Passed in rather than read back off the
+   * subscription because both callers already hold it, and a second read is one
+   * more chance for the activation and the access window to disagree.
+   */
+  userId: string;
   start: Date;
   end: Date;
   kind: "activated" | "renewed";
 }): Promise<void> {
-  await prisma.subscription.updateMany({
+  const activated = await prisma.subscription.updateMany({
     where: { id: input.subscriptionId, status: { notIn: CLOSED_STATUSES } },
     data: {
       status: "ACTIVE",
@@ -241,6 +247,44 @@ export async function activatePeriod(input: {
       pastDueAt: null,
       autoRenew: true,
     },
+  });
+  // Only a subscription that actually transitioned moves the access window. A
+  // cancelled/expired row that refused the update must not grant entitlement.
+  if (activated.count !== 1) return;
+
+  await extendAccessToPeriodEnd(input.userId, input.end);
+}
+
+/** accessSource recorded when a subscription period moves the access window. */
+export const SUBSCRIPTION_ACCESS_SOURCE = "SUBSCRIPTION";
+
+/**
+ * Move the user's paid-access window out to at least `until`.
+ *
+ * THIS IS THE LINK THAT WAS MISSING. Entitlement is decided by User.accessUntil
+ * (see hasAccess and requirePaidAccess), but activating a subscription only ever
+ * wrote Subscription.status. So a user could pay for a plan, watch it read ACTIVE
+ * on the subscription screen, and still be refused by every paid route with
+ * PAID_ACCESS_REQUIRED - money taken, and then asked to pay again. The top-up
+ * rail had exactly this gap and got exactly this fix; this is the subscription
+ * half of it, and activation is the single place both rails pass through.
+ *
+ * max(existing, periodEnd), not "add the plan length": the subscription already
+ * records the precise window that was paid for, and adding days on top would let
+ * a renewal collected a day early quietly bank an extra period. It never shortens
+ * a longer existing window, so a top-up or a lifetime grant stays intact.
+ */
+async function extendAccessToPeriodEnd(userId: string, until: Date): Promise<void> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { accessUntil: true },
+  });
+  if (!user) return;
+  if (user.accessUntil && user.accessUntil.getTime() >= until.getTime()) return;
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { accessUntil: until, accessSource: SUBSCRIPTION_ACCESS_SOURCE },
   });
 }
 
@@ -310,6 +354,7 @@ export async function settleSubscriptionPayment(input: {
   const isRenewal = Boolean(payment.subscription.startedAt);
   await activatePeriod({
     subscriptionId: payment.subscriptionId,
+    userId: payment.userId,
     start: payment.periodStart,
     end: payment.periodEnd,
     kind: isRenewal ? "renewed" : "activated",
@@ -432,6 +477,56 @@ export async function sweepDueSubscriptions(now: Date = new Date()): Promise<Swe
   }
 
   return result;
+}
+
+/**
+ * Heal accounts that paid BEFORE activatePeriod learned to write the access
+ * window.
+ *
+ * Those accounts hold an ACTIVE subscription reaching into the future but their
+ * User.accessUntil was never moved, so every paid route refused them with
+ * PAID_ACCESS_REQUIRED even though the money was taken - "I paid and it keeps
+ * asking me to pay". Without this they would stay locked out until their next
+ * renewal, which is not a fix, it is a second charge.
+ *
+ * Not a substitute for the write in activatePeriod - that is the fix, and it is
+ * what keeps new payments consistent. This is the repair for rows that predate
+ * it. Runs every boot because it is one indexed read and a no-op once every row
+ * is consistent, and it only ever extends a window, never shortens one.
+ */
+export async function backfillSubscriptionAccess(now: Date = new Date()): Promise<number> {
+  const live = await prisma.subscription.findMany({
+    where: { status: "ACTIVE", nextBillingAt: { gt: now } },
+    select: { userId: true, nextBillingAt: true },
+  });
+  if (live.length === 0) return 0;
+
+  // Greatest paid-through date per user, so two live rows resolve to the later
+  // window rather than whichever row the database happened to return last.
+  const latest = new Map<string, Date>();
+  for (const sub of live) {
+    if (!sub.nextBillingAt) continue;
+    const current = latest.get(sub.userId);
+    if (!current || sub.nextBillingAt.getTime() > current.getTime()) {
+      latest.set(sub.userId, sub.nextBillingAt);
+    }
+  }
+
+  let repaired = 0;
+  for (const [userId, until] of latest) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { accessUntil: true },
+    });
+    if (!user) continue;
+    if (user.accessUntil && user.accessUntil.getTime() >= until.getTime()) continue;
+    await prisma.user.update({
+      where: { id: userId },
+      data: { accessUntil: until, accessSource: SUBSCRIPTION_ACCESS_SOURCE },
+    });
+    repaired += 1;
+  }
+  return repaired;
 }
 
 async function emailPaymentRequired(input: {

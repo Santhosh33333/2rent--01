@@ -42,7 +42,7 @@ const db = vi.hoisted(() => ({
     create: vi.fn(),
   },
   subscriptionPayment: { upsert: vi.fn(), findUnique: vi.fn(), updateMany: vi.fn(), update: vi.fn() },
-  user: { findUnique: vi.fn() },
+  user: { findUnique: vi.fn(), update: vi.fn() },
   topupRequest: { findFirst: vi.fn() },
   upiPayment: { findFirst: vi.fn() },
   notification: { create: vi.fn() },
@@ -63,6 +63,7 @@ vi.mock("../services/emailService", () => ({
 
 import {
   SUBSCRIPTION_TRANSACTION_TYPE,
+  backfillSubscriptionAccess,
   collectForPeriod,
   debitWalletForPlan,
   periodFrom,
@@ -79,6 +80,7 @@ beforeEach(() => {
   sent.confirm = [];
   sent.required = [];
   db.user.findUnique.mockResolvedValue({ email: "u@example.com", fullName: "Uma" });
+  db.user.update.mockResolvedValue({});
   db.transaction.create.mockResolvedValue({ id: "tx-1" });
   db.subscription.updateMany.mockResolvedValue({ count: 1 });
   db.subscriptionPayment.upsert.mockResolvedValue({ id: "pay-1", status: "VERIFICATION_PENDING" });
@@ -180,6 +182,61 @@ describe("collectForPeriod", () => {
     expect(sent.confirm[0][0]).toBe("u@example.com");
   });
 
+  it("opens the access window when the wallet pays for the plan", async () => {
+    db.wallet.findUnique
+      .mockResolvedValueOnce({ id: "w-1", balance: 500, heldBalance: 0 })
+      .mockResolvedValueOnce({ balance: 400 });
+    db.wallet.updateMany.mockResolvedValue({ count: 1 });
+    db.user.findUnique.mockResolvedValue({ email: "u@example.com", fullName: "Uma", accessUntil: null });
+
+    const before = Date.now();
+    await collectForPeriod({
+      userId: USER,
+      subscriptionId: SUB,
+      planId: PLAN,
+      amount: 100,
+      planDays: 30,
+      planName: "Pro",
+      kind: "activated",
+    });
+
+    // Entitlement is User.accessUntil (hasAccess / requirePaidAccess), NOT
+    // Subscription.status. Without this write the plan reads ACTIVE on the
+    // subscription screen while every paid route still answers
+    // PAID_ACCESS_REQUIRED - the user pays, and is asked to pay again.
+    const call = db.user.update.mock.calls.at(-1)![0];
+    expect(call.where.id).toBe(USER);
+    expect(call.data.accessSource).toBe("SUBSCRIPTION");
+    const until = call.data.accessUntil as Date;
+    // A purchase is anchored to now, so ~30 days out.
+    expect(until.getTime()).toBeGreaterThan(before + 29 * 24 * 60 * 60 * 1000);
+  });
+
+  it("never shortens an access window paid for elsewhere", async () => {
+    db.wallet.findUnique
+      .mockResolvedValueOnce({ id: "w-1", balance: 500, heldBalance: 0 })
+      .mockResolvedValueOnce({ balance: 400 });
+    db.wallet.updateMany.mockResolvedValue({ count: 1 });
+    // A top-up or a lifetime grant already reaches further than this plan would.
+    db.user.findUnique.mockResolvedValue({
+      email: "u@example.com",
+      fullName: "Uma",
+      accessUntil: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+    });
+
+    await collectForPeriod({
+      userId: USER,
+      subscriptionId: SUB,
+      planId: PLAN,
+      amount: 100,
+      planDays: 30,
+      planName: "Pro",
+      kind: "activated",
+    });
+
+    expect(db.user.update).not.toHaveBeenCalled();
+  });
+
   it("opens a payment request and debits nothing when the wallet is short", async () => {
     db.wallet.findUnique.mockResolvedValue({ id: "w-1", balance: 20, heldBalance: 0 });
     db.wallet.updateMany.mockResolvedValue({ count: 0 });
@@ -267,6 +324,33 @@ describe("settleSubscriptionPayment", () => {
     expect(out).toEqual({ status: "VERIFIED", alreadySettled: false });
     expect(sent.confirm).toHaveLength(1);
     expect(sent.confirm[0][2]).toMatchObject({ method: "upi", referenceNumber: "UTR123" });
+  });
+
+  it("opens the access window to the verified period end", async () => {
+    const periodEnd = new Date("2026-11-05T00:00:00.000Z");
+    db.subscriptionPayment.findUnique.mockResolvedValue({
+      id: "pay-1",
+      subscriptionId: SUB,
+      userId: USER,
+      amount: 100,
+      referenceNumber: "UTR123",
+      periodStart: new Date("2026-10-06T00:00:00.000Z"),
+      periodEnd,
+      subscription: { startedAt: null, plan: { name: "Pro" } },
+    });
+    db.subscriptionPayment.updateMany.mockResolvedValue({ count: 1 });
+    db.user.findUnique.mockResolvedValue({ email: "u@example.com", fullName: "Uma", accessUntil: null });
+
+    await settleSubscriptionPayment({ paymentId: "pay-1", adminUserId: "admin-1" });
+
+    // Verifying the UTR is what finally turns the money into access. The window
+    // must reach the period that was paid for, exactly.
+    expect(db.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: USER },
+        data: { accessUntil: periodEnd, accessSource: "SUBSCRIPTION" },
+      }),
+    );
   });
 
   it("reports a second verification as already settled instead of re-activating", async () => {
@@ -411,5 +495,69 @@ describe("sweepDueSubscriptions", () => {
 
     expect(result.failed).toBe(1);
     expect(result.renewed).toBe(1);
+  });
+});
+
+/**
+ * The repair for accounts that paid before activation wrote the access window.
+ * Without it those accounts stay locked out until their next renewal - a second
+ * charge, not a fix.
+ */
+describe("backfillSubscriptionAccess", () => {
+  it("grants access to an account that paid before the window was written", async () => {
+    const until = new Date("2026-11-05T00:00:00.000Z");
+    db.subscription.findMany.mockResolvedValue([{ userId: USER, nextBillingAt: until }]);
+    db.user.findUnique.mockResolvedValue({ accessUntil: null });
+
+    const repaired = await backfillSubscriptionAccess(new Date("2026-10-06T00:00:00.000Z"));
+
+    expect(repaired).toBe(1);
+    expect(db.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: USER },
+        data: { accessUntil: until, accessSource: "SUBSCRIPTION" },
+      }),
+    );
+  });
+
+  it("takes the later of two live subscriptions", async () => {
+    const sooner = new Date("2026-11-05T00:00:00.000Z");
+    const later = new Date("2026-12-05T00:00:00.000Z");
+    db.subscription.findMany.mockResolvedValue([
+      { userId: USER, nextBillingAt: sooner },
+      { userId: USER, nextBillingAt: later },
+    ]);
+    db.user.findUnique.mockResolvedValue({ accessUntil: null });
+
+    await backfillSubscriptionAccess(new Date("2026-10-06T00:00:00.000Z"));
+
+    expect(db.user.update).toHaveBeenCalledTimes(1);
+    expect(db.user.update.mock.calls[0][0].data.accessUntil).toEqual(later);
+  });
+
+  it("leaves an account that already reaches further untouched", async () => {
+    db.subscription.findMany.mockResolvedValue([
+      { userId: USER, nextBillingAt: new Date("2026-11-05T00:00:00.000Z") },
+    ]);
+    // A top-up or a lifetime grant already reaches past this plan.
+    db.user.findUnique.mockResolvedValue({ accessUntil: new Date("2999-12-31T00:00:00.000Z") });
+
+    const repaired = await backfillSubscriptionAccess(new Date("2026-10-06T00:00:00.000Z"));
+
+    expect(repaired).toBe(0);
+    expect(db.user.update).not.toHaveBeenCalled();
+  });
+
+  it("only reads ACTIVE plans that reach into the future", async () => {
+    db.subscription.findMany.mockResolvedValue([]);
+
+    await backfillSubscriptionAccess(new Date("2026-10-06T00:00:00.000Z"));
+
+    // A PAST_DUE plan has an unpaid period ahead of it; granting access from it
+    // would hand out the very period the sweep is still asking the user to pay for.
+    expect(db.subscription.findMany.mock.calls[0][0].where).toMatchObject({
+      status: "ACTIVE",
+      nextBillingAt: { gt: expect.any(Date) },
+    });
   });
 });

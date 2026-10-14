@@ -13,7 +13,7 @@ import { processTimeoutBookings, sendUpcomingReminders } from "./services/bookin
 import { runReengagementSweep } from "./services/emailService";
 import { startMovieCatalogSync, stopMovieCatalogSync } from "./services/movieCatalogSync";
 import { sweepReleasableEscrows } from "./services/eventEscrowService";
-import { sweepDueSubscriptions } from "./services/subscriptionBillingService";
+import { sweepDueSubscriptions, backfillSubscriptionAccess } from "./services/subscriptionBillingService";
 import { startDigestScheduler, stopDigestScheduler } from "./services/digestScheduler";
 import { startReconciliationSweeper, stopReconciliationSweeper } from "./services/reconciliationSweeper";
 import { ensureLegalDocumentsSeeded } from "./services/legalConsentService";
@@ -519,6 +519,17 @@ startReengagementSweeper();
       if (inserted > 0) console.log(`[LEGAL] published ${inserted} legal document version(s)`);
     })
     .catch((err) => console.error("[LEGAL] document seed failed:", err));
+
+  // Accounts that paid for a plan before activating it also opened the access
+  // window: an ACTIVE subscription reaching into the future but no
+  // User.accessUntil, so every paid route refused them and the app kept asking
+  // them to pay. Heals them without a second charge. Idempotent and only ever
+  // extends, so it is safe on every boot.
+  backfillSubscriptionAccess()
+    .then((repaired) => {
+      if (repaired > 0) console.log(`[SUBSCRIPTION] repaired paid access for ${repaired} account(s)`);
+    })
+    .catch((err) => console.error("[SUBSCRIPTION] access backfill failed:", err));
 
   server.listen(env.PORT, () => {
     console.log(`Nabri API server listening on port ${env.PORT} [${env.NODE_ENV}]`);
