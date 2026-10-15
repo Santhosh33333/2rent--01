@@ -34,7 +34,8 @@ const OnboardingPage = lazy(() => import('./pages/onboarding/OnboardingPage').th
 const ProfileCompletionPage = lazy(() => import('./pages/profile/ProfileCompletionPage').then(m => ({ default: m.ProfileCompletionPage })))
 
 // User pages
-const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage').then(m => ({ default: m.DashboardPage })))
+// The old customer "dashboard" was a second home page. /dashboard redirects to
+// /home now, so every existing link to it still lands somewhere real.
 const ProfilePage = lazy(() => import('./pages/profile/ProfilePage').then(m => ({ default: m.ProfilePage })))
 const InvitePage = lazy(() => import('./pages/invite/InvitePage').then(m => ({ default: m.InvitePage })))
 const VerificationPage = lazy(() => import('./pages/verification/VerificationPage').then(m => ({ default: m.VerificationPage })))
@@ -226,7 +227,7 @@ export function App() {
           <Route element={<ProtectedRoute allowedRoles={['USER']} />}>
             <Route element={<Layout />}>
               <Route path="/profile/complete" element={<ProfileCompletionPage />} />
-              <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/dashboard" element={<Navigate to="/home" replace />} />
               <Route path="/partner/apply" element={<PartnerGatePage />} />
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/verification" element={<VerificationPage />} />

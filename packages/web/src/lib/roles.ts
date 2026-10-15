@@ -59,7 +59,11 @@ export const ADMIN_TIER_ROLES: readonly string[] = [
 export const SWITCHABLE_ROLES: readonly string[] = ['USER', 'PARTNER'] as const
 
 export const ROLE_DASHBOARDS: Record<string, string> = {
-  USER: '/dashboard',
+  // The customer surface has ONE home: /home, the tab the user actually sees
+  // in the dock. It used to be /dashboard, a separate "dashboard" page reached
+  // only by sign-in/boot, so the app opened on one screen and the Home tab went
+  // to another. /dashboard now redirects here (see App.tsx).
+  USER: '/home',
   PARTNER: '/partner/dashboard',
   ADMIN: '/admin/dashboard',
   SUPER_ADMIN: '/admin/dashboard',
@@ -88,7 +92,7 @@ export function isSuperAdminRole(raw: unknown): boolean {
 }
 
 export function dashboardForRole(raw: unknown): string {
-  return ROLE_DASHBOARDS[normalizeRole(raw)] || '/dashboard'
+  return ROLE_DASHBOARDS[normalizeRole(raw)] || '/home'
 }
 
 interface RoleBearingUser {

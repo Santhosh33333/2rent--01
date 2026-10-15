@@ -245,7 +245,7 @@ export function Layout() {
           className="max-w-7xl mx-auto h-16 px-3 rounded-3xl bg-surface-50/60 dark:bg-surface-900/60 backdrop-blur-2xl border border-surface-200/50 dark:border-surface-800/50 shadow-xl shadow-black/5 pointer-events-auto flex items-center justify-between"
         >
           <div className="flex items-center gap-3 min-w-0">
-            <Link to="/dashboard" className="flex items-center gap-2 pl-1 shrink-0" aria-label="Nabri home">
+            <Link to="/home" className="flex items-center gap-2 pl-1 shrink-0" aria-label="Nabri home">
               <span className="brand-badge h-8 w-8">
                 <img src="/logo-glyph-white.svg" alt="" className="h-5 w-5" />
               </span>

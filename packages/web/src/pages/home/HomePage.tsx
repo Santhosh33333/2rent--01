@@ -33,7 +33,7 @@ import { getErrorMessage, getErrorDetail } from '../../lib/error'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
 import { QUICK_ACTIONS, type QuickAction } from '../../lib/discoveryData'
-import { AskNabriPanel } from './AskNabriPanel'
+import { EmergencyPanel } from '../../components/EmergencyPanel'
 import { Reveal } from '../../components/motion/Reveal'
 import { Avatar } from '../../components/Avatar'
 import type { FeedPost, FeedPageData } from '../../types/post'
@@ -352,9 +352,11 @@ export function HomePage() {
         </div>
       </AnimatedPage>
 
-      <AnimatedPage delay={60}>
-        <AskNabriPanel />
-      </AnimatedPage>
+      {/* The assistant ("Ask Nabri") used to sit here as a panel of suggested
+          questions. It made the home screen read like a support/help desk, and
+          the same assistant is already one tap away: it lives on /support and
+          behind the floating launcher on every signed-in screen. Removed from
+          Home so this screen is a home, not a help page. */}
 
       {/* Explore — every destination is shown, each with a real (live) subtitle.
           Previously only 9 of 17 tiles were rendered and the rest hid behind an
@@ -644,25 +646,32 @@ export function HomePage() {
         </AnimatedPage>
 
         <AnimatedPage delay={320}>
-          <Reveal>
-            <GlassCard variant="elevated" padding="lg" className="prism-ring border-0 bg-gradient-to-br from-primary-600 to-primary-700 text-white">
-              <div className="flex items-center gap-2 mb-4">
-                <Wallet className="w-5 h-5 text-white/80" />
-                <span className="text-sm font-medium text-white/80">Wallet Balance</span>
-              </div>
-              <p className="prism-text animate-prism-breathe font-display text-3xl font-bold">
-                ₹{(wallet?.balance ?? 0).toLocaleString('en-IN')}
-              </p>
-              <div className="flex gap-2 mt-4">
-                <Link to="/wallet/topup" className="flex-1 text-center py-2.5 rounded-xl bg-white/15 hover:bg-white/25 text-xs font-semibold transition-colors">
-                  Top Up
-                </Link>
-                <Link to="/wallet/transactions" className="flex-1 text-center py-2.5 rounded-xl bg-white/15 hover:bg-white/25 text-xs font-semibold transition-colors">
-                  History
-                </Link>
-              </div>
-            </GlassCard>
-          </Reveal>
+          <div className="space-y-6">
+            <Reveal>
+              <GlassCard variant="elevated" padding="lg" className="prism-ring border-0 bg-gradient-to-br from-primary-600 to-primary-700 text-white">
+                <div className="flex items-center gap-2 mb-4">
+                  <Wallet className="w-5 h-5 text-white/80" />
+                  <span className="text-sm font-medium text-white/80">Wallet Balance</span>
+                </div>
+                <p className="prism-text animate-prism-breathe font-display text-3xl font-bold">
+                  ₹{(wallet?.balance ?? 0).toLocaleString('en-IN')}
+                </p>
+                <div className="flex gap-2 mt-4">
+                  <Link to="/wallet/topup" className="flex-1 text-center py-2.5 rounded-xl bg-white/15 hover:bg-white/25 text-xs font-semibold transition-colors">
+                    Top Up
+                  </Link>
+                  <Link to="/wallet/transactions" className="flex-1 text-center py-2.5 rounded-xl bg-white/15 hover:bg-white/25 text-xs font-semibold transition-colors">
+                    History
+                  </Link>
+                </div>
+              </GlassCard>
+            </Reveal>
+            {/* Carried over from the retired /dashboard page so safety keeps its
+                place on the one home screen. */}
+            <Reveal>
+              <EmergencyPanel />
+            </Reveal>
+          </div>
         </AnimatedPage>
       </div>
     </div>
