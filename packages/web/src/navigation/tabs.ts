@@ -3,7 +3,6 @@ import {
   Home,
   Compass,
   Inbox,
-  MessageCircle,
   User,
   Calendar,
   Users,
@@ -23,6 +22,7 @@ import {
   MapPin,
   Package,
   Rss,
+  Plus,
 } from "lucide-react";
 
 /**
@@ -56,8 +56,8 @@ export interface NavGroup {
 export const PRIMARY_TABS: NavItem[] = [
   { to: "/home", label: "Home", icon: Home },
   { to: "/discover", label: "Discover", icon: Compass },
-  { to: "/requests", label: "Requests", icon: Inbox, matchPrefix: "/requests" },
-  { to: "/messages", label: "Chat", icon: MessageCircle, matchPrefix: "/messages" },
+  { to: "/feed/new", label: "Create", icon: Plus, matchPrefix: "/feed/new" },
+  { to: "/messages", label: "Inbox", icon: Inbox, matchPrefix: "/messages" },
   { to: "/profile", label: "Profile", icon: User },
 ];
 
@@ -67,6 +67,7 @@ export const USER_MORE: NavGroup[] = [
     title: "My activity",
     items: [
       { to: "/feed", label: "Feed", icon: Rss, matchPrefix: "/feed" },
+      { to: "/requests", label: "Requests", icon: ClipboardList, matchPrefix: "/requests" },
       { to: "/bookings", label: "Bookings", icon: Calendar, matchPrefix: "/bookings" },
       { to: "/communities", label: "Communities", icon: Users, matchPrefix: "/communities" },
       { to: "/wallet", label: "Wallet", icon: Wallet, matchPrefix: "/wallet" },
