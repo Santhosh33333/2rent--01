@@ -8,6 +8,7 @@ import { chatUpload, classifyChatFile, resolveChatMedia, type ResolvedChatMedia 
 import { readBlob, removeBlob } from "../services/blobStorage";
 import { canDirectChat } from "../services/chatAccess";
 import { ensureConversation } from "../services/conversation";
+import { findPersonalData, PERSONAL_DATA_ERROR_CODE, PERSONAL_DATA_ERROR_MESSAGE } from "../services/piiGuard";
 
 // ============================================================================
 // CONVERSATION HELPERS
@@ -56,6 +57,17 @@ export async function sendMessage(req: AuthedRequest, res: Response): Promise<vo
     } else if (!content || !String(content).trim()) {
       sendError(res, "Message content is required.", 400, "VALIDATION_ERROR");
       return;
+    }
+
+    // Personal-data guard: chat is text, so this is where contact-detail
+    // sharing is actually stopped (calls carry no text). Applied to the caption
+    // of a media message too. See services/piiGuard.ts.
+    if (typeof content === "string" && content.trim()) {
+      const pii = findPersonalData(content);
+      if (pii) {
+        sendError(res, PERSONAL_DATA_ERROR_MESSAGE, 403, PERSONAL_DATA_ERROR_CODE);
+        return;
+      }
     }
 
     if (receiverId === req.user!.userId) {

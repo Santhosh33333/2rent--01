@@ -18,6 +18,7 @@ import { emitToUser, isUserOnline } from "../services/socketService";
 import { notifyGroupInvite, notifyGroupMessage } from "../services/messageNotifications";
 import { classifyChatFile, resolveChatMedia, type ResolvedChatMedia } from "../services/chatUploadService";
 import { removeBlob } from "../services/blobStorage";
+import { findPersonalData, PERSONAL_DATA_ERROR_CODE, PERSONAL_DATA_ERROR_MESSAGE } from "../services/piiGuard";
 
 const USER_SELECT = { id: true, fullName: true, avatarUrl: true } as const;
 const ALLOWED_REACTIONS = ["love", "like", "laugh", "wow", "sad", "thanks", "fire", "clap"];
@@ -728,6 +729,16 @@ export async function sendMessage(req: AuthedRequest, res: Response): Promise<vo
       }
     }
     content = content.slice(0, type === "TEXT" ? MAX_LENGTH : 1000);
+
+    // Same personal-data guard as 1:1 chat: group text is still a channel out
+    // of the app, and a caption counts. See services/piiGuard.ts.
+    if (content) {
+      const pii = findPersonalData(content);
+      if (pii) {
+        sendError(res, PERSONAL_DATA_ERROR_MESSAGE, 403, PERSONAL_DATA_ERROR_CODE);
+        return;
+      }
+    }
 
     // Replies must target a real, non-deleted message in the SAME group.
     let replyToId: string | null = null;

@@ -3,6 +3,7 @@ import { prisma } from "../config/database";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
 import { canDirectChat } from "../services/chatAccess";
+import { findPersonalData, PERSONAL_DATA_ERROR_CODE, PERSONAL_DATA_ERROR_MESSAGE } from "../services/piiGuard";
 
 const MAX_REQUESTS_PER_DAY_DEFAULT = 10;
 const COOLDOWN_DAYS_AFTER_REJECT_DEFAULT = 5;
@@ -36,6 +37,16 @@ export async function sendChatRequest(req: AuthedRequest, res: Response): Promis
     if (senderId === receiverId) {
       sendError(res, "Cannot send a chat request to yourself.", 400, "SELF_REQUEST");
       return;
+    }
+
+    // The request note is chat text too, so it carries the same personal-data
+    // guard as a message. See services/piiGuard.ts.
+    if (typeof message === "string" && message.trim()) {
+      const pii = findPersonalData(message);
+      if (pii) {
+        sendError(res, PERSONAL_DATA_ERROR_MESSAGE, 403, PERSONAL_DATA_ERROR_CODE);
+        return;
+      }
     }
 
     const [sender, receiver, senderSettings] = await Promise.all([
