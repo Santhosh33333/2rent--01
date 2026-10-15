@@ -13,6 +13,7 @@ import { getErrorMessage } from '../../lib/error'
 import { isSignedIn } from '../../lib/auth'
 import { directionsUrl } from '../../lib/maps'
 import { openExternalUrl } from '../../lib/externalLink'
+import { shareContent } from '../../lib/share'
 import { EventChat } from '../../components/events/EventChat'
 import { EventCostSheet } from '../../components/events/EventCostSheet'
 import { MusicToggle } from '../landing/components/MusicToggle'
@@ -157,16 +158,7 @@ export function EventDetailPage() {
 
   const handleShare = async () => {
     const url = window.location.href
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: event?.name || 'Event', url })
-      } else {
-        await navigator.clipboard.writeText(url)
-        toast.success('Event link copied')
-      }
-    } catch {
-      /* user dismissed the share sheet */
-    }
+    await shareContent({ title: event?.name || 'Event', text: event?.description?.slice(0, 120) || 'Event', url })
   }
 
   const handleRsvp = async () => {

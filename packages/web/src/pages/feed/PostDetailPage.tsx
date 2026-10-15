@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Heart, Bookmark, Gift, Flag, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowLeft, Heart, Bookmark, Gift, Flag, Trash2, ChevronDown, ChevronUp, Share2 } from "lucide-react";
+import { shareContent } from "../../lib/share";
 import { api, assetUrl, postApi } from "../../lib/api";
 import { useFeatureFlag } from "../../hooks/useFeatureFlag";
 import { Avatar } from "../../components/Avatar";
@@ -362,6 +363,19 @@ export function PostDetailPage() {
               }`}
             >
               <Bookmark className={`h-4 w-4 ${post.savedByMe ? "fill-current" : ""}`} /> {post.savedByMe ? "Saved" : "Save"}
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                void shareContent({
+                  title: "Nabri post",
+                  text: post.content?.slice(0, 120) || "Check out this post on Nabri",
+                  url: window.location.href,
+                })
+              }
+              className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm text-surface-600 transition hover:bg-surface-100 dark:text-surface-300 dark:hover:bg-surface-800"
+            >
+              <Share2 className="h-4 w-4" /> Share
             </button>
             {giftingOn && !isAuthor ? (
               <button

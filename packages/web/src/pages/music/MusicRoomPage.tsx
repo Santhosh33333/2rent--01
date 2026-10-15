@@ -35,6 +35,7 @@ import {
   Pause,
   Play,
   RefreshCw,
+  Share2,
   Trash2,
   Upload,
   UserPlus,
@@ -50,6 +51,7 @@ import { YouTubeRoomPlayer, type YouTubeTransport } from './YouTubeRoomPlayer'
 import { youtubeVideoId } from '../../lib/youtubePlayer'
 import { Modal, ScreenState } from '../../components/ui'
 import { getErrorMessage } from '../../lib/error'
+import { shareContent } from '../../lib/share'
 
 interface PlaybackSync {
   isPlaying: boolean
@@ -538,6 +540,16 @@ export function MusicRoomPage() {
           title="Copy room code"
         >
           <Copy className="h-3.5 w-3.5" /> {room.code}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            shareContent({ title: room.name, text: 'Join my Nabri music room', url: window.location.href })
+          }}
+          className="flex h-10 w-10 items-center justify-center rounded-2xl bg-surface-100 text-surface-600 transition hover:bg-surface-200 dark:bg-surface-800 dark:text-surface-300 dark:hover:bg-surface-700"
+          aria-label="Share room"
+        >
+          <Share2 className="h-5 w-5" />
         </button>
         {isHost && (
           <button

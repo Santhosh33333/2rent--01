@@ -299,6 +299,35 @@ const [error, setError] = useState<string | null>(null)
             </div>
           </div>
 
+          {/* A progress nudge: an open-ended "share" ask is easy to ignore, so
+              give it a concrete, achievable target (3 friends) and show how far
+              along the user already is. Rewards are still unlocked by a
+              completed booking on the server; this bar is just a nudge, not a
+              guarantee. */}
+          {(() => {
+            const goal = 3
+            const pct = Math.min(100, Math.round((invited / goal) * 100))
+            const remaining = Math.max(0, goal - invited)
+            return (
+              <div className="mb-4 rounded-2xl bg-white/60 px-3.5 py-3 dark:bg-surface-800/40">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-surface-500 dark:text-surface-400">
+                  Invite {goal} friends
+                </p>
+                <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-surface-200/60 dark:bg-surface-700/60">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-violet-500 to-primary-600 transition-all duration-500"
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                <p className="mt-1.5 text-xs text-surface-600 dark:text-surface-400">
+                  {remaining === 0
+                    ? 'You have invited 3 friends. Thank you for growing Nabri with us.'
+                    : `Invite ${remaining} more ${remaining === 1 ? 'friend' : 'friends'} to hit your goal.`}
+                </p>
+              </div>
+            )
+          })()}
+
           {/* What this account redeemed, if anything. Shown as a fact rather
               than an input so the field below only ever appears to accounts
               that can still use it. */}
