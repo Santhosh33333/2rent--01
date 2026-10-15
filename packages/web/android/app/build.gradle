@@ -58,8 +58,19 @@ android {
         // Manager, which silently does nothing where it is unavailable, so the
         // app now asks for the classic GoogleSignIn intent instead. Also adds
         // host file uploads to listening/watching rooms.
-        versionCode 25
-        versionName "1.0.24"
+        //
+        // 26 / 1.0.25 bundles everything since that build: the chat thread no
+        // longer refreshes on its own (a 15s poll replaced the whole list and
+        // yanked the scroll mid-conversation) and the composer grows with the
+        // message instead of clipping long text; movie type-ahead; photo
+        // crop/remove; the KYC placeholder-phone fix; YouTube-linked and
+        // retention-limited music rooms; chat unlocked only by an accepted
+        // request; new-post notifications and the official read-only Nabri
+        // Community with its 1:1 welcome DM; the full transaction history; the
+        // paid-but-still-asked-to-pay subscription fix and its paywall UI; and
+        // the Google sign-in avatar preservation.
+        versionCode 26
+        versionName "1.0.25"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
