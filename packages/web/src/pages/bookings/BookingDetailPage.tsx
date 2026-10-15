@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
-  Footprints, Package, MapPin, Navigation, Clock, Calendar, Star,
+  MapPin, Navigation, Clock, Calendar, Star,
   CreditCard, CheckCircle, XCircle, User, Loader2, AlertTriangle, KeyRound, Download, MessageCircle, Phone, Video
 } from 'lucide-react'
+import { serviceIcon } from '../../lib/serviceCatalog'
 import toast from 'react-hot-toast'
 import { api, assetUrl, bookingApi } from '../../lib/api'
 import { getErrorMessage } from '../../lib/error'
@@ -309,10 +310,7 @@ export function BookingDetailPage() {
       <AnimatedPage delay={200}>
         <GlassCard variant="elevated" padding="lg">
           <h3 className="section-title mb-4 flex items-center gap-2">
-            {booking.serviceType === 'WALKING'
-              ? <Footprints className="w-5 h-5 text-emerald-500" />
-              : <Package className="w-5 h-5 text-amber-500" />
-            }
+            <span className="text-xl">{serviceIcon(booking.serviceType)}</span>
             Service Details
           </h3>
           <div className="space-y-3">

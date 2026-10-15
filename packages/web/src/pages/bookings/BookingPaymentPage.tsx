@@ -3,8 +3,9 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   Banknote, CheckCircle, XCircle, Loader2, ArrowLeft,
-  Star, Clock, MapPin, Navigation, Footprints, Package, ShieldCheck, ImagePlus, X
+  Star, Clock, MapPin, Navigation, ShieldCheck, ImagePlus, X
 } from 'lucide-react'
+import { serviceTitle, serviceIcon } from '../../lib/serviceCatalog'
 import toast from 'react-hot-toast'
 import { api } from '../../lib/api'
 import { AnimatedPage } from '../../components/AnimatedPage'
@@ -297,10 +298,10 @@ export function BookingPaymentPage() {
           <h3 className="text-sm font-bold text-surface-500 dark:text-surface-400 uppercase tracking-wider mb-3">Booking Summary</h3>
           <div className="space-y-2.5">
             <div className="flex items-center gap-3">
-              <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${booking.serviceType === 'WALKING' ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-amber-100 dark:bg-amber-900/30'}`}>
-                {booking.serviceType === 'WALKING' ? <Footprints className="w-4 h-4 text-emerald-600" /> : <Package className="w-4 h-4 text-amber-600" />}
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-surface-100 dark:bg-surface-800">
+                <span className="text-base">{serviceIcon(booking.serviceType)}</span>
               </div>
-              <span className="text-sm font-semibold text-surface-900 dark:text-white">{booking.serviceType === 'WALKING' ? 'Walking Buddy' : 'CarryBuddy'}</span>
+              <span className="text-sm font-semibold text-surface-900 dark:text-white">{serviceTitle(booking.serviceType)}</span>
             </div>
             <div className="flex items-start gap-3">
               <MapPin className="w-4 h-4 text-emerald-500 mt-0.5 flex-shrink-0" />

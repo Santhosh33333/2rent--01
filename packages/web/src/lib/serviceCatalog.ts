@@ -1,5 +1,10 @@
-// Frontend mirror of the backend Expanded Partner Ecosystem catalog.
-// Key/label/icon MUST stay in sync with packages/backend/src/services/serviceCatalog.ts.
+// Frontend mirror of the backend service catalog. Key/label/icon MUST stay in
+// sync with packages/backend/src/services/serviceCatalog.ts.
+//
+// The catalogue is in-app companionship (talk, vent, time-pass, date, friends),
+// delivered over an in-app call or chat — so nothing here needs an item or a
+// drop-off. The retired local-services names still render for historical
+// bookings through LEGACY_SERVICE_LABELS below.
 export interface ServiceOption {
   key: string
   title: string
@@ -11,32 +16,56 @@ export interface ServiceOption {
 }
 
 export const SERVICES: ServiceOption[] = [
-  { key: 'WALKING', title: 'Walking Buddy', subtitle: 'Companion walks, pet walks & strolls', icon: '🚶', requiresItem: false, requiresDropoff: false, accent: 'from-emerald-500 to-emerald-600' },
-  { key: 'CARRY_BUDDY', title: 'Carry Buddy', subtitle: 'Heavy lifting, shifting & items', icon: '📦', requiresItem: true, requiresDropoff: true, accent: 'from-amber-500 to-orange-600' },
-  { key: 'FLAT_SHIFT', title: 'Flat Shift', subtitle: 'Flat shuffling & rearrangement', icon: '🛋️', requiresItem: false, requiresDropoff: false, accent: 'from-sky-500 to-sky-600' },
-  { key: 'LOCAL_MOVE', title: 'Local Move', subtitle: 'Small house/room local shifting', icon: '🚚', requiresItem: false, requiresDropoff: true, accent: 'from-indigo-500 to-indigo-600' },
-  { key: 'RIDE_BUDDY', title: 'Ride Buddy', subtitle: 'Buddy ride for short hops', icon: '🛵', requiresItem: false, requiresDropoff: true, accent: 'from-rose-500 to-pink-600' },
-  { key: 'ERRAND_BUDDY', title: 'Errand Buddy', subtitle: 'Pickups, drops & quick errands', icon: '🏃', requiresItem: false, requiresDropoff: true, accent: 'from-teal-500 to-teal-600' },
-  { key: 'WAIT_BUDDY', title: 'Wait Buddy', subtitle: 'Stand in queue / wait for you', icon: '⏳', requiresItem: false, requiresDropoff: false, accent: 'from-cyan-500 to-cyan-600' },
-  { key: 'STUDY_BUDDY', title: 'Study Buddy', subtitle: 'Peer study & doubt clearing', icon: '📚', requiresItem: false, requiresDropoff: false, accent: 'from-violet-500 to-purple-600' },
-  { key: 'SPOT_BUDDY', title: 'Spot Buddy', subtitle: 'Hold a spot on your behalf', icon: '📍', requiresItem: false, requiresDropoff: false, accent: 'from-fuchsia-500 to-fuchsia-600' },
-  { key: 'TRAVEL_BUDDY', title: 'Travel Buddy', subtitle: 'Companion for trips & transit', icon: '✈️', requiresItem: false, requiresDropoff: true, accent: 'from-blue-500 to-blue-600' },
-  { key: 'EVENT_BUDDY', title: 'Event Buddy', subtitle: 'On-ground help for events', icon: '🎉', requiresItem: false, requiresDropoff: false, accent: 'from-pink-500 to-rose-600' },
-  { key: 'BUSINESS_BUDDY', title: 'Business Buddy', subtitle: 'Business errands & courier', icon: '💼', requiresItem: false, requiresDropoff: true, accent: 'from-slate-500 to-slate-600' },
-  { key: 'PET_BUDDY', title: 'Pet Buddy', subtitle: 'Pet sitting, walking & care', icon: '🐾', requiresItem: false, requiresDropoff: false, accent: 'from-lime-500 to-green-600' },
-  { key: 'COMMERCIAL', title: 'Commercial & Industrial', subtitle: 'Bulk commercial support', icon: '🏭', requiresItem: false, requiresDropoff: true, accent: 'from-orange-500 to-red-600' },
+  { key: 'TALK', title: 'Talk', subtitle: 'One-to-one talk over an in-app call or chat', icon: '💬', requiresItem: false, requiresDropoff: false, accent: 'from-sky-500 to-blue-600' },
+  { key: 'VENT', title: 'Vent', subtitle: 'Let it all out to someone who listens', icon: '🫂', requiresItem: false, requiresDropoff: false, accent: 'from-violet-500 to-purple-600' },
+  { key: 'TIME_PASS', title: 'Time-pass', subtitle: 'Easy company to pass the time', icon: '⏳', requiresItem: false, requiresDropoff: false, accent: 'from-teal-500 to-cyan-600' },
+  { key: 'DATE', title: 'Date', subtitle: 'A companion for a date, over call or chat', icon: '💞', requiresItem: false, requiresDropoff: false, accent: 'from-rose-500 to-pink-600' },
+  { key: 'FRIENDS', title: 'Friends', subtitle: 'Meet a new friend and hang out', icon: '🤝', requiresItem: false, requiresDropoff: false, accent: 'from-emerald-500 to-green-600' },
+  { key: 'OTHER', title: 'Other', subtitle: 'Something else — describe it in the details', icon: '✨', requiresItem: false, requiresDropoff: false, accent: 'from-slate-500 to-slate-600' },
 ]
 
+/** Names for the retired local-services catalogue — display-only, for history. */
+export const LEGACY_SERVICE_LABELS: Record<string, string> = {
+  WALKING: 'Walking Buddy',
+  CARRY_BUDDY: 'Carry Buddy',
+  FLAT_SHIFT: 'Flat Shift',
+  LOCAL_MOVE: 'Local Move',
+  RIDE_BUDDY: 'Ride Buddy',
+  ERRAND_BUDDY: 'Errand Buddy',
+  WAIT_BUDDY: 'Wait Buddy',
+  STUDY_BUDDY: 'Study Buddy',
+  SPOT_BUDDY: 'Spot Buddy',
+  TRAVEL_BUDDY: 'Travel Buddy',
+  EVENT_BUDDY: 'Event Buddy',
+  BUSINESS_BUDDY: 'Business Buddy',
+  PET_BUDDY: 'Pet Buddy',
+  COMMERCIAL: 'Commercial & Industrial',
+}
+
+/** Human name for any service key, current or retired. */
 export function serviceTitle(key: string): string {
-  return SERVICES.find((s) => s.key === key)?.title ?? key
+  return SERVICES.find((s) => s.key === key)?.title ?? LEGACY_SERVICE_LABELS[key] ?? key
+}
+
+/** The catalogue entry for a key, if it is still offered. */
+export function serviceOption(key: string): ServiceOption | undefined {
+  return SERVICES.find((s) => s.key === key)
+}
+
+export function serviceIcon(key: string): string {
+  return serviceOption(key)?.icon ?? '✨'
+}
+
+export function serviceAccent(key: string): string {
+  return serviceOption(key)?.accent ?? 'from-surface-400 to-surface-500'
 }
 
 export function serviceRequiresItem(key: string): boolean {
-  return SERVICES.find((s) => s.key === key)?.requiresItem ?? false
+  return serviceOption(key)?.requiresItem ?? false
 }
 
 export function serviceRequiresDropoff(key: string): boolean {
-  return SERVICES.find((s) => s.key === key)?.requiresDropoff ?? false
+  return serviceOption(key)?.requiresDropoff ?? false
 }
 
 export interface OtpLabels {

@@ -72,7 +72,7 @@ export function CreateBookingPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const { user } = useAuth()
-  const initialType = (searchParams.get('type') as ServiceType) || 'WALKING'
+  const initialType = (searchParams.get('type') as ServiceType) || 'TALK'
 
   const [step, setStep] = useState<Step>(1)
   const [submitting, setSubmitting] = useState(false)

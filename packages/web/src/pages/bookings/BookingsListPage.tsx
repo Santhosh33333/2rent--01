@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  Footprints, Package, MapPin, ArrowRight, Clock, Search, Plus
+  Footprints, MapPin, ArrowRight, Clock, Search, Plus
 } from 'lucide-react'
+import { serviceTitle, serviceIcon, serviceAccent } from '../../lib/serviceCatalog'
 import { api } from '../../lib/api'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { EmptyState } from '../../components/EmptyState'
@@ -166,19 +167,12 @@ export function BookingsListPage() {
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-4">
-                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-md flex-shrink-0 ${
-                      booking.serviceType === 'WALKING'
-                        ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-emerald-500/20'
-                        : 'bg-gradient-to-br from-amber-500 to-orange-600 shadow-amber-500/20'
-                    }`}>
-                      {booking.serviceType === 'WALKING'
-                        ? <Footprints className="w-5 h-5 text-white" />
-                        : <Package className="w-5 h-5 text-white" />
-                      }
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg flex-shrink-0 bg-gradient-to-br ${serviceAccent(booking.serviceType)}`}>
+                      <span className="text-xl">{serviceIcon(booking.serviceType)}</span>
                     </div>
                     <div className="min-w-0">
-                      <h3 className="text-base font-bold font-display text-surface-900 dark:text-white capitalize">
-                        {booking.serviceType === 'WALKING' ? 'Walking Buddy' : 'CarryBuddy'}
+                      <h3 className="text-base font-bold font-display text-surface-900 dark:text-white">
+                        {serviceTitle(booking.serviceType)}
                       </h3>
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
                         <span className="flex items-center gap-1 text-xs text-surface-500">

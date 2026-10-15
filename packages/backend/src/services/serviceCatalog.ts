@@ -1,8 +1,17 @@
-// Expanded Partner Ecosystem — single source of truth for all 14 services.
+// Nabri social services — single source of truth for the catalogue.
+//
+// The catalogue is now in-app companionship: talk, vent, time-pass, date and
+// friends. Every one of them is delivered over an in-app call or chat, so no
+// entry involves travel, an item or a drop-off — `requiresDistance`,
+// `requiresItem` and `requiresDropoff` are all false. The old local-services
+// (walking/carry) catalogue is retired; see LEGACY_SERVICE_LABELS for how
+// bookings already in the database keep a readable name.
+//
 // Pricing here are DEFAULTS only; every value is overridable at runtime by the
 // admin via the PricingConfig table (scoped key: `${SERVICE}_${KEY}`). The
 // backend NEVER hardcodes a fare — it reads config, falling back to these
-// catalog defaults when no admin row exists.
+// catalog defaults when no admin row exists. The platform fee is admin-editable
+// too and defaults to 1%.
 
 export interface ServicePricing {
   baseFee: number;
@@ -31,167 +40,127 @@ export interface ServiceDef {
   pricing: ServicePricing;
 }
 
+// Shared shape so the six entries read as one catalogue, not six unrelated
+// numbers. Platform fee is 1% for every service; the fare is time-based.
+function pricing(baseFee: number, perMinute: number, minDurationMinutes: number): ServicePricing {
+  return {
+    baseFee,
+    perMinute,
+    perKm: 0,
+    minDurationMinutes,
+    waitingChargePerMin: 0,
+    waitingFreeMinutes: 5,
+    platformFeePercent: 1,
+    surgeEnabled: 0,
+    peakStart: 0,
+    peakEnd: 0,
+    peakMultiplier: 1.25,
+    minBookingAmount: 0,
+  };
+}
+
 export const SERVICE_CATALOG: ServiceDef[] = [
   {
-    key: "WALKING",
-    label: "Walking Buddy",
-    shortDescription: "Companion walks, pet walks & casual strolls",
-    category: "MOBILITY",
-    icon: "🚶",
-    requiresItem: false,
-    requiresDistance: true,
-    requiresDropoff: false,
-    pricing: { baseFee: 50, perMinute: 2, perKm: 0.7, minDurationMinutes: 10, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
-  },
-  {
-    key: "CARRY_BUDDY",
-    label: "Carry Buddy",
-    shortDescription: "Heavy lifting, shifting & item carrying",
-    category: "LOGISTICS",
-    icon: "📦",
-    requiresItem: true,
-    requiresDistance: true,
-    requiresDropoff: true,
-    pricing: { baseFee: 80, perMinute: 2.5, perKm: 1, minDurationMinutes: 10, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
-  },
-  {
-    key: "FLAT_SHIFT",
-    label: "Flat Shift",
-    shortDescription: "Helping hands for flat shuffling & rearrangement",
-    category: "LOGISTICS",
-    icon: "🛋️",
+    key: "TALK",
+    label: "Talk",
+    shortDescription: "One-to-one talk over an in-app call or chat",
+    category: "SOCIAL",
+    icon: "💬",
     requiresItem: false,
     requiresDistance: false,
     requiresDropoff: false,
-    pricing: { baseFee: 60, perMinute: 3, perKm: 0, minDurationMinutes: 30, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
+    pricing: pricing(50, 4, 15),
   },
   {
-    key: "LOCAL_MOVE",
-    label: "Local Move",
-    shortDescription: "Small house/room local shifting",
-    category: "LOGISTICS",
-    icon: "🚚",
+    key: "VENT",
+    label: "Vent",
+    shortDescription: "Let it all out to someone who listens",
+    category: "SOCIAL",
+    icon: "🫂",
     requiresItem: false,
-    requiresDistance: true,
-    requiresDropoff: true,
-    pricing: { baseFee: 120, perMinute: 4, perKm: 2, minDurationMinutes: 60, waitingChargePerMin: 0, waitingFreeMinutes: 10, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
+    requiresDistance: false,
+    requiresDropoff: false,
+    pricing: pricing(50, 4, 15),
   },
   {
-    key: "RIDE_BUDDY",
-    label: "Ride Buddy",
-    shortDescription: "Buddy ride for short passenger hops",
-    category: "MOBILITY",
-    icon: "🛵",
-    requiresItem: false,
-    requiresDistance: true,
-    requiresDropoff: true,
-    pricing: { baseFee: 40, perMinute: 3, perKm: 2.5, minDurationMinutes: 15, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
-  },
-  {
-    key: "ERRAND_BUDDY",
-    label: "Errand Buddy",
-    shortDescription: "Pickups, drops & quick errands",
-    category: "LOGISTICS",
-    icon: "🏃",
-    requiresItem: false,
-    requiresDistance: true,
-    requiresDropoff: true,
-    pricing: { baseFee: 30, perMinute: 2.5, perKm: 1.5, minDurationMinutes: 15, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
-  },
-  {
-    key: "WAIT_BUDDY",
-    label: "Wait Buddy",
-    shortDescription: "Stand in queue / wait on your behalf",
-    category: "SPECIAL",
+    key: "TIME_PASS",
+    label: "Time-pass",
+    shortDescription: "Easy company to pass the time",
+    category: "SOCIAL",
     icon: "⏳",
     requiresItem: false,
     requiresDistance: false,
     requiresDropoff: false,
-    pricing: { baseFee: 0, perMinute: 2, perKm: 0, minDurationMinutes: 15, waitingChargePerMin: 2, waitingFreeMinutes: 5, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
+    pricing: pricing(30, 3, 15),
   },
   {
-    key: "STUDY_BUDDY",
-    label: "Study Buddy",
-    shortDescription: "Peer study & doubt-clearing sessions",
-    category: "CARE",
-    icon: "📚",
+    key: "DATE",
+    label: "Date",
+    shortDescription: "A companion for a date, over call or chat",
+    category: "SOCIAL",
+    icon: "💞",
     requiresItem: false,
     requiresDistance: false,
     requiresDropoff: false,
-    pricing: { baseFee: 50, perMinute: 4, perKm: 0, minDurationMinutes: 30, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
+    pricing: pricing(100, 5, 30),
   },
   {
-    key: "SPOT_BUDDY",
-    label: "Spot Buddy",
-    shortDescription: "Hold a spot / reservation on your behalf",
-    category: "SPECIAL",
-    icon: "📍",
+    key: "FRIENDS",
+    label: "Friends",
+    shortDescription: "Meet a new friend and hang out",
+    category: "SOCIAL",
+    icon: "🤝",
     requiresItem: false,
     requiresDistance: false,
     requiresDropoff: false,
-    pricing: { baseFee: 20, perMinute: 2, perKm: 0, minDurationMinutes: 15, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
+    pricing: pricing(50, 4, 30),
   },
   {
-    key: "TRAVEL_BUDDY",
-    label: "Travel Buddy",
-    shortDescription: "Companion for trips & transit help",
-    category: "MOBILITY",
-    icon: "✈️",
-    requiresItem: false,
-    requiresDistance: true,
-    requiresDropoff: true,
-    pricing: { baseFee: 60, perMinute: 3, perKm: 2, minDurationMinutes: 30, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
-  },
-  {
-    key: "EVENT_BUDDY",
-    label: "Event Buddy",
-    shortDescription: "On-ground help for events & gatherings",
-    category: "SPECIAL",
-    icon: "🎉",
+    key: "OTHER",
+    label: "Other",
+    shortDescription: "Something else — describe it in the details",
+    category: "SOCIAL",
+    icon: "✨",
     requiresItem: false,
     requiresDistance: false,
     requiresDropoff: false,
-    pricing: { baseFee: 80, perMinute: 3.5, perKm: 0, minDurationMinutes: 60, waitingChargePerMin: 0, waitingFreeMinutes: 10, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
-  },
-  {
-    key: "BUSINESS_BUDDY",
-    label: "Business Buddy",
-    shortDescription: "Business errands & courier support",
-    category: "BUSINESS",
-    icon: "💼",
-    requiresItem: false,
-    requiresDistance: true,
-    requiresDropoff: true,
-    pricing: { baseFee: 100, perMinute: 5, perKm: 1.5, minDurationMinutes: 30, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
-  },
-  {
-    key: "PET_BUDDY",
-    label: "Pet Buddy",
-    shortDescription: "Pet sitting, walking & care",
-    category: "CARE",
-    icon: "🐾",
-    requiresItem: false,
-    requiresDistance: true,
-    requiresDropoff: false,
-    pricing: { baseFee: 60, perMinute: 3, perKm: 1, minDurationMinutes: 15, waitingChargePerMin: 0, waitingFreeMinutes: 5, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
-  },
-  {
-    key: "COMMERCIAL",
-    label: "Commercial & Industrial",
-    shortDescription: "Bulk commercial & industrial support",
-    category: "BUSINESS",
-    icon: "🏭",
-    requiresItem: false,
-    requiresDistance: true,
-    requiresDropoff: true,
-    pricing: { baseFee: 200, perMinute: 6, perKm: 4, minDurationMinutes: 120, waitingChargePerMin: 0, waitingFreeMinutes: 10, platformFeePercent: 10, surgeEnabled: 0, peakStart: 0, peakEnd: 0, peakMultiplier: 1.25, minBookingAmount: 0 },
+    pricing: pricing(0, 3, 15),
   },
 ];
 
 export const SERVICE_KEYS: string[] = SERVICE_CATALOG.map((s) => s.key);
 
+/**
+ * Names for the retired local-services catalogue.
+ *
+ * These keys are no longer offered anywhere, but bookings already in the
+ * database still carry them, so a historical booking keeps a human name instead
+ * of showing a bare key. Deliberately display-only — nothing here is bookable.
+ */
+export const LEGACY_SERVICE_LABELS: Record<string, string> = {
+  WALKING: "Walking Buddy",
+  CARRY_BUDDY: "Carry Buddy",
+  FLAT_SHIFT: "Flat Shift",
+  LOCAL_MOVE: "Local Move",
+  RIDE_BUDDY: "Ride Buddy",
+  ERRAND_BUDDY: "Errand Buddy",
+  WAIT_BUDDY: "Wait Buddy",
+  STUDY_BUDDY: "Study Buddy",
+  SPOT_BUDDY: "Spot Buddy",
+  TRAVEL_BUDDY: "Travel Buddy",
+  EVENT_BUDDY: "Event Buddy",
+  BUSINESS_BUDDY: "Business Buddy",
+  PET_BUDDY: "Pet Buddy",
+  COMMERCIAL: "Commercial & Industrial",
+};
+
 export function getServiceDef(key: string): ServiceDef | undefined {
   return SERVICE_CATALOG.find((s) => s.key === key);
+}
+
+/** Human name for any service key, current or retired. */
+export function serviceLabel(key: string): string {
+  return getServiceDef(key)?.label ?? LEGACY_SERVICE_LABELS[key] ?? key;
 }
 
 export function isServiceEnabled(key: string): boolean {
@@ -209,7 +178,7 @@ export function catalogDefaults(key: string): Record<string, number> {
       MIN_DURATION_MINUTES: 0,
       WAITING_CHARGE_PER_MIN: 0,
       WAITING_FREE_MINUTES: 5,
-      PLATFORM_FEE_PERCENT: 10,
+      PLATFORM_FEE_PERCENT: 1,
       SURGE_ENABLED: 0,
       PEAK_HOUR_START: 0,
       PEAK_HOUR_END: 0,
