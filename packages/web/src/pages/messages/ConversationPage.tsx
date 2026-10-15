@@ -10,7 +10,7 @@ import {
 } from 'lucide-react'
 import { api, assetUrl, chatRequestApi, type ConnectionStatus } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
-import { useChat } from '../../hooks/useSocket'
+import { useChat, useSocket } from '../../hooks/useSocket'
 import { useCallLauncher } from '../../hooks/useCallLauncher'
 import { Avatar } from '../../components/Avatar'
 
@@ -114,6 +114,12 @@ export function ConversationPage() {
   const chunksRef = useRef<Blob[]>([])
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  // The scrolling thread container and whether the reader is parked at its
+  // bottom. New messages only auto-scroll when they are already at the bottom,
+  // so a refresh can never yank them out of the history they are reading.
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const atBottomRef = useRef(true)
+  const composerRef = useRef<HTMLTextAreaElement>(null)
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const convIdRef = useRef<string | null>(null)
   const tempSeq = useRef(0)
@@ -131,6 +137,14 @@ export function ConversationPage() {
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  /** Track whether the reader is at the bottom so we only follow new messages
+      when it will not interrupt them. */
+  const onThreadScroll = () => {
+    const el = scrollRef.current
+    if (!el) return
+    atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120
   }
 
   useEffect(() => { convIdRef.current = conversationId }, [conversationId])
@@ -214,8 +228,12 @@ export function ConversationPage() {
     }
   }
 
-  // Initial load + safety-net poll (every 15s). Real-time socket events update the
-  // list immediately; the poll only catches anything a dropped socket frame missed.
+  // Initial load. After that the thread is kept current by real-time socket
+  // events; the list is only re-fetched when a dropped connection may have
+  // missed frames (see the recovery effect below). There is deliberately no
+  // timer: a poll every 15s replaced the whole list, re-rendered every bubble
+  // and — through the scroll effect — jumped the view, which read as the screen
+  // refreshing on its own in the middle of a conversation.
   const fetchMessages = useCallback(async () => {
     if (!userId) return
     try {
@@ -245,7 +263,24 @@ export function ConversationPage() {
           const temps = prev.filter((m) => m.id.startsWith('temp-'))
           const merged = [...items]
           for (const t of temps) if (!serverIds.has(t.id)) merged.push(t)
-          return merged
+
+          // Bail out when nothing actually changed. Replacing the array with
+          // freshly-parsed objects made every bubble re-render on every fetch
+          // even when the thread was identical, which is the churn the user saw
+          // as the screen "refreshing".
+          const unchanged =
+            merged.length === prev.length &&
+            merged.every((m, i) => {
+              const p = prev[i]
+              return (
+                !!p &&
+                p.id === m.id &&
+                p.status === m.status &&
+                p.content === m.content &&
+                JSON.stringify(p.reactions ?? {}) === JSON.stringify(m.reactions ?? {})
+              )
+            })
+          return unchanged ? prev : merged
         })
 
         // Mark the partner's messages to us as read (real-time, via socket).
@@ -268,11 +303,39 @@ export function ConversationPage() {
 
   useEffect(() => {
     fetchMessages()
-    const poll = setInterval(fetchMessages, 15000)
-    return () => { clearInterval(poll); if (typingTimer.current) clearTimeout(typingTimer.current) }
+    return () => { if (typingTimer.current) clearTimeout(typingTimer.current) }
   }, [fetchMessages])
 
-  useEffect(() => { scrollToBottom() }, [messages])
+  // Recover anything a dropped socket frame missed without a timer that would
+  // refresh the screen on its own: re-fetch after the socket reconnects, and
+  // when the app comes back to the foreground. Both are edge-triggered, so
+  // neither can interrupt an open conversation.
+  const { on: onSocket } = useSocket({ autoConnect: true })
+  useEffect(() => {
+    const offConnect = onSocket('connect', () => { void fetchMessages() })
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void fetchMessages()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      offConnect?.()
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [onSocket, fetchMessages])
+
+  useEffect(() => {
+    // Follow new messages only when the reader is already at the bottom.
+    if (atBottomRef.current) scrollToBottom()
+  }, [messages])
+
+  // Grow the composer with the message (up to ~5 lines) so everything the user
+  // types stays visible instead of scrolling out of a one-line field.
+  useEffect(() => {
+    const el = composerRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 132)}px`
+  }, [text])
 
   // message_sent is always-on: for a brand-new thread conversationId is still null,
   // so we MUST hear this to learn the new conversationId and reconcile the optimistic
@@ -388,7 +451,7 @@ export function ConversationPage() {
     return () => offs.forEach((off) => off && off())
   }, [conversationId, chat, myId])
 
-  const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInput = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setText(e.target.value)
     if (conversationId) chat.setTyping(true)
     if (typingTimer.current) clearTimeout(typingTimer.current)
@@ -401,6 +464,9 @@ export function ConversationPage() {
     e.preventDefault()
     if (!text.trim() || !userId || chatLocked) return
     setSending(true)
+    // Sending is an explicit intent to see the newest message, so follow it even
+    // if the reader had scrolled up.
+    atBottomRef.current = true
     // Collision-free placeholder id. `Date.now()` alone repeats when two
     // messages are sent inside the same millisecond, which would make both
     // bubbles reconcile to the same real id.
@@ -552,6 +618,7 @@ export function ConversationPage() {
   const sendMedia = async (file: File, kind: 'IMAGE' | 'VOICE') => {
     if (!userId) return
     setUploading(true)
+    atBottomRef.current = true
     try {
       const form = new FormData()
       // Give the file a safe extension. The chat upload endpoint allowlists by
@@ -683,7 +750,7 @@ export function ConversationPage() {
 
       {/* Messages Area */}
       <div className="flex-1 glass-card mt-4 overflow-hidden flex flex-col">
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        <div ref={scrollRef} onScroll={onThreadScroll} className="flex-1 overflow-y-auto p-4 space-y-3">
           {messages.length === 0 ? (
             /* Was a grey icon, one line, and a sub-line. An empty thread is the
                first thing a new user sees on their primary Chat tab, so it now
@@ -973,17 +1040,24 @@ export function ConversationPage() {
             >
               {recording ? <Square className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
             </button>
-            <div className="flex-1 relative">
-              <input
-                type="text"
+            <div className="flex-1">
+              <textarea
+                ref={composerRef}
+                rows={1}
                 value={text}
                 onChange={handleInput}
+                onKeyDown={(e) => {
+                  // Enter sends, Shift+Enter inserts a newline — same as the old
+                  // single-line field but without clipping long messages.
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    e.currentTarget.form?.requestSubmit()
+                  }
+                }}
                 placeholder={chatLocked ? 'Send a chat request to start messaging' : 'Type a message...'}
-                className="input pr-20 py-3"
+                className="input max-h-[132px] resize-none overflow-y-auto py-3 leading-relaxed"
                 disabled={sending || chatLocked}
               />
-              <div className="absolute right-2 bottom-1/2 translate-y-1/2 flex items-center gap-1">
-              </div>
             </div>
             <button
               type="submit"
