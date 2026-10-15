@@ -40,7 +40,7 @@ export interface ServiceDef {
   pricing: ServicePricing;
 }
 
-// Shared shape so the six entries read as one catalogue, not six unrelated
+// Shared shape so the entries read as one catalogue, not five unrelated
 // numbers. Platform fee is 1% for every service; the fare is time-based.
 function pricing(baseFee: number, perMinute: number, minDurationMinutes: number): ServicePricing {
   return {
@@ -115,17 +115,6 @@ export const SERVICE_CATALOG: ServiceDef[] = [
     requiresDropoff: false,
     pricing: pricing(50, 4, 30),
   },
-  {
-    key: "OTHER",
-    label: "Other",
-    shortDescription: "Something else — describe it in the details",
-    category: "SOCIAL",
-    icon: "✨",
-    requiresItem: false,
-    requiresDistance: false,
-    requiresDropoff: false,
-    pricing: pricing(0, 3, 15),
-  },
 ];
 
 export const SERVICE_KEYS: string[] = SERVICE_CATALOG.map((s) => s.key);
@@ -152,6 +141,8 @@ export const LEGACY_SERVICE_LABELS: Record<string, string> = {
   BUSINESS_BUDDY: "Business Buddy",
   PET_BUDDY: "Pet Buddy",
   COMMERCIAL: "Commercial & Industrial",
+  // "Other" was bookable once. Kept so historical bookings keep a readable name.
+  OTHER: "Other",
 };
 
 export function getServiceDef(key: string): ServiceDef | undefined {

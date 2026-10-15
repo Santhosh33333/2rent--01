@@ -22,7 +22,6 @@ export const SERVICES: ServiceOption[] = [
   { key: 'TIME_PASS', title: 'Time-pass', subtitle: 'Easy company to pass the time', icon: '⏳', requiresItem: false, requiresDropoff: false, minDuration: 15, accent: 'from-teal-500 to-cyan-600' },
   { key: 'DATE', title: 'Date', subtitle: 'A companion for a date, over call or chat', icon: '💞', requiresItem: false, requiresDropoff: false, minDuration: 30, accent: 'from-rose-500 to-pink-600' },
   { key: 'FRIENDS', title: 'Friends', subtitle: 'Meet a new friend and hang out', icon: '🤝', requiresItem: false, requiresDropoff: false, minDuration: 30, accent: 'from-emerald-500 to-green-600' },
-  { key: 'OTHER', title: 'Other', subtitle: 'Something else — describe it in the details', icon: '✨', requiresItem: false, requiresDropoff: false, minDuration: 15, accent: 'from-slate-500 to-slate-600' },
 ]
 
 /** Names for the retired local-services catalogue — display-only, for history. */
@@ -41,6 +40,9 @@ export const LEGACY_SERVICE_LABELS: Record<string, string> = {
   BUSINESS_BUDDY: 'Business Buddy',
   PET_BUDDY: 'Pet Buddy',
   COMMERCIAL: 'Commercial & Industrial',
+  // "Other" used to be a bookable option. It is no longer offered, but bookings
+  // already in the database may carry the key, so keep a readable name.
+  OTHER: 'Other',
 }
 
 /** Human name for any service key, current or retired. */
