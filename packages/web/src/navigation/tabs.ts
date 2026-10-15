@@ -24,6 +24,7 @@ import {
   Package,
   Rss,
   Plus,
+  BriefcaseBusiness,
 } from "lucide-react";
 
 /**
@@ -94,6 +95,7 @@ export const USER_MORE: NavGroup[] = [
     items: [
       { to: "/notifications", label: "Notifications", icon: Bell, matchPrefix: "/notifications" },
       { to: "/subscription", label: "Subscription", icon: ShieldCheck, matchPrefix: "/subscription" },
+      { to: "/partner/apply", label: "Become a partner", icon: BriefcaseBusiness, matchPrefix: "/partner/apply" },
       { to: "/settings", label: "Settings", icon: Settings, matchPrefix: "/settings" },
       { to: "/support", label: "Help & support", icon: LifeBuoy },
     ],
@@ -123,7 +125,9 @@ export const PARTNER_MORE: NavGroup[] = [
   },
   {
     title: "Account",
-    items: USER_MORE[2].items,
+    // An approved partner does not need the "Become a partner" call to action,
+    // so it is dropped from the shared Account group on the partner surface.
+    items: USER_MORE[2].items.filter((item) => item.to !== "/partner/apply"),
   },
 ];
 

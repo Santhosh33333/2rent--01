@@ -256,21 +256,44 @@ export const DISCOVERY_BY_KEY = Object.fromEntries(
   DISCOVERY_CATEGORIES.map((category) => [category.key, category]),
 ) as Record<DiscoveryCategoryKey, DiscoveryCategory>
 
-export const QUICK_ACTIONS = [
-  { key: 'ai-assistant', label: 'AI Assistant', route: '/ai' },
-  { key: 'dating', label: 'Dating', route: '/discover/dating' },
-  { key: 'friendship', label: 'Friendship', route: '/discover/friendship' },
-  { key: 'movies', label: 'Movies', route: '/discover/movies' },
-  { key: 'walking-buddy', label: 'Walking Buddy', route: '/discover/walking-buddy' },
-  { key: 'carrybuddy', label: 'Carry', route: '/discover/carrybuddy' },
-  { key: 'travel', label: 'Travel', route: '/discover/travel' },
-  { key: 'events', label: 'Events', route: '/discover/events' },
-  { key: 'communities', label: 'Communities', route: '/discover/communities' },
-  { key: 'food', label: 'Food', route: '/discover/food' },
-  { key: 'fitness', label: 'Fitness', route: '/discover/fitness' },
-  { key: 'sports', label: 'Sports', route: '/discover/sports' },
-  { key: 'gaming', label: 'Gaming', route: '/discover/gaming' },
-  { key: 'study', label: 'Study', route: '/discover/study' },
-  { key: 'networking', label: 'Networking', route: '/discover/networking' },
-  { key: 'local-activities', label: 'Local Activities', route: '/discover/local-activities' },
+export interface QuickAction {
+  key: string
+  label: string
+  /** A page that actually exists and is backed by real data. */
+  route: string
+  /** Short, factual description of where the tile leads. */
+  subtitle: string
+  /**
+   * Which live counter from the home screen replaces `subtitle` when it is
+   * available. Omitted where the home screen has no trustworthy count, so a
+   * tile never shows a number it cannot back up.
+   */
+  countKey?: 'people' | 'events' | 'communities'
+}
+
+/**
+ * The tiles on the home screen ("Explore Nabri").
+ *
+ * Every `route` here is a live feature page, not an informational category
+ * stub. Categories that only have a discovery stub with no real listing keep
+ * pointing at /discover/:key so the tile never leads to a dead end.
+ */
+export const QUICK_ACTIONS: QuickAction[] = [
+  { key: 'dating', label: 'Dating', route: '/dating', subtitle: 'Matches near you', countKey: 'people' },
+  { key: 'friendship', label: 'Friendship', route: '/discover/friendship', subtitle: 'Find your people', countKey: 'people' },
+  { key: 'events', label: 'Events', route: '/events', subtitle: 'Nearby & upcoming', countKey: 'events' },
+  { key: 'communities', label: 'Communities', route: '/communities', subtitle: 'Join a group', countKey: 'communities' },
+  { key: 'movies', label: 'Movies', route: '/movies', subtitle: 'Now showing' },
+  { key: 'music', label: 'Music', route: '/music', subtitle: 'Live rooms' },
+  { key: 'sports', label: 'Sports', route: '/sports', subtitle: 'Games near you' },
+  { key: 'ai-assistant', label: 'AI Assistant', route: '/ai', subtitle: 'Ask anything' },
+  { key: 'walking-buddy', label: 'Walking Buddy', route: '/walking-requests', subtitle: 'Book a walk' },
+  { key: 'carrybuddy', label: 'Carry', route: '/discover/carrybuddy', subtitle: 'Errands & pickups' },
+  { key: 'travel', label: 'Travel', route: '/discover/travel', subtitle: 'Plan a trip' },
+  { key: 'food', label: 'Food', route: '/discover/food', subtitle: 'Places & meetups' },
+  { key: 'fitness', label: 'Fitness', route: '/discover/fitness', subtitle: 'Partners & sessions' },
+  { key: 'gaming', label: 'Gaming', route: '/discover/gaming', subtitle: 'Play together' },
+  { key: 'study', label: 'Study', route: '/discover/study', subtitle: 'Groups & revision' },
+  { key: 'networking', label: 'Networking', route: '/discover/networking', subtitle: 'Meet & grow' },
+  { key: 'local-activities', label: 'Local Activities', route: '/discover/local-activities', subtitle: 'Weekend plans' },
 ]

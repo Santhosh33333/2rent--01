@@ -24,6 +24,7 @@
         "test:rbac": "tsx tests/admin-rbac.test.ts",
         "test:security": "tsx tests/admin-security.test.ts",
         "seed:services": "tsx prisma/seed-services.ts",
+        "seed:preferences": "tsx scripts/seedPreferenceOptions.ts",
         "lint": "eslint src --ext .ts"
     },
     "dependencies": {

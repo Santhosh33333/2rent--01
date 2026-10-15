@@ -4,8 +4,11 @@ import { ArrowLeft, Sun, Moon, Monitor, Bell, Shield, Smartphone, Type, WifiOff,
 import toast from 'react-hot-toast'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
+import { RoleSwitcher } from '../../components/RoleSwitcher'
 import { api } from '../../lib/api'
 import { useTheme, ACCENTS, Accent } from '../../lib/themeContext'
+import { useRole } from '../../lib/roleContext'
+import { isAdminTierRole } from '../../lib/roles'
 import { MAX_PIN_LENGTH, MIN_PIN_LENGTH, useAppLock } from '../../lib/appLock'
 import { showPrivacyOptionsForm, subscribeAdsState } from '../../lib/ads'
 
@@ -203,6 +206,11 @@ export function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const { setTheme, setAccent } = useTheme()
+  const { approvedRoles, accountRole } = useRole()
+  // The role switcher is a control for accounts that actually have more than one
+  // surface to move between: admin-tier accounts and users approved for a
+  // second role (e.g. partner). A plain user gets no role control at all.
+  const canSwitchRoles = isAdminTierRole(accountRole) || approvedRoles.some((r) => r !== 'USER')
   const { enabled: appLockEnabled, autoLockSec, enable, disable, changePin, lockNow, setAutoLockSec } = useAppLock()
   // Ads consent resolves at boot, which can finish after this page mounts, so
   // reading the flag once on mount hides the entry permanently. Subscribe so it
@@ -292,6 +300,19 @@ export function SettingsPage() {
       <AnimatedPage>
         <GlassCard variant="elevated" padding="lg">
           <h1 className="text-2xl font-bold font-display text-surface-900 dark:text-white mb-6">Settings</h1>
+
+          {/* Role — moved out of the header (it used to crowd the logo) and shown
+              only when the account can actually switch surfaces. */}
+          {canSwitchRoles && (
+            <>
+              <h2 className="text-xs font-semibold text-surface-400 uppercase tracking-wider mb-3">Account mode</h2>
+              <div className="mb-8">
+                <SettingRow icon={Shield} label="Active role" description="Switch between the surfaces you have access to">
+                  <RoleSwitcher variant="settings" />
+                </SettingRow>
+              </div>
+            </>
+          )}
 
           {/* Appearance */}
           <h2 className="text-xs font-semibold text-surface-400 uppercase tracking-wider mb-3">Appearance</h2>

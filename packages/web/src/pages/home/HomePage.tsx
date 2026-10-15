@@ -1,22 +1,30 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
-  ArrowRight,
-  Bell,
+  BookOpen,
+  BriefcaseBusiness,
   Calendar,
+  CalendarDays,
   ChevronRight,
-  Clock,
+  Clapperboard,
+  Dumbbell,
   Footprints,
+  Gamepad2,
+  Heart,
+  MapPin,
   MessageCircle,
+  Music,
+  Package,
+  Plane,
+  Rss,
   Search,
   Sparkles,
-  User,
-  Wallet,
-  MapPin,
   Users,
-  Heart,
-  Rss,
+  UsersRound,
+  UtensilsCrossed,
+  Wallet,
   X,
+  type LucideIcon,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../../lib/auth'
@@ -24,10 +32,9 @@ import { api } from '../../lib/api'
 import { getErrorMessage, getErrorDetail } from '../../lib/error'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
-import { QUICK_ACTIONS } from '../../lib/discoveryData'
+import { QUICK_ACTIONS, type QuickAction } from '../../lib/discoveryData'
 import { AskNabriPanel } from './AskNabriPanel'
 import { Reveal } from '../../components/motion/Reveal'
-import { Tilt } from '../../components/motion/Tilt'
 import { Avatar } from '../../components/Avatar'
 import type { FeedPost, FeedPageData } from '../../types/post'
 
@@ -78,6 +85,32 @@ interface CommunityItem {
   city?: string | null
 }
 
+/**
+ * Icon + accent per quick action.
+ *
+ * The accent is a literal Tailwind gradient string, not built by concatenation
+ * at runtime, so the classes survive the JIT scan. Keys must match QUICK_ACTIONS.
+ */
+const QUICK_ACTION_STYLE: Record<string, { icon: LucideIcon; accent: string }> = {
+  dating: { icon: Heart, accent: 'from-rose-500 to-pink-600' },
+  friendship: { icon: Users, accent: 'from-blue-500 to-cyan-600' },
+  events: { icon: CalendarDays, accent: 'from-fuchsia-500 to-pink-600' },
+  communities: { icon: UsersRound, accent: 'from-cyan-500 to-blue-600' },
+  movies: { icon: Clapperboard, accent: 'from-violet-500 to-purple-600' },
+  music: { icon: Music, accent: 'from-pink-500 to-rose-600' },
+  sports: { icon: Dumbbell, accent: 'from-emerald-500 to-lime-600' },
+  'ai-assistant': { icon: Sparkles, accent: 'from-indigo-500 to-violet-600' },
+  'walking-buddy': { icon: Footprints, accent: 'from-emerald-500 to-teal-600' },
+  carrybuddy: { icon: Package, accent: 'from-amber-500 to-orange-600' },
+  travel: { icon: Plane, accent: 'from-sky-500 to-indigo-600' },
+  food: { icon: UtensilsCrossed, accent: 'from-orange-500 to-amber-600' },
+  fitness: { icon: Dumbbell, accent: 'from-lime-500 to-green-600' },
+  gaming: { icon: Gamepad2, accent: 'from-indigo-500 to-violet-600' },
+  study: { icon: BookOpen, accent: 'from-teal-500 to-cyan-600' },
+  networking: { icon: BriefcaseBusiness, accent: 'from-slate-500 to-slate-700' },
+  'local-activities': { icon: MapPin, accent: 'from-pink-500 to-rose-600' },
+}
+
 export function HomePage() {
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -90,6 +123,10 @@ export function HomePage() {
   const [feedPreview, setFeedPreview] = useState<FeedPost[]>([])
   const [requestedIds, setRequestedIds] = useState<Set<string>>(new Set())
   const [requestingId, setRequestingId] = useState<string | null>(null)
+  // Live counters for the Explore tiles. These are the sizes of the real sets
+  // this screen fetched - not a global total - so a tile never shows a number
+  // the page cannot back up (see QuickAction.countKey).
+  const [liveCounts, setLiveCounts] = useState({ people: 0, events: 0, communities: 0 })
   const [loading, setLoading] = useState(true)
 
   // Recommendations are dismissible. The choice is remembered locally so a user
@@ -142,7 +179,7 @@ export function HomePage() {
           const d = suggestedRes.value.data?.data || suggestedRes.value.data || []
           const arr: SuggestedApiUser[] = Array.isArray(d) ? d : (d.items || [])
           setSuggestedUsers(
-            arr.slice(0, 6).map((u) => ({
+            arr.slice(0, 8).map((u) => ({
               id: u.id,
               name: u.fullName || 'Nabri member',
               avatarUrl: u.avatarUrl ?? null,
@@ -150,18 +187,21 @@ export function HomePage() {
               bio: u.bio ?? null,
             })),
           )
+          setLiveCounts((c) => ({ ...c, people: arr.length }))
         }
         if (trendingRes.status === 'fulfilled' && trendingRes.value) {
           // GET /search/trending returns { communities, events }. Events are raw
           // rows, so the date is read from startTime and may be absent.
           const d = trendingRes.value.data?.data || trendingRes.value.data || {}
           const events = Array.isArray(d.events) ? d.events : []
-          setTrendingEvents(events.slice(0, 4))
+          setTrendingEvents(events.slice(0, 6))
+          setLiveCounts((c) => ({ ...c, events: events.length }))
         }
         if (communitiesRes.status === 'fulfilled' && communitiesRes.value) {
           const d = communitiesRes.value.data?.data || communitiesRes.value.data || []
           const arr = Array.isArray(d) ? d : (d.items || [])
-          setCommunities(arr.slice(0, 4))
+          setCommunities(arr.slice(0, 6))
+          setLiveCounts((c) => ({ ...c, communities: typeof d.total === 'number' ? d.total : arr.length }))
         }
         if (feedRes.status === 'fulfilled' && feedRes.value) {
           const data: FeedPageData | undefined = feedRes.value.data?.data
@@ -210,11 +250,18 @@ export function HomePage() {
     return 'Good evening'
   }
 
-  const quickLinks = [
-    { to: '/messages', icon: MessageCircle, label: 'Chat' },
-    { to: '/notifications', icon: Bell, label: 'Notifications' },
-    { to: '/profile', icon: User, label: 'Profile' },
-  ]
+  /** Live count when the home screen has one, otherwise the factual subtitle. */
+  const tileSubtitle = (action: QuickAction) => {
+    if (action.countKey) {
+      const n = liveCounts[action.countKey]
+      if (n > 0) {
+        if (action.countKey === 'people') return `${n} nearby`
+        if (action.countKey === 'events') return `${n} upcoming`
+        return `${n} groups`
+      }
+    }
+    return action.subtitle
+  }
 
   const statusBadge = (status: string) => {
     const map: Record<string, string> = {
@@ -229,18 +276,18 @@ export function HomePage() {
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div className="skeleton h-48 rounded-3xl" />
-        <div className="grid grid-cols-2 gap-4">
-          {[...Array(8)].map((_, i) => (
-            <div key={i} className="glass-card-static p-5">
-              <div className="skeleton h-12 w-12 rounded-2xl mx-auto" />
-              <div className="skeleton h-4 w-20 mx-auto mt-3 rounded-xl" />
+      <div className="space-y-6 sm:space-y-8">
+        <div className="skeleton h-44 rounded-3xl" />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {[...Array(12)].map((_, i) => (
+            <div key={i} className="glass-card-static p-3">
+              <div className="skeleton h-11 w-11 rounded-2xl" />
+              <div className="skeleton h-4 w-20 mt-3 rounded-xl" />
+              <div className="skeleton h-3 w-14 mt-2 rounded-xl" />
             </div>
           ))}
         </div>
         <div className="skeleton h-36 rounded-3xl" />
-        <div className="skeleton h-40 rounded-3xl" />
       </div>
     )
   }
@@ -257,6 +304,17 @@ export function HomePage() {
           <div className="prism-sweep animate-prism-sweep" aria-hidden />
           <div className="absolute -right-16 -top-24 h-72 w-72 rounded-full bg-[#D2F53C]/10 blur-3xl" />
           <div className="absolute -bottom-24 -left-16 h-64 w-64 rounded-full bg-white/5 blur-3xl" />
+
+          {/* The brand sits on the home hero itself so the app name and glyph are
+              unmistakable here, not only in the sticky header above. */}
+          <div className="relative z-10 mb-4 flex items-center gap-2">
+            <span className="brand-badge h-7 w-7">
+              <img src="/logo-glyph-white.svg" alt="" className="h-4 w-4" />
+            </span>
+            <span className="text-sm font-black font-display tracking-tight text-white/90">
+              Nabri<span className="text-[#D2F53C]">.</span>
+            </span>
+          </div>
 
           <div className="relative z-10 flex items-center justify-between gap-4">
             <div>
@@ -286,7 +344,7 @@ export function HomePage() {
                     navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`)
                   }
                 }}
-                placeholder="Search people, places, events, movies..."
+                placeholder="People, friends, events, movies, communities..."
                 className="w-full rounded-2xl border border-white/20 bg-white/10 py-3 pl-11 pr-4 text-sm text-white placeholder:text-white/60 outline-none"
               />
             </div>
@@ -298,10 +356,52 @@ export function HomePage() {
         <AskNabriPanel />
       </AnimatedPage>
 
+      {/* Explore — every destination is shown, each with a real (live) subtitle.
+          Previously only 9 of 17 tiles were rendered and the rest hid behind an
+          "Explore all" link, which is what made the screen feel incomplete. */}
+      <AnimatedPage delay={100}>
+        <Reveal>
+          <div>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="section-title flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-primary-500" />
+                Explore Nabri
+              </h2>
+              <Link to="/discover" className="inline-flex items-center gap-1 text-sm font-medium text-primary-600 dark:text-primary-400">
+                See all <ChevronRight className="w-4 h-4" />
+              </Link>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {QUICK_ACTIONS.map((action) => {
+                const style = QUICK_ACTION_STYLE[action.key] ?? { icon: Sparkles, accent: 'from-primary-500 to-primary-700' }
+                const Icon = style.icon
+                return (
+                  <Link
+                    key={action.key}
+                    to={action.route}
+                    className="group flex flex-col items-start gap-2 rounded-2xl border border-surface-200 bg-white p-3 shadow-card transition hover:-translate-y-0.5 hover:shadow-card-hover dark:border-surface-800 dark:bg-surface-900"
+                  >
+                    <span className={`flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br ${style.accent} text-white shadow-lg shadow-black/5`}>
+                      <Icon className="h-5 w-5" />
+                    </span>
+                    <span className="line-clamp-1 text-sm font-semibold text-surface-900 dark:text-white">
+                      {action.label}
+                    </span>
+                    <span className="line-clamp-1 text-xs text-surface-500 dark:text-surface-400">
+                      {tileSubtitle(action)}
+                    </span>
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
+        </Reveal>
+      </AnimatedPage>
+
       {/* People you may like — a recommendation, so it is dismissible, and the
           interests that drive it are one tap from here. */}
       {showPeople && suggestedUsers.length > 0 && (
-        <AnimatedPage delay={80}>
+        <AnimatedPage delay={140}>
           <Reveal>
             <GlassCard variant="elevated" padding="lg">
               <div className="mb-4 flex items-center justify-between gap-2">
@@ -359,48 +459,107 @@ export function HomePage() {
         </AnimatedPage>
       )}
 
-      <AnimatedPage delay={100}>
-        <Reveal>
-          <div>
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="section-title flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-primary-500" />
-                Quick actions
-              </h2>
-              <Link to="/discover" className="inline-flex items-center gap-1 text-sm font-medium text-primary-600 dark:text-primary-400">
-                Explore all <ChevronRight className="w-4 h-4" />
-              </Link>
-            </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {QUICK_ACTIONS.slice(0, 9).map((action, i) => {
-                const Icon = activityIcons[action.key] || Sparkles
-                return (
-                  <Reveal key={action.key} delay={i * 0.05} from="up">
-                    <Tilt max={10} lift={16} scale={1.04} glare>
-                      <Link
-                        to={action.route}
-                        className="group relative flex h-full flex-col items-center rounded-2xl border border-surface-200 bg-white p-3 text-center shadow-card transition-shadow hover:shadow-card-hover dark:border-surface-800 dark:bg-surface-900"
-                      >
-                        <span className="prism-chip mb-3 h-12 w-12 text-white shadow-lg shadow-primary-500/20">
-                          <Icon className="h-5 w-5" />
+      {/* Happening nearby — real events, dismissible like the people row. */}
+      {showToday && (
+        <AnimatedPage delay={180}>
+          <Reveal>
+            <div>
+              <div className="mb-4 flex items-center justify-between gap-2">
+                <h2 className="section-title flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-primary-500" />
+                  Happening nearby
+                </h2>
+                <div className="flex items-center gap-1">
+                  <Link to="/events" className="inline-flex items-center gap-1 text-sm font-medium text-primary-600 dark:text-primary-400">
+                    View all <ChevronRight className="w-4 h-4" />
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => dismiss('hideToday')}
+                    aria-label="Dismiss event suggestions"
+                    className="rounded-lg p-1.5 text-surface-400 transition-colors hover:bg-surface-100 hover:text-surface-600 dark:hover:bg-surface-800 dark:hover:text-surface-200"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+              {trendingEvents.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-surface-300 bg-surface-100 p-6 text-center text-sm text-surface-600 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-400">
+                  No upcoming events yet. <Link to="/events" className="text-primary-600 hover:underline dark:text-primary-400">Browse events</Link> or create one.
+                </div>
+              ) : (
+                <div className="-mx-2 flex snap-x snap-mandatory gap-3 overflow-x-auto px-2 pb-1">
+                  {trendingEvents.map((ev) => (
+                    <Link
+                      key={ev.id}
+                      to={`/events/${ev.id}`}
+                      className="flex min-w-[210px] max-w-[230px] flex-shrink-0 snap-start flex-col rounded-2xl border border-surface-200 bg-white p-3 shadow-card transition hover:-translate-y-0.5 hover:shadow-card-hover dark:border-surface-800 dark:bg-surface-900"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-primary-600 text-white">
+                          <Calendar className="h-4 w-4" />
                         </span>
-                        <p className="line-clamp-2 text-xs font-semibold sm:text-sm">
-                          {action.label.replace(/^[^\w]*/g, '')}
-                        </p>
-                      </Link>
-                    </Tilt>
-                  </Reveal>
-                )
-              })}
+                        <span className="text-xs font-semibold text-primary-600 dark:text-primary-400">
+                          {formatEventDate(ev.startTime)}
+                        </span>
+                      </div>
+                      <p className="mt-2 line-clamp-2 text-sm font-semibold text-surface-900 dark:text-white">
+                        {ev.title || ev.name || 'Event'}
+                      </p>
+                      <p className="mt-1 flex items-center gap-1 text-xs text-surface-500 dark:text-surface-400">
+                        <MapPin className="h-3 w-3" /> {ev.city || ev.location || 'Online / TBA'}
+                      </p>
+                    </Link>
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
-        </Reveal>
-      </AnimatedPage>
+          </Reveal>
+        </AnimatedPage>
+      )}
+
+      {/* Communities to join — real groups. */}
+      {communities.length > 0 && (
+        <AnimatedPage delay={210}>
+          <Reveal>
+            <div>
+              <div className="mb-4 flex items-center justify-between gap-2">
+                <h2 className="section-title flex items-center gap-2">
+                  <Users className="w-5 h-5 text-cyan-500" />
+                  Communities to join
+                </h2>
+                <Link to="/communities" className="inline-flex items-center gap-1 text-sm font-medium text-primary-600 dark:text-primary-400">
+                  View all <ChevronRight className="w-4 h-4" />
+                </Link>
+              </div>
+              <div className="-mx-2 flex snap-x snap-mandatory gap-3 overflow-x-auto px-2 pb-1">
+                {communities.map((c) => (
+                  <Link
+                    key={c.id}
+                    to={`/communities/${c.id}`}
+                    className="flex min-w-[210px] max-w-[240px] flex-shrink-0 snap-start items-center gap-3 rounded-2xl border border-surface-200 bg-white p-3 shadow-card transition hover:-translate-y-0.5 hover:shadow-card-hover dark:border-surface-800 dark:bg-surface-900"
+                  >
+                    <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-indigo-600 text-white">
+                      <Users className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="line-clamp-1 text-sm font-semibold text-surface-900 dark:text-white">{c.name}</p>
+                      <p className="text-xs text-surface-500 dark:text-surface-400">
+                        {c.memberCount ?? 0} members{c.city ? ` · ${c.city}` : ''}
+                      </p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </Reveal>
+        </AnimatedPage>
+      )}
 
       {/* Real posts from the community feed — no placeholder content, so an
           empty feed simply shows nothing here rather than a convincing fake. */}
       {feedPreview.length > 0 && (
-        <AnimatedPage delay={140}>
+        <AnimatedPage delay={240}>
           <Reveal>
             <GlassCard variant="elevated" padding="lg">
               <div className="mb-4 flex items-center justify-between">
@@ -444,84 +603,48 @@ export function HomePage() {
         </AnimatedPage>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {showToday && (
-        <AnimatedPage delay={200} className="lg:col-span-2"><Reveal>
-          <GlassCard variant="elevated" padding="lg">
-            <div className="flex items-center justify-between mb-6 gap-2">
-              <h2 className="section-title flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-primary-500" />
-                Nabri Today
-              </h2>
-              <div className="flex items-center gap-1">
-                <Link to="/events" className="text-sm font-medium text-primary-600 dark:text-primary-400 hover:text-primary-500 flex items-center gap-1 transition-colors">
-                  View all <ChevronRight className="w-4 h-4" />
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => dismiss('hideToday')}
-                  aria-label="Dismiss today's suggestions"
-                  className="rounded-lg p-1.5 text-surface-400 transition-colors hover:bg-surface-100 hover:text-surface-600 dark:hover:bg-surface-800 dark:hover:text-surface-200"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <AnimatedPage delay={280} className="lg:col-span-2">
+          <Reveal>
+            <GlassCard variant="elevated" padding="lg" className="h-full">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="section-title flex items-center gap-2">
+                  <Footprints className="w-5 h-5 text-emerald-500" />
+                  Recent activity
+                </h2>
+                <Link to="/bookings" className="text-sm font-medium text-primary-600 dark:text-primary-400">Open bookings</Link>
               </div>
-            </div>
-
-            {trendingEvents.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-surface-300 bg-surface-100 p-6 text-center text-sm text-surface-600 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-400">
-                No upcoming events yet. <Link to="/events" className="text-primary-600 hover:underline dark:text-primary-400">Browse events</Link> or create one.
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {trendingEvents.map((ev) => (
-                  <Link key={ev.id} to={`/events/${ev.id}`} className="flex items-center gap-4 rounded-2xl border border-surface-200 bg-surface-50 p-3 transition hover:bg-surface-100 dark:border-surface-700 dark:bg-surface-800/40 dark:hover:bg-surface-800">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-primary-600 text-white">
-                      <Calendar className="w-4 h-4" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-semibold text-surface-900 dark:text-white">{ev.title || ev.name || 'Event'}</p>
-                      </div>
-                      <p className="mt-1 flex items-center gap-1 text-xs text-surface-500">
-                        <Clock className="w-3 h-3" /> {formatEventDate(ev.startTime)} {ev.city && <>· <MapPin className="w-3 h-3" /> {ev.city}</>}
-                      </p>
-                    </div>
-                    <ArrowRight className="w-4 h-4 text-surface-400" />
-                  </Link>
-                ))}
-              </div>
-            )}
-
-            {communities.length > 0 && (
-              <div className="mt-6">
-                <div className="mb-3 flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-surface-900 dark:text-surface-100">Communities</h3>
-                  <Link to="/communities" className="text-xs font-medium text-primary-600 dark:text-primary-400">View all</Link>
+              {recentBookings.length === 0 ? (
+                <div className="text-center py-8 text-surface-500">
+                  No recent activity yet. Start with a social plan or a local meetup.
                 </div>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {communities.map((c) => (
-                    <Link key={c.id} to={`/communities/${c.id}`} className="flex items-center gap-3 rounded-2xl border border-surface-200 bg-white p-2.5 transition hover:bg-surface-50 dark:border-surface-800 dark:bg-surface-900/60 dark:hover:bg-surface-900">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-indigo-600 text-white">
-                        <Users className="w-4 h-4" />
+              ) : (
+                <div className="space-y-3">
+                  {recentBookings.map((booking) => (
+                    <Link key={booking.id} to={`/bookings/${booking.id}`} className="flex items-center gap-4 p-3 rounded-2xl hover:bg-surface-100 dark:hover:bg-surface-800/50 transition-all group">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-md shadow-emerald-500/20 flex-shrink-0">
+                        <Footprints className="w-4 h-4 text-white" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="truncate text-sm font-semibold text-surface-900 dark:text-white">{c.name}</p>
-                        <p className="text-xs text-surface-500">{c.memberCount ?? 0} members {c.city && `· ${c.city}`}</p>
+                        <p className="text-sm font-semibold text-surface-900 dark:text-white truncate">{booking.startLocation || 'Pickup'}</p>
+                        <div className="flex items-center gap-2 mt-0.5 text-xs text-surface-500">
+                          <Calendar className="w-3 h-3" />
+                          {booking.scheduledAt ? new Date(booking.scheduledAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }) : 'ASAP'}
+                        </div>
                       </div>
-                      <ChevronRight className="w-4 h-4 text-surface-400" />
+                      <span className={`text-[10px] px-2.5 py-1 rounded-full font-semibold flex-shrink-0 ${statusBadge(booking.status)}`}>
+                        {booking.status?.replace(/_/g, ' ')}
+                      </span>
                     </Link>
                   ))}
                 </div>
-              </div>
-            )}
-          </GlassCard>
-        </Reveal>
+              )}
+            </GlassCard>
+          </Reveal>
         </AnimatedPage>
-        )}
 
-        <AnimatedPage delay={300} className={showToday ? '' : 'lg:col-span-3'}><Reveal>
-          <div className="space-y-6">
+        <AnimatedPage delay={320}>
+          <Reveal>
             <GlassCard variant="elevated" padding="lg" className="prism-ring border-0 bg-gradient-to-br from-primary-600 to-primary-700 text-white">
               <div className="flex items-center gap-2 mb-4">
                 <Wallet className="w-5 h-5 text-white/80" />
@@ -539,80 +662,9 @@ export function HomePage() {
                 </Link>
               </div>
             </GlassCard>
-
-            <GlassCard variant="elevated" padding="lg">
-              <h3 className="font-bold font-display text-surface-900 dark:text-surface-100 mb-4">Quick Links</h3>
-              <div className="space-y-2">
-                {quickLinks.map((link) => (
-                  <Link key={link.to} to={link.to} className="flex items-center justify-between p-2.5 rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors group">
-                    <span className="flex items-center gap-3 text-sm font-medium text-surface-700 dark:text-surface-300">
-                      <link.icon className="w-4 h-4 text-surface-400 group-hover:text-primary-500 transition-colors" />
-                      {link.label}
-                    </span>
-                    <ChevronRight className="w-4 h-4 text-surface-400 group-hover:text-primary-500 transition-colors" />
-                  </Link>
-                ))}
-              </div>
-            </GlassCard>
-          </div>
-        </Reveal>
+          </Reveal>
         </AnimatedPage>
       </div>
-
-      <AnimatedPage delay={350}><Reveal>
-        <GlassCard variant="elevated" padding="lg">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="section-title flex items-center gap-2">
-              <Footprints className="w-5 h-5 text-emerald-500" />
-              Recent activity
-            </h2>
-            <Link to="/bookings" className="text-sm font-medium text-primary-600 dark:text-primary-400">Open bookings</Link>
-          </div>
-          {recentBookings.length === 0 ? (
-            <div className="text-center py-8 text-surface-500">
-              No recent activity yet. Start with a social plan or a local meetup.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {recentBookings.map((booking) => (
-                <Link key={booking.id} to={`/bookings/${booking.id}`} className="flex items-center gap-4 p-3 rounded-2xl hover:bg-surface-100 dark:hover:bg-surface-800/50 transition-all group">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-md shadow-emerald-500/20 flex-shrink-0">
-                    <Footprints className="w-4 h-4 text-white" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-surface-900 dark:text-white truncate">{booking.startLocation || 'Pickup'}</p>
-                    <div className="flex items-center gap-2 mt-0.5 text-xs text-surface-500">
-                      <Calendar className="w-3 h-3" />
-                      {booking.scheduledAt ? new Date(booking.scheduledAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }) : 'ASAP'}
-                    </div>
-                  </div>
-                  <span className={`text-[10px] px-2.5 py-1 rounded-full font-semibold flex-shrink-0 ${statusBadge(booking.status)}`}>
-                    {booking.status?.replace(/_/g, ' ')}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          )}
-        </GlassCard>
-      </Reveal>
-      </AnimatedPage>
     </div>
   )
 }
-
-const activityIcons: Record<string, any> = {
-  dating: Sparkles,
-  friendship: MessageCircle,
-  movies: Calendar,
-  'walking-buddy': Footprints,
-  carrybuddy: Footprints,
-  travel: Sparkles,
-  events: Calendar,
-  communities: MessageCircle,
-  food: Sparkles,
-  fitness: Sparkles,
-  gaming: Sparkles,
-  study: Sparkles,
-  networking: Sparkles,
-}
-

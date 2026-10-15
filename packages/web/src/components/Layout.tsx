@@ -11,7 +11,6 @@ import { OfflineBanner } from './OfflineBanner';
 import { useRole } from '../lib/roleContext';
 import { isAdminTierRole, isSuperAdminRole } from '../lib/roles';
 import { useTheme } from '../lib/themeContext';
-import { RoleSwitcher } from './RoleSwitcher';
 import { Avatar } from './Avatar';
 import { PartnerLiveLocationSharer } from './PartnerLiveLocationSharer';
 import { UserLiveLocationSharer } from './UserLiveLocationSharer';
@@ -262,8 +261,10 @@ export function Layout() {
             </Link>
           </div>
 
-          <RoleSwitcher />
-
+          {/* The role switcher used to sit here, between the wordmark and the
+              action icons, and squeezed the "Nabri." logo on narrow screens.
+              It now lives in Settings (admin / multi-role accounts only), so the
+              header carries just the brand on the left and actions on the right. */}
           <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             <Link to="/search" className="p-2 rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 transition hidden sm:block">
               <Search className="w-5 h-5" />

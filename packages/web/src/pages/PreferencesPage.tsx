@@ -128,6 +128,12 @@ export function PreferencesPage() {
   const [saving, setSaving] = useState(false);
   const [issues, setIssues] = useState<Record<string, string>>({});
   const [locating, setLocating] = useState(false);
+  // The interest catalogue is deliberately open-ended (it is seeded in the
+  // database), so the list can be long. Show a preview and let people expand it
+  // rather than dumping 50 chips at once - and keep anything already selected
+  // visible even when collapsed.
+  const [showAllInterests, setShowAllInterests] = useState(false);
+  const INTEREST_PREVIEW = 16;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -480,7 +486,13 @@ export function PreferencesPage() {
           description="Pick as many as you like. Shared interests raise someone higher."
         >
           <div className="flex flex-wrap gap-2">
-            {options.options.interests.map((option: PreferenceOption) => (
+            {(showAllInterests || options.options.interests.length <= INTEREST_PREVIEW
+              ? options.options.interests
+              : options.options.interests.filter(
+                  (option: PreferenceOption, index: number) =>
+                    index < INTEREST_PREVIEW || form.interests.includes(option.value),
+                )
+            ).map((option: PreferenceOption) => (
               <Chip
                 key={option.value}
                 label={option.label}
@@ -489,6 +501,17 @@ export function PreferencesPage() {
               />
             ))}
           </div>
+          {options.options.interests.length > INTEREST_PREVIEW && (
+            <button
+              type="button"
+              onClick={() => setShowAllInterests((v) => !v)}
+              className="mt-3 text-xs font-medium text-primary-600 hover:underline dark:text-primary-400"
+            >
+              {showAllInterests
+                ? "Show less"
+                : `Show more (${options.options.interests.length - INTEREST_PREVIEW} more)`}
+            </button>
+          )}
           <FieldError message={issueFor("interests")} />
           {selectedInterestLabels > 0 && (
             <p className="text-xs text-surface-500 mt-3">

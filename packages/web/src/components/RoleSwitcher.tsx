@@ -6,7 +6,7 @@ import { isAdminTierRole } from '../lib/roles'
 import { dashboardForRole } from '../lib/roles'
 import { RefreshCw, Check, ChevronDown, ArrowRight, Shield } from 'lucide-react'
 
-export function RoleSwitcher() {
+export function RoleSwitcher({ variant = 'header' }: { variant?: 'header' | 'settings' } = {}) {
   const { approvedRoles, activeRole, accountRole, switchRole } = useRole()
   const navigate = useNavigate()
   const [isOpen, setIsOpen] = useState(false)
@@ -25,9 +25,13 @@ export function RoleSwitcher() {
 
   const isUserOnly = availableRoles.length <= 1
 
-  // Hide the switcher entirely unless there is something meaningful to offer:
-  // multiple approved roles, or a plain user who can still apply to become a partner.
-  if (isUserOnly && activeRole !== 'USER') {
+  // This control used to live in the header, where it crowded the "Nabri."
+  // wordmark on narrow phones. It now sits in Settings and only renders when
+  // there is a genuine switch to offer: an admin-tier account, or a user with a
+  // second approved role (e.g. an approved partner). A plain user has nothing
+  // to switch between, so no role control is shown to them at all - the
+  // "Become a partner" path is a normal nav entry instead (see tabs.ts).
+  if (isUserOnly) {
     return null
   }
 
@@ -71,11 +75,15 @@ export function RoleSwitcher() {
       )}
       <button
         onClick={() => { setIsOpen(!isOpen); setMessage(null) }}
-        className="flex items-center gap-2 px-3 py-2 rounded-xl bg-surface-100 dark:bg-surface-800 hover:bg-surface-200 dark:hover:bg-surface-700 transition-all duration-200 text-sm font-medium"
+        className={`flex items-center gap-2 rounded-xl bg-surface-100 px-3 py-2 text-sm font-medium transition-all duration-200 hover:bg-surface-200 dark:bg-surface-800 dark:hover:bg-surface-700 ${
+          variant === 'settings' ? 'w-full justify-between' : ''
+        }`}
         disabled={switching}
       >
-        <span className="text-base">{currentMeta.icon}</span>
-        <span className="hidden sm:inline">{currentMeta.label}</span>
+        <span className="flex items-center gap-2">
+          <span className="text-base">{currentMeta.icon}</span>
+          <span className={variant === 'settings' ? 'inline' : 'hidden sm:inline'}>{currentMeta.label}</span>
+        </span>
         {switching ? (
           <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-500" />
         ) : (
@@ -141,25 +149,6 @@ export function RoleSwitcher() {
                 )
               })}
             </div>
-
-            {isUserOnly && activeRole === 'USER' && (
-              <>
-                <div className="mx-3 my-1 h-px bg-surface-200 dark:bg-surface-800" />
-                <div className="p-2">
-                  <button
-                    onClick={() => { setIsOpen(false); navigate('/partner/apply') }}
-                    className="w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all hover:bg-surface-50 dark:hover:bg-surface-800"
-                  >
-                    <span className="text-xl">{ROLE_META.PARTNER.icon}</span>
-                    <div className="flex-1 min-w-0">
-                      <span className="text-sm font-medium text-surface-900 dark:text-surface-50">Become a Partner</span>
-                      <p className="text-xs text-surface-500 dark:text-surface-400">Apply, get approved, and start earning</p>
-                    </div>
-                    <ArrowRight className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
-                  </button>
-                </div>
-              </>
-            )}
           </div>
         </>
       )}
