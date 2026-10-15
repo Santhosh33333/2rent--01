@@ -1,9 +1,9 @@
 ﻿import { getErrorMessage, getErrorDetail } from '../../lib/error'
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Footprints, Package, MapPin, Users, Sparkles,
-  FileText, CreditCard, CheckCircle, ArrowLeft, ArrowRight, Loader2
+  FileText, CreditCard, CheckCircle, ArrowLeft, ArrowRight, Loader2, Search
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { api } from '../../lib/api'
@@ -11,7 +11,8 @@ import { useAuth } from '../../lib/auth'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
 import { LocationInput } from '../../components/LocationInput'
-import { SERVICES, serviceOption, serviceTitle, serviceRequiresItem, serviceRequiresDropoff } from '../../lib/serviceCatalog'
+import { serviceOption, serviceTitle, serviceRequiresItem, serviceRequiresDropoff } from '../../lib/serviceCatalog'
+import { FRIENDSHIP_CATEGORIES, servicesForCategories } from '../../lib/friendshipCategories'
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6
 
@@ -130,6 +131,16 @@ export function CreateBookingPage() {
   }, [fetchWalletBalance])
 
   const [selectedTypes, setSelectedTypes] = useState<ServiceType[]>([initialType])
+  // Friendship categories chosen on step 1. The service(s) the booking is
+  // created against are derived from these, so the wizard can offer a rich,
+  // searchable set without changing what the backend prices and matches on.
+  const [selectedCategories, setSelectedCategories] = useState<string[]>(() => {
+    const seed = FRIENDSHIP_CATEGORIES.find((c) => c.service === initialType)
+    return seed ? [seed.key] : []
+  })
+  const [categorySearch, setCategorySearch] = useState('')
+  const [showAllCategories, setShowAllCategories] = useState(false)
+  const CATEGORY_PREVIEW = 12
   const [booking, setBooking] = useState<BookingData>({
     serviceType: initialType,
     pickupLocation: user?.city || '',
@@ -213,16 +224,50 @@ export function CreateBookingPage() {
   }, [booking.serviceType, booking.duration, booking.distance, estimateRetry])
 
 
-  const toggleServiceType = (type: ServiceType) => {
-    setSelectedTypes((prev) => {
-      const next = prev.includes(type)
-        ? prev.filter((item) => item !== type)
-        : [...prev, type]
-      const primary = next[0] || type
-      setBooking((current) => ({ ...current, serviceType: primary }))
-      return next.length > 0 ? next : [type]
-    })
+  // Selecting a category re-derives the service(s) the booking runs on: the
+  // set of services whose categories are selected, with the first as the
+  // primary (it drives pricing, the connect step and the summary).
+  const toggleCategory = (key: string) => {
+    const next = selectedCategories.includes(key)
+      ? selectedCategories.filter((k) => k !== key)
+      : [...selectedCategories, key]
+    setSelectedCategories(next)
+    const services = servicesForCategories(next)
+    if (services.length > 0) {
+      setSelectedTypes(services)
+      if (services[0] !== booking.serviceType) {
+        setBooking((current) => ({ ...current, serviceType: services[0] }))
+      }
+    }
   }
+
+  const clearCategories = () => {
+    setSelectedCategories([])
+    setSelectedTypes([booking.serviceType])
+  }
+
+  // Categories visible in step 1: everything while searching or expanded,
+  // otherwise a short preview. Anything already selected is always kept on
+  // screen so a collapsed list never hides a choice the user made.
+  const filteredCategories = useMemo(() => {
+    const q = categorySearch.trim().toLowerCase()
+    if (!q) return FRIENDSHIP_CATEGORIES
+    return FRIENDSHIP_CATEGORIES.filter(
+      (c) =>
+        c.title.toLowerCase().includes(q) ||
+        c.description.toLowerCase().includes(q),
+    )
+  }, [categorySearch])
+
+  const visibleCategories = useMemo(() => {
+    if (categorySearch.trim() || showAllCategories) return filteredCategories
+    if (filteredCategories.length <= CATEGORY_PREVIEW) return filteredCategories
+    const head = filteredCategories.slice(0, CATEGORY_PREVIEW)
+    const selectedTail = filteredCategories.filter(
+      (c) => selectedCategories.includes(c.key) && !head.includes(c),
+    )
+    return [...head, ...selectedTail]
+  }, [categorySearch, showAllCategories, filteredCategories, selectedCategories])
 
   // Every catalogue service is delivered inside the app, so a booking has no
   // pickup or destination — step 2 is the call/chat choice instead.
@@ -253,7 +298,7 @@ export function CreateBookingPage() {
 
   const canProceed = () => {
     switch (step) {
-      case 1: return !!booking.serviceType
+      case 1: return selectedCategories.length > 0
       case 2: return isRemote || (!!booking.pickupLocation && !!booking.dropLocation)
       case 3: return true
       case 4: return true
@@ -410,34 +455,95 @@ export function CreateBookingPage() {
         <GlassCard variant="elevated" padding="lg">
           {step === 1 && (
             <div className="space-y-4">
-              <h2 className="section-title">Choose Service</h2>
-              <p className="text-sm text-surface-500 dark:text-surface-400">Select one or more service types.</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {SERVICES.map((s) => {
-                  const isSelected = selectedTypes.includes(s.key)
-                  const accentClasses = isSelected
-                    ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/10 shadow-lg shadow-indigo-500/10'
-                    : 'border-surface-200 dark:border-surface-700 hover:border-surface-300 dark:hover:border-surface-600'
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="section-title">What kind of company?</h2>
+                  <p className="text-sm text-surface-500 dark:text-surface-400 mt-1">
+                    Pick one or more. This is what we match you on.
+                  </p>
+                </div>
+                {selectedCategories.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearCategories}
+                    className="shrink-0 text-xs font-medium text-primary-600 hover:underline dark:text-primary-400"
+                  >
+                    Clear all
+                  </button>
+                )}
+              </div>
+
+              <div className="relative">
+                <Search
+                  className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-surface-400"
+                  aria-hidden="true"
+                />
+                <input
+                  value={categorySearch}
+                  onChange={(e) => setCategorySearch(e.target.value)}
+                  placeholder="Search categories"
+                  aria-label="Search friendship categories"
+                  className="w-full rounded-xl border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800 pl-9 pr-3 py-2.5 text-sm text-surface-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {visibleCategories.map((c) => {
+                  const isSelected = selectedCategories.includes(c.key)
                   return (
                     <button
-                      key={s.key}
-                      onClick={() => toggleServiceType(s.key)}
-                      className={`p-6 rounded-2xl border-2 text-center transition-all ${accentClasses}`}
+                      key={c.key}
+                      type="button"
+                      onClick={() => toggleCategory(c.key)}
+                      aria-pressed={isSelected}
+                      className={`relative p-4 rounded-2xl border-2 text-left transition-all ${
+                        isSelected
+                          ? 'border-primary-500 bg-primary-500/10 shadow-sm'
+                          : 'border-surface-200 dark:border-surface-700 hover:border-surface-300 dark:hover:border-surface-600'
+                      }`}
                     >
-                      <div className={`w-14 h-14 mx-auto rounded-2xl flex items-center justify-center mb-4 shadow-lg bg-gradient-to-br ${s.accent}`}>
-                        <span className="text-3xl">{s.icon}</span>
-                      </div>
-                      <p className="text-lg font-bold font-display text-surface-900 dark:text-white">{s.title}</p>
-                      <p className="text-sm text-surface-500 mt-1">{s.subtitle}</p>
-                      <div className="mt-3 flex items-center justify-center gap-2">
-                        <span className="text-[10px] uppercase tracking-wide rounded-full border px-2 py-0.5 border-surface-300 dark:border-surface-600 text-surface-500">
-                          {isSelected ? 'Selected' : 'Tap to add'}
+                      {c.badge && (
+                        <span className="absolute top-2 right-2 text-[9px] font-semibold uppercase tracking-wide rounded-full bg-surface-900/80 text-white px-2 py-0.5">
+                          {c.badge}
                         </span>
-                      </div>
+                      )}
+                      <span className="text-2xl" aria-hidden="true">{c.icon}</span>
+                      <p className="mt-2 text-sm font-semibold text-surface-900 dark:text-white">{c.title}</p>
+                      <p className="text-xs text-surface-500 dark:text-surface-400 mt-0.5">{c.description}</p>
+                      {isSelected && (
+                        <CheckCircle
+                          className="w-4 h-4 text-primary-600 absolute bottom-2 right-2"
+                          aria-hidden="true"
+                        />
+                      )}
                     </button>
                   )
                 })}
               </div>
+
+              {filteredCategories.length === 0 && (
+                <p className="text-sm text-surface-500 dark:text-surface-400 py-6 text-center">
+                  No categories match your search.
+                </p>
+              )}
+
+              {!categorySearch.trim() && filteredCategories.length > CATEGORY_PREVIEW && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllCategories((v) => !v)}
+                  className="text-xs font-medium text-primary-600 hover:underline dark:text-primary-400"
+                >
+                  {showAllCategories
+                    ? 'See less'
+                    : `See more (${filteredCategories.length - CATEGORY_PREVIEW} more)`}
+                </button>
+              )}
+
+              {selectedCategories.length > 0 && (
+                <p className="text-xs text-surface-500 dark:text-surface-400">
+                  {selectedCategories.length} selected
+                </p>
+              )}
             </div>
           )}
 
