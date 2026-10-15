@@ -12,16 +12,17 @@ export interface ServiceOption {
   icon: string // emoji used as the service glyph
   requiresItem: boolean
   requiresDropoff: boolean // pickup-to-drop: destination mandatory
+  minDuration: number // shortest session length, in minutes (matches the backend)
   accent: string // tailwind gradient classes for the icon chip
 }
 
 export const SERVICES: ServiceOption[] = [
-  { key: 'TALK', title: 'Talk', subtitle: 'One-to-one talk over an in-app call or chat', icon: '💬', requiresItem: false, requiresDropoff: false, accent: 'from-sky-500 to-blue-600' },
-  { key: 'VENT', title: 'Vent', subtitle: 'Let it all out to someone who listens', icon: '🫂', requiresItem: false, requiresDropoff: false, accent: 'from-violet-500 to-purple-600' },
-  { key: 'TIME_PASS', title: 'Time-pass', subtitle: 'Easy company to pass the time', icon: '⏳', requiresItem: false, requiresDropoff: false, accent: 'from-teal-500 to-cyan-600' },
-  { key: 'DATE', title: 'Date', subtitle: 'A companion for a date, over call or chat', icon: '💞', requiresItem: false, requiresDropoff: false, accent: 'from-rose-500 to-pink-600' },
-  { key: 'FRIENDS', title: 'Friends', subtitle: 'Meet a new friend and hang out', icon: '🤝', requiresItem: false, requiresDropoff: false, accent: 'from-emerald-500 to-green-600' },
-  { key: 'OTHER', title: 'Other', subtitle: 'Something else — describe it in the details', icon: '✨', requiresItem: false, requiresDropoff: false, accent: 'from-slate-500 to-slate-600' },
+  { key: 'TALK', title: 'Talk', subtitle: 'One-to-one talk over an in-app call or chat', icon: '💬', requiresItem: false, requiresDropoff: false, minDuration: 15, accent: 'from-sky-500 to-blue-600' },
+  { key: 'VENT', title: 'Vent', subtitle: 'Let it all out to someone who listens', icon: '🫂', requiresItem: false, requiresDropoff: false, minDuration: 15, accent: 'from-violet-500 to-purple-600' },
+  { key: 'TIME_PASS', title: 'Time-pass', subtitle: 'Easy company to pass the time', icon: '⏳', requiresItem: false, requiresDropoff: false, minDuration: 15, accent: 'from-teal-500 to-cyan-600' },
+  { key: 'DATE', title: 'Date', subtitle: 'A companion for a date, over call or chat', icon: '💞', requiresItem: false, requiresDropoff: false, minDuration: 30, accent: 'from-rose-500 to-pink-600' },
+  { key: 'FRIENDS', title: 'Friends', subtitle: 'Meet a new friend and hang out', icon: '🤝', requiresItem: false, requiresDropoff: false, minDuration: 30, accent: 'from-emerald-500 to-green-600' },
+  { key: 'OTHER', title: 'Other', subtitle: 'Something else — describe it in the details', icon: '✨', requiresItem: false, requiresDropoff: false, minDuration: 15, accent: 'from-slate-500 to-slate-600' },
 ]
 
 /** Names for the retired local-services catalogue — display-only, for history. */

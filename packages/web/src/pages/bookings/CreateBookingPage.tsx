@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  Footprints, Package, MapPin, Calendar, Clock, Timer,
+  Footprints, Package, MapPin,
   FileText, CreditCard, CheckCircle, ArrowLeft, ArrowRight, Loader2
 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -11,9 +11,9 @@ import { useAuth } from '../../lib/auth'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
 import { LocationInput } from '../../components/LocationInput'
-import { SERVICES, serviceTitle, serviceRequiresItem, serviceRequiresDropoff } from '../../lib/serviceCatalog'
+import { SERVICES, serviceOption, serviceTitle, serviceRequiresItem, serviceRequiresDropoff } from '../../lib/serviceCatalog'
 
-type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7
+type Step = 1 | 2 | 3 | 4 | 5 | 6
 type ServiceType = string
 
 interface BookingData {
@@ -48,12 +48,16 @@ interface PriceEstimate {
 
 const STEPS = [
   { label: 'Service', icon: Footprints },
-  { label: 'Location', icon: MapPin },
-  { label: 'Schedule', icon: Calendar },
+  { label: 'Connect', icon: MapPin },
   { label: 'Details', icon: FileText },
   { label: 'Estimate', icon: CreditCard },
   { label: 'Confirm', icon: CheckCircle },
 ]
+
+// Sessions start immediately, so the wizard no longer asks for a date, time or
+// duration. The booking holds only the service's minimum session length; the
+// metered call/chat billing (callBillingService) charges the minutes actually
+// used, so a person is never pre-charged for time they did not take.
 
 function formatDuration(min: number): string {
   if (!min || min <= 0) return '—'
@@ -119,26 +123,27 @@ export function CreateBookingPage() {
     dropLocation: '',
     date: '',
     time: '',
-    duration: '60',
+    duration: String(serviceOption(initialType)?.minDuration ?? 30),
     distance: '',
     itemType: '',
     itemDescription: '',
     sameGenderOnly: false,
   })
   const [createdBookingId, setCreatedBookingId] = useState<string | null>(null)
-  const [durationMode, setDurationMode] = useState<'HOURS' | 'DAYS'>('HOURS')
-  const [durationValue, setDurationValue] = useState('1')
+  // How the customer wants to connect — every service is delivered in-app.
+  const [connectMode, setConnectMode] = useState<'CALL' | 'CHAT'>('CHAT')
 
   const updateBooking = (data: Partial<BookingData>) => {
     setBooking((prev) => ({ ...prev, ...data }))
   }
 
-  const applyDuration = (mode: 'HOURS' | 'DAYS', val: string) => {
-    const n = Number(val)
-    if (!Number.isFinite(n) || n <= 0) return
-    const mins = mode === 'HOURS' ? Math.round(n * 60) : Math.round(n * 24 * 60)
-    updateBooking({ duration: String(mins) })
-  }
+  // Sessions start now, so the held amount is based on the service's minimum
+  // length. Changing the service re-bases it; metered billing charges the real
+  // minutes used, so nobody is pre-charged for time they did not take.
+  useEffect(() => {
+    const min = serviceOption(booking.serviceType)?.minDuration ?? 30
+    setBooking((prev) => (prev.duration === String(min) ? prev : { ...prev, duration: String(min) }))
+  }, [booking.serviceType])
 
   // Fetch the server-computed price estimate so the displayed total always
   // matches exactly what the backend debits from the wallet at booking time
@@ -198,34 +203,25 @@ export function CreateBookingPage() {
     })
   }
 
+  // Every catalogue service is delivered inside the app, so a booking has no
+  // pickup or destination — step 2 is the call/chat choice instead.
+  const isRemote = !serviceRequiresDropoff(booking.serviceType)
+
   const canProceed = () => {
     switch (step) {
       case 1: return !!booking.serviceType
-      case 2: return !!booking.pickupLocation && (!serviceRequiresDropoff(booking.serviceType) || !!booking.dropLocation)
-      case 3: return !!booking.date && !!booking.time
+      case 2: return isRemote || (!!booking.pickupLocation && !!booking.dropLocation)
+      case 3: return true
       case 4: return true
       case 5: return true
-      case 6: return true
       default: return true
     }
   }
 
   const handleSubmit = async () => {
     if (submissionLock.current) return
-    // Booking window: now → +2 months (mirrors backend enforcement)
-    const scheduledAt = new Date(`${booking.date}T${booking.time}:00`)
-    if (!booking.date || !booking.time || Number.isNaN(scheduledAt.getTime())) {
-      toast.error('Please choose a valid date and time.')
-      return
-    }
-    if (scheduledAt.getTime() < Date.now() - 5 * 60 * 1000) {
-      toast.error('Booking time must be in the future. Please pick a later slot.')
-      return
-    }
-    if (scheduledAt.getTime() > Date.now() + 60 * 24 * 60 * 60 * 1000) {
-      toast.error('Bookings can only be made from today up to 2 months in advance.')
-      return
-    }
+    // Sessions start immediately — the wizard no longer collects a date/time.
+    const scheduledAt = new Date()
     if (estimateLoading || estimate === null) {
       toast.error(estimateError ? 'Price is unavailable. Retry the estimate first.' : 'Still calculating your price...')
       return
@@ -242,11 +238,13 @@ export function CreateBookingPage() {
     submissionLock.current = true
     setSubmitting(true)
     try {
-      const normalizedPickup = booking.pickupLocation.trim()
-      const normalizedDestination = (booking.dropLocation || booking.pickupLocation).trim()
-      // Send an explicit UTC instant: the naive "dateTtime" string would be
-      // parsed as UTC by the server, shifting IST picks by +5:30.
-      const scheduledInstant = new Date(`${booking.date}T${booking.time}:00`).toISOString()
+      // In-app services have no pickup/destination; the booking row still stores
+      // a location string, so a plain marker keeps it honest rather than blank.
+      const normalizedPickup = isRemote ? 'In-app' : booking.pickupLocation.trim()
+      const normalizedDestination = isRemote ? 'In-app' : (booking.dropLocation || booking.pickupLocation).trim()
+      // Send an explicit UTC instant so server-side parsing cannot shift the
+      // start time by the booker's offset.
+      const scheduledInstant = scheduledAt.toISOString()
       const res = await api.post('/bookings', {
         serviceType: selectedTypes.length > 0 ? selectedTypes : [booking.serviceType],
         startLocation: normalizedPickup,
@@ -256,21 +254,21 @@ export function CreateBookingPage() {
         distanceKm: booking.distance ? Number.parseFloat(booking.distance) || undefined : undefined,
         itemType: booking.itemType || undefined,
         itemDescription: booking.itemDescription || undefined,
-        notes: booking.itemDescription || undefined,
+        notes: isRemote
+          ? `Connect by ${connectMode === 'CALL' ? 'call' : 'chat'}`
+          : booking.itemDescription || undefined,
         sameGenderOnly: booking.sameGenderOnly || undefined,
       })
       const data = res.data?.data || res.data
       const id = data?.id || data?.bookingId
       setCreatedBookingId(id)
 
-      setStep(7)
+      setStep(6)
       toast.success('Booking confirmed! Paid from your wallet.')
     } catch (err: unknown) {
       const code = getErrorDetail(err)
-      if (code === 'BOOKING_WINDOW_EXCEEDED') {
-        toast.error('Bookings can only be made from today up to 2 months in advance.')
-      } else if (code === 'BOOKING_TIME_IN_PAST') {
-        toast.error('Booking time must be in the future. Please pick a later slot.')
+      if (code === 'BOOKING_BEFORE_HOURS' || code === 'BOOKING_AFTER_HOURS') {
+        toast.error(getErrorMessage(err, 'Companions are available between 4:00 AM and 10:00 PM. Please try again then.'))
       } else if (code === 'INSUFFICIENT_BALANCE') {
         toast.error(getErrorMessage(err, 'Insufficient wallet balance. Please top up first.'))
         navigate('/wallet/topup')
@@ -288,10 +286,8 @@ export function CreateBookingPage() {
   const platformFee = estimate?.platformFee ?? 0
   const total = estimate?.estimatedAmount ?? 0
   const insufficientBalance = walletBalance !== null && total > 0 && walletBalance < total
-  const today = new Date().toISOString().split('T')[0]
-  const maxDate = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
 
-  if (step === 7) {
+  if (step === 6) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
         <AnimatedPage>
@@ -385,142 +381,82 @@ export function CreateBookingPage() {
 
           {step === 2 && (
             <div className="space-y-4">
-              <h2 className="section-title">Pickup & Destination</h2>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => updateBooking({ pickupLocation: user?.city || 'Current city' })}
-                  className="btn-outline text-xs py-2 px-3"
-                >
-                  Use my city
-                </button>
-                <button
-                  type="button"
-                  onClick={() => updateBooking({ dropLocation: booking.pickupLocation || user?.city || 'Same as pickup' })}
-                  className="btn-outline text-xs py-2 px-3"
-                >
-                  Set destination to pickup
-                </button>
-              </div>
-              <LocationInput
-                label="Pickup Location"
-                required
-                value={booking.pickupLocation}
-                onChange={(v) => updateBooking({ pickupLocation: v })}
-                placeholder="Start typing an address or use my location"
-              />
-              <LocationInput
-                label="Destination"
-                required={serviceRequiresDropoff(booking.serviceType)}
-                optional={!serviceRequiresDropoff(booking.serviceType)}
-                value={booking.dropLocation}
-                onChange={(v) => updateBooking({ dropLocation: v })}
-                placeholder={serviceRequiresDropoff(booking.serviceType) ? 'Where should it be delivered?' : 'Enter destination (defaults to pickup)'}
-              />
+              {isRemote ? (
+                <>
+                  <h2 className="section-title">How to connect</h2>
+                  <p className="text-sm text-surface-500 dark:text-surface-400">
+                    This is an in-app service — no travel needed. Choose how you'd like to talk.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {([
+                      { key: 'CHAT', title: 'Chat', subtitle: 'Message inside the app', icon: '💬' },
+                      { key: 'CALL', title: 'Call', subtitle: 'Voice call inside the app', icon: '📞' },
+                    ] as const).map((opt) => {
+                      const active = connectMode === opt.key
+                      return (
+                        <button
+                          key={opt.key}
+                          type="button"
+                          onClick={() => setConnectMode(opt.key)}
+                          className={`p-6 rounded-2xl border-2 text-center transition-all ${
+                            active
+                              ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/10 shadow-lg shadow-indigo-500/10'
+                              : 'border-surface-200 dark:border-surface-700 hover:border-surface-300 dark:hover:border-surface-600'
+                          }`}
+                        >
+                          <div className="w-14 h-14 mx-auto rounded-2xl flex items-center justify-center mb-4 bg-gradient-to-br from-sky-500 to-blue-600 text-3xl">
+                            {opt.icon}
+                          </div>
+                          <p className="text-lg font-bold font-display text-surface-900 dark:text-white">{opt.title}</p>
+                          <p className="text-sm text-surface-500 mt-1">{opt.subtitle}</p>
+                          <span className="inline-block mt-3 text-[10px] uppercase tracking-wide rounded-full border px-2 py-0.5 border-surface-300 dark:border-surface-600 text-surface-500">
+                            {active ? 'Selected' : 'Tap to choose'}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h2 className="section-title">Pickup & Destination</h2>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => updateBooking({ pickupLocation: user?.city || 'Current city' })}
+                      className="btn-outline text-xs py-2 px-3"
+                    >
+                      Use my city
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateBooking({ dropLocation: booking.pickupLocation || user?.city || 'Same as pickup' })}
+                      className="btn-outline text-xs py-2 px-3"
+                    >
+                      Set destination to pickup
+                    </button>
+                  </div>
+                  <LocationInput
+                    label="Pickup Location"
+                    required
+                    value={booking.pickupLocation}
+                    onChange={(v) => updateBooking({ pickupLocation: v })}
+                    placeholder="Start typing an address or use my location"
+                  />
+                  <LocationInput
+                    label="Destination"
+                    required={serviceRequiresDropoff(booking.serviceType)}
+                    optional={!serviceRequiresDropoff(booking.serviceType)}
+                    value={booking.dropLocation}
+                    onChange={(v) => updateBooking({ dropLocation: v })}
+                    placeholder={serviceRequiresDropoff(booking.serviceType) ? 'Where should it be delivered?' : 'Enter destination (defaults to pickup)'}
+                  />
+                </>
+              )}
             </div>
           )}
 
-          {step === 3 && (
-            <div className="space-y-4">
-              <h2 className="section-title">Date, Time & Duration</h2>
-              <div>
-                <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-2">Date *</label>
-                <div className="relative">
-                  <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-surface-400" />
-                  <input
-                    type="date"
-                    value={booking.date}
-                    onChange={(e) => updateBooking({ date: e.target.value })}
-                    min={today}
-                    max={maxDate}
-                    className="input pl-12 py-3.5"
-                  />
-                </div>
-                <p className="text-xs text-surface-500 mt-1.5">Bookable from today up to 2 months ahead.</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-2">Time *</label>
-                <div className="relative">
-                  <Clock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-surface-400" />
-                  <input
-                    type="time"
-                    value={booking.time}
-                    onChange={(e) => updateBooking({ time: e.target.value })}
-                    className="input pl-12 py-3.5"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-2">Duration</label>
-                <div className="flex gap-2 mb-3">
-                  {(['HOURS', 'DAYS'] as const).map((m) => (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => { setDurationMode(m); applyDuration(m, durationValue) }}
-                      className={`flex-1 py-2.5 rounded-xl border text-sm font-semibold transition-all ${
-                        durationMode === m
-                          ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/10 text-primary-600 dark:text-primary-400'
-                          : 'border-surface-200 dark:border-surface-700 text-surface-500'
-                      }`}
-                    >
-                      {m === 'HOURS' ? 'Hours' : 'Days'}
-                    </button>
-                  ))}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {(durationMode === 'HOURS' ? [1, 2, 3, 4, 6, 8, 12, 24] : [1, 2, 3, 5, 7]).map((v) => (
-                    <button
-                      key={v}
-                      type="button"
-                      onClick={() => { setDurationValue(String(v)); applyDuration(durationMode, String(v)) }}
-                      className={`px-3 py-2 rounded-xl border text-sm font-medium transition-all ${
-                        Number(durationValue) === v
-                          ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/10 text-primary-600 dark:text-primary-400'
-                          : 'border-surface-200 dark:border-surface-700 text-surface-600 dark:text-surface-300'
-                      }`}
-                    >
-                      {v}
-                      {durationMode === 'HOURS' ? 'h' : 'd'}
-                    </button>
-                  ))}
-                </div>
-                <div className="relative mt-3">
-                  <Timer className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-surface-400" />
-                  <input
-                    type="number"
-                    min={1}
-                    value={durationValue}
-                    onChange={(e) => { setDurationValue(e.target.value); applyDuration(durationMode, e.target.value) }}
-                    placeholder={`Custom (${durationMode === 'HOURS' ? 'hours' : 'days'})`}
-                    className="input pl-12 py-3.5"
-                  />
-                </div>
-                <p className="text-xs text-surface-500 mt-1.5">
-                  Total duration: {formatDuration(Number(booking.duration) || 0)}
-                </p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-2">
-                  Distance (km) <span className="text-surface-400">· optional, used for per-km pricing</span>
-                </label>
-                <div className="relative">
-                  <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-surface-400" />
-                  <input
-                    type="number"
-                    min={0}
-                    step="0.1"
-                    value={booking.distance}
-                    onChange={(e) => updateBooking({ distance: e.target.value })}
-                    placeholder="e.g. 3"
-                    className="input pl-12 py-3.5"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {step === 4 && serviceRequiresItem(booking.serviceType) && (
+          {step === 3 && serviceRequiresItem(booking.serviceType) && (
             <div className="space-y-4">
               <h2 className="section-title">Item Details</h2>
               <div>
@@ -564,7 +500,7 @@ export function CreateBookingPage() {
             </div>
           )}
 
-          {step === 4 && !serviceRequiresItem(booking.serviceType) && (
+          {step === 3 && !serviceRequiresItem(booking.serviceType) && (
             <div className="space-y-4">
               <h2 className="section-title">Additional Notes</h2>
               <div>
@@ -595,7 +531,7 @@ export function CreateBookingPage() {
             </div>
           )}
 
-          {step === 5 && (
+          {step === 4 && (
             <div className="space-y-4">
               <h2 className="section-title">Price Estimate</h2>
               {estimateLoading ? (
@@ -649,7 +585,7 @@ export function CreateBookingPage() {
             </div>
           )}
 
-          {step === 6 && (
+          {step === 5 && (
             <div className="space-y-4">
               <h2 className="section-title">Confirm & Pay</h2>
               <div className="space-y-3">
@@ -658,26 +594,31 @@ export function CreateBookingPage() {
                     <span className="text-sm text-surface-500">Service</span>
                     <span className="text-sm font-medium text-surface-900 dark:text-white">{serviceTitle(booking.serviceType)}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-surface-500">Pickup</span>
-                    <span className="text-sm font-medium text-surface-900 dark:text-white">{booking.pickupLocation}</span>
-                  </div>
-                  {booking.dropLocation && (
-                    <div className="flex justify-between">
-                      <span className="text-sm text-surface-500">Destination</span>
-                      <span className="text-sm font-medium text-surface-900 dark:text-white">{booking.dropLocation}</span>
-                    </div>
+                  {isRemote ? (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-surface-500">Connect by</span>
+                        <span className="text-sm font-medium text-surface-900 dark:text-white">{connectMode === 'CALL' ? 'Call' : 'Chat'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-surface-500">Starts</span>
+                        <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Now</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-surface-500">Pickup</span>
+                        <span className="text-sm font-medium text-surface-900 dark:text-white">{booking.pickupLocation}</span>
+                      </div>
+                      {booking.dropLocation && (
+                        <div className="flex justify-between">
+                          <span className="text-sm text-surface-500">Destination</span>
+                          <span className="text-sm font-medium text-surface-900 dark:text-white">{booking.dropLocation}</span>
+                        </div>
+                      )}
+                    </>
                   )}
-                  <div className="flex justify-between">
-                    <span className="text-sm text-surface-500">Date & Time</span>
-                    <span className="text-sm font-medium text-surface-900 dark:text-white">
-                      {booking.date} at {booking.time}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-surface-500">Duration</span>
-                    <span className="text-sm font-medium text-surface-900 dark:text-white">{formatDuration(Number(booking.duration) || 0)}</span>
-                  </div>
                   <div className="h-px bg-surface-200 dark:bg-surface-700" />
                   <div className="flex justify-between">
                     <span className="text-sm font-bold text-surface-900 dark:text-white">Total</span>
@@ -718,7 +659,7 @@ export function CreateBookingPage() {
 
       <AnimatedPage delay={75}>
         <div className="flex gap-3">
-          {step > 1 && step < 7 && (
+          {step > 1 && step < 6 && (
             <button
               onClick={() => setStep((prev) => (prev - 1) as Step)}
               className="flex-1 btn-outline flex items-center justify-center gap-2"
@@ -726,7 +667,7 @@ export function CreateBookingPage() {
               <ArrowLeft className="w-4 h-4" /> Back
             </button>
           )}
-          {step < 6 && (
+          {step < 5 && (
             <button
               onClick={() => setStep((prev) => (prev + 1) as Step)}
               disabled={!canProceed()}
@@ -735,7 +676,7 @@ export function CreateBookingPage() {
               Next <ArrowRight className="w-4 h-4" />
             </button>
           )}
-          {step === 6 && (
+          {step === 5 && (
             <button
               onClick={handleSubmit}
               disabled={submitting || insufficientBalance || walletLoading || walletBalance === null || walletError || estimateLoading || estimate === null}

@@ -61,7 +61,7 @@ export function RoleSwitcher({ variant = 'header' }: { variant?: 'header' | 'set
   const currentMeta = ROLE_META[activeRole] || ROLE_META.USER
 
   return (
-    <div className="relative flex items-center gap-2">
+    <div className="relative flex flex-wrap items-center gap-2">
       {previewingFromAdmin && (
         <button
           onClick={() => handleSwitch(accountRole)}
@@ -94,7 +94,15 @@ export function RoleSwitcher({ variant = 'header' }: { variant?: 'header' | 'set
       {isOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          <div className="absolute top-full left-0 mt-2 w-80 max-w-[calc(100vw-2rem)] bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-700 rounded-2xl shadow-2xl z-50 overflow-hidden animate-fade-in duration-200">
+          <div className={
+            variant === 'settings'
+              // In Settings the switcher sits inside a GlassCard, which is
+              // `overflow-hidden`. An absolutely positioned panel was clipped by
+              // the card, so the menu appeared cut off ("half hidden"). Rendering
+              // it in-flow (w-full wraps under the button) keeps it fully visible.
+              ? 'relative z-50 mt-2 w-full bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-700 rounded-2xl shadow-xl overflow-hidden'
+              : 'absolute top-full left-0 mt-2 w-80 max-w-[calc(100vw-2rem)] bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-700 rounded-2xl shadow-2xl z-50 overflow-hidden animate-fade-in duration-200'
+          }>
             <div className="p-3 border-b border-surface-100 dark:border-surface-800">
               <p className="text-xs font-semibold text-surface-500 dark:text-surface-400 uppercase tracking-wider">Switch Role</p>
             </div>

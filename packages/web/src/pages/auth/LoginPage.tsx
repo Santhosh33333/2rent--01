@@ -919,15 +919,19 @@ export function LoginPage() {
               Create one
             </Link>
           </p>
-          <p className="mt-3 text-center">
-            <Link
-              to="/download"
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-surface-400 dark:text-surface-500 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
-            >
-              <Smartphone className="w-3.5 h-3.5" />
-              Get the Android app
-            </Link>
-          </p>
+          {/* Only meaningful on the web — inside the packaged app the person is
+              already using the app, so the "Get the Android app" link is noise. */}
+          {!isNative && (
+            <p className="mt-3 text-center">
+              <Link
+                to="/download"
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-surface-400 dark:text-surface-500 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+              >
+                <Smartphone className="w-3.5 h-3.5" />
+                Get the Android app
+              </Link>
+            </p>
+          )}
           </AnimatedPage>
         )}
       </div>

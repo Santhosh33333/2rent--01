@@ -11,6 +11,7 @@ import { useRole } from '../../lib/roleContext'
 import { isAdminTierRole } from '../../lib/roles'
 import { MAX_PIN_LENGTH, MIN_PIN_LENGTH, useAppLock } from '../../lib/appLock'
 import { showPrivacyOptionsForm, subscribeAdsState } from '../../lib/ads'
+import { isPushOptedIn, setPushOptedIn, registerForPushNotifications } from '../../lib/pushNotifications'
 
 interface Settings {
   theme: string
@@ -226,6 +227,9 @@ export function SettingsPage() {
     api.get('/settings').then(r => {
       const data = r.data.data
       const merged = { ...defaultSettings, ...data }
+      // The device-level opt-out is the source of truth for push, not the
+      // server copy, so the toggle reflects what the phone will actually do.
+      merged.pushEnabled = isPushOptedIn()
       setSettings(merged)
       localStorage.setItem('notification-sound-enabled', String(merged.notificationSound && merged.notificationsEnabled))
       localStorage.setItem('notifications-enabled', String(merged.notificationsEnabled))
@@ -243,6 +247,17 @@ export function SettingsPage() {
   const updateNotificationSound = (enabled: boolean) => {
     update('notificationSound', enabled)
     localStorage.setItem('notification-sound-enabled', String(enabled))
+  }
+
+  // The toggle used to write only `settings.pushEnabled`, while the code that
+  // actually gates device push reads a separate localStorage flag
+  // (`nabri-push-optin`). Turning this off therefore did nothing. Drive the real
+  // flag, and re-register the FCM token when it is switched back on so a device
+  // that opted out can start receiving notifications again without a restart.
+  const updatePushEnabled = (enabled: boolean) => {
+    update('pushEnabled', enabled)
+    setPushOptedIn(enabled)
+    if (enabled) void registerForPushNotifications()
   }
 
   const updateAllNotifications = (enabled: boolean) => {
@@ -370,7 +385,7 @@ export function SettingsPage() {
                 <ToggleSwitch enabled={settings.communityUpdates} onChange={v => update('communityUpdates', v)} />
               </SettingRow>
               <SettingRow icon={Smartphone} label="Push Notifications" description="Device push notifications">
-                <ToggleSwitch enabled={settings.pushEnabled} onChange={v => update('pushEnabled', v)} />
+                <ToggleSwitch enabled={settings.pushEnabled} onChange={updatePushEnabled} />
               </SettingRow>
               <SettingRow icon={Bell} label="Email Notifications" description="Email digest updates">
                 <ToggleSwitch enabled={settings.emailNotifications} onChange={v => update('emailNotifications', v)} />
