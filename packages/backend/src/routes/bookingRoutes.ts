@@ -36,6 +36,8 @@ router.post(
     body("itemDescription").optional().isString().trim().isLength({ max: 500 }),
     body("notes").optional().isString().trim().isLength({ max: 500 }),
     body("sameGenderOnly").optional().isBoolean().toBoolean(),
+    // The companion chosen from the "online now" list (Partner.id), if any.
+    body("preferredPartnerId").optional().isString().trim().isLength({ max: 64 }),
   ],
   sanitizeInput,
   validateRequest,
@@ -51,6 +53,10 @@ router.post(
 
 // Get price estimate
 router.get("/price-estimate", bookingController.getPriceEstimate);
+
+// Who is available for a call/chat right now. Declared before "/:id" so the
+// literal path is not swallowed by the id param route.
+router.get("/companions", bookingController.listOnlineCompanions);
 
 // Get my bookings
 router.get("/", bookingController.getMyBookings);

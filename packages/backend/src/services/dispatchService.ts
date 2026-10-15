@@ -1,5 +1,6 @@
 ﻿import { prisma } from "../config/database";
 import { emitToUser, getIO } from "./socketService";
+import { serviceLabel } from "./serviceCatalog";
 
 /**
  * Job dispatch pipeline.
@@ -96,11 +97,29 @@ async function persistNotification(userId: string, title: string, body: string, 
   }
 }
 
+export interface DispatchOutcome {
+  /** False when the booking was not in a dispatchable state (e.g. cash/UPI). */
+  dispatched: boolean;
+  /** True when the caller's chosen companion received the job directly. */
+  preferredHonoured: boolean;
+  targetCount: number;
+}
+
 /**
  * Fan a newly-created (or re-dispatched) booking out to eligible partners.
  * Fire-and-forget safe: never throws into the caller's flow.
+ *
+ * When `options.preferredPartnerId` names an eligible partner the job goes to
+ * that person only (the user chose them). If they are not eligible, or have
+ * gone offline since the picker was opened, the fan-out falls back to the whole
+ * eligible pool rather than stranding the booking — the caller learns which
+ * happened from the returned `preferredHonoured`.
  */
-export async function dispatchBooking(bookingId: string): Promise<void> {
+export async function dispatchBooking(
+  bookingId: string,
+  options: { preferredPartnerId?: string } = {}
+): Promise<DispatchOutcome> {
+  const notDispatched: DispatchOutcome = { dispatched: false, preferredHonoured: false, targetCount: 0 };
   try {
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
@@ -115,17 +134,23 @@ export async function dispatchBooking(bookingId: string): Promise<void> {
       },
     });
 
-    if (!booking || booking.status !== "PARTNER_SEARCHING") return;
+    if (!booking || booking.status !== "PARTNER_SEARCHING") return notDispatched;
 
-    const targets = await findEligiblePartners(booking);
-    if (targets.length === 0) {
+    const eligible = await findEligiblePartners(booking);
+    if (eligible.length === 0) {
       scheduleExpiry(bookingId);
-      return;
+      return notDispatched;
     }
+
+    // Targeted dispatch: only honour the choice when that partner is genuinely
+    // eligible right now. Otherwise fall back to the full pool.
+    const preferred = options.preferredPartnerId;
+    const preferredTarget = preferred ? eligible.find((t) => t.id === preferred) : undefined;
+    const targets = preferredTarget ? [preferredTarget] : eligible;
 
     const payload = jobPayload(booking);
     const expiresAt = new Date(Date.now() + DISPATCH_WINDOW_MS);
-    const serviceLabel = booking.serviceType === "CARRY_BUDDY" ? "Carry Buddy" : "Walking";
+    const label = serviceLabel(booking.serviceType);
 
     for (const target of targets) {
       emitToUser(target.userId, "new_job", payload);
@@ -134,7 +159,7 @@ export async function dispatchBooking(bookingId: string): Promise<void> {
       void persistNotification(
         target.userId,
         "New job nearby",
-        `A ${serviceLabel} job is available. Open the app to view details and accept.`,
+        `A ${label} job is available. Open the app to view details and accept.`,
         payload
       );
     }
@@ -155,8 +180,10 @@ export async function dispatchBooking(bookingId: string): Promise<void> {
     }
 
     scheduleExpiry(bookingId);
+    return { dispatched: true, preferredHonoured: Boolean(preferredTarget), targetCount: targets.length };
   } catch (err) {
     console.error("[DISPATCH] dispatchBooking failed:", err);
+    return notDispatched;
   }
 }
 

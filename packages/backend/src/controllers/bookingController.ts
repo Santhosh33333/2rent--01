@@ -18,6 +18,7 @@ import {
   type Provider,
 } from "../services/paymentProvider"
 import { dispatchBooking, onBookingClaimed } from "../services/dispatchService"
+import { findOnlineCompanions } from "../services/partnerMatching"
 import { ensureConversation } from "./messageController"
 import { SERVICE_KEYS, getServiceDef } from "../services/serviceCatalog"
 import { logBookingTransition } from "../services/bookingLogService"
@@ -76,6 +77,28 @@ function mergeBookingPreference(notes: unknown, sameGenderOnly: unknown): string
 }
 
 // ============================================================================
+// ONLINE COMPANIONS
+// ============================================================================
+
+/**
+ * Who can take a call/chat session right now.
+ *
+ * Presence is real (socket registry / Redis), never a fabricated "online" flag,
+ * and only public profile fields are returned — never contact details.
+ */
+export async function listOnlineCompanions(req: AuthedRequest, res: Response): Promise<void> {
+  try {
+    const viewerId = req.user!.userId
+    const requested = Number(req.query.limit)
+    const limit = Number.isFinite(requested) && requested > 0 ? Math.min(Math.floor(requested), 50) : 30
+    const items = await findOnlineCompanions(viewerId, limit)
+    sendSuccess(res, { items, total: items.length })
+  } catch {
+    sendError(res, "Failed to load online companions.", 500, "INTERNAL_ERROR")
+  }
+}
+
+// ============================================================================
 // CREATE BOOKING
 // ============================================================================
 
@@ -94,6 +117,10 @@ export async function createBooking(req: AuthedRequest, res: Response): Promise<
       return;
     }
     const { startLocation, endLocation, scheduledAt, durationMinutes, itemType, itemDescription, notes, timezone, startLatitude, startLongitude, endLatitude, endLongitude, couponCode, distanceKm, sameGenderOnly } = req.body;
+    // Optional: the companion the user picked from the "online now" list.
+    const preferredPartnerId = typeof req.body.preferredPartnerId === "string" && req.body.preferredPartnerId.trim()
+      ? req.body.preferredPartnerId.trim()
+      : undefined;
 
     // Per-type process: pickup-to-drop services must have a destination;
     // companion-style services (walking, pet, study…) default it to pickup.
@@ -152,8 +179,10 @@ export async function createBooking(req: AuthedRequest, res: Response): Promise<
       couponCode,
     });
 
-    // Fan the job out to eligible partners (realtime + notifications).
-    void dispatchBooking(booking.id);
+    // Fan the job out to eligible partners (realtime + notifications). A chosen
+    // companion is targeted directly; if they are no longer eligible the
+    // fan-out falls back to the pool and `preferredHonoured` comes back false.
+    const dispatchResult = await dispatchBooking(booking.id, { preferredPartnerId });
 
     await prisma.auditLog.create({
       data: {
@@ -162,7 +191,7 @@ export async function createBooking(req: AuthedRequest, res: Response): Promise<
         action: "BOOKING_CREATE",
         entityType: "Booking",
         entityId: booking.id,
-        metadata: JSON.stringify({ serviceType: normalizedServiceType, serviceTypes }),
+        metadata: JSON.stringify({ serviceType: normalizedServiceType, serviceTypes, preferredPartnerId: preferredPartnerId ?? null }),
       },
     });
 
@@ -174,7 +203,19 @@ export async function createBooking(req: AuthedRequest, res: Response): Promise<
       note: "Booking created",
     });
 
-    sendSuccess(res, booking, "Booking created.", 201);
+    sendSuccess(
+      res,
+      {
+        ...booking,
+        // Tells the client whether their chosen person actually received the
+        // request, or whether it went to the available pool instead.
+        companionPreference: preferredPartnerId
+          ? { requested: preferredPartnerId, honoured: dispatchResult.preferredHonoured }
+          : null,
+      },
+      "Booking created.",
+      201
+    );
   } catch (err: any) {
     if (err?.code === "INSUFFICIENT_BALANCE") {
       sendError(res, err.message, 400, "INSUFFICIENT_BALANCE");
