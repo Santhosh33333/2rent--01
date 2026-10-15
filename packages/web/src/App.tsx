@@ -36,6 +36,7 @@ const ProfileCompletionPage = lazy(() => import('./pages/profile/ProfileCompleti
 // User pages
 const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage').then(m => ({ default: m.DashboardPage })))
 const ProfilePage = lazy(() => import('./pages/profile/ProfilePage').then(m => ({ default: m.ProfilePage })))
+const InvitePage = lazy(() => import('./pages/invite/InvitePage').then(m => ({ default: m.InvitePage })))
 const VerificationPage = lazy(() => import('./pages/verification/VerificationPage').then(m => ({ default: m.VerificationPage })))
 const AgreementsPage = lazy(() => import('./pages/verification/AgreementsPage').then(m => ({ default: m.AgreementsPage })))
   const LegalConsentPage = lazy(() => import('./pages/legal/LegalConsentPage').then(m => ({ default: m.LegalConsentPage })))
@@ -228,6 +229,7 @@ export function App() {
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/partner/apply" element={<PartnerGatePage />} />
               <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/invite" element={<InvitePage />} />
               <Route path="/verification" element={<VerificationPage />} />
               <Route path="/verification/step1" element={<KycStep1PersonalDetails />} />
               <Route path="/verification/step2" element={<KycStep2GovId />} />

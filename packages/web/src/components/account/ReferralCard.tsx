@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Copy, Gift, Check, Users, Sparkles, TriangleAlert } from 'lucide-react'
+import { Copy, Gift, Check, Users, Sparkles, TriangleAlert, Share2, MessageCircle } from 'lucide-react'
+import { QRCodeSVG } from 'qrcode.react'
 import { api } from '../../lib/api'
+import { useAuth } from '../../lib/auth'
+import { inviteLink, shareInvite, whatsappInviteUrl } from '../../lib/invite'
 import { Tilt } from '../motion/Tilt'
 import { getErrorMessage, getErrorDetail } from '../../lib/error'
 
@@ -50,10 +53,8 @@ interface ReferralProfile {
   stats: { invited: number; completed: number }
 }
 
-const SHARE_TEXT = (code: string) =>
-  `Join me on Nabri — people nearby for walks, events, dating and more. Use my code ${code} when you sign up.`
-
-export function ReferralCard({ className = '' }: { className?: string }) {
+export function ReferralCard({ className = '', showQr = false }: { className?: string; showQr?: boolean }) {
+  const { user } = useAuth()
   const [profile, setProfile] = useState<ReferralProfile | null>(null)
   const [copied, setCopied] = useState(false)
 const [error, setError] = useState<string | null>(null)
@@ -63,6 +64,7 @@ const [error, setError] = useState<string | null>(null)
   const [manualCode, setManualCode] = useState('')
   const [applyingManual, setApplyingManual] = useState(false)
   const [manualNote, setManualNote] = useState<string | null>(null)
+  const [linkCopied, setLinkCopied] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -172,23 +174,28 @@ const [error, setError] = useState<string | null>(null)
 
   const share = async () => {
     if (!profile?.code) return
-    const text = SHARE_TEXT(profile.code)
-    const url = `${window.location.origin}/register?ref=${encodeURIComponent(profile.code)}`
-    // Native share sheet on mobile, clipboard elsewhere.
-    if (typeof navigator.share === 'function') {
-      try {
-        await navigator.share({ title: 'Join me on Nabri', text, url })
-        return
-      } catch {
-        // The user dismissed the sheet, or it failed: fall through to copy.
-      }
-    }
-    try {
-      await navigator.clipboard.writeText(`${text} ${url}`)
+    const outcome = await shareInvite(profile.code, user?.name)
+    if (outcome === 'copied') {
       setCopied(true)
       window.setTimeout(() => setCopied(false), 2200)
-    } catch {
+    } else if (outcome === 'failed') {
       setError('Could not share. Copy the code and send it yourself.')
+    }
+  }
+
+  const shareWhatsApp = () => {
+    if (!profile?.code) return
+    window.open(whatsappInviteUrl(profile.code, user?.name), '_blank', 'noopener')
+  }
+
+  const copyLink = async () => {
+    if (!profile?.code) return
+    try {
+      await navigator.clipboard.writeText(inviteLink(profile.code))
+      setLinkCopied(true)
+      window.setTimeout(() => setLinkCopied(false), 2200)
+    } catch {
+      setError('Could not copy the link. Select it and copy it manually.')
     }
   }
 
@@ -252,6 +259,25 @@ const [error, setError] = useState<string | null>(null)
               {copied ? <Check className="h-5 w-5" aria-hidden /> : <Copy className="h-5 w-5" aria-hidden />}
             </button>
           </div>
+
+          {/* The link is what actually gets sent. Shown in full so it can be
+              copied by hand when the share sheet is unavailable. It points at
+              the deployed site, never at the app's internal https://localhost. */}
+          <button
+            type="button"
+            onClick={() => void copyLink()}
+            aria-label={linkCopied ? 'Invite link copied' : 'Copy invite link'}
+            className="mb-4 flex w-full items-center gap-2 rounded-2xl bg-white/60 px-3.5 py-2.5 text-left dark:bg-surface-800/40"
+          >
+            <span className="min-w-0 flex-1 truncate font-mono text-xs text-surface-600 dark:text-surface-400">
+              {inviteLink(profile.code)}
+            </span>
+            {linkCopied ? (
+              <Check className="h-4 w-4 shrink-0 text-emerald-500" aria-hidden />
+            ) : (
+              <Copy className="h-4 w-4 shrink-0 text-surface-500" aria-hidden />
+            )}
+          </button>
 
           <div className="mb-4 grid grid-cols-2 gap-3">
             <div className="rounded-2xl bg-white/60 px-3 py-2.5 dark:bg-surface-800/40">
@@ -360,16 +386,41 @@ const [error, setError] = useState<string | null>(null)
 
           {error && <p className="mb-3 text-xs font-medium text-amber-600 dark:text-amber-400">{error}</p>}
 
-          <Tilt max={6} lift={10} scale={1.01}>
-            <button
-              type="button"
-              onClick={share}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-violet-500 to-primary-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-primary-500/25 transition active:scale-[0.98]"
-            >
-              <Gift className="h-4 w-4" aria-hidden />
-              Share your code
-            </button>
-          </Tilt>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <Tilt max={6} lift={10} scale={1.01}>
+              <button
+                type="button"
+                onClick={shareWhatsApp}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#25D366] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/25 transition active:scale-[0.98]"
+              >
+                <MessageCircle className="h-4 w-4" aria-hidden />
+                Share on WhatsApp
+              </button>
+            </Tilt>
+            <Tilt max={6} lift={10} scale={1.01}>
+              <button
+                type="button"
+                onClick={share}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-violet-500 to-primary-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-primary-500/25 transition active:scale-[0.98]"
+              >
+                <Share2 className="h-4 w-4" aria-hidden />
+                Share your code
+              </button>
+            </Tilt>
+          </div>
+
+          {/* A scannable code for offline moments - a meetup, a classroom, a
+              shop counter - where sending a link is awkward. */}
+          {showQr && (
+            <div className="mt-4 flex flex-col items-center rounded-2xl bg-white/60 p-4 dark:bg-surface-800/40">
+              <div className="rounded-2xl bg-white p-3">
+                <QRCodeSVG value={inviteLink(profile.code)} size={156} level="M" includeMargin={false} />
+              </div>
+              <p className="mt-2.5 text-xs text-surface-500 dark:text-surface-400">
+                Scan to join with your code
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </section>

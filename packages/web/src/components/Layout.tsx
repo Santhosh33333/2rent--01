@@ -3,7 +3,7 @@ import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
 import { 
   Home, User, Wallet, Users, Sun, Moon, X, Bell, 
   MapPin, LogOut, Calendar, Settings, Shield, Info, LayoutDashboard, 
-  ClipboardList, Search, QrCode, Send, LifeBuoy 
+  ClipboardList, Search, QrCode, Send, LifeBuoy, Gift 
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { ImpersonationBanner } from './ImpersonationBanner';
@@ -93,6 +93,7 @@ const adminNav = [
 ];
 
 const sidebarLinks = [
+  { to: '/invite', icon: Gift, label: 'Invite & earn' },
   { to: '/settings', icon: Settings, label: 'Settings' },
   { to: '/notifications', icon: Bell, label: 'Notifications' },
   { to: '/support', icon: LifeBuoy, label: 'Help & support' },
@@ -280,6 +281,16 @@ export function Layout() {
             <Link to="/notifications" className="p-2 rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 transition relative">
               <Bell className="w-5 h-5" />
               <UnreadBadge />
+            </Link>
+            {/* One tap from every screen to the invite loop. Growth is word of
+                mouth for an app like this, so inviting a friend should not be
+                buried at the bottom of the profile. */}
+            <Link
+              to="/invite"
+              aria-label="Invite friends and earn"
+              className="p-2 rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 transition"
+            >
+              <Gift className="w-5 h-5" />
             </Link>
             {/* The avatar - not a hamburger - is how the drawer opens at every
                 width. The three-line button was removed because taps around it
