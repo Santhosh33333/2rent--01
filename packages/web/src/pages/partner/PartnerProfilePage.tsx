@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import {
   User, Star, Settings, Shield, Camera, ChevronRight, Award, Footprints,
-  Wallet, LogOut, Phone, Mail, CheckCircle, Package, FileText, Check, X, MessageCircle
+  Wallet, LogOut, Phone, Mail, CheckCircle, FileText, Check, X, MessageCircle
 } from 'lucide-react'
 import { useAuth } from '../../lib/auth'
 import { api } from '../../lib/api'
@@ -150,14 +150,9 @@ export function PartnerProfilePage() {
                 <h1 className="text-2xl sm:text-3xl font-bold font-display">{user?.name || 'Partner'}</h1>
               </div>
               <div className="flex items-center justify-center sm:justify-start gap-2 mt-2 flex-wrap">
-                {stats.serviceTypes.includes('WALKING') && (
+                {(stats.serviceTypes.includes('WALKING') || stats.serviceTypes.includes('CARRY_BUDDY')) && (
                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/20 text-xs font-semibold backdrop-blur-sm">
-                    <Footprints className="w-3 h-3" /> Walking
-                  </span>
-                )}
-                {stats.serviceTypes.includes('CARRY_BUDDY') && (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/20 text-xs font-semibold backdrop-blur-sm">
-                    <Package className="w-3 h-3" /> CarryBuddy
+                    <User className="w-3 h-3" /> Companion
                   </span>
                 )}
               </div>

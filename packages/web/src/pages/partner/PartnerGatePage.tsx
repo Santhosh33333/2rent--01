@@ -117,12 +117,12 @@ export function PartnerGatePage() {
           ) : (
             <div className="p-6 rounded-2xl bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-700">
               <h2 className="font-bold text-lg text-surface-900 dark:text-white text-center">Apply as Partner</h2>
-              <p className="mt-1 text-sm text-surface-500 dark:text-surface-400 text-center">Select the services you want to provide.</p>
+              <p className="mt-1 text-sm text-surface-500 dark:text-surface-400 text-center">Choose how you would like to help. Sessions are delivered inside the app by call or chat.</p>
 
               <div className="space-y-3 mt-5">
                 {[
-                  { key: 'walking', label: 'Walking Buddy', desc: 'Accompany users on walks, errands and events', checked: providesWalking, toggle: () => setProvidesWalking((v) => !v) },
-                  { key: 'carry', label: 'CarryBuddy', desc: 'Help users carry and deliver items safely', checked: providesCarry, toggle: () => setProvidesCarry((v) => !v) },
+                  { key: 'call', label: 'Call sessions', desc: 'Talk, Vent and Time-pass over a voice call', checked: providesWalking, toggle: () => setProvidesWalking((v) => !v) },
+                  { key: 'chat', label: 'Chat sessions', desc: 'Date and Friends over in-app chat', checked: providesCarry, toggle: () => setProvidesCarry((v) => !v) },
                 ].map((s) => (
                   <button key={s.key} type="button" onClick={s.toggle}
                     className={`w-full flex items-center gap-3 p-4 rounded-xl border transition-all active:scale-[0.99] ${
