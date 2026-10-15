@@ -42,8 +42,16 @@ export function HeroSection({ plans, signedIn }: HeroProps) {
         <div className="nb-rv">
           <Brand size={64} className="nb-logo--hero" />
 
+          {/*
+            The headline leads with "Meet People Nearby" on purpose: it is the
+            exact phrase the Play listing targets (title "Nabri: Meet People
+            Nearby") and the phrase people actually type into search. Keeping the
+            landing H1 in step with the store listing means a visitor who found
+            us through that term lands on a page that says the same thing, instead
+            of a generic tagline that has to re-earn the click.
+          */}
           <h1 id="nb-hero-h">
-            Meet People.
+            Meet People Nearby.
             <br />
             Discover <em>Experiences.</em>
             <br />
@@ -59,9 +67,12 @@ export function HeroSection({ plans, signedIn }: HeroProps) {
             <span>Travel</span>
           </p>
 
+          {/* One clear promise rather than a keyword list. It mirrors the store
+              short description so search, landing and install all say the same
+              thing, and it leads with what a visitor gets, not a feature dump. */}
           <p className="nb-lead">
-            Nabri brings dating, friendship, activities, movies, sports, events, communities,
-            travel and AI-powered discovery into one place.
+            Make friends, find dates, and discover events, films and meetups near you —
+            with verified members and neighbourhood-level locations.
           </p>
 
           <div className="nb-btns">
@@ -72,7 +83,7 @@ export function HeroSection({ plans, signedIn }: HeroProps) {
               rel={signedIn ? undefined : 'noopener noreferrer'}
             >
               <Download aria-hidden="true" />
-              {signedIn ? 'Open Nabri' : 'Try Nabri'}
+              {signedIn ? 'Open Nabri' : 'Get Nabri Free'}
             </a>
             <a className="nb-btn nb-btn--ghost" href="#vision">
               Explore the Future
