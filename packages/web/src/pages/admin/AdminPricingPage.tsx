@@ -4,6 +4,7 @@ import { AdminPageHeader } from '../../components/admin/AdminPageHeader'
 import { Beaker, Clock, Loader2, Percent, Plus, Save, ShieldCheck, Users } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { adminApi } from '../../lib/api'
+import { SERVICES } from '../../lib/serviceCatalog'
 
 interface PricingConfig {
   id: string
@@ -39,7 +40,7 @@ export function AdminPricingPage() {
   const [newValue, setNewValue] = useState('')
   const [newCategory, setNewCategory] = useState('USER')
 
-  const [simService, setSimService] = useState('WALKING')
+  const [simService, setSimService] = useState(SERVICES[0]?.key ?? 'TALK')
   const [simDuration, setSimDuration] = useState('30')
   const [simDistance, setSimDistance] = useState('0')
   const [simDraft, setSimDraft] = useState('')
@@ -450,8 +451,9 @@ export function AdminPricingPage() {
                     onChange={(e) => { setSimService(e.target.value); setSimResult(null) }}
                     className="rounded-md border border-slate-300 px-3 py-2 text-sm"
                   >
-                    <option value="WALKING">Walking</option>
-                    <option value="CARRY_BUDDY">CarryBuddy</option>
+                    {SERVICES.map((s) => (
+                      <option key={s.key} value={s.key}>{s.title}</option>
+                    ))}
                   </select>
                   <input
                     value={simDuration}

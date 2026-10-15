@@ -149,7 +149,7 @@ export function AdminWalkingPartnersPage() {
           <button
             onClick={() =>
               exportTableToPdf({
-                title: 'Walking Partners',
+                title: 'Companion Partners',
                 subtitle: `Page ${page} of ${totalPages}`,
                 columns: ['Name', 'Email', 'Phone', 'Status', 'Services', 'Joined'],
                 rows: partners.map((p) => [
@@ -228,7 +228,7 @@ export function AdminWalkingPartnersPage() {
                         <div className="hidden sm:flex gap-1">
                           {(partner.services || []).map((svc) => (
                             <span key={svc} className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${serviceBadge(svc)}`}>
-                              {svc === 'WALKING' ? 'Walking' : svc === 'CARRY_BUDDY' ? 'Carry' : svc}
+                              {svc === 'WALKING' ? 'Call' : svc === 'CARRY_BUDDY' ? 'Chat' : svc}
                             </span>
                           ))}
                         </div>
@@ -273,7 +273,7 @@ export function AdminWalkingPartnersPage() {
                           <div className="flex gap-2">
                             {partner.services.map((svc) => (
                               <span key={svc} className={`text-xs px-3 py-1 rounded-full font-medium ${serviceBadge(svc)}`}>
-                                {svc === 'WALKING' ? 'Walking Buddy' : svc === 'CARRY_BUDDY' ? 'CarryBuddy' : svc}
+                                {svc === 'WALKING' ? 'Call sessions' : svc === 'CARRY_BUDDY' ? 'Chat sessions' : svc}
                               </span>
                             ))}
                           </div>

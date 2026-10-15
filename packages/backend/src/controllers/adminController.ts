@@ -2083,7 +2083,7 @@ async function bumpPricingVersion(actorId: string): Promise<number> {
 export async function simulatePricing(req: AuthedRequest, res: Response): Promise<void> {
   try {
     const { serviceType, durationMinutes, distanceKm, draft } = req.body;
-    const stype = typeof serviceType === "string" && SERVICE_KEYS.includes(serviceType) ? serviceType : "WALKING";
+    const stype = typeof serviceType === "string" && SERVICE_KEYS.includes(serviceType) ? serviceType : SERVICE_KEYS[0];
     const result = await bookingEngine.simulatePrice({
       serviceType: stype,
       durationMinutes: durationMinutes ? Number(durationMinutes) : 30,
