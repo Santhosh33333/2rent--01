@@ -4,6 +4,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { inviteLink, shareInvite, whatsappInviteUrl } from '../../lib/invite'
+import { openExternalUrl } from '../../lib/externalLink'
 import { Tilt } from '../motion/Tilt'
 import { getErrorMessage, getErrorDetail } from '../../lib/error'
 
@@ -185,7 +186,9 @@ const [error, setError] = useState<string | null>(null)
 
   const shareWhatsApp = () => {
     if (!profile?.code) return
-    window.open(whatsappInviteUrl(profile.code, user?.name), '_blank', 'noopener')
+    // `_system` hands the wa.me URL to the system so the WhatsApp app opens; a
+    // plain window.open is silently dropped inside the Android WebView.
+    openExternalUrl(whatsappInviteUrl(profile.code, user?.name))
   }
 
   const copyLink = async () => {
