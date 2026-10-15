@@ -24,7 +24,7 @@ const OPTIONS: Array<{
     key: 'PARTNER',
     icon: Handshake,
     title: 'PARTNER',
-    description: 'Provide Walking Buddy and CarryBuddy services',
+    description: 'Offer call and chat companionship sessions',
     gradient: 'from-accent-400 to-accent-600',
     selectedRing: 'border-accent-500 bg-accent-500/10 ring-2 ring-accent-500/40',
   },

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../../lib/auth'
 import { api } from '../../lib/api'
+import { serviceTitle } from '../../lib/serviceCatalog'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
 import { SkeletonLoader } from '../../components/SkeletonLoader'
@@ -251,7 +252,7 @@ export function PartnerDashboardPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-surface-900 dark:text-white truncate">
-                  {activeJob.startLocation || activeJob.serviceType}
+                  {serviceTitle(activeJob.serviceType)}
                 </p>
                 <p className="text-xs text-surface-500 mt-0.5">
                   {activeJob.status.replace(/_/g, ' ')}
@@ -432,7 +433,7 @@ export function PartnerDashboardPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-surface-900 dark:text-white truncate">
-                      {job.startLocation || job.serviceType}
+                      {serviceTitle(job.serviceType)}
                     </p>
                     <p className="text-xs text-surface-500">
                       {job.status.replace(/_/g, ' ')}

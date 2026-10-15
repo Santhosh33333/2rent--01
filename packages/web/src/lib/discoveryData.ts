@@ -3,8 +3,6 @@ import {
   Heart,
   Users,
   Clapperboard,
-  Footprints,
-  Package,
   Plane,
   CalendarDays,
   UsersRound,
@@ -21,8 +19,6 @@ export type DiscoveryCategoryKey =
   | 'dating'
   | 'friendship'
   | 'movies'
-  | 'walking-buddy'
-  | 'carrybuddy'
   | 'travel'
   | 'events'
   | 'communities'
@@ -92,30 +88,6 @@ export const DISCOVERY_CATEGORIES: DiscoveryCategory[] = [
     filters: ['Genre', 'Language', 'Release date', 'Rating', 'Theatre'],
     safetyRules: ['No ticket guarantees until API connection', 'Use real listings or empty states', 'Meetup privacy controls'],
     workflow: ['Pick a movie', 'Check screening details', 'Create meetup or invite friends', 'RSVP'],
-    recommendations: [],
-  },
-  {
-    key: 'walking-buddy',
-    label: 'Walking Buddy',
-    summary: 'Book safe walking sessions with verified profiles and local routes.',
-    icon: Footprints,
-    accent: 'from-emerald-500 to-teal-600',
-    volume: 'Active',
-    filters: ['Distance', 'Time', 'Route type', 'Availability', 'Rating'],
-    safetyRules: ['Walking booking stays separate from social activities', 'Share only general location', 'Emergency contact visibility can be managed'],
-    workflow: ['Choose time and route', 'Confirm partner availability', 'Track ride progress', 'Complete and rate'],
-    recommendations: [],
-  },
-  {
-    key: 'carrybuddy',
-    label: 'CarryBuddy',
-    summary: 'Match with trusted helpers for errands, pickups, and drop-offs.',
-    icon: Package,
-    accent: 'from-amber-500 to-orange-600',
-    volume: 'Errands',
-    filters: ['Trip type', 'Distance', 'Schedule', 'Price', 'Verification'],
-    safetyRules: ['Do not expose exact home address', 'Use booking contracts for value-based tasks', 'Report suspicious activity quickly'],
-    workflow: ['Create task request', 'Approve helper', 'Track progress', 'Rate after completion'],
     recommendations: [],
   },
   {
@@ -287,8 +259,6 @@ export const QUICK_ACTIONS: QuickAction[] = [
   { key: 'music', label: 'Music', route: '/music', subtitle: 'Live rooms' },
   { key: 'sports', label: 'Sports', route: '/sports', subtitle: 'Games near you' },
   { key: 'ai-assistant', label: 'AI Assistant', route: '/ai', subtitle: 'Ask anything' },
-  { key: 'walking-buddy', label: 'Walking Buddy', route: '/walking-requests', subtitle: 'Book a walk' },
-  { key: 'carrybuddy', label: 'Carry', route: '/discover/carrybuddy', subtitle: 'Errands & pickups' },
   { key: 'travel', label: 'Travel', route: '/discover/travel', subtitle: 'Plan a trip' },
   { key: 'food', label: 'Food', route: '/discover/food', subtitle: 'Places & meetups' },
   { key: 'fitness', label: 'Fitness', route: '/discover/fitness', subtitle: 'Partners & sessions' },

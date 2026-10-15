@@ -157,12 +157,12 @@ function NearbyPartners() {
                 </p>
                 <p className="text-xs text-surface-500 flex items-center gap-1 mt-0.5">
                   <Star className="w-3 h-3 text-amber-500" />
-                  {Number(p.rating || 0).toFixed(1)} · {p.completedJobs} jobs · {p.services.join(' + ') || 'services'}
+                  {Number(p.rating || 0).toFixed(1)} · {p.completedJobs} jobs · available now
                 </p>
               </div>
               <div className="flex flex-col gap-1.5 shrink-0">
                 <Link
-                  to={`/bookings/create${p.services.includes('carry') && !p.services.includes('walking') ? '?type=CARRY' : ''}`}
+                  to="/bookings/create"
                   className="rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white text-center"
                 >
                   Book

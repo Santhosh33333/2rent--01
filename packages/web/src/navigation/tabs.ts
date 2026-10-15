@@ -21,7 +21,6 @@ import {
   LayoutDashboard,
   ClipboardList,
   MapPin,
-  Package,
   Rss,
   Plus,
   BriefcaseBusiness,
@@ -112,15 +111,6 @@ export const PARTNER_MORE: NavGroup[] = [
       { to: "/partner/wallet", label: "Wallet", icon: Wallet },
       { to: "/partner/performance", label: "Performance", icon: ClipboardList },
       { to: "/partner/profile", label: "Partner profile", icon: User },
-    ],
-  },
-  {
-    title: "Carry buddy",
-    items: [
-      { to: "/carry/dashboard", label: "Carry dashboard", icon: Package },
-      { to: "/carry/jobs", label: "Carry jobs", icon: ClipboardList },
-      { to: "/carry/route", label: "My route", icon: MapPin },
-      { to: "/carry/earnings", label: "Earnings", icon: Wallet },
     ],
   },
   {

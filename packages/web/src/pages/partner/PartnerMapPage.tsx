@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
 import {
-  Navigation, List, Loader2, Footprints, Package, User, MapPin
+  Navigation, List, Loader2, User, MapPin
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { api } from '../../lib/api'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
 import { LiveMap, MapPoint } from '../../components/LiveMap'
+import { serviceTitle, serviceIcon, serviceAccent, serviceRequiresDropoff } from '../../lib/serviceCatalog'
 
 interface NearbyBooking {
   id: string
@@ -111,15 +112,13 @@ export function PartnerMapPage() {
             {nearby.map((booking) => (
               <GlassCard key={booking.id} variant="elevated" padding="sm">
                 <div className="flex items-center gap-4">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-md flex-shrink-0 ${
-                    booking.serviceType === 'WALKING' ? 'bg-gradient-to-br from-emerald-500 to-emerald-600' : 'bg-gradient-to-br from-amber-500 to-orange-600'
-                  }`}>
-                    {booking.serviceType === 'WALKING' ? <Footprints className="w-4 h-4 text-white" /> : <Package className="w-4 h-4 text-white" />}
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-md flex-shrink-0 bg-gradient-to-br ${serviceAccent(booking.serviceType)}`}>
+                    <span className="text-lg">{serviceIcon(booking.serviceType)}</span>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-surface-900 dark:text-white truncate">{booking.startLocation}</p>
+                    <p className="text-sm font-semibold text-surface-900 dark:text-white truncate">{serviceTitle(booking.serviceType)}</p>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-xs text-surface-500">{booking.serviceType === 'WALKING' ? 'Walking' : 'Carry'}</span>
+                      <span className="text-xs text-surface-500">{serviceRequiresDropoff(booking.serviceType) ? (booking.startLocation || 'Pickup') : 'In-app call / chat'}</span>
                       {booking.user?.fullName && <span className="text-xs text-surface-400 flex items-center gap-1"><User className="w-3 h-3" /> {booking.user.fullName}</span>}
                     </div>
                   </div>

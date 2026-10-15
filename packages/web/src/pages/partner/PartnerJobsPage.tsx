@@ -2,13 +2,14 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ClipboardList, MapPin, Clock, CheckCircle, XCircle, Navigation,
-  Search, Footprints, Package, ArrowRight, User, Loader2
+  Search, Footprints, Video, ArrowRight, User, Loader2
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { api } from '../../lib/api'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
 import { EmptyState } from '../../components/EmptyState'
+import { serviceTitle, serviceIcon, serviceAccent, serviceRequiresDropoff } from '../../lib/serviceCatalog'
 
 interface Job {
   id: string
@@ -156,20 +157,22 @@ export function PartnerJobsPage() {
                 <div className="p-5">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-4">
-                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-md flex-shrink-0 ${
-                        job.serviceType === 'WALKING'
-                          ? 'bg-gradient-to-br from-primary-500 to-primary-700 shadow-primary-500/20'
-                          : 'bg-gradient-to-br from-accent-400 to-accent-500 shadow-accent-500/20'
-                      }`}>
-                        {job.serviceType === 'WALKING' ? <Footprints className="w-5 h-5 text-white" /> : <Package className="w-5 h-5 text-white" />}
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-md flex-shrink-0 bg-gradient-to-br ${serviceAccent(job.serviceType)}`}>
+                        <span className="text-xl">{serviceIcon(job.serviceType)}</span>
                       </div>
                       <div className="min-w-0">
-                        <h3 className="text-base font-bold font-display text-surface-900 dark:text-white capitalize">
-                          {job.serviceType === 'WALKING' ? 'Walking Buddy' : 'CarryBuddy'}
+                        <h3 className="text-base font-bold font-display text-surface-900 dark:text-white">
+                          {serviceTitle(job.serviceType)}
                         </h3>
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
-                          <span className="flex items-center gap-1 text-xs text-surface-500"><MapPin className="w-3 h-3" /> {job.startLocation || 'Pickup'}</span>
-                          {job.endLocation && job.endLocation !== job.startLocation && <span className="flex items-center gap-1 text-xs text-surface-500"><Navigation className="w-3 h-3" /> {job.endLocation}</span>}
+                          {serviceRequiresDropoff(job.serviceType) ? (
+                            <>
+                              <span className="flex items-center gap-1 text-xs text-surface-500"><MapPin className="w-3 h-3" /> {job.startLocation || 'Pickup'}</span>
+                              {job.endLocation && job.endLocation !== job.startLocation && <span className="flex items-center gap-1 text-xs text-surface-500"><Navigation className="w-3 h-3" /> {job.endLocation}</span>}
+                            </>
+                          ) : (
+                            <span className="flex items-center gap-1 text-xs text-surface-500"><Video className="w-3 h-3" /> In-app call / chat</span>
+                          )}
                           <span className="flex items-center gap-1 text-xs text-surface-500">
                             <Clock className="w-3 h-3" />
                             {job.scheduledAt ? new Date(job.scheduledAt).toLocaleString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'ASAP'}
