@@ -12,11 +12,13 @@ import {
 } from "./requestsApi";
 
 /**
- * Requests tab.
+ * The Inbox tab (route `/requests`).
  *
  * One inbox for "things waiting on me": service bookings and received dating
  * likes. Both halves come from live endpoints, and either half failing degrades
- * to the other rather than emptying the screen.
+ * to the other rather than emptying the screen. The heading reads "Inbox" to
+ * match the tab that opens it; the route keeps its original name so existing
+ * links and the backend contract are untouched.
  */
 export function RequestsPage() {
   const [items, setItems] = useState<UnifiedRequest[]>([]);
@@ -66,7 +68,7 @@ export function RequestsPage() {
     <div className="mx-auto w-full max-w-2xl pb-24">
       <header className="mb-5">
         <h1 className="text-2xl font-bold tracking-tight text-surface-900 dark:text-white">
-          Requests
+          Inbox
         </h1>
         <p className="mt-1 text-sm text-surface-500 dark:text-surface-400">
           {loading

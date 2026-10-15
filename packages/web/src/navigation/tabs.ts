@@ -3,6 +3,7 @@ import {
   Home,
   Compass,
   Inbox,
+  MessageCircle,
   User,
   Calendar,
   Users,
@@ -57,7 +58,11 @@ export const PRIMARY_TABS: NavItem[] = [
   { to: "/home", label: "Home", icon: Home },
   { to: "/discover", label: "Discover", icon: Compass },
   { to: "/feed/new", label: "Create", icon: Plus, matchPrefix: "/feed/new" },
-  { to: "/messages", label: "Inbox", icon: Inbox, matchPrefix: "/messages" },
+  // The Inbox tab surfaces "things waiting on me" (incoming likes + booking
+  // requests). Conversations live one tap away in More → Messages, so the
+  // fourth slot answers "is anything waiting for me?" rather than duplicating
+  // the chat list that discovery links into directly.
+  { to: "/requests", label: "Inbox", icon: Inbox, matchPrefix: "/requests" },
   { to: "/profile", label: "Profile", icon: User },
 ];
 
@@ -67,7 +72,7 @@ export const USER_MORE: NavGroup[] = [
     title: "My activity",
     items: [
       { to: "/feed", label: "Feed", icon: Rss, matchPrefix: "/feed" },
-      { to: "/requests", label: "Requests", icon: ClipboardList, matchPrefix: "/requests" },
+      { to: "/messages", label: "Messages", icon: MessageCircle, matchPrefix: "/messages" },
       { to: "/bookings", label: "Bookings", icon: Calendar, matchPrefix: "/bookings" },
       { to: "/communities", label: "Communities", icon: Users, matchPrefix: "/communities" },
       { to: "/wallet", label: "Wallet", icon: Wallet, matchPrefix: "/wallet" },
