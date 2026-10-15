@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  Footprints, Package, MapPin,
+  Footprints, Package, MapPin, Users, Sparkles,
   FileText, CreditCard, CheckCircle, ArrowLeft, ArrowRight, Loader2
 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -14,6 +14,19 @@ import { LocationInput } from '../../components/LocationInput'
 import { SERVICES, serviceOption, serviceTitle, serviceRequiresItem, serviceRequiresDropoff } from '../../lib/serviceCatalog'
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6
+
+// A person who can take a call/chat right now, as returned by
+// GET /bookings/companions. Public profile fields only.
+interface OnlineCompanion {
+  partnerId: string
+  userId: string
+  displayName: string
+  avatarUrl: string | null
+  city: string | null
+  rating: number
+  completedJobs: number
+  isOnline: boolean
+}
 type ServiceType = string
 
 interface BookingData {
@@ -132,6 +145,14 @@ export function CreateBookingPage() {
   const [createdBookingId, setCreatedBookingId] = useState<string | null>(null)
   // How the customer wants to connect — every service is delivered in-app.
   const [connectMode, setConnectMode] = useState<'CALL' | 'CHAT'>('CHAT')
+  // Who the user wants to talk to. `null` means "surprise me" — the backend
+  // then sends the request to any available person.
+  const [companions, setCompanions] = useState<OnlineCompanion[]>([])
+  const [companionsLoading, setCompanionsLoading] = useState(false)
+  const [chosenPartnerId, setChosenPartnerId] = useState<string | null>(null)
+  // What actually happened to a hand-picked choice (the person may have gone
+  // offline between the list loading and the booking being created).
+  const [preferenceNote, setPreferenceNote] = useState<{ name: string; honoured: boolean } | null>(null)
 
   const updateBooking = (data: Partial<BookingData>) => {
     setBooking((prev) => ({ ...prev, ...data }))
@@ -207,6 +228,29 @@ export function CreateBookingPage() {
   // pickup or destination — step 2 is the call/chat choice instead.
   const isRemote = !serviceRequiresDropoff(booking.serviceType)
 
+  // Load real presence for the "who's online now" picker when step 2 opens.
+  // Refetched on each entry so the list is never stale by the time they book.
+  useEffect(() => {
+    if (step !== 2 || !isRemote) return
+    let current = true
+    setCompanionsLoading(true)
+    api
+      .get('/bookings/companions', { params: { limit: 30 }, timeout: 15000 })
+      .then((r) => {
+        const d = r.data?.data || r.data
+        if (current) setCompanions(Array.isArray(d?.items) ? d.items : [])
+      })
+      .catch(() => {
+        if (current) setCompanions([])
+      })
+      .finally(() => {
+        if (current) setCompanionsLoading(false)
+      })
+    return () => {
+      current = false
+    }
+  }, [step, isRemote])
+
   const canProceed = () => {
     switch (step) {
       case 1: return !!booking.serviceType
@@ -258,10 +302,21 @@ export function CreateBookingPage() {
           ? `Connect by ${connectMode === 'CALL' ? 'call' : 'chat'}`
           : booking.itemDescription || undefined,
         sameGenderOnly: booking.sameGenderOnly || undefined,
+        preferredPartnerId: chosenPartnerId ?? undefined,
       })
       const data = res.data?.data || res.data
       const id = data?.id || data?.bookingId
       setCreatedBookingId(id)
+
+      // Report what happened to a hand-picked companion: if they dropped
+      // offline the request was sent to the available pool instead.
+      const pref = data?.companionPreference
+      if (pref && pref.requested) {
+        const picked = companions.find((c) => c.partnerId === pref.requested)
+        setPreferenceNote({ name: picked?.displayName || 'the person you chose', honoured: !!pref.honoured })
+      } else {
+        setPreferenceNote(null)
+      }
 
       setStep(6)
       toast.success('Booking confirmed! Paid from your wallet.')
@@ -296,8 +351,15 @@ export function CreateBookingPage() {
               <CheckCircle className="w-10 h-10 text-white" />
             </div>
             <h1 className="text-2xl font-bold font-display text-surface-900 dark:text-white mb-2">Booking Confirmed!</h1>
-            <p className="text-surface-500 dark:text-surface-400 mb-8">Your {serviceTitle(booking.serviceType).toLowerCase()} booking has been created and payment processed.</p>
-            <div className="space-y-3">
+            <p className="text-surface-500 dark:text-surface-400 mb-3">Your {serviceTitle(booking.serviceType).toLowerCase()} booking has been created and payment processed.</p>
+            {preferenceNote && (
+              <p className="text-sm text-surface-500 dark:text-surface-400 mb-3">
+                {preferenceNote.honoured
+                  ? `We've sent your request to ${preferenceNote.name}. They'll accept it when they're ready.`
+                  : `${preferenceNote.name} just went offline, so your request went to other available people instead.`}
+              </p>
+            )}
+            <div className="space-y-3 mt-8">
               {createdBookingId && (
                 <button onClick={() => navigate(`/bookings/${createdBookingId}`)} className="w-full btn-primary">
                   View Booking
@@ -415,6 +477,84 @@ export function CreateBookingPage() {
                         </button>
                       )
                     })}
+                  </div>
+
+                  <div className="pt-2">
+                    <h3 className="text-sm font-semibold text-surface-900 dark:text-white mb-1">Who do you want to talk to?</h3>
+                    <p className="text-xs text-surface-500 dark:text-surface-400 mb-3">
+                      Pick someone who is online right now, or let us choose for you.
+                    </p>
+                    {companionsLoading ? (
+                      <div className="space-y-2">
+                        {[1, 2, 3].map((i) => (
+                          <div key={i} className="h-16 rounded-xl bg-surface-100 dark:bg-surface-800 animate-pulse" />
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <button
+                          type="button"
+                          onClick={() => setChosenPartnerId(null)}
+                          className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${
+                            chosenPartnerId === null
+                              ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/10'
+                              : 'border-surface-200 dark:border-surface-700 hover:border-surface-300 dark:hover:border-surface-600'
+                          }`}
+                        >
+                          <span className="w-10 h-10 rounded-full bg-gradient-to-br from-fuchsia-500 to-violet-600 flex items-center justify-center shrink-0">
+                            <Sparkles className="w-5 h-5 text-white" />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-semibold text-surface-900 dark:text-white">Surprise me</span>
+                            <span className="block text-xs text-surface-500">Send to any available person</span>
+                          </span>
+                          {chosenPartnerId === null && <CheckCircle className="w-5 h-5 text-indigo-600 shrink-0" />}
+                        </button>
+
+                        {companions.length === 0 ? (
+                          <p className="text-xs text-surface-500 dark:text-surface-400 px-1 py-2">
+                            No one is online at this moment. Your request will go to the first available person.
+                          </p>
+                        ) : (
+                          companions.map((c) => {
+                            const active = chosenPartnerId === c.partnerId
+                            return (
+                              <button
+                                key={c.partnerId}
+                                type="button"
+                                onClick={() => setChosenPartnerId(c.partnerId)}
+                                className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${
+                                  active
+                                    ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/10'
+                                    : 'border-surface-200 dark:border-surface-700 hover:border-surface-300 dark:hover:border-surface-600'
+                                }`}
+                              >
+                                {c.avatarUrl ? (
+                                  <img src={c.avatarUrl} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
+                                ) : (
+                                  <span className="w-10 h-10 rounded-full bg-surface-200 dark:bg-surface-700 flex items-center justify-center text-surface-600 dark:text-surface-300 shrink-0">
+                                    <Users className="w-5 h-5" />
+                                  </span>
+                                )}
+                                <span className="min-w-0 flex-1">
+                                  <span className="flex items-center gap-2">
+                                    <span className="text-sm font-semibold text-surface-900 dark:text-white truncate">{c.displayName || 'Companion'}</span>
+                                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 shrink-0">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                      Online
+                                    </span>
+                                  </span>
+                                  <span className="block text-xs text-surface-500 truncate">
+                                    {c.city ? `${c.city} · ` : ''}{c.rating > 0 ? `${c.rating.toFixed(1)} rating` : 'New here'}
+                                  </span>
+                                </span>
+                                {active && <CheckCircle className="w-5 h-5 text-indigo-600 shrink-0" />}
+                              </button>
+                            )
+                          })
+                        )}
+                      </div>
+                    )}
                   </div>
                 </>
               ) : (
