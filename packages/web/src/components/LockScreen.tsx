@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { MAX_PIN_LENGTH, MIN_PIN_LENGTH, useAppLock } from "../lib/appLock";
+import { useScreenLock } from "../hooks/useScreenLock";
 
 const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "⌫"];
 
@@ -9,6 +10,10 @@ export function LockScreen() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // While this screen is up, the system Back button must not dismiss it - the
+  // only ways out are the PIN or an explicit sign-out.
+  useScreenLock(true);
 
   // The keypad auto-submits, so it has to know how long the stored PIN is.
   // A hash carries no length; without this the screen submitted at four digits

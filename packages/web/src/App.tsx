@@ -229,7 +229,6 @@ export function App() {
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/partner/apply" element={<PartnerGatePage />} />
               <Route path="/profile" element={<ProfilePage />} />
-              <Route path="/invite" element={<InvitePage />} />
               <Route path="/verification" element={<VerificationPage />} />
               <Route path="/verification/step1" element={<KycStep1PersonalDetails />} />
               <Route path="/verification/step2" element={<KycStep2GovId />} />
@@ -303,6 +302,10 @@ export function App() {
               <Route path="/wallet/withdraw" element={<WithdrawalPage />} />
               <Route path="/wallet/transactions" element={<TransactionHistoryPage />} />
               <Route path="/wallet/history" element={<TransactionHistoryPage />} />
+              {/* Invite & earn is word-of-mouth growth, so both customer and
+                  partner surfaces get it (the referral endpoints only require an
+                  authenticated account). */}
+              <Route path="/invite" element={<InvitePage />} />
             </Route>
           </Route>
 

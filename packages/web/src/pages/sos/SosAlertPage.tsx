@@ -10,6 +10,7 @@ import { EmptyState } from '../../components/EmptyState'
 import { LiveMap } from '../../components/LiveMap'
 import { getErrorMessage } from '../../lib/error'
 import { openExternalUrl } from '../../lib/externalLink'
+import { useScreenLock } from '../../hooks/useScreenLock'
 
 interface SosAlertDetail {
   id: string
@@ -31,6 +32,11 @@ export function SosAlertPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+
+  // A live SOS for its own owner is a screen they must not be able to back out
+  // of: the alert stays active until it is cancelled. Admins watching someone
+  // else's alert are free to leave.
+  useScreenLock(alert?.status === 'ACTIVE' && viewerRole === 'OWNER')
 
   const load = async () => {
     if (!alertId) return

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mic, MicOff, PhoneOff, Phone, Volume2, VolumeX } from 'lucide-react';
 import { useInAppCall, formatCallDuration, registerCallController, type CallPeer } from '../hooks/useInAppCall';
+import { useScreenLock } from '../hooks/useScreenLock';
 import { callApi, type CallTerms } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { Avatar } from './Avatar';
@@ -78,6 +79,10 @@ export default function CallOverlay() {
     toggleMute,
     toggleSpeaker,
   } = call;
+
+  // An in-progress call owns the screen: Back must not drop the user out of it
+  // (the way out is End call / Decline). Idle releases the lock.
+  useScreenLock(state !== 'idle');
 
   // Publish this instance to the call registry so CallUserButton and the pages
   // start calls through this state machine. That path takes the microphone

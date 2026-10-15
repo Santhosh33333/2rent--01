@@ -284,14 +284,17 @@ export function Layout() {
             </Link>
             {/* One tap from every screen to the invite loop. Growth is word of
                 mouth for an app like this, so inviting a friend should not be
-                buried at the bottom of the profile. */}
-            <Link
-              to="/invite"
-              aria-label="Invite friends and earn"
-              className="p-2 rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 transition"
-            >
-              <Gift className="w-5 h-5" />
-            </Link>
+                buried at the bottom of the profile. Admin surfaces have no
+                referral profile, so they do not get the entry. */}
+            {!isAdminTierRole(activeRole) && (
+              <Link
+                to="/invite"
+                aria-label="Invite friends and earn"
+                className="p-2 rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 transition"
+              >
+                <Gift className="w-5 h-5" />
+              </Link>
+            )}
             {/* The avatar - not a hamburger - is how the drawer opens at every
                 width. The three-line button was removed because taps around it
                 did not register reliably on both web and app, and it squeezed a
@@ -389,7 +392,9 @@ export function Layout() {
                 <div>
                   <p className="px-3 text-[10px] font-black uppercase tracking-widest text-surface-400 mb-3">System</p>
                   <div className="space-y-1">
-                    {sidebarLinks.map(({ to, icon: Icon, label }) => (
+                    {sidebarLinks
+                      .filter(({ to }) => to !== '/invite' || !isAdminTierRole(activeRole))
+                      .map(({ to, icon: Icon, label }) => (
                       <Link
                         key={to} to={to}
                         className={`flex items-center gap-3 px-3 py-3 rounded-2xl text-sm transition-all ${location.pathname === to ? 'bg-primary-500 text-white shadow-md shadow-primary-500/20' : 'text-surface-600 dark:text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-800'}`}
