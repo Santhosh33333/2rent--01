@@ -12,15 +12,29 @@ import { Share } from '@capacitor/share'
  */
 const CONFIGURED_ORIGIN = (import.meta.env.VITE_PUBLIC_WEB_ORIGIN as string | undefined)?.trim()
 
-export const PUBLIC_WEB_ORIGIN = (
-  CONFIGURED_ORIGIN && CONFIGURED_ORIGIN.length > 0
-    ? CONFIGURED_ORIGIN
-    : import.meta.env.PROD
-      ? 'https://2rent-01.vercel.app'
-      : typeof window !== 'undefined'
-        ? window.location.origin
-        : 'https://2rent-01.vercel.app'
-).replace(/\/+$/, '')
+/**
+ * The published site, used only when no browser origin is meaningful. The
+ * installed app is served from https://localhost, so a web origin can only be
+ * trusted when we are genuinely on the web - and on the web the shared link
+ * should follow whichever domain the user is browsing (yuvers.in, a Vercel
+ * preview, ...) rather than pinning one. That is also why the env override is
+ * optional: without it, invites still point at a live copy of the app.
+ */
+const FALLBACK_ORIGIN = 'https://2rent-01.vercel.app'
+
+function resolveOrigin(): string {
+  if (CONFIGURED_ORIGIN && CONFIGURED_ORIGIN.length > 0) return CONFIGURED_ORIGIN
+  if (
+    typeof window !== 'undefined' &&
+    !Capacitor.isNativePlatform() &&
+    /^https?:$/.test(window.location.protocol)
+  ) {
+    return window.location.origin
+  }
+  return FALLBACK_ORIGIN
+}
+
+export const PUBLIC_WEB_ORIGIN = resolveOrigin().replace(/\/+$/, '')
 
 /** The link a friend taps. RegisterPage reads `?ref=` and prefills the code. */
 export function inviteLink(code: string): string {

@@ -13,8 +13,9 @@ Growth only works if the invite actually works. Two real bugs were in the way:
 - **Invite links were dead.** The share button built the link from
   `window.location.origin`. Inside the installed app the WebView is served from
   `https://localhost`, so every shared link was `https://localhost/register?ref=…`
-  — unusable for anyone else. Links now always point at the public site
-  (`https://2rent-01.vercel.app`, override with `VITE_PUBLIC_WEB_ORIGIN`).
+  — unusable for anyone else. Links now resolve to the domain the user is
+  actually on (web) and to the published site inside the app
+  (`https://2rent-01.vercel.app`; override with `VITE_PUBLIC_WEB_ORIGIN`).
 - **Sharing was web-only and buried.** Share now uses the native Android share
   sheet (so WhatsApp / Telegram / SMS appear), adds a one-tap **Share on
   WhatsApp** button, shows a copyable link, and offers a **scannable QR**.
