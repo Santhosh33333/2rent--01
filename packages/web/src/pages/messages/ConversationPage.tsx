@@ -1008,7 +1008,7 @@ export function ConversationPage() {
         )}
 
         {/* Input Area */}
-        <div className="p-4 border-t border-surface-100 dark:border-surface-800">
+        <div className="p-4 border-t border-surface-100 dark:border-surface-800 safe-bottom">
           {replyTarget && (
             <div className="mb-2 flex items-center gap-2 rounded-2xl bg-surface-100 dark:bg-surface-800 px-3 py-2">
               <div className="w-1 self-stretch rounded-full bg-primary-500 shrink-0" />

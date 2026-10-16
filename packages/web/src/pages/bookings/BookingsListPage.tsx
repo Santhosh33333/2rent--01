@@ -26,7 +26,7 @@ interface Booking {
   }
 }
 
-type TabType = 'ACTIVE' | 'PAST' | 'CANCELLED' | 'ALL'
+type TabType = 'ACTIVE' | 'PAST' | 'ALL'
 
 const statusConfig: Record<string, { label: string; badge: string }> = {
   PENDING: { label: 'Pending', badge: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
@@ -62,7 +62,6 @@ export function BookingsListPage() {
     let matchesTab = false
     if (activeTab === 'ACTIVE') matchesTab = activeStatuses.includes(b.status)
     else if (activeTab === 'PAST') matchesTab = pastStatuses.includes(b.status)
-    else if (activeTab === 'CANCELLED') matchesTab = b.status === 'CANCELLED'
     else matchesTab = true
 
     const matchesSearch = search
@@ -77,7 +76,6 @@ export function BookingsListPage() {
   const tabs: { key: TabType; label: string }[] = [
     { key: 'ACTIVE', label: 'Active' },
     { key: 'PAST', label: 'Past' },
-    { key: 'CANCELLED', label: 'Cancelled' },
     { key: 'ALL', label: 'All' },
   ]
 
