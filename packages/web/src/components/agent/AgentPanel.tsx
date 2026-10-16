@@ -37,7 +37,7 @@ import { AgentToolActivityList, AgentTypingIndicator } from './AgentToolActivity
 const STARTER_PROMPTS = [
   'Am I subscribed right now?',
   'What can you do for me?',
-  'Find walking partners near me',
+  'Find a companion near me',
   'Show my recent payments',
 ]
 

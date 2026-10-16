@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Wallet, ArrowDownRight, Receipt, ShoppingCart, Zap } from 'lucide-react'
+import { Wallet, ArrowDownRight, Receipt, ShoppingCart, Zap, Compass } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { AnimatedPage } from '../../components/AnimatedPage'
@@ -90,8 +90,10 @@ export function WalletPage() {
             </div>
 
             <div className="flex flex-wrap gap-3 mt-8">
-              <Link to="/walking-requests/create" className="px-6 py-3 rounded-2xl bg-white/15 hover:bg-white/25 text-sm font-semibold transition-all flex items-center gap-2 backdrop-blur-sm">
-                <ShoppingCart className="w-4 h-4" /> Book a Walk
+              {/* Walking/carry are retired from the catalogue, so the money
+                  surface points at Discover, where the live services are. */}
+              <Link to="/discover" className="px-6 py-3 rounded-2xl bg-white/15 hover:bg-white/25 text-sm font-semibold transition-all flex items-center gap-2 backdrop-blur-sm">
+                <Compass className="w-4 h-4" /> Find a companion
               </Link>
               <Link to="/wallet/topup" className="px-6 py-3 rounded-2xl bg-white/15 hover:bg-white/25 text-sm font-semibold transition-all flex items-center gap-2 backdrop-blur-sm">
                 <Zap className="w-4 h-4" /> Top Up
@@ -142,9 +144,9 @@ export function WalletPage() {
                 <Wallet className="w-8 h-8 text-surface-400" />
               </div>
               <h3 className="font-bold text-surface-900 dark:text-surface-100 mb-1 font-display">No transactions yet</h3>
-              <p className="text-sm text-surface-500 dark:text-surface-400">Book a walk or carry service to get started</p>
-              <Link to="/walking-requests/create" className="mt-4 inline-block btn-primary btn-sm">
-                Book a Walk
+              <p className="text-sm text-surface-500 dark:text-surface-400">Book a session or join an event to get started</p>
+              <Link to="/discover" className="mt-4 inline-block btn-primary btn-sm">
+                Find a companion
               </Link>
             </div>
           ) : (
