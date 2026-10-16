@@ -749,7 +749,7 @@ export function ConversationPage() {
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 glass-card mt-4 overflow-hidden flex flex-col">
+      <div className="flex-1 glass-card mt-4 overflow-hidden flex flex-col min-h-0">
         <div ref={scrollRef} onScroll={onThreadScroll} className="flex-1 overflow-y-auto p-4 space-y-3">
           {messages.length === 0 ? (
             /* Was a grey icon, one line, and a sub-line. An empty thread is the
