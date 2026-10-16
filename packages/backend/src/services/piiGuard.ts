@@ -7,9 +7,9 @@
 //
 // It now covers every path where text reaches another person or leaves the
 // app: 1:1 messages, group messages, chat-request notes, event threads, feed
-// posts and comments, community posts and comments, and the text handed to the
-// AI endpoints (the assistant, the agent, translation and drafting - all of
-// which forward it to a model provider). One rule, one refusal, wherever the
+// posts and comments, community posts, comments and polls, and the text handed
+// to the AI endpoints (the assistant, the agent, translation and drafting - all
+// of which forward it to a model provider). One rule, one refusal, wherever the
 // text is authored.
 //
 // It detects contact details, not "sensitive words": phone numbers, email

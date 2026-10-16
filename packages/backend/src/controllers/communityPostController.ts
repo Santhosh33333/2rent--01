@@ -549,6 +549,14 @@ export async function createPoll(req: AuthedRequest, res: Response): Promise<voi
       sendError(res, OFFICIAL_READ_ONLY_MESSAGE, 403, "OFFICIAL_READ_ONLY");
       return;
     }
+    // A poll is read by every member like any other post, and option texts are
+    // free text too — so the question and every option take the same refusal,
+    // after membership like the other writes in this file. See piiGuard.ts.
+    const piiInPoll = findPersonalData(String(question)) ?? texts.find((t) => findPersonalData(t));
+    if (piiInPoll) {
+      sendError(res, PERSONAL_DATA_ERROR_MESSAGE, 403, PERSONAL_DATA_ERROR_CODE);
+      return;
+    }
     let closes: Date | null = null;
     if (closesAt) {
       closes = new Date(closesAt);

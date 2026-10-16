@@ -25,6 +25,7 @@ const prismaMock = vi.hoisted(() => ({
   communityMember: { findUnique: vi.fn(), findMany: vi.fn() },
   communityPost: { create: vi.fn(), findFirst: vi.fn(), findUnique: vi.fn() },
   communityComment: { create: vi.fn() },
+  communityPoll: { create: vi.fn() },
 }));
 
 vi.mock('../config/database', () => ({ prisma: prismaMock }));
@@ -36,6 +37,7 @@ import {
 import {
   createPost as createCommunityPost,
   createComment as createCommunityComment,
+  createPoll,
 } from '../controllers/communityPostController';
 import { PERSONAL_DATA_ERROR_CODE, PERSONAL_DATA_ERROR_MESSAGE } from '../services/piiGuard';
 
@@ -197,5 +199,52 @@ describe('community comments — personal-data guard', () => {
     expect(prismaMock.communityComment.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ content: 'Good point about the opening.' }) }),
     );
+  });
+});
+
+// Polls are the community's other free-text write: the question and the option
+// texts are as public as a post, so they take the same refusal — including the
+// case where only one option carries the contact detail.
+describe('community polls — personal-data guard', () => {
+  beforeEach(() => {
+    prismaMock.communityPoll.create.mockResolvedValue({
+      id: 'poll-1',
+      question: 'Best day for the club round?',
+      options: [],
+    });
+  });
+
+  it('refuses a phone number in the question before the row is written', async () => {
+    const res = makeRes();
+    await createPoll(
+      req({ question: 'Call me on 98765 43210 to vote', options: ['Saturday', 'Sunday'] }, { id: COMMUNITY }),
+      res,
+    );
+
+    expectRefused(res);
+    expect(prismaMock.communityPoll.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses an email address hiding in a single option', async () => {
+    const res = makeRes();
+    await createPoll(
+      req({ question: 'Best day for the club round?', options: ['Saturday', 'Email club@example.com'] }, { id: COMMUNITY }),
+      res,
+    );
+
+    expectRefused(res);
+    expect(prismaMock.communityPoll.create).not.toHaveBeenCalled();
+  });
+
+  it('creates a poll from ordinary text', async () => {
+    const res = makeRes();
+    await createPoll(
+      req({ question: 'Best day for the club round?', options: ['Saturday', 'Sunday'] }, { id: COMMUNITY }),
+      res,
+    );
+
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(body(res).success).toBe(true);
+    expect(prismaMock.communityPoll.create).toHaveBeenCalledTimes(1);
   });
 });
