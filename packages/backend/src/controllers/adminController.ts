@@ -701,6 +701,23 @@ export async function resolveSosAlert(req: AuthedRequest, res: Response): Promis
 }
 
 /**
+ * Money a hard delete would destroy.
+ *
+ * Deleting a User cascades to their Events (Event.organizer is onDelete:
+ * Cascade), and so to EventEscrow -- and settlement is the only code that ever
+ * un-holds a payer's wallet. Removing an organizer who still has HELD or
+ * DISPUTED escrow therefore strands every payer's reserved balance with no row
+ * left to refund. Both delete paths below refuse on this and send the admin to
+ * the event flow, where cancelling freezes the holds and a settlement decision
+ * (POST /api/admin/events/:id/settle) releases or refunds them.
+ */
+function organizedUnsettledEscrowCount(userId: string): Promise<number> {
+  return prisma.eventEscrow.count({
+    where: { organizerId: userId, status: { in: ["HELD", "DISPUTED"] } },
+  });
+}
+
+/**
  * Bulk account action for the admin user list. SUPER_ADMIN only.
  *
  * Two rules shaped this endpoint:
@@ -774,6 +791,18 @@ export async function bulkUserAction(req: AuthedRequest, res: Response): Promise
             data: { status: "SUSPENDED", suspendedUntil: null, suspensionReason: "Removed in bulk by administrator" },
           });
         } else {
+          // Refuse a delete that would strand held event money; report it as
+          // skipped (a guard refusal, like the protections above) with a reason
+          // the admin can act on, rather than letting the cascade destroy it.
+          const held = await organizedUnsettledEscrowCount(id);
+          if (held > 0) {
+            skipped.push({
+              id,
+              email: target.email,
+              reason: "Organizes an event that still holds attendees' money.",
+            });
+            continue;
+          }
           await prisma.user.delete({ where: { id } });
         }
         // Audit after the write so the log cannot claim success for a delete
@@ -837,6 +866,19 @@ export async function deleteUser(req: AuthedRequest, res: Response): Promise<voi
     // so it cannot be side-stepped by changing the role first.
     if (isPrimarySuperAdmin(target.email)) {
       sendError(res, "The primary super admin account cannot be deleted.", 403, "PROTECTED_ACCOUNT");
+      return;
+    }
+    // Same money guard as the bulk path: deleting an organizer whose events
+    // still hold escrow cascades those rows away and strands the payers'
+    // reserved balance. Refuse and name the fix instead of destroying it.
+    const held = await organizedUnsettledEscrowCount(id);
+    if (held > 0) {
+      sendError(
+        res,
+        "This account organizes an event that still holds attendees' money. Settle those events before deleting the account.",
+        409,
+        "USER_HAS_UNSETTLED_EVENT_ESCROW",
+      );
       return;
     }
     // Audit first using admin as actor (log survives the delete)
