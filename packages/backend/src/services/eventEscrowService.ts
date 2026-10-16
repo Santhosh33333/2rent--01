@@ -483,6 +483,58 @@ export async function freezeAllEscrowsForEvent(eventId: string, now: Date): Prom
   return count;
 }
 
+export interface CancelRefundResult {
+  refunded: number;
+  skipped: number;
+  failed: number;
+}
+
+/**
+ * Give every unsettled hold back, because the event will not happen.
+ *
+ * When an organizer cancels, the fee has no service behind it, so the payer must
+ * be made whole -- and unlike a release, a refund moves no money outward: the
+ * amount was only ever reserved in `heldBalance`, never deducted from `balance`,
+ * so this needs no gateway call. Doing it automatically means an admin does not
+ * have to adjudicate every cancelled-and-paid event.
+ *
+ * One hold per transaction and a failure is counted, not thrown: a single bad
+ * row (a drifted wallet) must not stop the other payers from being refunded, and
+ * the caller freezes whatever is left so it still cannot auto-release.
+ */
+export async function refundAllEscrowsForEvent(
+  eventId: string,
+  note: string,
+): Promise<CancelRefundResult> {
+  const holds = await prisma.eventEscrow.findMany({
+    where: { eventId, status: { in: ["HELD", "DISPUTED"] } },
+    select: { id: true },
+    orderBy: { heldAt: "asc" },
+  });
+
+  const result: CancelRefundResult = { refunded: 0, skipped: 0, failed: 0 };
+  for (const hold of holds) {
+    try {
+      await refundEscrow(hold.id, null, note);
+      result.refunded += 1;
+    } catch (err: any) {
+      // ALREADY_SETTLED is a benign race -- the sweeper or an admin settled this
+      // hold first, exactly once. Anything else (HELD_BALANCE_MISMATCH) means the
+      // refund rolled back and needs a human, so it is counted and logged, not
+      // silently folded into "done".
+      if (err?.code === "ALREADY_SETTLED") {
+        result.skipped += 1;
+        continue;
+      }
+      result.failed += 1;
+      console.error(
+        `[ESCROW] cancel-refund failed for escrow ${hold.id}: ${err?.code ?? ""} ${err?.message ?? err}`,
+      );
+    }
+  }
+  return result;
+}
+
 export interface SweepResult {
   scanned: number;
   released: number;

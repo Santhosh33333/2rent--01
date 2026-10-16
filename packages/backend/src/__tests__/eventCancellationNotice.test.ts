@@ -7,27 +7,45 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * notifications were written, but nothing ever called it, so attendees kept
  * plans for an event that no longer existed. And because the escrow sweeper
  * releases any still-HELD hold once the event's own end time plus the dispute
- * window passes -- a deadline cancelling does not move -- an uncancelled hold
- * would have paid the organizer for an event that never ran.
+ * window passes -- a deadline cancelling does not move -- a cancelled-and-paid
+ * event would have paid the organizer for an event that never ran.
  *
- * updateEvent now fires the notice and freezes the holds on the transition into
- * CANCELLED. These pin the properties that matter: the people who are still
- * going hear about it, the money stops moving toward the organizer, nobody
- * hears or gets frozen twice, and an ordinary edit is neither.
+ * updateEvent now refunds every unsettled hold (the amount was only ever
+ * reserved in `heldBalance`, so refunding is an internal un-hold needing no
+ * gateway call), freezes whatever a refund could not settle so it still cannot
+ * auto-release, and only then fires the notice -- in that order, because the
+ * money matters more than the message. Pinned here: who hears about it, that
+ * the refund runs exactly once and first, and that a re-save or an ordinary
+ * edit repeats neither.
+ *
+ * The refund loop and the freeze itself run against the real Prisma layer in
+ * eventEscrow.test.ts; here they are spies so the controller's ordering is
+ * visible.
  */
 
 const prismaMock = vi.hoisted(() => ({
   event: { findUnique: vi.fn(), update: vi.fn() },
   eventAttendee: { findMany: vi.fn() },
-  eventEscrow: { updateMany: vi.fn() },
   auditLog: { create: vi.fn() },
 }));
 
 vi.mock('../config/database', () => ({ prisma: prismaMock }));
 vi.mock('../controllers/notificationController', () => ({ notifyEventUpdate: vi.fn() }));
+// Spies rather than stubs: every other export stays real, so a new call from
+// updateEvent into the escrow service still lands on real code instead of
+// silently vanishing behind a mocked module.
+vi.mock('../services/eventEscrowService', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../services/eventEscrowService')>();
+  return {
+    ...actual,
+    refundAllEscrowsForEvent: vi.fn().mockResolvedValue({ refunded: 2, skipped: 0, failed: 0 }),
+    freezeAllEscrowsForEvent: vi.fn().mockResolvedValue(0),
+  };
+});
 
 import { updateEvent } from '../controllers/eventController';
 import { notifyEventUpdate } from '../controllers/notificationController';
+import { refundAllEscrowsForEvent, freezeAllEscrowsForEvent } from '../services/eventEscrowService';
 
 const ME = 'organizer-1';
 const EVENT = 'event-1';
@@ -75,7 +93,6 @@ beforeEach(() => {
   prismaMock.event.findUnique.mockResolvedValue(publishedEvent());
   prismaMock.event.update.mockImplementation(async (args: any) => ({ ...publishedEvent(), ...args.data }));
   prismaMock.eventAttendee.findMany.mockResolvedValue([{ userId: 'friend-1' }, { userId: 'friend-2' }]);
-  prismaMock.eventEscrow.updateMany.mockResolvedValue({ count: 2 });
   prismaMock.auditLog.create.mockResolvedValue({});
 });
 
@@ -108,8 +125,10 @@ describe('updateEvent — cancellation notice', () => {
     expect(body(res).success).toBe(true);
     expect(notifyEventUpdate).not.toHaveBeenCalled();
     expect(prismaMock.eventAttendee.findMany).not.toHaveBeenCalled();
-    // The money must not be frozen again either.
-    expect(prismaMock.eventEscrow.updateMany).not.toHaveBeenCalled();
+    // The money must not be touched again either: a second refund run would
+    // be caught row by row, but the transition is the signal, not the body.
+    expect(refundAllEscrowsForEvent).not.toHaveBeenCalled();
+    expect(freezeAllEscrowsForEvent).not.toHaveBeenCalled();
   });
 
   it('treats an ordinary edit as an edit, not a cancellation', async () => {
@@ -118,42 +137,39 @@ describe('updateEvent — cancellation notice', () => {
 
     expect(body(res).success).toBe(true);
     expect(notifyEventUpdate).not.toHaveBeenCalled();
-    expect(prismaMock.eventEscrow.updateMany).not.toHaveBeenCalled();
+    // Renaming an event must never return anyone's money.
+    expect(refundAllEscrowsForEvent).not.toHaveBeenCalled();
+    expect(freezeAllEscrowsForEvent).not.toHaveBeenCalled();
   });
 });
 
 describe('updateEvent — cancellation escrow', () => {
-  it('freezes every held hold so the sweep cannot pay the organizer', async () => {
+  it('refunds the held fees, then freezes what is left, before it tells anyone', async () => {
     const res = makeRes();
     await updateEvent(makeReq({ status: 'CANCELLED' }), res);
 
     expect(body(res).success).toBe(true);
-    expect(prismaMock.eventEscrow.updateMany).toHaveBeenCalledTimes(1);
-    expect(prismaMock.eventEscrow.updateMany).toHaveBeenCalledWith({
-      where: { eventId: EVENT, status: 'HELD' },
-      data: { status: 'DISPUTED' },
-    });
 
-    // A freeze that touched rows must also flag the event for the admin queue.
-    const settlementUpdate = prismaMock.event.update.mock.calls.find(
-      (c: any) => c[0]?.data?.settlementStatus,
-    );
-    expect(settlementUpdate?.[0].data.settlementStatus).toBe('IN_DISPUTE');
-  });
+    expect(refundAllEscrowsForEvent).toHaveBeenCalledTimes(1);
+    const [refundedEventId, note] = (refundAllEscrowsForEvent as any).mock.calls[0];
+    expect(refundedEventId).toBe(EVENT);
+    // This note is what the payer is shown, so it has to say both what happened
+    // and that their money is coming back.
+    expect(note).toMatch(/cancel/i);
+    expect(note).toMatch(/refund/i);
 
-  it('leaves the event settlement alone when there was nothing held', async () => {
-    prismaMock.eventEscrow.updateMany.mockResolvedValue({ count: 0 });
+    // The freeze is only the fallback for holds a refund could not settle, so
+    // it must follow the refund: freezing first would dispute the very rows the
+    // refund is about to return and leave the payer stuck in the admin queue.
+    expect(freezeAllEscrowsForEvent).toHaveBeenCalledTimes(1);
+    const [frozenEventId, frozenAt] = (freezeAllEscrowsForEvent as any).mock.calls[0];
+    expect(frozenEventId).toBe(EVENT);
+    expect(frozenAt).toBeInstanceOf(Date);
 
-    const res = makeRes();
-    await updateEvent(makeReq({ status: 'CANCELLED' }), res);
-
-    expect(body(res).success).toBe(true);
-    // Still freezes (the query ran), but must not stamp IN_DISPUTE on an event
-    // with no money held -- freezeAllEscrowsForEvent only updates on count > 0.
-    expect(prismaMock.eventEscrow.updateMany).toHaveBeenCalledTimes(1);
-    const settlementUpdate = prismaMock.event.update.mock.calls.find(
-      (c: any) => c[0]?.data?.settlementStatus,
-    );
-    expect(settlementUpdate).toBeUndefined();
+    const refundOrder = (refundAllEscrowsForEvent as any).mock.invocationCallOrder[0];
+    const freezeOrder = (freezeAllEscrowsForEvent as any).mock.invocationCallOrder[0];
+    const notifyOrder = (notifyEventUpdate as any).mock.invocationCallOrder[0];
+    expect(refundOrder).toBeLessThan(freezeOrder);
+    expect(freezeOrder).toBeLessThan(notifyOrder);
   });
 });

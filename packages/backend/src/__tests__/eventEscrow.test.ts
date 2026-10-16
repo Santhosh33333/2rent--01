@@ -49,7 +49,14 @@ vi.mock("../config/database", () => ({
   },
 }));
 
-import { EscrowError, releaseEscrow, refundEscrow, sweepReleasableEscrows } from "../services/eventEscrowService";
+import {
+  EscrowError,
+  releaseEscrow,
+  refundEscrow,
+  sweepReleasableEscrows,
+  refundAllEscrowsForEvent,
+  freezeAllEscrowsForEvent,
+} from "../services/eventEscrowService";
 
 const ESCROW = "esc-1";
 const PAYER = "payer-1";
@@ -393,5 +400,107 @@ describe("errors carry a usable code", () => {
   it("uses EscrowError so callers can branch on code not on message text", async () => {
     hoisted.eventEscrow.findUnique.mockResolvedValue(null);
     await expect(refundEscrow("nope", "admin-1", "Some note.")).rejects.toBeInstanceOf(EscrowError);
+  });
+});
+
+describe("refundAllEscrowsForEvent — what cancelling a paid event does with money", () => {
+  const NOTE = "Event was cancelled by the organizer; attendee fee refunded.";
+
+  /** List the holds the refund pass will walk; settlement refreshes fall back to []. */
+  function listHolds(ids: string[]) {
+    hoisted.eventEscrow.findMany.mockResolvedValueOnce(ids.map((id) => ({ id })));
+  }
+
+  it("returns every unsettled hold to the payer, moving no money outward", async () => {
+    listHolds(["esc-1", "esc-2"]);
+
+    const res = await refundAllEscrowsForEvent("ev1", NOTE);
+
+    expect(res).toEqual({ refunded: 2, skipped: 0, failed: 0 });
+    expect(hoisted.eventEscrow.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { eventId: "ev1", status: { in: ["HELD", "DISPUTED"] } },
+        orderBy: { heldAt: "asc" },
+      }),
+    );
+    // One un-hold per hold, and the direction of every refund is inward only:
+    // the organizer is never paid for an event that did not happen, and the
+    // payer's balance is untouched because the amount only ever sat reserved.
+    expect(hoisted.$queryRaw).toHaveBeenCalledTimes(2);
+    expect(hoisted.wallet.update).not.toHaveBeenCalled();
+    expect(hoisted.eventShare.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: "REFUNDED" } }),
+    );
+  });
+
+  it("reports an already-settled hold as skipped instead of failing the run", async () => {
+    listHolds(["esc-1", "esc-2"]);
+    // The first claim wins; the second loses to whoever settled that row first.
+    hoisted.eventEscrow.updateMany
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 0 });
+
+    const res = await refundAllEscrowsForEvent("ev1", NOTE);
+
+    expect(res).toEqual({ refunded: 1, skipped: 1, failed: 0 });
+    expect(hoisted.$queryRaw).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps refunding the rest when one hold cannot be un-held", async () => {
+    listHolds(["esc-1", "esc-2"]);
+    // Hold one's guarded un-hold matches no rows, so its transaction rolls back.
+    // Hold two must still be refunded, and the bad one must be counted as
+    // failed -- and logged -- rather than folded into "done", because the caller
+    // freezes what is left and needs a true count to decide what needs a human.
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    hoisted.$queryRaw.mockResolvedValueOnce([]);
+
+    const res = await refundAllEscrowsForEvent("ev1", NOTE);
+
+    expect(res).toEqual({ refunded: 1, skipped: 0, failed: 1 });
+    expect(logged).toHaveBeenCalledWith(expect.stringContaining("esc-1"));
+    logged.mockRestore();
+  });
+
+  it("does nothing when nothing is held", async () => {
+    hoisted.eventEscrow.findMany.mockResolvedValueOnce([]);
+
+    const res = await refundAllEscrowsForEvent("ev1", NOTE);
+
+    expect(res).toEqual({ refunded: 0, skipped: 0, failed: 0 });
+    expect(hoisted.$queryRaw).not.toHaveBeenCalled();
+    expect(hoisted.wallet.update).not.toHaveBeenCalled();
+    expect(hoisted.event.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("freezeAllEscrowsForEvent — the fallback for holds a refund could not settle", () => {
+  it("moves HELD to DISPUTED and flags the event for the admin queue", async () => {
+    hoisted.eventEscrow.updateMany.mockResolvedValue({ count: 2 });
+
+    const count = await freezeAllEscrowsForEvent("ev1", new Date("2026-06-10T14:00:00Z"));
+
+    expect(count).toBe(2);
+    // Only HELD rows: an already-frozen (DISPUTED) hold is already queued, and
+    // a settled row must never be reopened.
+    expect(hoisted.eventEscrow.updateMany).toHaveBeenCalledWith({
+      where: { eventId: "ev1", status: "HELD" },
+      data: { status: "DISPUTED" },
+    });
+    expect(hoisted.event.update).toHaveBeenCalledWith({
+      where: { id: "ev1" },
+      data: { settlementStatus: "IN_DISPUTE" },
+    });
+  });
+
+  it("leaves the event settlement alone when nothing was held", async () => {
+    hoisted.eventEscrow.updateMany.mockResolvedValue({ count: 0 });
+
+    const count = await freezeAllEscrowsForEvent("ev1", new Date());
+
+    expect(count).toBe(0);
+    // Stamping IN_DISPUTE on an event with no money would park it in a queue
+    // where nothing is waiting to be decided.
+    expect(hoisted.event.update).not.toHaveBeenCalled();
   });
 });

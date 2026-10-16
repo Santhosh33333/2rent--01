@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../config/database";
 import { NOT_PRIVILEGED } from "../rbac/privilegedUsers";
 import { checkCancel, checkJoin } from "../services/eventJoinPolicy";
-import { freezeAllEscrowsForEvent } from "../services/eventEscrowService";
+import { freezeAllEscrowsForEvent, refundAllEscrowsForEvent } from "../services/eventEscrowService";
 import { notifyEventUpdate } from "./notificationController";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
@@ -1043,14 +1043,20 @@ const nextStart = startTime ? new Date(startTime) : event.startTime;
     // CANCELLED (saving an already-cancelled event again notifies nobody twice)
     // and never to the organizer, who is the one doing the cancelling.
     if (status === "CANCELLED" && event.status !== "CANCELLED") {
-      // Cancelling must not silently hand held money to the organizer. The
-      // escrow sweeper releases every still-HELD hold once the event's own end
-      // time plus the dispute window passes, and cancelling does not move that
-      // deadline -- so an untouched hold would pay the organizer for an event
-      // that never ran. Freezing moves every hold to DISPUTED, which the sweep
-      // never releases, and leaves the refund-versus-release call with an admin
-      // in the existing escrow queue. Always before the notification: the money
-      // matters more than the message.
+      // Cancelling must give attendees their money back, not hand it to the
+      // organizer. The escrow sweeper releases every still-HELD hold once the
+      // event's own end time plus the dispute window passes, and cancelling does
+      // not move that deadline -- so an untouched hold would pay the organizer
+      // for an event that never ran. Refund moves no money outward (the amount
+      // was only ever reserved, never deducted), so it needs no gateway call.
+      // Always before the notification: the money matters more than the message.
+      await refundAllEscrowsForEvent(
+        id,
+        "Event was cancelled by the organizer; attendee fee refunded.",
+      );
+      // Safety net for any hold a refund could not settle (a drifted wallet):
+      // freeze it so it still cannot auto-release to the organizer, and leave it
+      // in the admin queue to resolve.
       await freezeAllEscrowsForEvent(id, new Date());
 
       const stillGoing = await prisma.eventAttendee.findMany({
