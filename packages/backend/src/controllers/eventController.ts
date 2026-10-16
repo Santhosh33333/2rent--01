@@ -1134,6 +1134,25 @@ export async function deleteEvent(req: AuthedRequest, res: Response): Promise<vo
       return;
     }
 
+    // A hard delete cascades: EventEscrow dies with the event (and with its
+    // EventShare). Settlement is the only thing that ever un-holds a payer's
+    // wallet, so deleting an event that still holds money would strand that
+    // money in the payer's heldBalance forever with no row left to refund.
+    // Refuse, and send the organizer down the cancel path instead -- there the
+    // holds freeze and an admin decides refund versus release.
+    const unsettledHolds = await prisma.eventEscrow.count({
+      where: { eventId: id, status: { in: ["HELD", "DISPUTED"] } },
+    });
+    if (unsettledHolds > 0) {
+      sendError(
+        res,
+        "This event still holds attendees' money. Cancel the event and let the pending payments settle before deleting it.",
+        409,
+        "EVENT_HAS_UNSETTLED_ESCROW",
+      );
+      return;
+    }
+
     await prisma.$transaction([
       prisma.eventAttendee.deleteMany({ where: { eventId: id } }),
       prisma.event.delete({ where: { id } }),
