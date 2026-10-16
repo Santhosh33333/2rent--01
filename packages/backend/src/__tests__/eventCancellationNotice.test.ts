@@ -1,19 +1,25 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
- * Cancelling an event used to be silent.
+ * Cancelling an event used to be silent, and it used to leave the money alone.
  *
  * notificationController has carried an EVENT_CANCELLED builder since the
  * notifications were written, but nothing ever called it, so attendees kept
- * plans for an event that no longer existed. updateEvent now fires it on the
- * transition into CANCELLED. These pin the three properties that matter: the
- * people who are still going hear about it, nobody hears twice, and an
- * ordinary edit is not a cancellation.
+ * plans for an event that no longer existed. And because the escrow sweeper
+ * releases any still-HELD hold once the event's own end time plus the dispute
+ * window passes -- a deadline cancelling does not move -- an uncancelled hold
+ * would have paid the organizer for an event that never ran.
+ *
+ * updateEvent now fires the notice and freezes the holds on the transition into
+ * CANCELLED. These pin the properties that matter: the people who are still
+ * going hear about it, the money stops moving toward the organizer, nobody
+ * hears or gets frozen twice, and an ordinary edit is neither.
  */
 
 const prismaMock = vi.hoisted(() => ({
   event: { findUnique: vi.fn(), update: vi.fn() },
   eventAttendee: { findMany: vi.fn() },
+  eventEscrow: { updateMany: vi.fn() },
   auditLog: { create: vi.fn() },
 }));
 
@@ -69,6 +75,7 @@ beforeEach(() => {
   prismaMock.event.findUnique.mockResolvedValue(publishedEvent());
   prismaMock.event.update.mockImplementation(async (args: any) => ({ ...publishedEvent(), ...args.data }));
   prismaMock.eventAttendee.findMany.mockResolvedValue([{ userId: 'friend-1' }, { userId: 'friend-2' }]);
+  prismaMock.eventEscrow.updateMany.mockResolvedValue({ count: 2 });
   prismaMock.auditLog.create.mockResolvedValue({});
 });
 
@@ -101,6 +108,8 @@ describe('updateEvent — cancellation notice', () => {
     expect(body(res).success).toBe(true);
     expect(notifyEventUpdate).not.toHaveBeenCalled();
     expect(prismaMock.eventAttendee.findMany).not.toHaveBeenCalled();
+    // The money must not be frozen again either.
+    expect(prismaMock.eventEscrow.updateMany).not.toHaveBeenCalled();
   });
 
   it('treats an ordinary edit as an edit, not a cancellation', async () => {
@@ -109,5 +118,42 @@ describe('updateEvent — cancellation notice', () => {
 
     expect(body(res).success).toBe(true);
     expect(notifyEventUpdate).not.toHaveBeenCalled();
+    expect(prismaMock.eventEscrow.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('updateEvent — cancellation escrow', () => {
+  it('freezes every held hold so the sweep cannot pay the organizer', async () => {
+    const res = makeRes();
+    await updateEvent(makeReq({ status: 'CANCELLED' }), res);
+
+    expect(body(res).success).toBe(true);
+    expect(prismaMock.eventEscrow.updateMany).toHaveBeenCalledTimes(1);
+    expect(prismaMock.eventEscrow.updateMany).toHaveBeenCalledWith({
+      where: { eventId: EVENT, status: 'HELD' },
+      data: { status: 'DISPUTED' },
+    });
+
+    // A freeze that touched rows must also flag the event for the admin queue.
+    const settlementUpdate = prismaMock.event.update.mock.calls.find(
+      (c: any) => c[0]?.data?.settlementStatus,
+    );
+    expect(settlementUpdate?.[0].data.settlementStatus).toBe('IN_DISPUTE');
+  });
+
+  it('leaves the event settlement alone when there was nothing held', async () => {
+    prismaMock.eventEscrow.updateMany.mockResolvedValue({ count: 0 });
+
+    const res = makeRes();
+    await updateEvent(makeReq({ status: 'CANCELLED' }), res);
+
+    expect(body(res).success).toBe(true);
+    // Still freezes (the query ran), but must not stamp IN_DISPUTE on an event
+    // with no money held -- freezeAllEscrowsForEvent only updates on count > 0.
+    expect(prismaMock.eventEscrow.updateMany).toHaveBeenCalledTimes(1);
+    const settlementUpdate = prismaMock.event.update.mock.calls.find(
+      (c: any) => c[0]?.data?.settlementStatus,
+    );
+    expect(settlementUpdate).toBeUndefined();
   });
 });
