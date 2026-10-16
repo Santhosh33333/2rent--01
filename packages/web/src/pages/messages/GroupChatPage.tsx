@@ -443,6 +443,11 @@ export function GroupChatPage() {
           {sending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
         </button>
       </div>
+      {/* Mirrors the 1:1 composer hint: the group send path runs the same
+          server-side personal-data guard, so say so before the first attempt. */}
+      <p className="mt-2 pb-[var(--safe-bottom,0px)] text-center text-[11px] leading-relaxed text-surface-400 dark:text-surface-500">
+        Don&rsquo;t share your phone number, OTP or address &mdash; messages with personal details are blocked.
+      </p>
 
       {/* Members / actions */}
       <Modal open={membersOpen} onClose={() => setMembersOpen(false)} title={group.name} description={`${group.memberCount} members`}>

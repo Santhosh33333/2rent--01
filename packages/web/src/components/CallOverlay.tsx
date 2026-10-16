@@ -226,7 +226,14 @@ export default function CallOverlay() {
             {statusLine}
           </p>
           {state === 'active' ? (
-            <p className="text-xs text-white/50">Private app call · no numbers shared</p>
+            <>
+              <p className="text-xs text-white/50">Private app call · no numbers shared</p>
+              {/* Voice is the one channel we cannot scan - the PII guard only
+                  sees text - so the call UI has to carry the warning itself. */}
+              <p className="text-[11px] leading-relaxed text-amber-300/80">
+                Voice isn&rsquo;t filtered like chat — never share your number, OTP or address.
+              </p>
+            </>
           ) : null}
           {(state === 'calling' || state === 'connecting' || state === 'active') && terms?.enabled ? (
             <p className="text-xs text-amber-300/90">

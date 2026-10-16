@@ -1008,7 +1008,7 @@ export function ConversationPage() {
         )}
 
         {/* Input Area */}
-        <div className="p-4 border-t border-surface-100 dark:border-surface-800 safe-bottom">
+        <div className="p-4 pb-[max(1rem,var(--safe-bottom,0px))] border-t border-surface-100 dark:border-surface-800">
           {replyTarget && (
             <div className="mb-2 flex items-center gap-2 rounded-2xl bg-surface-100 dark:bg-surface-800 px-3 py-2">
               <div className="w-1 self-stretch rounded-full bg-primary-500 shrink-0" />
@@ -1071,6 +1071,12 @@ export function ConversationPage() {
               )}
             </button>
           </form>
+          {/* Server-side guard (services/piiGuard.ts) rejects these with
+              PII_NOT_ALLOWED; the hint is here so people know before they hit
+              a blocked send rather than learning it from an error toast. */}
+          <p className="mt-2 text-center text-[11px] leading-relaxed text-surface-400 dark:text-surface-500">
+            Don&rsquo;t share your phone number, OTP or address &mdash; messages with personal details are blocked.
+          </p>
         </div>
       </div>
     </div>
