@@ -107,6 +107,11 @@ export function MusicRoomPage() {
   const { on, emit } = useSocket({ autoConnect: true })
 
   const [room, setRoom] = useState<MusicRoomDetail | null>(null)
+  // Live attendance: who is connected *right now*. Deliberately separate from
+  // `room.memberCount`, which counts memberships and therefore only grows until
+  // someone explicitly leaves — showing that as "here now" is what made the room
+  // feel dead. Both numbers come from the server; nothing is estimated locally.
+  const [live, setLive] = useState<{ count: number; ids: string[] }>({ count: 0, ids: [] })
   const [sync, setSync] = useState<PlaybackSync | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -167,6 +172,30 @@ export function MusicRoomPage() {
     void load(controller.signal)
     return () => controller.abort()
   }, [load])
+
+  /**
+   * Refresh only the membership half of the room (list + count).
+   *
+   * A presence event that carries `memberCount` means someone joined or left,
+   * so the member modal must show the new person — but refetching the whole
+   * detail would also rewrite the playhead from the persisted position and seek
+   * every guest mid-track. This touches only what membership changed.
+   */
+  const refreshMembers = useCallback(
+    async (signal?: AbortSignal) => {
+      if (!roomId) return
+      try {
+        const res = await musicRoomApi.detail(roomId)
+        if (signal?.aborted) return
+        const detail = res.data.data
+        setRoom((prev) => (prev ? { ...prev, members: detail.members, memberCount: detail.memberCount } : prev))
+      } catch {
+        // Transient: the count from the socket event is already on screen; a
+        // missed member-list refresh resolves on the next load().
+      }
+    },
+    [roomId],
+  )
 
   // Catalogue for the host's picker. `loadSongLibrary` is memoised, so opening
   // the picker does not refetch.
@@ -237,12 +266,24 @@ export function MusicRoomPage() {
     })
   }, [])
 
+  // Merge one live-presence payload. Partial by design: the controller's
+  // presence events carry only the membership count and the socket layer's
+  // carry only live attendance, so each half updates only when it is present.
+  const applyLive = useCallback((d: { liveCount?: number; liveUserIds?: string[] }) => {
+    if (typeof d.liveCount !== 'number') return
+    setLive((prev) => ({
+      count: d.liveCount as number,
+      ids: Array.isArray(d.liveUserIds) ? (d.liveUserIds as string[]) : prev.ids,
+    }))
+  }, [])
+
   useEffect(() => {
     if (!roomId) return
     const offState = on('music_room_state', (data: unknown) => {
       const d = data as { roomId?: string }
       if (d?.roomId !== roomId) return
       applyServerSync(d)
+      applyLive(d as { liveCount?: number; liveUserIds?: string[] })
     })
     const offSync = on('music_room_sync', (data: unknown) => {
       const d = data as { roomId?: string }
@@ -253,6 +294,10 @@ export function MusicRoomPage() {
       const d = data as { roomId?: string; memberCount?: number }
       if (d?.roomId !== roomId) return
       setRoom((prev) => (prev ? { ...prev, memberCount: d.memberCount ?? prev.memberCount } : prev))
+      applyLive(d as { liveCount?: number; liveUserIds?: string[] })
+      // The server only sends `memberCount` on a membership change, so this is
+      // the moment the member list itself needs updating.
+      if (typeof d.memberCount === 'number') void refreshMembers()
     })
     const offHost = on('music_room_host_changed', (data: unknown) => {
       const d = data as { roomId?: string }
@@ -271,7 +316,7 @@ export function MusicRoomPage() {
       offHost?.()
       offEnded?.()
     }
-  }, [roomId, on, applyServerSync, load])
+  }, [roomId, on, applyServerSync, applyLive, refreshMembers, load])
 
   // Guests follow the host's clock. The host is the source, so it never rewrites
   // its own element from a broadcast.
@@ -530,7 +575,9 @@ export function MusicRoomPage() {
         <div className="min-w-0 flex-1">
           <p className="truncate text-base font-bold text-surface-900 dark:text-white">{room.name}</p>
           <p className="truncate text-xs text-surface-500 dark:text-surface-400">
-            {isHost ? 'You host' : 'Listening'} · {room.memberCount} {room.memberCount === 1 ? 'person' : 'people'}
+            {isHost ? 'You host' : 'Listening'} · {room.memberCount}{' '}
+            {room.memberCount === 1 ? 'member' : 'members'}
+            {live.count > 0 ? ` · ${live.count} here now` : ''}
           </p>
         </div>
         <button
@@ -708,20 +755,44 @@ export function MusicRoomPage() {
       </p>
 
       {/* Members */}
-      <Modal open={membersOpen} onClose={() => setMembersOpen(false)} title={room.name} description={`${room.memberCount} people`}>
+      <Modal
+        open={membersOpen}
+        onClose={() => setMembersOpen(false)}
+        title={room.name}
+        description={`${room.memberCount} ${room.memberCount === 1 ? 'member' : 'members'}${
+          live.count > 0 ? ` · ${live.count} here now` : ''
+        }`}
+      >
         <div className="max-h-72 space-y-1 overflow-y-auto">
-          {room.members.map((m) => (
-            <div key={m.userId} className="flex items-center gap-3 rounded-2xl px-2 py-2">
-              <Avatar src={m.user?.avatarUrl} name={m.user?.fullName} className="h-10 w-10 rounded-2xl" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-surface-900 dark:text-white">
-                  {m.user?.fullName || 'Nabri member'}
-                  {m.userId === myId ? ' (you)' : ''}
-                </p>
-                <p className="text-xs capitalize text-surface-400">{m.role.toLowerCase()}</p>
+          {room.members.map((m) => {
+            // "Here now" comes from the room's live presence payload — a member
+            // with no connected socket (closed app, other device idle) is simply
+            // not marked, rather than being shown as present by default.
+            const isHereNow = live.ids.includes(m.userId)
+            return (
+              <div key={m.userId} className="flex items-center gap-3 rounded-2xl px-2 py-2">
+                <div className="relative shrink-0">
+                  <Avatar src={m.user?.avatarUrl} name={m.user?.fullName} className="h-10 w-10 rounded-2xl" />
+                  {isHereNow && (
+                    <span
+                      className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-surface-900"
+                      aria-hidden="true"
+                    />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-surface-900 dark:text-white">
+                    {m.user?.fullName || 'Nabri member'}
+                    {m.userId === myId ? ' (you)' : ''}
+                  </p>
+                  <p className="text-xs capitalize text-surface-400">
+                    {m.role.toLowerCase()}
+                    {isHereNow ? ' · here now' : ''}
+                  </p>
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
         {isHost && (
           <div className="mt-4 space-y-1.5">

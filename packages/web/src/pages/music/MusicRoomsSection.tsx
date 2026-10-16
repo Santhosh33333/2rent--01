@@ -154,7 +154,7 @@ export function MusicRoomsSection() {
                   <span className="block truncate text-xs text-surface-500">
                     {room.isPlaying ? 'Playing now' : room.mediaTitle || 'Nothing playing'}
                     {' · '}
-                    {room.memberCount} {room.memberCount === 1 ? 'person' : 'people'}
+                    {room.memberCount} {room.memberCount === 1 ? 'member' : 'members'}
                     {room.myRole === 'HOST' ? ' · you host' : ''}
                   </span>
                 </span>

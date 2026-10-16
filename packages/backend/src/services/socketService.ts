@@ -162,6 +162,90 @@ export function emitToMusicRoom(roomId: string, event: string, payload: unknown)
   ioInstance.to(musicRoomName(roomId)).emit(event, payload);
 }
 
+/**
+ * A socket as `fetchSockets()` reports it across instances.
+ *
+ * Only `socket.data` survives the Redis adapter's hop — a custom property such
+ * as `socket.userId` stays on the process that accepted the connection — which
+ * is why identity for live presence is stamped into `data` at connect time.
+ */
+type PresenceSocket = { id: string; data?: { userId?: string; musicRooms?: string[] } };
+
+/**
+ * Distinct users connected to a music room, optionally ignoring one socket.
+ *
+ * Distinct by *user*, not by socket: two tabs of the same person must count as
+ * one person "here now". The exclusion exists because a socket that is leaving
+ * (or has just disconnected) can still appear in the adapter's room listing for
+ * a moment — without it the count lags one event behind.
+ */
+export function presenceUserIds(sockets: PresenceSocket[], excludeSocketId?: string): string[] {
+  const ids = new Set<string>();
+  for (const s of sockets) {
+    if (excludeSocketId && s?.id === excludeSocketId) continue;
+    const uid = s?.data?.userId;
+    if (typeof uid === "string" && uid) ids.add(uid);
+  }
+  return [...ids];
+}
+
+/**
+ * Who is connected to a room *right now* — as opposed to `memberCount`, which
+ * counts memberships and therefore only ever grows until someone explicitly
+ * leaves. This is the number that makes the room feel alive.
+ *
+ * `includeUserId` unions the caller's own id: a socket that has just called
+ * `join()` may not yet be listed by the adapter, and the first count reading 0
+ * for the person who just walked in is the most visible possible glitch.
+ */
+export async function musicRoomPresenceSnapshot(
+  roomId: string,
+  opts: { excludeSocketId?: string; includeUserId?: string } = {}
+): Promise<string[]> {
+  if (!ioInstance) return opts.includeUserId ? [opts.includeUserId] : [];
+  try {
+    const sockets = (await ioInstance.in(musicRoomName(roomId)).fetchSockets()) as unknown as PresenceSocket[];
+    const ids = presenceUserIds(sockets, opts.excludeSocketId);
+    if (opts.includeUserId && !ids.includes(opts.includeUserId)) ids.push(opts.includeUserId);
+    return ids;
+  } catch {
+    return opts.includeUserId ? [opts.includeUserId] : [];
+  }
+}
+
+/**
+ * Re-publish a room's live attendance: `liveCount` + `liveUserIds`.
+ *
+ * Emitted alongside the controller's `music_room_presence` (which carries the
+ * membership count) so the client can merge each half independently; a payload
+ * with only live fields never clobbers `memberCount`.
+ */
+export async function broadcastMusicRoomPresence(
+  roomId: string,
+  opts: { excludeSocketId?: string; includeUserId?: string } = {}
+): Promise<void> {
+  const liveUserIds = await musicRoomPresenceSnapshot(roomId, opts);
+  emitToMusicRoom(roomId, "music_room_presence", {
+    roomId,
+    liveCount: liveUserIds.length,
+    liveUserIds,
+  });
+}
+
+/** Remember a room this socket opened, so its disconnect can re-publish counts. */
+function trackMusicRoom(socket: AuthSocket, roomId: string): void {
+  const data = socket.data as PresenceSocket["data"] | undefined;
+  const list = Array.isArray(data?.musicRooms) ? data!.musicRooms! : [];
+  if (!list.includes(roomId)) list.push(roomId);
+  socket.data = { ...data, musicRooms: list };
+}
+
+function untrackMusicRoom(socket: AuthSocket, roomId: string): void {
+  const data = socket.data as PresenceSocket["data"] | undefined;
+  if (!Array.isArray(data?.musicRooms)) return;
+  socket.data = { ...data, musicRooms: data.musicRooms!.filter((id) => id !== roomId) };
+}
+
 export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
   const io = new SocketIOServer(httpServer, {
     cors: {
@@ -227,6 +311,15 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
   // Connection handler
   io.on("connection", (socket: AuthSocket) => {
     const userId = socket.userId as string;
+
+    // Stamped into `data` (not just `socket.userId`) because that is the only
+    // part of a socket the Redis adapter serialises — music-room presence is
+    // read back with fetchSockets(), which may be served by another instance.
+    socket.data = {
+      ...(socket.data as { userId?: string; musicRooms?: string[] } | undefined),
+      userId,
+      musicRooms: [],
+    };
 
     // Store connection
     activeConnections.set(socket.id, {
@@ -1000,16 +1093,29 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
           return;
         }
         socket.join(musicRoomName(roomId));
+        trackMusicRoom(socket, roomId);
 
         // Sent raw, with `updatedAt`, so the client applies one uniform rule
         // (position + elapsed since updatedAt) to both this and a live sync —
         // pre-adding elapsed here would double-count on a playing track.
         const memberCount = await prisma.musicRoomMember.count({ where: { roomId } });
 
+        // Live attendance is derived from connected sockets, so opening the
+        // room (and every later arrival) republishes it; `includeUserId` keeps
+        // the joiner's own first read from being 0.
+        const liveUserIds = await musicRoomPresenceSnapshot(roomId, { includeUserId: userId });
+
         socket.emit("music_room_state", {
           ...musicSyncPayload(room),
           myRole: membership.role,
           memberCount,
+          liveCount: liveUserIds.length,
+          liveUserIds,
+        });
+        emitToMusicRoom(roomId, "music_room_presence", {
+          roomId,
+          liveCount: liveUserIds.length,
+          liveUserIds,
         });
       } catch (err) {
         console.error("[SOCKET] music_room_join error:", err);
@@ -1018,7 +1124,14 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
 
     socket.on("music_room_leave", (rawId: unknown) => {
       const roomId = String(rawId || "").slice(0, 64);
-      if (roomId) socket.leave(musicRoomName(roomId));
+      if (!roomId) return;
+      untrackMusicRoom(socket, roomId);
+      // Leave first, then republish with this socket excluded: the adapter can
+      // still list a socket that is mid-leave, which would keep a departed
+      // person in the count until the next event.
+      void Promise.resolve(socket.leave(musicRoomName(roomId))).then(() => {
+        void broadcastMusicRoomPresence(roomId, { excludeSocketId: socket.id });
+      });
     });
 
     /**
@@ -1148,6 +1261,18 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
 
       // Remove from active connections
       activeConnections.delete(socket.id);
+
+      // Music-room attendance is read from connected sockets, so a drop has to
+      // republish it or the room keeps showing someone who is gone. By this
+      // point the socket has already left its rooms (socket.io drops them
+      // before `disconnect` fires), so the snapshot below excludes it anyway —
+      // the explicit id is belt and braces for adapter lag.
+      const musicRooms = (socket.data as { musicRooms?: string[] } | undefined)?.musicRooms;
+      if (Array.isArray(musicRooms)) {
+        for (const roomId of musicRooms) {
+          void broadcastMusicRoomPresence(roomId, { excludeSocketId: socket.id });
+        }
+      }
 
       // Remove from user sockets
       if (userSockets.has(userId)) {
