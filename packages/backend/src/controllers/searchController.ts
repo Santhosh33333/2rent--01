@@ -3,6 +3,14 @@ import { prisma } from '../config/database'
 import { AuthedRequest } from '../middleware/authTypes'
 import { NOT_PRIVILEGED } from '../rbac/privilegedUsers'
 
+/**
+ * What "visible event" means, mirroring DISCOVERY_STATUSES / buildEventWhere in
+ * eventController. Search must apply the same guard: without it a cancelled or
+ * draft event surfaced in global search, in the home page's trending row and in
+ * the autocomplete suggestions — the "cancelled event keeps showing" report.
+ */
+const DISCOVERY_STATUSES = ["PUBLISHED", "LIVE"]
+
 interface SearchResult {
   type: 'user' | 'event' | 'community' | 'booking'
   id: string
@@ -81,6 +89,7 @@ export async function search(req: AuthedRequest, res: Response) {
       const [eventResults, eventCount] = await Promise.all([
         prisma.event.findMany({
           where: {
+            status: { in: DISCOVERY_STATUSES },
             OR: [
               { title: { contains: query } },
               { description: { contains: query } },
@@ -100,6 +109,7 @@ export async function search(req: AuthedRequest, res: Response) {
         }),
         prisma.event.count({
           where: {
+            status: { in: DISCOVERY_STATUSES },
             OR: [
               { title: { contains: query } },
               { description: { contains: query } },
@@ -227,9 +237,9 @@ export async function getTrendingSearches(req: Request, res: Response) {
       take: 5,
     })
 
-    // Get upcoming events
+    // Get upcoming events (visible ones only — see DISCOVERY_STATUSES above)
     const topEvents = await prisma.event.findMany({
-      where: { startTime: { gte: new Date() } },
+      where: { status: { in: DISCOVERY_STATUSES }, startTime: { gte: new Date() } },
       select: { id: true, title: true, startTime: true },
       take: 5,
       orderBy: { startTime: 'asc' }
@@ -278,9 +288,9 @@ export async function getSuggestions(req: Request, res: Response) {
     })
     suggestions.push(...users.map(u => u.fullName).filter(Boolean))
 
-    // Get event title suggestions
+    // Get event title suggestions (visible events only)
     const events = await prisma.event.findMany({
-      where: { title: { contains: query } },
+      where: { status: { in: DISCOVERY_STATUSES }, title: { contains: query } },
       select: { title: true },
       take: 3,
     })
