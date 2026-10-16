@@ -192,6 +192,11 @@ export function EventChat({ eventId, canPost }: EventChatProps) {
           {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
         </button>
       </div>
+      {/* Mirrors the 1:1 and group composer hints: this send path runs the same
+          server-side personal-data guard, so say so before the first attempt. */}
+      <p className="px-3 pb-3 text-center text-[11px] leading-relaxed text-surface-400 dark:text-surface-500">
+        Don&rsquo;t share your phone number, OTP or address &mdash; messages with personal details are blocked.
+      </p>
     </section>
   )
 }

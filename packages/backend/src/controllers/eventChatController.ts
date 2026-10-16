@@ -15,6 +15,7 @@ import { prisma } from "../config/database";
 import { sendError, sendSuccess } from "../utils/response";
 import { NOT_PRIVILEGED } from "../rbac/privilegedUsers";
 import { emitToUser } from "../services/socketService";
+import { findPersonalData, PERSONAL_DATA_ERROR_CODE, PERSONAL_DATA_ERROR_MESSAGE } from "../services/piiGuard";
 
 const MAX_LENGTH = 2000;
 const MAX_MEDIA_LENGTH = 500;
@@ -111,10 +112,23 @@ export async function sendEventMessage(req: AuthedRequest, res: Response): Promi
       return;
     }
 
+    // Authorisation first: a non-member is told they are not attending, never
+    // anything about the message body.
     const membership = await requireThreadMembership(eventId, userId);
     if (!membership.ok) {
       sendError(res, membership.message, membership.status, membership.code);
       return;
+    }
+
+    // Same personal-data guard as 1:1 and group chat: an event thread is still
+    // a person-to-person channel inside the app, and a caption counts. A
+    // refused message is never stored or fanned out. See services/piiGuard.ts.
+    if (content) {
+      const pii = findPersonalData(content);
+      if (pii) {
+        sendError(res, PERSONAL_DATA_ERROR_MESSAGE, 403, PERSONAL_DATA_ERROR_CODE);
+        return;
+      }
     }
 
     const saved = await prisma.eventGroupMessage.create({
