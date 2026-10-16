@@ -803,20 +803,32 @@ html.dark [class~='dark:text-primary-700'][class] { color: rgb(var(--c-400)); }
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.02'/%3E%3C/svg%3E");
   }
 
-  /* Chat is a fixed-height column (header / scrolling thread / composer). The
-     15rem it used to hardcode only covered the top stack and the tab bar; the
-     moment a banner ad is up the shell reserves an extra `--nabri-ad-strip`
-     band above the tab bar, so the composer was pushed behind it and the last
-     message became unreachable. The strip is unset (0px) off the native build,
-     so this is a no-op on the web. */
+  /* Chat is a fixed-height column (header / scrolling thread / composer).
+     The numbers below are the *same* gutters <main> applies around the page —
+     its measured `--nabri-top-stack` plus 1rem above, then the known stack
+     below (main's 6rem bottom padding + the shell's 2.5rem/3.5rem/4rem
+     vertical padding) — plus half a rem of slack so the column never quite
+     overflows. Deriving them instead of hardcoding 15rem means a taller header
+     (offline/impersonation banner, wrapped row) or an AdMob strip moves the
+     column in step, instead of quietly pushing the composer behind the tab bar
+     — which is exactly what the old fixed values did on desktop, where they
+     left the thread 3rem too tall and the page scrolling under the composer. */
   .chat-viewport {
-    height: calc(100vh - 15rem - var(--nabri-ad-strip, 0px));
-    height: calc(100dvh - 15rem - var(--nabri-ad-strip, 0px));
+    height: calc(100vh - var(--nabri-top-stack, 5rem) - 10rem - var(--nabri-ad-strip, 0px));
+    height: calc(100dvh - var(--nabri-top-stack, 5rem) - 10rem - var(--nabri-ad-strip, 0px));
   }
+  /* ≥640px the shell's vertical padding grows py-5 → sm:py-7: +1rem. */
+  @media (min-width: 640px) {
+    .chat-viewport {
+      height: calc(100vh - var(--nabri-top-stack, 5rem) - 11rem - var(--nabri-ad-strip, 0px));
+      height: calc(100dvh - var(--nabri-top-stack, 5rem) - 11rem - var(--nabri-ad-strip, 0px));
+    }
+  }
+  /* ≥1024px <main> drops to lg:pb-12 and the wrapper to lg:py-8: −3rem. */
   @media (min-width: 1024px) {
     .chat-viewport {
-      height: calc(100vh - 10rem - var(--nabri-ad-strip, 0px));
-      height: calc(100dvh - 10rem - var(--nabri-ad-strip, 0px));
+      height: calc(100vh - var(--nabri-top-stack, 5rem) - 8.5rem - var(--nabri-ad-strip, 0px));
+      height: calc(100dvh - var(--nabri-top-stack, 5rem) - 8.5rem - var(--nabri-ad-strip, 0px));
     }
   }
 

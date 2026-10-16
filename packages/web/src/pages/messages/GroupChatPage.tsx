@@ -312,8 +312,11 @@ export function GroupChatPage() {
     )
   }
 
+  // chat-viewport is the same derived height the 1:1 thread uses: the old
+  // `100vh-8rem` was ~6.5rem taller than the space the shell leaves on a phone,
+  // so the composer sat below the fold and behind the tab bar.
   return (
-    <div className="mx-auto flex h-[calc(100vh-8rem)] max-w-3xl flex-col">
+    <div className="mx-auto flex max-w-3xl flex-col chat-viewport">
       {/* Header */}
       <header className="flex items-center gap-3 border-b border-surface-200 pb-3 dark:border-surface-800">
         <Link
@@ -353,7 +356,7 @@ export function GroupChatPage() {
       </header>
 
       {/* Messages */}
-      <div className="flex-1 space-y-3 overflow-y-auto py-4">
+      <div className="flex-1 min-h-0 space-y-3 overflow-y-auto py-4">
         {messages.length === 0 ? (
           <div className="py-16 text-center">
             <Users className="mx-auto mb-2 h-6 w-6 text-surface-300" />
@@ -412,7 +415,7 @@ export function GroupChatPage() {
       </div>
 
       {/* Composer */}
-      <div className="flex items-center gap-2 border-t border-surface-200 pt-3 dark:border-surface-800">
+      <div className="flex shrink-0 items-center gap-2 border-t border-surface-200 pt-3 dark:border-surface-800">
         <label className="flex h-11 w-11 flex-shrink-0 cursor-pointer items-center justify-center rounded-2xl bg-surface-100 text-surface-600 transition hover:bg-surface-200 dark:bg-surface-800 dark:text-surface-300 dark:hover:bg-surface-700">
           {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImagePlus className="h-5 w-5" />}
           <input type="file" accept="image/*" className="hidden" onChange={onPickImage} disabled={uploading} />
