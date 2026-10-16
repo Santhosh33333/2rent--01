@@ -1,10 +1,16 @@
-// Personal-data guard for user-authored chat text.
+// Personal-data guard for user-authored text.
 //
 // The product rule is that members do not exchange personal contact details
 // inside the app or on an in-app call - the relationship stays on Nabri, and
 // nobody can be pressured into moving to an unmoderated channel. Voice calls
-// carry no text, so this guard is the enforceable surface: every 1:1 message,
-// group message and chat-request note passes through it before it is stored.
+// carry no text, so this guard is the enforceable surface.
+//
+// It now covers every path where text reaches another person or leaves the
+// app: 1:1 messages, group messages, chat-request notes, event threads, feed
+// posts and comments, community posts and comments, and the text handed to the
+// AI endpoints (the assistant, the agent, translation and drafting - all of
+// which forward it to a model provider). One rule, one refusal, wherever the
+// text is authored.
 //
 // It detects contact details, not "sensitive words": phone numbers, email
 // addresses, links/domains, @handles and a small set of messaging-platform

@@ -3,6 +3,7 @@ import { prisma } from "../config/database";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
 import { canPostInOfficialCommunity } from "../services/officialCommunity";
+import { findPersonalData, PERSONAL_DATA_ERROR_CODE, PERSONAL_DATA_ERROR_MESSAGE } from "../services/piiGuard";
 
 // ============================================================================
 // COMMUNITY POSTS + COMMENTS (spec 104-105) — real DB rows, backend-enforced
@@ -128,6 +129,15 @@ export async function createPost(req: AuthedRequest, res: Response): Promise<voi
     if (officialWriteBlocked(community, req.user!.role)) {
       sendError(res, OFFICIAL_READ_ONLY_MESSAGE, 403, "OFFICIAL_READ_ONLY");
       return;
+    }
+    // Guarded after the membership check, so a stranger learns the rule only
+    // once they could have posted anyway. Same rule as chat. See piiGuard.ts.
+    if (text) {
+      const pii = findPersonalData(text);
+      if (pii) {
+        sendError(res, PERSONAL_DATA_ERROR_MESSAGE, 403, PERSONAL_DATA_ERROR_CODE);
+        return;
+      }
     }
     const post = await prisma.communityPost.create({
       data: {
@@ -289,6 +299,14 @@ export async function createComment(req: AuthedRequest, res: Response): Promise<
     if (!post) {
       sendError(res, "Post not found.", 404, "POST_NOT_FOUND");
       return;
+    }
+    // Guarded after the membership and post checks. Same rule as chat.
+    {
+      const pii = findPersonalData(String(content));
+      if (pii) {
+        sendError(res, PERSONAL_DATA_ERROR_MESSAGE, 403, PERSONAL_DATA_ERROR_CODE);
+        return;
+      }
     }
     const comment = await prisma.communityComment.create({
       data: { postId, authorId: req.user!.userId, content: String(content).trim().slice(0, 1000) },

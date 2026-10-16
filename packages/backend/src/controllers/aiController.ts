@@ -4,6 +4,7 @@ import { sendSuccess, sendError } from "../utils/response";
 import { prisma } from "../config/database";
 import { NOT_PRIVILEGED } from "../rbac/privilegedUsers";
 import { isDemoEmail } from "../utils/demo";
+import { findPersonalData, PERSONAL_DATA_ERROR_CODE, PERSONAL_DATA_ERROR_MESSAGE } from "../services/piiGuard";
 import {
   aiComplete,
   aiConfigInfo,
@@ -45,6 +46,16 @@ export async function askAssistant(req: AuthedRequest, res: Response): Promise<v
     if (message.length < 2) {
       sendError(res, "Ask me something — events, sports, movies, partners, communities or bookings.", 400, "VALIDATION_ERROR");
       return;
+    }
+    // The question is forwarded to a model provider, so a contact detail typed
+    // here would leave the app for a third party. Refused before any lookup or
+    // token is spent. Same rule and wording as chat. See services/piiGuard.ts.
+    {
+      const pii = findPersonalData(message);
+      if (pii) {
+        sendError(res, PERSONAL_DATA_ERROR_MESSAGE, 403, PERSONAL_DATA_ERROR_CODE);
+        return;
+      }
     }
     const lat = req.body?.lat !== undefined ? Number(req.body.lat) : NaN;
     const lon = req.body?.lon !== undefined ? Number(req.body.lon) : NaN;
@@ -268,6 +279,13 @@ export async function translateMessage(req: AuthedRequest, res: Response): Promi
       sendError(res, "Text and targetLang are required.", 400, "VALIDATION_ERROR");
       return;
     }
+    // Translation is usually run on a message about to be sent to someone, and
+    // the text goes to the model provider either way. Refusing it here is the
+    // same rule as chat, applied one step earlier. See services/piiGuard.ts.
+    if (findPersonalData(text)) {
+      sendError(res, PERSONAL_DATA_ERROR_MESSAGE, 403, PERSONAL_DATA_ERROR_CODE);
+      return;
+    }
     try {
       const out = await aiComplete(
         req.user!.userId,
@@ -304,6 +322,14 @@ export async function draftText(req: AuthedRequest, res: Response): Promise<void
     const context = String(req.body?.context || "").trim().slice(0, 500);
     if (!["bio", "event", "community"].includes(kind) || !context) {
       sendError(res, "Kind must be bio, event or community, with context text.", 400, "VALIDATION_ERROR");
+      return;
+    }
+    // The context goes to the model provider, and the draft it returns is meant
+    // to be published (bio, event, community) — where the same rule will refuse
+    // it again. Catching it here saves the round trip and keeps contact details
+    // out of the third-party request too. See services/piiGuard.ts.
+    if (findPersonalData(context)) {
+      sendError(res, PERSONAL_DATA_ERROR_MESSAGE, 403, PERSONAL_DATA_ERROR_CODE);
       return;
     }
     try {

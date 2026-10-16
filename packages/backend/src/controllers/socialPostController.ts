@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { prisma } from "../config/database";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
+import { findPersonalData, PERSONAL_DATA_ERROR_CODE, PERSONAL_DATA_ERROR_MESSAGE } from "../services/piiGuard";
 
 // ============================================================================
 // SOCIAL FEED — GLOBAL POSTS
@@ -98,6 +99,17 @@ export async function createPost(req: AuthedRequest, res: Response): Promise<voi
     if (!text && !img && !vid) {
       sendError(res, "Add some text, a photo or a video.", 400, "VALIDATION_ERROR");
       return;
+    }
+
+    // Personal-data guard: a feed post is read by the whole app, so a contact
+    // detail in it is broadcast rather than exchanged with one person. Same rule
+    // and same refusal as chat. See services/piiGuard.ts.
+    if (text) {
+      const pii = findPersonalData(text);
+      if (pii) {
+        sendError(res, PERSONAL_DATA_ERROR_MESSAGE, 403, PERSONAL_DATA_ERROR_CODE);
+        return;
+      }
     }
 
     let type = typeof req.body.type === "string" ? String(req.body.type).toUpperCase() : "";
@@ -347,6 +359,15 @@ export async function createComment(req: AuthedRequest, res: Response): Promise<
     if (!(await canView(post, me))) {
       sendError(res, "You cannot comment on this post.", 403, "FORBIDDEN");
       return;
+    }
+    // Guarded after canView, so a stranger cannot learn the rule by probing for
+    // a post they are not allowed to see. Same rule as chat. See piiGuard.ts.
+    {
+      const pii = findPersonalData(content);
+      if (pii) {
+        sendError(res, PERSONAL_DATA_ERROR_MESSAGE, 403, PERSONAL_DATA_ERROR_CODE);
+        return;
+      }
     }
     const parentId = typeof req.body.parentId === "string" && req.body.parentId.trim() ? req.body.parentId.trim() : null;
     let parentAuthorId: string | null = null;

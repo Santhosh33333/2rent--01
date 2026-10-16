@@ -4,6 +4,7 @@ import { isAdminTierRole } from "../rbac/activeRole";
 import { getClientIp } from "../rbac/adminSecurity";
 import { sendError, sendSuccess } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
+import { findPersonalData, PERSONAL_DATA_ERROR_CODE, PERSONAL_DATA_ERROR_MESSAGE } from "../services/piiGuard";
 import { runAgentTurn, type AgentTurnResult } from "../agent/agentService";
 import { consumeConfirmation, grantsFilterFor, runAgentTool } from "../agent/toolRouter";
 import { listToolsForGrants, type AgentToolContext } from "../agent/toolRegistry";
@@ -74,6 +75,15 @@ export async function agentAsk(req: AuthedRequest, res: Response): Promise<void>
   }
   if (message.length > MAX_MESSAGE_LENGTH) {
     sendError(res, "That message is too long.", 400, "MESSAGE_TOO_LONG");
+    return;
+  }
+
+  // The turn is forwarded to a model provider, so a contact detail typed here
+  // would leave the app. Refused before the session, the context build or any
+  // tool runs, so nothing is spent on a message that will not be answered. Same
+  // rule and wording as chat. See services/piiGuard.ts.
+  if (findPersonalData(message)) {
+    sendError(res, PERSONAL_DATA_ERROR_MESSAGE, 403, PERSONAL_DATA_ERROR_CODE);
     return;
   }
 
