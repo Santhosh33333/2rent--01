@@ -22,12 +22,20 @@ type AiIntent = "events" | "sports" | "movies" | "partners" | "communities" | "b
 
 function detectIntent(message: string): AiIntent {
   const m = message.toLowerCase();
-  if (/\b(sport|game|cricket|football|badminton|tennis|basketball|run|running|cycling|swim|gym|chess|player|team|match)\b/.test(m)) return "sports";
-  if (/\b(movie|film|cinema|watch|watchlist)\b/.test(m)) return "movies";
-  if (/\b(partner|buddy|walking|carry|service|job|helper)\b/.test(m)) return "partners";
-  if (/\b(communit|group|club|poll)\b/.test(m)) return "communities";
-  if (/\b(book|payment|refund|wallet|otp|job status|my job)\b/.test(m)) return "bookings";
-  if (/\b(event|meetup|tomorrow|weekend|today|evening|plan|do something|anything)\b/.test(m)) return "events";
+  // Plurals are matched explicitly: \bevent\b does not match "events" — there
+  // is no word boundary before the trailing s — so the phrases people actually
+  // type ("any events this week", "movies", "communities near me") used to
+  // fall through to the generic help reply while every live-data branch below
+  // sat unused. The same was true for sports/movies/partners/bookings, and
+  // `communit` could never match at all (no English word ends there), so the
+  // communities branch only answered "group"/"club"/"poll". Every original
+  // singular word is kept; only plural forms are added.
+  if (/\b(sport|sports|game|games|cricket|football|badminton|tennis|basketball|run|runs|running|cycling|swim|swims|gym|chess|player|players|team|teams|match|matches)\b/.test(m)) return "sports";
+  if (/\b(movie|movies|film|films|cinema|watch|watchlist)\b/.test(m)) return "movies";
+  if (/\b(partner|partners|buddy|buddies|walking|carry|service|services|helper|helpers|job|jobs)\b/.test(m)) return "partners";
+  if (/\b(communit\w*|group|groups|club|clubs|poll)\b/.test(m)) return "communities";
+  if (/\b(book|booking|bookings|payment|payments|refund|refunds|wallet|otp|job status|my job)\b/.test(m)) return "bookings";
+  if (/\b(event|events|meetup|meetups|tomorrow|weekend|today|evening|plan|plans|do something|anything)\b/.test(m)) return "events";
   return "help";
 }
 
