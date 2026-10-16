@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../config/database";
 import { NOT_PRIVILEGED } from "../rbac/privilegedUsers";
 import { checkCancel, checkJoin } from "../services/eventJoinPolicy";
+import { notifyEventUpdate } from "./notificationController";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
 import {
@@ -1033,6 +1034,25 @@ const nextStart = startTime ? new Date(startTime) : event.startTime;
         price: priceValue !== undefined ? priceValue : event.price,
       },
     });
+
+    // Cancelling is the one update an attendee must not miss: without this they
+    // keep planning for an event that no longer exists. The notification type
+    // and its builder already existed in notificationController but nothing ever
+    // called them, so cancellation was silent. Fired only on the transition into
+    // CANCELLED (saving an already-cancelled event again notifies nobody twice)
+    // and never to the organizer, who is the one doing the cancelling.
+    if (status === "CANCELLED" && event.status !== "CANCELLED") {
+      const stillGoing = await prisma.eventAttendee.findMany({
+        where: { eventId: id, userId: { not: req.user!.userId }, status: { not: "CANCELLED" } },
+        select: { userId: true },
+      });
+      await notifyEventUpdate(
+        id,
+        updated.title,
+        "EVENT_CANCELLED",
+        stillGoing.map((a) => a.userId),
+      );
+    }
 
     await prisma.auditLog.create({
       data: {
