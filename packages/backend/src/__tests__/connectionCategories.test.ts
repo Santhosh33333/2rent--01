@@ -19,6 +19,7 @@ import * as ctrl from "../controllers/connectionCategoryController";
 
 function row(overrides: Record<string, unknown> = {}) {
   return {
+    id: "cat_1",
     key: "DATING",
     label: "Dating",
     description: null,
@@ -175,10 +176,69 @@ describe("seedDefaults", () => {
 
 describe("createCategory / updateCategory / deleteCategory", () => {
   it("creates with normalized data", async () => {
+    prismaMock.connectionCategory.findMany.mockResolvedValue([row()]);
     prismaMock.connectionCategory.create.mockResolvedValue(row());
     await service.createCategory({ key: "dating", label: "Dating", callPricePerMinute: 1 });
     const arg = prismaMock.connectionCategory.create.mock.calls[0][0];
     expect(arg.data.key).toBe("DATING");
+  });
+
+  it("seeds the defaults before creating into an empty table", async () => {
+    // Empty table -> source "defaults" -> the ten shipped rows are materialised
+    // first, so one new category cannot hide the other nine.
+    prismaMock.connectionCategory.findMany.mockResolvedValue([]);
+    prismaMock.connectionCategory.findUnique.mockResolvedValue(null);
+    prismaMock.connectionCategory.create.mockResolvedValue(row());
+    await service.createCategory({ key: "MOVIE", label: "Movie" });
+    expect(prismaMock.connectionCategory.create).toHaveBeenCalledTimes(
+      service.CONNECTION_CATEGORY_DEFAULTS.length + 1
+    );
+    const last = prismaMock.connectionCategory.create.mock.calls.at(-1)![0];
+    expect(last.data.key).toBe("MOVIE");
+  });
+
+  it("derives isPaid=true when a priced mode is on", async () => {
+    prismaMock.connectionCategory.findMany.mockResolvedValue([row()]);
+    prismaMock.connectionCategory.create.mockResolvedValue(row());
+    await service.createCategory({ key: "PAID_ONE", label: "Paid", callPricePerMinute: 2 });
+    expect(prismaMock.connectionCategory.create.mock.calls[0][0].data.isPaid).toBe(true);
+  });
+
+  it("derives isPaid=false when every enabled mode is free", async () => {
+    prismaMock.connectionCategory.findMany.mockResolvedValue([row()]);
+    prismaMock.connectionCategory.create.mockResolvedValue(row());
+    await service.createCategory({ key: "FREE_ONE", label: "Free", callPricePerMinute: 0 });
+    expect(prismaMock.connectionCategory.create.mock.calls[0][0].data.isPaid).toBe(false);
+  });
+
+  it("ignores a stored price on a mode that is switched off", async () => {
+    prismaMock.connectionCategory.findMany.mockResolvedValue([row()]);
+    prismaMock.connectionCategory.create.mockResolvedValue(row());
+    await service.createCategory({
+      key: "OFF_CALL",
+      label: "Off",
+      callEnabled: false,
+      callPricePerMinute: 5,
+    });
+    expect(prismaMock.connectionCategory.create.mock.calls[0][0].data.isPaid).toBe(false);
+  });
+
+  it("re-derives isPaid from the merged row on a partial update", async () => {
+    prismaMock.connectionCategory.findUnique.mockResolvedValue(
+      row({ isPaid: true, callPricePerMinute: "1.00" })
+    );
+    prismaMock.connectionCategory.update.mockResolvedValue(row({ isPaid: false, callPricePerMinute: "0.00" }));
+    await service.updateCategory("cat_1", { callPricePerMinute: 0 });
+    expect(prismaMock.connectionCategory.update.mock.calls[0][0].data.isPaid).toBe(false);
+  });
+
+  it("keeps isPaid=true when a patch touches an unrelated field", async () => {
+    prismaMock.connectionCategory.findUnique.mockResolvedValue(
+      row({ isPaid: true, callPricePerMinute: "1.00" })
+    );
+    prismaMock.connectionCategory.update.mockResolvedValue(row({ isPaid: true }));
+    await service.updateCategory("cat_1", { label: "Renamed" });
+    expect(prismaMock.connectionCategory.update.mock.calls[0][0].data.isPaid).toBe(true);
   });
 
   it("returns null when updating a missing category", async () => {
@@ -208,8 +268,44 @@ describe("controller", () => {
     expect(out.statusCode).toBe(400);
   });
 
+  it("rejects a create with a malformed key", async () => {
+    const { res, out } = makeRes();
+    await ctrl.adminCreateCategory({ body: { key: "bad key!", label: "Fine" } } as never, res as never);
+    expect(out.statusCode).toBe(400);
+  });
+
+  it("rejects a create with an over-long label", async () => {
+    const { res, out } = makeRes();
+    await ctrl.adminCreateCategory(
+      { body: { key: "LONG_ONE", label: "x".repeat(61) } } as never,
+      res as never
+    );
+    expect(out.statusCode).toBe(400);
+  });
+
+  it("rejects an update that blanks the label", async () => {
+    const { res, out } = makeRes();
+    await ctrl.adminUpdateCategory(
+      { body: { label: "   " }, params: { id: "cat_1" } } as never,
+      res as never
+    );
+    expect(out.statusCode).toBe(400);
+    expect(prismaMock.connectionCategory.update).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 updating a category that does not exist", async () => {
+    prismaMock.connectionCategory.findUnique.mockResolvedValue(null);
+    const { res, out } = makeRes();
+    await ctrl.adminUpdateCategory(
+      { body: { label: "Renamed" }, params: { id: "nope" } } as never,
+      res as never
+    );
+    expect(out.statusCode).toBe(404);
+  });
+
   it("maps a unique-constraint failure to 409", async () => {
     const conflict = Object.assign(new Error("dup"), { code: "P2002" });
+    prismaMock.connectionCategory.findMany.mockResolvedValue([row()]);
     prismaMock.connectionCategory.create.mockRejectedValue(conflict);
     const { res, out } = makeRes();
     await ctrl.adminCreateCategory({ body: { key: "DATING", label: "Dating" } } as never, res as never);

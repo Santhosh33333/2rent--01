@@ -13,6 +13,8 @@ import type { CategoryInput } from "../services/connectionCategoryService";
  */
 
 function readInput(body: Record<string, unknown>): CategoryInput {
+  // `isPaid` is deliberately absent: the service derives it from the prices so
+  // the stored flag can never disagree with what is actually charged.
   return {
     key: body.key,
     label: body.label,
@@ -20,13 +22,56 @@ function readInput(body: Record<string, unknown>): CategoryInput {
     chatEnabled: body.chatEnabled,
     callEnabled: body.callEnabled,
     videoEnabled: body.videoEnabled,
-    isPaid: body.isPaid,
     chatPricePerMinute: body.chatPricePerMinute,
     callPricePerMinute: body.callPricePerMinute,
     videoPricePerMinute: body.videoPricePerMinute,
     enabled: body.enabled,
     sortOrder: body.sortOrder,
   };
+}
+
+const KEY_PATTERN = /^[A-Z0-9_]{2,40}$/;
+const LABEL_MAX = 60;
+const DESCRIPTION_MAX = 200;
+
+function normalizedKey(value: unknown): string {
+  return typeof value === "string" ? value.trim().toUpperCase() : "";
+}
+
+function descriptionProblem(input: CategoryInput): string | null {
+  if (typeof input.description === "string" && input.description.length > DESCRIPTION_MAX) {
+    return `description must be at most ${DESCRIPTION_MAX} characters.`;
+  }
+  return null;
+}
+
+/**
+ * A create writes a permanent key, so key and label are checked before the row
+ * exists. Updates only send the fields the caller changed, so only those are
+ * checked — a PATCH that never mentions `label` cannot fail on it.
+ */
+function createProblem(input: CategoryInput): string | null {
+  if (!KEY_PATTERN.test(normalizedKey(input.key))) {
+    return "key must be 2-40 characters using A-Z, 0-9 and _.";
+  }
+  const label = typeof input.label === "string" ? input.label.trim() : "";
+  if (!label || label.length > LABEL_MAX) {
+    return `label is required (up to ${LABEL_MAX} characters).`;
+  }
+  return descriptionProblem(input);
+}
+
+function patchProblem(input: CategoryInput): string | null {
+  if (input.key !== undefined && !KEY_PATTERN.test(normalizedKey(input.key))) {
+    return "key must be 2-40 characters using A-Z, 0-9 and _.";
+  }
+  if (input.label !== undefined) {
+    const label = typeof input.label === "string" ? input.label.trim() : "";
+    if (!label || label.length > LABEL_MAX) {
+      return `label is required (up to ${LABEL_MAX} characters).`;
+    }
+  }
+  return descriptionProblem(input);
 }
 
 /** GET /api/connection-categories — enabled categories for the client. */
@@ -64,9 +109,8 @@ export async function adminSeedCategories(_req: Request, res: Response): Promise
 
 export async function adminCreateCategory(req: Request, res: Response): Promise<Response> {
   const input = readInput(req.body ?? {});
-  if (!input.key || !input.label) {
-    return sendError(res, "key and label are required.", 400, "VALIDATION_ERROR");
-  }
+  const problem = createProblem(input);
+  if (problem) return sendError(res, problem, 400, "VALIDATION_ERROR");
   try {
     const category = await connectionCategoryService.createCategory(input);
     return sendSuccess(res, category, "Category created.", 201);
@@ -79,8 +123,11 @@ export async function adminCreateCategory(req: Request, res: Response): Promise<
 }
 
 export async function adminUpdateCategory(req: Request, res: Response): Promise<Response> {
+  const input = readInput(req.body ?? {});
+  const problem = patchProblem(input);
+  if (problem) return sendError(res, problem, 400, "VALIDATION_ERROR");
   try {
-    const category = await connectionCategoryService.updateCategory(req.params.id, readInput(req.body ?? {}));
+    const category = await connectionCategoryService.updateCategory(req.params.id, input);
     if (!category) return sendError(res, "Category not found.", 404, "NOT_FOUND");
     return sendSuccess(res, category, "Category updated.");
   } catch (err) {

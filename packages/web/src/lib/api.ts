@@ -398,6 +398,16 @@ export const adminApi = {
   updatePricingConfig: (id: string, data: PricingConfigInput) => api.put(`/admin/pricing/${id}`, data),
   deletePricingConfig: (id: string) => api.delete(`/admin/pricing/${id}`),
   simulatePricing: (data: PriceEstimateParams) => api.post('/admin/pricing/simulate', data),
+  // Connection categories (live chat/call catalogue). The read endpoint serves
+  // the built-in defaults while the table is empty; `seed` materialises them as
+  // real rows so they become editable here.
+  listConnectionCategories: () => api.get('/admin/connection-categories'),
+  seedConnectionCategories: () => api.post('/admin/connection-categories/seed'),
+  createConnectionCategory: (data: ConnectionCategoryInput) =>
+    api.post('/admin/connection-categories', data),
+  updateConnectionCategory: (id: string, data: ConnectionCategoryInput) =>
+    api.put(`/admin/connection-categories/${id}`, data),
+  deleteConnectionCategory: (id: string) => api.delete(`/admin/connection-categories/${id}`),
   // Free trial. One length, read by the landing pages and enforced at signup.
   // `days: null` on setUserTrial revokes access for that account.
   getTrialConfig: () => api.get('/admin/subscriptions/trial'),
@@ -669,7 +679,10 @@ export const callApi = {
 
 // One catalogue row for the live connection flow: whether each mode is offered
 // and what it costs per minute. `chatPricePerMinute` of 0 means chat is free.
+// `id` is absent only for the built-in defaults the backend serves before an
+// admin seeds the table - those rows are not editable yet.
 export interface ConnectionCategoryRow {
+  id?: string
   key: string
   label: string
   description: string | null
@@ -682,6 +695,21 @@ export interface ConnectionCategoryRow {
   videoPricePerMinute: number
   enabled: boolean
   sortOrder: number
+}
+
+/** Editable fields. `isPaid` is derived server-side from these prices. */
+export interface ConnectionCategoryInput {
+  key?: string
+  label?: string
+  description?: string | null
+  chatEnabled?: boolean
+  callEnabled?: boolean
+  videoEnabled?: boolean
+  chatPricePerMinute?: number
+  callPricePerMinute?: number
+  videoPricePerMinute?: number
+  enabled?: boolean
+  sortOrder?: number
 }
 
 export const connectionCategoryApi = {

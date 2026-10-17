@@ -16,6 +16,11 @@ import { prisma } from "../config/database";
  */
 
 export interface ConnectionCategoryShape {
+  /**
+   * Absent for the built-in defaults: they have no row until an admin seeds
+   * them, so nothing can address them by id yet.
+   */
+  id?: string;
   key: string;
   label: string;
   description: string | null;
@@ -193,7 +198,6 @@ export interface CategoryInput {
   chatEnabled?: unknown;
   callEnabled?: unknown;
   videoEnabled?: unknown;
-  isPaid?: unknown;
   chatPricePerMinute?: unknown;
   callPricePerMinute?: unknown;
   videoPricePerMinute?: unknown;
@@ -202,6 +206,7 @@ export interface CategoryInput {
 }
 
 type CategoryRow = {
+  id: string;
   key: string;
   label: string;
   description: string | null;
@@ -222,6 +227,7 @@ type CategoryRow = {
  */
 export function serializeCategory(row: CategoryRow): ConnectionCategoryShape {
   return {
+    id: row.id,
     key: row.key,
     label: row.label,
     description: row.description,
@@ -259,7 +265,6 @@ export function normalizeCategoryInput(raw: CategoryInput): Record<string, unkno
   if (raw.chatEnabled !== undefined) out.chatEnabled = asBoolean(raw.chatEnabled, true);
   if (raw.callEnabled !== undefined) out.callEnabled = asBoolean(raw.callEnabled, true);
   if (raw.videoEnabled !== undefined) out.videoEnabled = asBoolean(raw.videoEnabled, false);
-  if (raw.isPaid !== undefined) out.isPaid = asBoolean(raw.isPaid, false);
   if (raw.chatPricePerMinute !== undefined) out.chatPricePerMinute = toPrice(raw.chatPricePerMinute);
   if (raw.callPricePerMinute !== undefined) out.callPricePerMinute = toPrice(raw.callPricePerMinute);
   if (raw.videoPricePerMinute !== undefined) out.videoPricePerMinute = toPrice(raw.videoPricePerMinute);
@@ -337,20 +342,55 @@ export async function seedDefaults(): Promise<{ created: number; skipped: number
   return { created, skipped };
 }
 
+/**
+ * `isPaid` is derived rather than set by the caller: a stored flag that could
+ * disagree with the actual per-mode prices would be a lie the billing engine
+ * would later have to reconcile. A category is paid iff at least one mode that
+ * is switched on actually costs something.
+ */
+function deriveIsPaid(input: {
+  chatEnabled: boolean;
+  callEnabled: boolean;
+  videoEnabled: boolean;
+  chatPricePerMinute: number;
+  callPricePerMinute: number;
+  videoPricePerMinute: number;
+}): boolean {
+  return (
+    (input.chatEnabled && input.chatPricePerMinute > 0) ||
+    (input.callEnabled && input.callPricePerMinute > 0) ||
+    (input.videoEnabled && input.videoPricePerMinute > 0)
+  );
+}
+
+/**
+ * Creating into an empty table would leave the admin with a catalogue of one
+ * and silently hide the other nine shipped categories (the read path only
+ * falls back to defaults when there are *no* rows), so seed first.
+ */
 export async function createCategory(input: CategoryInput): Promise<ConnectionCategoryShape> {
   const data = normalizeCategoryInput(input);
+  const seeded = await listAll();
+  if (seeded.source === "defaults") {
+    await seedDefaults();
+  }
+
+  const values = {
+    chatEnabled: Boolean(data.chatEnabled ?? true),
+    callEnabled: Boolean(data.callEnabled ?? true),
+    videoEnabled: Boolean(data.videoEnabled ?? false),
+    chatPricePerMinute: Number(data.chatPricePerMinute ?? 0),
+    callPricePerMinute: Number(data.callPricePerMinute ?? 0),
+    videoPricePerMinute: Number(data.videoPricePerMinute ?? 0),
+  };
+
   const row = await prisma.connectionCategory.create({
     data: {
       key: String(data.key ?? ""),
       label: String(data.label ?? ""),
       description: (data.description as string | null) ?? null,
-      chatEnabled: Boolean(data.chatEnabled ?? true),
-      callEnabled: Boolean(data.callEnabled ?? true),
-      videoEnabled: Boolean(data.videoEnabled ?? false),
-      isPaid: Boolean(data.isPaid ?? false),
-      chatPricePerMinute: Number(data.chatPricePerMinute ?? 0),
-      callPricePerMinute: Number(data.callPricePerMinute ?? 0),
-      videoPricePerMinute: Number(data.videoPricePerMinute ?? 0),
+      ...values,
+      isPaid: deriveIsPaid(values),
       enabled: Boolean(data.enabled ?? true),
       sortOrder: Number(data.sortOrder ?? 0),
     },
@@ -362,7 +402,27 @@ export async function updateCategory(id: string, input: CategoryInput): Promise<
   const existing = await prisma.connectionCategory.findUnique({ where: { id } });
   if (!existing) return null;
   const data = normalizeCategoryInput(input);
-  const row = await prisma.connectionCategory.update({ where: { id }, data });
+
+  // Merge onto the stored row so a partial update re-derives `isPaid` from the
+  // *combined* result, not just the fields that happened to be in the patch.
+  const merged = {
+    chatEnabled: data.chatEnabled !== undefined ? Boolean(data.chatEnabled) : existing.chatEnabled,
+    callEnabled: data.callEnabled !== undefined ? Boolean(data.callEnabled) : existing.callEnabled,
+    videoEnabled: data.videoEnabled !== undefined ? Boolean(data.videoEnabled) : existing.videoEnabled,
+    chatPricePerMinute:
+      data.chatPricePerMinute !== undefined ? Number(data.chatPricePerMinute) : Number(existing.chatPricePerMinute ?? 0),
+    callPricePerMinute:
+      data.callPricePerMinute !== undefined ? Number(data.callPricePerMinute) : Number(existing.callPricePerMinute ?? 0),
+    videoPricePerMinute:
+      data.videoPricePerMinute !== undefined
+        ? Number(data.videoPricePerMinute)
+        : Number(existing.videoPricePerMinute ?? 0),
+  };
+
+  const row = await prisma.connectionCategory.update({
+    where: { id },
+    data: { ...data, isPaid: deriveIsPaid(merged) },
+  });
   return serializeCategory(row);
 }
 
