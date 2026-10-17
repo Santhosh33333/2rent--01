@@ -25,6 +25,7 @@ import { AppTabBar } from './navigation/AppTabBar';
 import { MoreSheet } from './navigation/MoreSheet';
 import { AgentLauncher } from './agent/AgentLauncher';
 import { NavGroupList, groupsForRole } from './navigation/NavGroupList';
+import { MAIN_GROUP } from '../navigation/tabs';
 
 function UnreadBadge() {
   const [count, setCount] = useState(0);
@@ -384,7 +385,7 @@ export function Layout() {
                   </>
                 ) : (
                   <NavGroupList
-                    groups={groupsForRole(activeRole)}
+                    groups={[MAIN_GROUP, ...groupsForRole(activeRole)]}
                     onNavigate={() => setSidebarOpen(false)}
                     variant="drawer"
                   />

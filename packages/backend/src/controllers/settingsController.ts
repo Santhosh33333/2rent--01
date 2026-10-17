@@ -11,8 +11,6 @@ interface UserSettings {
   notificationsEnabled: boolean;
   notificationSound: boolean;
   chatNotifications: boolean;
-  eventReminders: boolean;
-  walkingAlerts: boolean;
   communityUpdates: boolean;
   pushEnabled: boolean;
   emailNotifications: boolean;
@@ -34,8 +32,6 @@ const DEFAULT_SETTINGS: UserSettings = {
   notificationsEnabled: true,
   notificationSound: true,
   chatNotifications: true,
-  eventReminders: true,
-  walkingAlerts: true,
   communityUpdates: true,
   pushEnabled: true,
   emailNotifications: true,

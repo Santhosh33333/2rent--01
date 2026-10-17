@@ -66,6 +66,17 @@ export const PRIMARY_TABS: NavItem[] = [
   { to: "/profile", label: "Profile", icon: User },
 ];
 
+/**
+ * The same five destinations, declared as a drawer group.
+ *
+ * The dock is `lg:hidden`, so on a desktop browser the drawer is the only
+ * navigation there is — and it used to start at "My activity", which left Home,
+ * Discover, Create, Inbox and Profile unreachable above mobile widths. The More
+ * sheet deliberately does not repeat this group: on a phone the dock already
+ * carries these five, so showing them again there is just noise.
+ */
+export const MAIN_GROUP: NavGroup = { title: "Main", items: PRIMARY_TABS };
+
 /** Consumer "More" destinations. Grouped so the sheet reads as a menu, not a dump. */
 export const USER_MORE: NavGroup[] = [
   {

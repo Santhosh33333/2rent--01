@@ -185,7 +185,7 @@ export function PrivacyPage() {
             <SettingRow icon={Eye} label="Profile Visibility" description="Allow others to view your profile">
               <Toggle enabled={prefs.allowProfileView} onChange={v => updatePref('allowProfileView', v)} />
             </SettingRow>
-            <SettingRow icon={MapPin} label="Location Sharing" description="Share location during walks">
+            <SettingRow icon={MapPin} label="Location Sharing" description="Allow others to see your location">
               <Toggle enabled={prefs.allowLocationSharing} onChange={v => updatePref('allowLocationSharing', v)} />
             </SettingRow>
             <SettingRow icon={Smartphone} label="Show Phone Number" description="Visible to matched partners">

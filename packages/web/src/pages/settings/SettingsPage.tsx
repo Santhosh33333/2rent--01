@@ -20,8 +20,6 @@ interface Settings {
   notificationsEnabled: boolean
   notificationSound: boolean
   chatNotifications: boolean
-  eventReminders: boolean
-  walkingAlerts: boolean
   communityUpdates: boolean
   pushEnabled: boolean
   emailNotifications: boolean
@@ -37,8 +35,8 @@ interface Settings {
 
 const defaultSettings: Settings = {
   theme: 'system', accent: 'navy', fontSize: 'medium',
-  notificationsEnabled: true, notificationSound: true, chatNotifications: true, eventReminders: true,
-  walkingAlerts: true, communityUpdates: true, pushEnabled: true,
+  notificationsEnabled: true, notificationSound: true, chatNotifications: true,
+  communityUpdates: true, pushEnabled: true,
   emailNotifications: true, smsNotifications: false, dataSaver: false,
   autoDownloadImages: true, autoDownloadVideos: false, showOnlineStatus: true,
   showLastActive: true, allowProfileView: true, allowLocationSharing: false,
@@ -375,12 +373,6 @@ export function SettingsPage() {
               <SettingRow icon={Bell} label="Chat Messages" description="New message alerts">
                 <ToggleSwitch enabled={settings.chatNotifications} onChange={v => update('chatNotifications', v)} />
               </SettingRow>
-              <SettingRow icon={Bell} label="Event Reminders" description="Upcoming event alerts">
-                <ToggleSwitch enabled={settings.eventReminders} onChange={v => update('eventReminders', v)} />
-              </SettingRow>
-              <SettingRow icon={Bell} label="Walking Requests" description="New walking request alerts">
-                <ToggleSwitch enabled={settings.walkingAlerts} onChange={v => update('walkingAlerts', v)} />
-              </SettingRow>
               <SettingRow icon={Bell} label="Community Updates" description="Community activity alerts">
                 <ToggleSwitch enabled={settings.communityUpdates} onChange={v => update('communityUpdates', v)} />
               </SettingRow>
@@ -404,7 +396,7 @@ export function SettingsPage() {
           <SettingRow icon={Eye} label="Profile Visibility" description="Allow others to view your profile">
             <ToggleSwitch enabled={settings.allowProfileView} onChange={v => update('allowProfileView', v)} />
           </SettingRow>
-          <SettingRow icon={Shield} label="Location Sharing" description="Share location during walks">
+          <SettingRow icon={Shield} label="Location Sharing" description="Allow others to see your location">
             <ToggleSwitch enabled={settings.allowLocationSharing} onChange={v => update('allowLocationSharing', v)} />
           </SettingRow>
 

@@ -57,9 +57,6 @@ const VerifyAddressPage = lazy(() => import('./pages/verification/VerifyAddressP
 const WalletPage = lazy(() => import('./pages/wallet/WalletPage').then(m => ({ default: m.WalletPage })))
 const TransactionHistoryPage = lazy(() => import('./pages/wallet/TransactionHistoryPage').then(m => ({ default: m.TransactionHistoryPage })))
 const TopUpPage = lazy(() => import('./pages/wallet/TopUpPage').then(m => ({ default: m.TopUpPage })))
-const WalkingRequestsPage = lazy(() => import('./pages/walking-requests/WalkingRequestsPage').then(m => ({ default: m.WalkingRequestsPage })))
-const CreateWalkingRequestPage = lazy(() => import('./pages/walking-requests/CreateWalkingRequestPage').then(m => ({ default: m.CreateWalkingRequestPage })))
-const WalkingRequestDetailPage = lazy(() => import('./pages/walking-requests/WalkingRequestDetailPage').then(m => ({ default: m.WalkingRequestDetailPage })))
 const CommunitiesPage = lazy(() => import('./pages/communities/CommunitiesPage').then(m => ({ default: m.CommunitiesPage })))
 const CommunityDetailPage = lazy(() => import('./pages/communities/CommunityDetailPage').then(m => ({ default: m.CommunityDetailPage })))
 const EventsPage = lazy(() => import('./pages/events/EventsPage').then(m => ({ default: m.EventsPage })))
@@ -72,13 +69,6 @@ const PartnerJobsPage = lazy(() => import('./pages/partner/PartnerJobsPage').the
 const PartnerJobDetailPage = lazy(() => import('./pages/partner/PartnerJobDetailPage').then(m => ({ default: m.PartnerJobDetailPage })))
 const PartnerWalletPage = lazy(() => import('./pages/partner/PartnerWalletPage').then(m => ({ default: m.PartnerWalletPage })))
 const PartnerProfilePage = lazy(() => import('./pages/partner/PartnerProfilePage').then(m => ({ default: m.PartnerProfilePage })))
-
-// CarryBuddy pages
-const CarryBuddyDashboard = lazy(() => import('./pages/carry/CarryBuddyDashboard').then(m => ({ default: m.CarryBuddyDashboard })))
-const CarryBuddyJobsPage = lazy(() => import('./pages/carry/CarryBuddyJobsPage').then(m => ({ default: m.CarryBuddyJobsPage })))
-const CarryBuddyRoutePage = lazy(() => import('./pages/carry/CarryBuddyRoutePage').then(m => ({ default: m.CarryBuddyRoutePage })))
-const CarryBuddyEarningsPage = lazy(() => import('./pages/carry/CarryBuddyEarningsPage').then(m => ({ default: m.CarryBuddyEarningsPage })))
-const CarryBuddyProfilePage = lazy(() => import('./pages/carry/CarryBuddyProfilePage').then(m => ({ default: m.CarryBuddyProfilePage })))
 
 // Admin pages
 const AdminPortalPage = lazy(() => import('./pages/admin/AdminPortalPage').then(m => ({ default: m.AdminPortalPage })))
@@ -274,9 +264,10 @@ export function App() {
               <Route path="/bookings/:id/tracking" element={<BookingTrackingPage />} />
               <Route path="/bookings/:id/rate" element={<RatingPage />} />
 
-              <Route path="/walking-requests" element={<WalkingRequestsPage />} />
-              <Route path="/walking-requests/create" element={<CreateWalkingRequestPage />} />
-              <Route path="/walking-requests/:id" element={<WalkingRequestDetailPage />} />
+              {/* The walking service was retired. These routes are unreachable
+                  from the app itself, so old links land in discovery rather than
+                  a blank screen. */}
+              <Route path="/walking-requests/*" element={<Navigate to="/discover" replace />} />
               <Route path="/communities" element={<CommunitiesPage />} />
               <Route path="/communities/:id" element={<CommunityDetailPage />} />
               <Route path="/notifications" element={<NotificationsPage />} />
@@ -337,11 +328,9 @@ export function App() {
 
           <Route element={<ProtectedRoute allowedRoles={['PARTNER']} />}>
             <Route element={<Layout />}>
-              <Route path="/carry/dashboard" element={<CarryBuddyDashboard />} />
-              <Route path="/carry/jobs" element={<CarryBuddyJobsPage />} />
-              <Route path="/carry/route" element={<CarryBuddyRoutePage />} />
-              <Route path="/carry/earnings" element={<CarryBuddyEarningsPage />} />
-              <Route path="/carry/profile" element={<CarryBuddyProfilePage />} />
+              {/* The standalone carry-buddy surface was folded into the partner
+                  dashboard; keep old links inside the partner area. */}
+              <Route path="/carry/*" element={<Navigate to="/partner/dashboard" replace />} />
             </Route>
           </Route>
 
