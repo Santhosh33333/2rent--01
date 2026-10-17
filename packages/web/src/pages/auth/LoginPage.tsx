@@ -2,7 +2,7 @@ import { getErrorMessage } from '../../lib/error'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../lib/auth'
-import { initGoogleSignIn, signInWithGoogle, renderGoogleButton, isNativeApp, signInWithGoogleNative } from '../../lib/googleAuth'
+import { initGoogleSignIn, signInWithGoogle, renderGoogleButton, isNativeApp, signInWithGoogleNative, describeGoogleAuthError } from '../../lib/googleAuth'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { ArrowRight, Mail, Lock, Loader2, Phone, Eye, EyeOff, Smartphone } from 'lucide-react'
 import { api } from '../../lib/api'
@@ -45,6 +45,7 @@ export function LoginPage() {
   const isNative = isNativeApp()
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
+  const [googleError, setGoogleError] = useState<string | null>(null)
   const [apiError, setApiError] = useState<string | null>(null)
   const [googleReady, setGoogleReady] = useState(false)
   const googleBtnRef = useRef<HTMLDivElement>(null)
@@ -135,6 +136,7 @@ export function LoginPage() {
 
   const handleGoogleCredential = useCallback(async (credential: string) => {
     setGoogleLoading(true)
+    setGoogleError(null)
     try {
       const data = await signInWithGoogle(credential)
       if (!data?.accessToken || !data?.refreshToken) {
@@ -150,6 +152,7 @@ export function LoginPage() {
       })
       toast.success('Welcome back!')
     } catch (err: unknown) {
+      setGoogleError(`Server: ${describeGoogleAuthError(err)}`)
       toast.error(getErrorMessage(err, 'Google sign-in failed'))
     } finally {
       setGoogleLoading(false)
@@ -161,12 +164,16 @@ export function LoginPage() {
       // Native shell: Google's GSI script is blocked in the WebView, so use the
       // on-device account picker and exchange the ID token with our backend.
       setGoogleLoading(true)
+      setGoogleError(null)
       try {
         const idToken = await signInWithGoogleNative()
         await handleGoogleCredential(idToken)
       } catch (err: unknown) {
         // A dismissed account picker is a no-op, not an error worth shouting about.
         if (!/cancel/i.test(String(err instanceof Error ? err.message : err))) {
+          // Keep the exact provider error on screen: the toast vanishes, and a
+          // screenshot of it is what actually identifies status 10 / 12500.
+          setGoogleError(`Google picker: ${describeGoogleAuthError(err)}`)
           toast.error(getErrorMessage(err, 'Google sign-in failed'))
         }
       } finally {
@@ -411,6 +418,22 @@ export function LoginPage() {
                     {googleLoading ? 'Signing in...' : 'Continue with Google'}
                   </span>
                 </button>
+              )}
+              {/*
+                Native-only diagnostic. The packaged picker fails for reasons
+                (signing-cert mismatch, misconfigured client, a rejected token)
+                that a toast states once and loses; a member testing 1.0.26 can
+                read this line back verbatim instead of describing it.
+              */}
+              {isNative && googleError && (
+                <div className="mt-3 rounded-2xl bg-danger-50 dark:bg-danger-500/10 border border-danger-200 dark:border-danger-500/20 px-4 py-3 animate-scale-in">
+                  <p className="text-xs font-semibold text-danger-600 dark:text-danger-400">
+                    Google sign-in detail
+                  </p>
+                  <p className="mt-1 text-xs font-mono break-words select-all text-danger-600 dark:text-danger-400">
+                    {googleError}
+                  </p>
+                </div>
               )}
             </div>
 

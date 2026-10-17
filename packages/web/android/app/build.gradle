@@ -69,8 +69,17 @@ android {
         // Community with its 1:1 welcome DM; the full transaction history; the
         // paid-but-still-asked-to-pay subscription fix and its paywall UI; and
         // the Google sign-in avatar preservation.
-        versionCode 26
-        versionName "1.0.25"
+        //
+        // 27 / 1.0.26 adds no product behaviour: when the packaged Google
+        // sign-in does fail, the exact provider error (Play-services status such
+        // as 10 or 12500, the plugin code, or the HTTP status from our own token
+        // exchange) is now printed under the button instead of only flashing in
+        // a toast. Every configuration layer - OAuth consent, both Android
+        // signing fingerprints, the accepted token audiences and the live
+        // browser flow - was verified correct, so the next report needs the
+        // verbatim failure text rather than another description of it.
+        versionCode 27
+        versionName "1.0.26"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

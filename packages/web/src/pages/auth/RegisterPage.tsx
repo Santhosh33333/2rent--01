@@ -9,7 +9,7 @@ import { User, Mail, Phone, Lock, Eye, EyeOff, ArrowRight, ArrowLeft, Check, Spa
 import { useAuth } from '../../lib/auth'
 import { resolveLandingRole } from '../../lib/roles'
 import { api } from '../../lib/api'
-import { initGoogleSignIn, signInWithGoogle, renderGoogleButton, isNativeApp, signInWithGoogleNative } from '../../lib/googleAuth'
+import { initGoogleSignIn, signInWithGoogle, renderGoogleButton, isNativeApp, signInWithGoogleNative, describeGoogleAuthError } from '../../lib/googleAuth'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { stashPendingReferralCode } from '../../components/account/ReferralCard'
 
@@ -133,6 +133,7 @@ export function RegisterPage() {
   )
 
   const [googleLoading, setGoogleLoading] = useState(false)
+  const [googleError, setGoogleError] = useState<string | null>(null)
   const [googleReady, setGoogleReady] = useState(false)
   const googleBtnRef = useRef<HTMLDivElement>(null)
   const [googleRendered, setGoogleRendered] = useState(false)
@@ -261,6 +262,7 @@ export function RegisterPage() {
   const handleGoogleCredential = async (credential: string) => {
     setGoogleLoading(true)
     setSubmitError('')
+    setGoogleError(null)
     try {
       const data = await signInWithGoogle(credential)
       if (!data?.accessToken || !data?.refreshToken) {
@@ -277,6 +279,7 @@ export function RegisterPage() {
     } catch (err: unknown) {
       const message = getErrorMessage(err, 'Google sign-up failed')
       setSubmitError(message)
+      setGoogleError(`Server: ${describeGoogleAuthError(err)}`)
       toast.error(message)
     } finally {
       setGoogleLoading(false)
@@ -288,6 +291,7 @@ export function RegisterPage() {
       // Native shell: Google's GSI script is blocked in the WebView, so use the
       // on-device account picker and exchange the ID token with our backend.
       setGoogleLoading(true)
+      setGoogleError(null)
       try {
         const idToken = await signInWithGoogleNative()
         await handleGoogleCredential(idToken)
@@ -296,6 +300,8 @@ export function RegisterPage() {
         if (!/cancel/i.test(String(err instanceof Error ? err.message : err))) {
           const message = getErrorMessage(err, 'Google sign-up failed')
           setSubmitError(message)
+          // Keep the provider's own words on screen; the toast is gone in a beat.
+          setGoogleError(`Google picker: ${describeGoogleAuthError(err)}`)
           toast.error(message)
         }
       } finally {
@@ -571,6 +577,17 @@ export function RegisterPage() {
                         {googleLoading ? 'Creating account...' : 'Sign up with Google'}
                       </span>
                     </button>
+                  )}
+                  {/* Native-only diagnostic; see LoginPage for why it exists. */}
+                  {isNative && googleError && (
+                    <div className="mt-3 rounded-2xl bg-danger-50 dark:bg-danger-500/10 border border-danger-200 dark:border-danger-500/20 px-4 py-3 animate-scale-in">
+                      <p className="text-xs font-semibold text-danger-600 dark:text-danger-400">
+                        Google sign-up detail
+                      </p>
+                      <p className="mt-1 text-xs font-mono break-words select-all text-danger-600 dark:text-danger-400">
+                        {googleError}
+                      </p>
+                    </div>
                   )}
                   {accountType === 'PARTNER' && (
                     <p className="text-xs text-surface-500 text-center">

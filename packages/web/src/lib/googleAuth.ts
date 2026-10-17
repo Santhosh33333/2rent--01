@@ -172,3 +172,45 @@ export async function signInWithGoogleNative(): Promise<string> {
   }
   return idToken
 }
+
+/**
+ * Flatten a failed Google sign-in into one copyable line.
+ *
+ * A toast disappears and the person reporting the failure cannot recall the
+ * exact wording, so the interesting facts are collected instead: the
+ * Play-services exception text (which carries Google's numeric status - `10`
+ * for a signing-certificate mismatch, `12500` for a misconfigured client), the
+ * plugin/axios `code`, and the HTTP status when the failure came from our own
+ * `/auth/google` exchange. On the web the raw axios message is deliberately
+ * blurred by `getErrorMessage`; here we want the opposite.
+ */
+export function describeGoogleAuthError(err: unknown): string {
+  const e = (err ?? {}) as {
+    message?: unknown
+    code?: unknown
+    response?: { status?: unknown; data?: { message?: unknown; error?: unknown } }
+  }
+
+  const serverText =
+    (typeof e.response?.data?.message === 'string' && e.response.data.message) ||
+    (typeof e.response?.data?.error === 'string' && e.response.data.error) ||
+    ''
+
+  let primary = serverText
+  if (!primary && typeof e.message === 'string') primary = e.message.trim()
+  if (!primary && typeof err === 'string') primary = err
+  if (!primary) {
+    try {
+      primary = JSON.stringify(err)
+    } catch {
+      primary = ''
+    }
+  }
+
+  const bits = [String(primary || 'Unknown error')]
+  const status = e.response?.status
+  if (status !== undefined && status !== null) bits.push(`HTTP ${status}`)
+  const code = e.code === undefined || e.code === null ? '' : String(e.code)
+  if (code && code !== String(status) && !bits[0].includes(code)) bits.push(`code ${code}`)
+  return bits.join(' · ')
+}
