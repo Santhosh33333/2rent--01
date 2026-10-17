@@ -141,7 +141,10 @@ export function EventCostSheet({ eventId, isOrganizer }: { eventId: string; isOr
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-surface-500 dark:text-surface-400">
                     Auto total
                   </p>
-                  <p className="prism-text font-display text-3xl font-bold leading-tight">
+                  {/* Money figure on a light card (`bg-white/70`): the prism
+                      gradient's pastel middle is ~2:1 on white, so the total
+                      washed out. Matches the "Collected" figure beside it. */}
+                  <p className="font-display text-3xl font-bold leading-tight text-surface-900 dark:text-white">
                     {sheet.total === null ? '—' : rupees(sheet.total)}
                   </p>
                   <p className="mt-0.5 text-[11px] text-surface-500 dark:text-surface-400">

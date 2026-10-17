@@ -650,7 +650,13 @@ export function HomePage() {
                   <Wallet className="w-5 h-5 text-white/80" />
                   <span className="text-sm font-medium text-white/80">Wallet Balance</span>
                 </div>
-                <p className="prism-text animate-prism-breathe font-display text-3xl font-bold">
+                {/* Money figure: solid white, not `prism-text`. The prism
+                    gradient starts and ends on `--c-600`, the same accent the
+                    card is painted with, so the leading and trailing digits
+                    sank into the card, and the breathing animation held the
+                    whole number at 55-85% opacity. A balance has to be legible
+                    at a glance. */}
+                <p className="font-display text-3xl font-bold text-white">
                   ₹{(wallet?.balance ?? 0).toLocaleString('en-IN')}
                 </p>
                 <div className="flex gap-2 mt-4">
