@@ -10,14 +10,8 @@ interface UserSettings {
   language: string;
   notificationsEnabled: boolean;
   notificationSound: boolean;
-  chatNotifications: boolean;
   communityUpdates: boolean;
   pushEnabled: boolean;
-  emailNotifications: boolean;
-  smsNotifications: boolean;
-  dataSaver: boolean;
-  autoDownloadImages: boolean;
-  autoDownloadVideos: boolean;
   showOnlineStatus: boolean;
   showLastActive: boolean;
   allowProfileView: boolean;
@@ -31,14 +25,8 @@ const DEFAULT_SETTINGS: UserSettings = {
   language: "en",
   notificationsEnabled: true,
   notificationSound: true,
-  chatNotifications: true,
   communityUpdates: true,
   pushEnabled: true,
-  emailNotifications: true,
-  smsNotifications: false,
-  dataSaver: false,
-  autoDownloadImages: true,
-  autoDownloadVideos: false,
   showOnlineStatus: true,
   showLastActive: true,
   allowProfileView: true,

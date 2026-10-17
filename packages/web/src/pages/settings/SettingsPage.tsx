@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Sun, Moon, Monitor, Bell, Shield, Smartphone, Type, WifiOff, Save, Loader2, Eye, Clock, Lock, KeyRound } from 'lucide-react'
+import { ArrowLeft, Sun, Moon, Monitor, Bell, Shield, Smartphone, Type, Save, Loader2, Eye, Clock, Lock, KeyRound } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
@@ -19,14 +19,8 @@ interface Settings {
   fontSize: string
   notificationsEnabled: boolean
   notificationSound: boolean
-  chatNotifications: boolean
   communityUpdates: boolean
   pushEnabled: boolean
-  emailNotifications: boolean
-  smsNotifications: boolean
-  dataSaver: boolean
-  autoDownloadImages: boolean
-  autoDownloadVideos: boolean
   showOnlineStatus: boolean
   showLastActive: boolean
   allowProfileView: boolean
@@ -35,10 +29,8 @@ interface Settings {
 
 const defaultSettings: Settings = {
   theme: 'system', accent: 'navy', fontSize: 'medium',
-  notificationsEnabled: true, notificationSound: true, chatNotifications: true,
-  communityUpdates: true, pushEnabled: true,
-  emailNotifications: true, smsNotifications: false, dataSaver: false,
-  autoDownloadImages: true, autoDownloadVideos: false, showOnlineStatus: true,
+  notificationsEnabled: true, notificationSound: true,
+  communityUpdates: true, pushEnabled: true, showOnlineStatus: true,
   showLastActive: true, allowProfileView: true, allowLocationSharing: false,
 }
 
@@ -370,17 +362,11 @@ export function SettingsPage() {
           </SettingRow>
           {settings.notificationsEnabled && (
             <>
-              <SettingRow icon={Bell} label="Chat Messages" description="New message alerts">
-                <ToggleSwitch enabled={settings.chatNotifications} onChange={v => update('chatNotifications', v)} />
-              </SettingRow>
               <SettingRow icon={Bell} label="Community Updates" description="Community activity alerts">
                 <ToggleSwitch enabled={settings.communityUpdates} onChange={v => update('communityUpdates', v)} />
               </SettingRow>
               <SettingRow icon={Smartphone} label="Push Notifications" description="Device push notifications">
                 <ToggleSwitch enabled={settings.pushEnabled} onChange={updatePushEnabled} />
-              </SettingRow>
-              <SettingRow icon={Bell} label="Email Notifications" description="Email digest updates">
-                <ToggleSwitch enabled={settings.emailNotifications} onChange={v => update('emailNotifications', v)} />
               </SettingRow>
             </>
           )}
@@ -458,18 +444,6 @@ export function SettingsPage() {
               }}
             />
           )}
-
-          {/* Data & Storage */}
-          <h2 className="text-xs font-semibold text-surface-400 uppercase tracking-wider mb-3 mt-8">Data & Storage</h2>
-          <SettingRow icon={WifiOff} label="Data Saver" description="Reduce data usage">
-            <ToggleSwitch enabled={settings.dataSaver} onChange={v => update('dataSaver', v)} />
-          </SettingRow>
-          <SettingRow icon={Smartphone} label="Auto-download Images" description="Download images on mobile data">
-            <ToggleSwitch enabled={settings.autoDownloadImages} onChange={v => update('autoDownloadImages', v)} />
-          </SettingRow>
-          <SettingRow icon={Smartphone} label="Auto-download Videos" description="Download videos on mobile data">
-            <ToggleSwitch enabled={settings.autoDownloadVideos} onChange={v => update('autoDownloadVideos', v)} />
-          </SettingRow>
 
           {/* Save */}
           <div className="pt-6">
