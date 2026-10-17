@@ -51,32 +51,13 @@ legend{
 }
 .field{display:flex;flex-direction:column;gap:6px}
 label,.q{font-weight:600;font-size:15px}
-.hint{font-weight:400;color:var(--muted);font-size:13px}
-input[type=text],input[type=email],input[type=tel],select,textarea{
+input[type=text],input[type=email]{
   width:100%;font:inherit;color:var(--ink);background:var(--white);
   border:1.5px solid var(--line);border-radius:10px;padding:14px;min-height:50px;
   appearance:none;-webkit-appearance:none;transition:border-color .15s,box-shadow .15s;
 }
-select{
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='9' viewBox='0 0 14 9'%3E%3Cpath d='M1 1l6 6 6-6' fill='none' stroke='%2312263A' stroke-width='2'/%3E%3C/svg%3E");
-  background-repeat:no-repeat;background-position:right 16px center;padding-right:42px;
-}
-textarea{min-height:110px;resize:vertical}
-input:focus,select:focus,textarea:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 4px rgba(47,91,255,.18)}
-input:user-invalid,select:user-invalid,textarea:user-invalid{border-color:var(--error)}
-
-.chips{display:flex;flex-wrap:wrap;gap:10px}
-.chip{position:relative}
-.chip input{position:absolute;opacity:0;inset:0;width:100%;height:100%;cursor:pointer;margin:0}
-.chip span{
-  display:inline-block;padding:11px 16px;border-radius:999px;background:var(--white);
-  border:1.5px solid var(--line);font-weight:500;font-size:15px;transition:all .15s;
-}
-.chip input:checked + span{background:var(--ink);border-color:var(--ink);color:var(--white)}
-.chip input:focus-visible + span{outline:3px solid var(--blue);outline-offset:2px}
-
-.consent{display:flex;gap:12px;align-items:flex-start;font-size:14px;color:var(--muted)}
-.consent input{width:22px;height:22px;margin-top:1px;flex:none;accent-color:var(--blue)}
+input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 4px rgba(47,91,255,.18)}
+input:user-invalid{border-color:var(--error)}
 
 button{
   font:inherit;font-weight:700;font-size:17px;color:var(--white);background:var(--blue);
@@ -98,7 +79,7 @@ button[disabled]{opacity:.65;cursor:progress}
   <header>
     <div class="brand"><i class="dot"></i>Nabri</div>
     <h1>Test Nabri before anyone else.</h1>
-    <p class="lead">Use the early version, tell us what breaks, and shape what we build next. It takes about two minutes to apply.</p>
+    <p class="lead">Use the early version, tell us what breaks, and shape what we build next. It takes about ten seconds to apply.</p>
     <div class="perks">
       <span>Android on Google Play</span>
       <span>Early access</span>
@@ -125,49 +106,12 @@ button[disabled]{opacity:.65;cursor:progress}
         <label for="email">Email</label>
         <input id="email" name="email" type="email" autocomplete="email" inputmode="email" required>
       </div>
-      <div class="field">
-        <label for="phone">WhatsApp number <span class="hint">(optional, for quick updates)</span></label>
-        <input id="phone" name="WhatsApp" type="tel" autocomplete="tel" inputmode="tel">
-      </div>
-      <div class="field">
-        <label for="city">City</label>
-        <input id="city" name="City" type="text" autocomplete="address-level2" required>
-      </div>
     </fieldset>
 
-    <fieldset>
-      <legend>Your phone</legend>
-      <p class="note">Nabri for Android is distributed through <strong>Google Play</strong>. <strong>Current test build: 1.0.19</strong>. Within seconds of applying we email you the steps &mdash; join the tester group, tap <strong>Become a tester</strong>, then install from <a href="https://play.google.com/store/apps/details?id=app.rentbuddy.app" style="color:var(--blue);font-weight:600">Google Play</a>. <strong>Join the group and open Google Play with the same Google account</strong> &mdash; a different account shows &ldquo;App not available&rdquo;. In a hurry? <a href="https://groups.google.com/g/nabri-beta" style="color:var(--blue);font-weight:600">Join the tester group directly</a> first. An App Store version for iPhone will come later.</p>
-      <div class="field">
-        <label for="model">Android phone model <span class="hint">(for example, Redmi Note 12)</span></label>
-        <input id="model" name="Phone model" type="text" required>
-      </div>
-    </fieldset>
-
-    <fieldset>
-      <div class="field">
-        <label for="time">Time you can give each week</label>
-        <select id="time" name="Weekly time" required>
-          <option value="" selected disabled>Choose one</option>
-          <option>Under 1 hour</option>
-          <option>1 to 3 hours</option>
-          <option>3 to 5 hours</option>
-          <option>More than 5 hours</option>
-        </select>
-      </div>
-      <div class="field">
-        <label for="why">Why do you want to test Nabri?</label>
-        <textarea id="why" name="Why join" required></textarea>
-      </div>
-    </fieldset>
-
-    <label class="consent">
-      <input type="checkbox" name="Consent" value="Yes" required>
-      <span>I agree to be contacted about the Nabri beta and to report issues honestly.</span>
-    </label>
+    <p class="note">Nabri for Android is distributed through <strong>Google Play</strong>. <strong>Current test build: 1.0.26</strong>. Within seconds of applying we email you the steps &mdash; join the tester group, tap <strong>Become a tester</strong>, then install from <a href="https://play.google.com/store/apps/details?id=app.rentbuddy.app" style="color:var(--blue);font-weight:600">Google Play</a>. <strong>Join the group and open Google Play with the same Google account</strong> &mdash; a different account shows &ldquo;App not available&rdquo;. In a hurry? <a href="https://groups.google.com/g/nabri-beta" style="color:var(--blue);font-weight:600">Join the tester group directly</a> first. An App Store version for iPhone will come later.</p>
 
     <button type="submit" id="send">Apply as a beta tester</button>
-    <p class="fine">Your details go only to the Nabri founder.<br>Android build 1.0.19 &middot; <a href="https://play.google.com/store/apps/details?id=app.rentbuddy.app" style="color:var(--blue);font-weight:600">Get it on Google Play</a></p>
+    <p class="fine">Your details go only to the Nabri founder.<br>Android build 1.0.26 &middot; <a href="https://play.google.com/store/apps/details?id=app.rentbuddy.app" style="color:var(--blue);font-weight:600">Get it on Google Play</a></p>
   </form>
 </div>
 <script>
