@@ -93,7 +93,15 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   }
 
   // ---- PARTNER GATE: partner surfaces stay locked until admin approval ----
-  if (effectiveRole === 'PARTNER' && (location.pathname.startsWith('/partner') || location.pathname.startsWith('/carry')) && location.pathname !== '/partner/pending') {
+  // User-only destinations are already blocked by the `allowedRoles={['USER']}`
+  // route group in App.tsx, which sends a partner to /partner/dashboard before
+  // this runs. This gate only handles what those route groups cannot: keeping
+  // the partner surface itself behind admin approval.
+  if (
+    effectiveRole === 'PARTNER' &&
+    (location.pathname.startsWith('/partner') || location.pathname.startsWith('/carry')) &&
+    location.pathname !== '/partner/pending'
+  ) {
     if (user.partnerStatus !== 'APPROVED') {
       return <Navigate to="/partner/pending" replace />
     }

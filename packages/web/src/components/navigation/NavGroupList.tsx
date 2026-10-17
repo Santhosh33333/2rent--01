@@ -1,5 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import {
+  MAIN_GROUP,
+  PARTNER_MAIN_GROUP,
   PARTNER_MORE,
   USER_MORE,
   isNavItemActive,
@@ -73,7 +75,20 @@ export function NavGroupList({
   );
 }
 
-/** The group set for a role, resolved in one place. */
+/**
+ * The "More" group set for a role — the destinations that are not dock tabs.
+ *
+ * Both the drawer and the More sheet render this, so a partner cannot be shown
+ * the customer menu in one surface and the partner menu in the other. The
+ * drawer additionally prepends `mainGroupForRole` because its dock is hidden on
+ * desktop; the phone More sheet deliberately does not, since the dock is right
+ * there.
+ */
 export function groupsForRole(role?: string | null): NavGroup[] {
   return role === "PARTNER" ? PARTNER_MORE : USER_MORE;
+}
+
+/** The dock, as a group, for surfaces that do not show the dock (the drawer). */
+export function mainGroupForRole(role?: string | null): NavGroup {
+  return role === "PARTNER" ? PARTNER_MAIN_GROUP : MAIN_GROUP;
 }

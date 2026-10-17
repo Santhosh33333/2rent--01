@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, type MouseEvent } from 'react';
 import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
 import { 
-  Home, User, Wallet, Users, Sun, Moon, X, Bell, 
-  MapPin, LogOut, Calendar, Settings, Shield, Info, LayoutDashboard, 
+  User, Wallet, Users, Sun, Moon, X, Bell, 
+  MapPin, LogOut, Settings, Shield, Info,
   ClipboardList, Search, QrCode, Send, LifeBuoy, Gift 
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
@@ -24,8 +24,7 @@ import { ReConsentBanner } from './legal/ReConsentBanner';
 import { AppTabBar } from './navigation/AppTabBar';
 import { MoreSheet } from './navigation/MoreSheet';
 import { AgentLauncher } from './agent/AgentLauncher';
-import { NavGroupList, groupsForRole } from './navigation/NavGroupList';
-import { MAIN_GROUP } from '../navigation/tabs';
+import { NavGroupList, groupsForRole, mainGroupForRole } from './navigation/NavGroupList';
 
 function UnreadBadge() {
   const [count, setCount] = useState(0);
@@ -63,22 +62,6 @@ function UnreadBadge() {
   );
 }
 
-const userNav = [
-  { to: '/home', icon: Home, label: 'Home' },
-  { to: '/discover', icon: Search, label: 'Discover' },
-  { to: '/bookings', icon: Calendar, label: 'Bookings' },
-  { to: '/communities', icon: Users, label: 'Social' },
-  { to: '/profile', icon: User, label: 'Profile' },
-];
-
-const partnerNav = [
-  { to: '/partner/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/partner/jobs', icon: ClipboardList, label: 'Jobs' },
-  { to: '/partner/map', icon: MapPin, label: 'Map' },
-  { to: '/partner/wallet', icon: Wallet, label: 'Wallet' },
-  { to: '/partner/profile', icon: User, label: 'Profile' },
-];
-
 const adminNav = [
   { to: '/admin/dashboard', icon: Shield, label: 'Dashboard' },
   { to: '/admin/users', icon: Users, label: 'Users' },
@@ -98,7 +81,9 @@ const sidebarLinks = [
   { to: '/notifications', icon: Bell, label: 'Notifications' },
   { to: '/support', icon: LifeBuoy, label: 'Help & support' },
   { to: '/settings/privacy', icon: Shield, label: 'Privacy' },
-  { to: '/home', icon: Info, label: 'About' },
+  // Points at the public /about page, not /home. /home is a customer-only route,
+  // so a partner tapping "About" was bounced back to their dashboard.
+  { to: '/about', icon: Info, label: 'About' },
 ];
 
 /**
@@ -124,9 +109,17 @@ export function Layout() {
   const [bannerUp, setBannerUp] = useState(false);
   const topStackRef = useRef<HTMLDivElement | null>(null);
 
-  const navItems = activeRole === 'PARTNER' ? partnerNav
-    : isAdminTierRole(activeRole) ? adminNav
-    : userNav;
+  // Only the admin console still needs a bespoke list; customer and partner
+  // drawers render `groupsForRole` so navigation has one source of truth.
+  const navItems = adminNav;
+
+  // A partner's "home" is their dashboard and their wallet lives under
+  // /partner. Pointing the header at the customer routes would bounce them
+  // straight back to /partner/dashboard, so the brand and wallet icons are
+  // role-aware.
+  const isPartner = activeRole === 'PARTNER';
+  const homeHref = isPartner ? '/partner/dashboard' : '/home';
+  const walletHref = isPartner ? '/partner/wallet' : '/wallet';
 
   const isSuperAdmin = isSuperAdminRole(user?.role) || activeRole === 'SUPER_ADMIN';
   const superAdminNav = isSuperAdmin
@@ -246,7 +239,7 @@ export function Layout() {
           className="max-w-7xl mx-auto h-16 px-3 rounded-3xl bg-surface-50/60 dark:bg-surface-900/60 backdrop-blur-2xl border border-surface-200/50 dark:border-surface-800/50 shadow-xl shadow-black/5 pointer-events-auto flex items-center justify-between"
         >
           <div className="flex items-center gap-3 min-w-0">
-            <Link to="/home" className="flex items-center gap-2 pl-1 shrink-0" aria-label="Nabri home">
+            <Link to={homeHref} className="flex items-center gap-2 pl-1 shrink-0" aria-label="Nabri home">
               <span className="brand-badge h-8 w-8">
                 <img src="/logo-glyph-white.svg" alt="" className="h-5 w-5" />
               </span>
@@ -267,14 +260,18 @@ export function Layout() {
               It now lives in Settings (admin / multi-role accounts only), so the
               header carries just the brand on the left and actions on the right. */}
           <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-            <Link to="/search" className="p-2 rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 transition hidden sm:block">
-              <Search className="w-5 h-5" />
-            </Link>
+            {/* Discovery search is a customer surface; a partner has no search
+                route, so the icon is hidden rather than dead. */}
+            {!isPartner && (
+              <Link to="/search" className="p-2 rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 transition hidden sm:block">
+                <Search className="w-5 h-5" />
+              </Link>
+            )}
             <button onClick={toggleTheme} className="p-2 rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 transition">
               {theme === 'dark' ? <Sun className="w-5 h-5 text-yellow-500" /> : <Moon className="w-5 h-5 text-surface-600" />}
             </button>
             <Link
-              to="/wallet"
+              to={walletHref}
               aria-label="Wallet"
               className="p-2 rounded-xl hover:bg-surface-100 dark:hover:bg-surface-800 transition"
             >
@@ -348,9 +345,9 @@ export function Layout() {
                   shrinks, long nav lists overflow, and the Sign Out button is
                   pushed off-screen where it cannot be scrolled to. */}
               <nav className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-6 pr-1 -mr-2">
-                {/* Admins keep their own console list; everyone else renders the
-                    same shared groups as the More sheet, so the drawer and the
-                    dock cannot teach different navigation. */}
+                {/* Admins keep their own console list; everyone else renders
+                    the shared groups from `groupsForRole`, so the drawer and
+                    the dock cannot teach different navigation. */}
                 {isAdminTierRole(activeRole) ? (
                   <>
                     <div>
@@ -385,7 +382,7 @@ export function Layout() {
                   </>
                 ) : (
                   <NavGroupList
-                    groups={[MAIN_GROUP, ...groupsForRole(activeRole)]}
+                    groups={[mainGroupForRole(activeRole), ...groupsForRole(activeRole)]}
                     onNavigate={() => setSidebarOpen(false)}
                     variant="drawer"
                   />

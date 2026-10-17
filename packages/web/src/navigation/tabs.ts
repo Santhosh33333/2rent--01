@@ -50,9 +50,9 @@ export interface NavGroup {
 }
 
 /**
- * The five primary destinations. These are the only things that get a tab, and
- * they are identical for every consumer role so muscle memory survives a switch
- * between user and partner preview.
+ * The five customer-primary destinations. A customer account sees these; a
+ * partner account gets its own set below, because a partner's job is to answer
+ * requests, not to browse discovery.
  */
 export const PRIMARY_TABS: NavItem[] = [
   { to: "/home", label: "Home", icon: Home },
@@ -67,6 +67,23 @@ export const PRIMARY_TABS: NavItem[] = [
 ];
 
 /**
+ * Partner primary tabs (dock) for a partner-only surface.
+ */
+export const PARTNER_PRIMARY_TABS: NavItem[] = [
+  { to: "/partner/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/partner/jobs", label: "Jobs", icon: ClipboardList, matchPrefix: "/partner/jobs" },
+  { to: "/partner/map", label: "Map", icon: MapPin },
+  { to: "/partner/wallet", label: "Wallet", icon: Wallet },
+  { to: "/partner/profile", label: "Profile", icon: User },
+];
+
+/** Resolve the five primary tabs for a given role. */
+export function primaryTabsForRole(role?: string | null): NavItem[] {
+  if (role === "PARTNER") return PARTNER_PRIMARY_TABS;
+  return PRIMARY_TABS;
+}
+
+/**
  * The same five destinations, declared as a drawer group.
  *
  * The dock is `lg:hidden`, so on a desktop browser the drawer is the only
@@ -76,6 +93,14 @@ export const PRIMARY_TABS: NavItem[] = [
  * carries these five, so showing them again there is just noise.
  */
 export const MAIN_GROUP: NavGroup = { title: "Main", items: PRIMARY_TABS };
+
+/**
+ * The partner dock, declared as a drawer group. On a phone the dock already
+ * carries these five; the drawer needs its own copy because it is `lg:block`
+ * and the dock is `lg:hidden`, so a desktop partner would otherwise start at
+ * "Partner" with no dashboard/jobs/map tab at all.
+ */
+export const PARTNER_MAIN_GROUP: NavGroup = { title: "Main", items: PARTNER_PRIMARY_TABS };
 
 /** Consumer "More" destinations. Grouped so the sheet reads as a menu, not a dump. */
 export const USER_MORE: NavGroup[] = [
@@ -114,21 +139,23 @@ export const USER_MORE: NavGroup[] = [
 
 export const PARTNER_MORE: NavGroup[] = [
   {
+    // Partner destinations that are NOT already dock tabs. Dashboard, Jobs,
+    // Map, Wallet and Profile live in the dock, so repeating them here would
+    // just show the same five links twice in the drawer and the More sheet.
     title: "Partner",
     items: [
-      { to: "/partner/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { to: "/partner/jobs", label: "Jobs", icon: ClipboardList },
-      { to: "/partner/map", label: "Live map", icon: MapPin },
-      { to: "/partner/wallet", label: "Wallet", icon: Wallet },
       { to: "/partner/performance", label: "Performance", icon: ClipboardList },
-      { to: "/partner/profile", label: "Partner profile", icon: User },
+      { to: "/messages", label: "Messages", icon: MessageCircle, matchPrefix: "/messages" },
     ],
   },
   {
     title: "Account",
     // An approved partner does not need the "Become a partner" call to action,
-    // so it is dropped from the shared Account group on the partner surface.
-    items: USER_MORE[2].items.filter((item) => item.to !== "/partner/apply"),
+    // and has no customer subscription: both would dead-end for them, so they
+    // are dropped from the shared Account group on the partner surface.
+    items: USER_MORE[2].items.filter(
+      (item) => item.to !== "/partner/apply" && item.to !== "/subscription",
+    ),
   },
 ];
 

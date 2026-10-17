@@ -8,7 +8,7 @@ import { NavGroupList, groupsForRole } from "./NavGroupList";
  * the whole point: a More sheet that lists aspirational features teaches users
  * that the app lies.
  *
- * Shares `NavGroupList` with the sidebar drawer so the two cannot list different
+ * Shares `groupsForRole` with the sidebar drawer so the two cannot list different
  * destinations, and closes on navigation because a sheet left open over a new
  * page is a dead end.
  */

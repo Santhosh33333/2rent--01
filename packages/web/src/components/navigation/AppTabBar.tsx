@@ -1,8 +1,9 @@
 import { NavLink } from "react-router-dom";
 import { MoreHorizontal } from "lucide-react";
 import { motion } from "motion/react";
-import { PRIMARY_TABS, isNavItemActive, type NavItem } from "../../navigation/tabs";
+import { primaryTabsForRole, isNavItemActive, type NavItem } from "../../navigation/tabs";
 import { useLocation } from "react-router-dom";
+import { useRole } from "../../lib/roleContext";
 
 /**
  * Bottom tab bar.
@@ -18,6 +19,8 @@ import { useLocation } from "react-router-dom";
  */
 export function AppTabBar({ onOpenMore }: { onOpenMore: () => void }) {
   const { pathname } = useLocation();
+  const { activeRole } = useRole();
+  const tabs = primaryTabsForRole(activeRole);
 
   return (
     <nav
@@ -42,7 +45,7 @@ export function AppTabBar({ onOpenMore }: { onOpenMore: () => void }) {
         transition={{ type: "spring", stiffness: 260, damping: 26 }}
         className="mx-auto flex max-w-md items-stretch gap-1 rounded-3xl border border-surface-200/60 bg-surface-50/85 px-2 py-2 shadow-2xl shadow-black/10 backdrop-blur-2xl dark:border-surface-800/60 dark:bg-surface-900/85"
       >
-        {PRIMARY_TABS.map((item) => (
+        {tabs.map((item) => (
           <TabLink key={item.to} item={item} active={isNavItemActive(item, pathname)} />
         ))}
 

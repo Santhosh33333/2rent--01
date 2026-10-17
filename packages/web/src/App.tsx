@@ -271,11 +271,6 @@ export function App() {
               <Route path="/walking-requests/*" element={<Navigate to="/discover" replace />} />
               <Route path="/communities" element={<CommunitiesPage />} />
               <Route path="/communities/:id" element={<CommunityDetailPage />} />
-              <Route path="/notifications" element={<NotificationsPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/settings/privacy" element={<PrivacyPage />} />
-              <Route path="/settings/privacy/privacy-policy" element={<PrivacyPolicyPage />} />
-              <Route path="/settings/privacy/terms" element={<TermsOfServicePage />} />
               <Route path="/search" element={<SearchPage />} />
             </Route>
           </Route>
@@ -288,13 +283,23 @@ export function App() {
               straight to /wallet/withdraw, which used to sit inside the USER-only
               block above: ProtectedRoute bounced the partner back to
               /partner/dashboard with `replace`, so the form never rendered and
-              the button looked completely dead. */}
+              the button looked completely dead.
+
+              Settings, Notifications and the privacy pages live here too: they
+              are the "for all account types" items in the drawer, so a partner
+              tapping Settings must land on Settings rather than being bounced
+              back to their dashboard. */}
           <Route element={<ProtectedRoute allowedRoles={['USER', 'PARTNER']} />}>
             <Route element={<Layout />}>
               <Route path="/wallet/topup" element={<TopUpPage />} />
               <Route path="/wallet/withdraw" element={<WithdrawalPage />} />
               <Route path="/wallet/transactions" element={<TransactionHistoryPage />} />
               <Route path="/wallet/history" element={<TransactionHistoryPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/settings/privacy" element={<PrivacyPage />} />
+              <Route path="/settings/privacy/privacy-policy" element={<PrivacyPolicyPage />} />
+              <Route path="/settings/privacy/terms" element={<TermsOfServicePage />} />
+              <Route path="/notifications" element={<NotificationsPage />} />
               {/* Invite & earn is word-of-mouth growth, so both customer and
                   partner surfaces get it (the referral endpoints only require an
                   authenticated account). */}
