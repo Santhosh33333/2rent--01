@@ -18,6 +18,7 @@ import {
   type Provider,
 } from "../services/paymentProvider"
 import { dispatchBooking, onBookingClaimed } from "../services/dispatchService"
+import { withConnectMode, type ConnectMode } from "../services/connectMode"
 import { findOnlineCompanions } from "../services/partnerMatching"
 import { ensureConversation } from "./messageController"
 import { SERVICE_KEYS, getServiceDef } from "../services/serviceCatalog"
@@ -122,6 +123,14 @@ export async function createBooking(req: AuthedRequest, res: Response): Promise<
       ? req.body.preferredPartnerId.trim()
       : undefined;
 
+    // How the booker wants to be connected: "CALL" or "CHAT". It is written into
+    // the booking's notes so matching can honour the partner's own call/chat
+    // choice; anything else simply leaves the channel unspecified, which matches
+    // every partner rather than none of them.
+    const rawConnectMode = typeof req.body.connectMode === "string" ? req.body.connectMode.toUpperCase() : "";
+    const connectMode: ConnectMode | undefined =
+      rawConnectMode === "CALL" || rawConnectMode === "CHAT" ? rawConnectMode : undefined;
+
     // Per-type process: pickup-to-drop services must have a destination;
     // companion-style services (walking, pet, study…) default it to pickup.
     const serviceDef = getServiceDef(normalizedServiceType);
@@ -170,7 +179,10 @@ export async function createBooking(req: AuthedRequest, res: Response): Promise<
       durationMinutes,
       itemType,
       itemDescription,
-      notes: mergeBookingPreference(notes, sameGenderOnly),
+      notes: mergeBookingPreference(
+        withConnectMode(typeof notes === "string" ? notes : undefined, connectMode),
+        sameGenderOnly
+      ),
       startLatitude,
       startLongitude,
       endLatitude,
@@ -191,7 +203,12 @@ export async function createBooking(req: AuthedRequest, res: Response): Promise<
         action: "BOOKING_CREATE",
         entityType: "Booking",
         entityId: booking.id,
-        metadata: JSON.stringify({ serviceType: normalizedServiceType, serviceTypes, preferredPartnerId: preferredPartnerId ?? null }),
+        metadata: JSON.stringify({
+          serviceType: normalizedServiceType,
+          serviceTypes,
+          preferredPartnerId: preferredPartnerId ?? null,
+          connectMode: connectMode ?? null,
+        }),
       },
     });
 

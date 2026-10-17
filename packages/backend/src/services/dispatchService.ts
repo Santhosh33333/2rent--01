@@ -1,6 +1,7 @@
 ﻿import { prisma } from "../config/database";
 import { emitToUser, getIO } from "./socketService";
 import { serviceLabel } from "./serviceCatalog";
+import { capabilityFilter, connectModeForBooking } from "./connectMode";
 
 /**
  * Job dispatch pipeline.
@@ -47,10 +48,13 @@ function jobPayload(booking: {
  */
 async function findEligiblePartners(booking: {
   serviceType: string;
+  notes?: string | null;
   userId: string;
 }): Promise<DispatchTarget[]> {
-  const serviceFilter =
-    booking.serviceType === "CARRY_BUDDY" ? { providesCarry: true } : { providesWalking: true };
+  // The two capability flags answer the booker's call/chat choice, not the
+  // retired catalogue keys - every live service used to fan out to
+  // call-capable partners alone. An unspecified channel reaches everyone.
+  const serviceFilter = capabilityFilter(connectModeForBooking(booking));
 
   const partners = await prisma.partner.findMany({
     where: {
@@ -127,6 +131,7 @@ export async function dispatchBooking(
         id: true,
         userId: true,
         serviceType: true,
+        notes: true,
         startLocation: true,
         endLocation: true,
         scheduledAt: true,

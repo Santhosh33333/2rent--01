@@ -38,7 +38,7 @@ export function TermsOfServicePage() {
 
             <section>
               <h2 className="text-lg font-bold font-display text-surface-900 dark:text-white mb-3">3. Services</h2>
-              <p className="text-sm leading-relaxed">Nabri connects users with service providers (partners) for walking companions, carry assistance, and other community services. We are a platform — we do not directly provide the services listed.</p>
+              <p className="text-sm leading-relaxed">Nabri connects users with service providers (partners) for companionship sessions delivered inside the app — over call or chat — and other community services. We are a platform — we do not directly provide the services listed.</p>
             </section>
 
             <section>

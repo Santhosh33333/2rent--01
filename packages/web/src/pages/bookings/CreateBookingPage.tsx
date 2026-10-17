@@ -348,6 +348,9 @@ export function CreateBookingPage() {
           : booking.itemDescription || undefined,
         sameGenderOnly: booking.sameGenderOnly || undefined,
         preferredPartnerId: chosenPartnerId ?? undefined,
+        // Sent as a field, not only as notes prose: matching uses it to decide
+        // which partners (call-taking / chat-taking) are offered this job.
+        connectMode: isRemote ? connectMode : undefined,
       })
       const data = res.data?.data || res.data
       const id = data?.id || data?.bookingId

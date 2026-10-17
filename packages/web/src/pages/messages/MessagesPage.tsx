@@ -322,7 +322,7 @@ export function MessagesPage() {
         <div className="glass-elevated overflow-hidden divide-y divide-surface-100 dark:divide-surface-800">
           {filtered.length === 0 ? (
             <EmptyState icon={MessageCircle} title={search ? 'No conversations found' : 'No conversations yet'}
-              description={search ? 'Try a different search term' : 'Start chatting with your walking partners!'}
+              description={search ? 'Try a different search term' : 'Start chatting with your companions!'}
               action={!search ? <Link to="/discover" className="btn btn-primary btn-sm">Find people to chat with</Link> : undefined} />
           ) : (
             filtered.map((conv) => (

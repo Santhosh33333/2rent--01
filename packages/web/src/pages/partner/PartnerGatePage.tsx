@@ -121,8 +121,8 @@ export function PartnerGatePage() {
 
               <div className="space-y-3 mt-5">
                 {[
-                  { key: 'call', label: 'Call sessions', desc: 'Talk, Vent and Time-pass over a voice call', checked: providesWalking, toggle: () => setProvidesWalking((v) => !v) },
-                  { key: 'chat', label: 'Chat sessions', desc: 'Date and Friends over in-app chat', checked: providesCarry, toggle: () => setProvidesCarry((v) => !v) },
+                  { key: 'call', label: 'Call sessions', desc: 'Jobs that start with a voice call in the app', checked: providesWalking, toggle: () => setProvidesWalking((v) => !v) },
+                  { key: 'chat', label: 'Chat sessions', desc: 'Jobs that start with an in-app chat', checked: providesCarry, toggle: () => setProvidesCarry((v) => !v) },
                 ].map((s) => (
                   <button key={s.key} type="button" onClick={s.toggle}
                     className={`w-full flex items-center gap-3 p-4 rounded-xl border transition-all active:scale-[0.99] ${

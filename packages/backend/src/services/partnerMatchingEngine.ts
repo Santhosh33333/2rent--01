@@ -1,6 +1,7 @@
 import { prisma } from "../config/database";
 import { calculateDistance } from "../utils/location";
 import { getServiceDef } from "./serviceCatalog";
+import { capabilityFilter as bookingCapability, connectModeForBooking } from "./connectMode";
 import { getConfig } from "./pricingEngine";
 import { isDemoEmail, isDemoPartnerEmail, isDemoUserEmail } from "../utils/demo";
 
@@ -62,11 +63,13 @@ export async function findMatchingPartners(
     // Same-gender preference (spec 101): enforced HERE in the backend, never
     // just hidden in UI. Read from the booking notes set at creation.
     let genderFilter: { gender?: string } = {};
+    let bookingNotes: string | null = null;
     try {
       const booking = await prisma.booking.findUnique({
         where: { id: bookingId },
         select: { notes: true },
       });
+      bookingNotes = booking?.notes ?? null;
       let pref: any = {};
       try {
         pref = booking?.notes ? JSON.parse(booking.notes) : {};
@@ -87,20 +90,19 @@ export async function findMatchingPartners(
     bookingUser.blocksReceived.forEach((b) => blockedUserIds.add(b.blockerId));
 
     // Query partners who:
-    // - Provide the service type (WALKING/CARRY_BUDDY honour capability flags;
-    //   other Expanded-Ecosystem services match any approved, available partner)
+    // - Take the session the booker asked for: call or chat, recorded on the
+    //   booking. The retired WALKING/CARRY_BUDDY keys keep the mapping they
+    //   always had, and an unspecified channel matches every partner
+    //   (see services/connectMode.ts).
     // - Are active and approved
     // - Are currently available
     // - Haven't been blocked
-    const capabilityFilter =
-      criteria.serviceType === "WALKING"
-        ? { providesWalking: true }
-        : criteria.serviceType === "CARRY_BUDDY"
-          ? { providesCarry: true }
-          : {};
+    const capabilityWhere = bookingCapability(
+      connectModeForBooking({ serviceType: criteria.serviceType, notes: bookingNotes })
+    );
     const partners = await prisma.partner.findMany({
       where: {
-        ...capabilityFilter,
+        ...capabilityWhere,
         status: "APPROVED",
         isAvailable: true,
         user: {

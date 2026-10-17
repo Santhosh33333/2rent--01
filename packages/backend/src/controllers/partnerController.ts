@@ -3,6 +3,7 @@ import { Response } from "express";
 import { prisma } from "../config/database";
 import { sendSuccess, sendError } from "../utils/response";
 import { AuthedRequest } from "../middleware/authTypes";
+import { connectModeForBooking, partnerServes } from "../services/connectMode";
 import * as partnerMatching from "../services/partnerMatchingEngine";
 import * as bookingEngine from "../services/bookingEngine";
 import { expireStaleSearches, onBookingClaimed, markDispatchesViewed } from "../services/dispatchService";
@@ -107,11 +108,10 @@ export async function getNearbyBookings(req: AuthedRequest, res: Response): Prom
       status: { in: ["PARTNER_SEARCHING", "PAYMENT_SUCCESSFUL"] },
     };
 
-    if (partner.providesWalking && !partner.providesCarry) {
-      where.serviceType = "WALKING";
-    } else if (!partner.providesWalking && partner.providesCarry) {
-      where.serviceType = "CARRY_BUDDY";
-    }
+    // Deliberately no service filter. The retired WALKING/CARRY_BUDDY keys
+    // matched nothing bookable any more, so a partner who ticked a single
+    // option was handed an empty list; the call/chat channel is decided per
+    // job below, once the booking rows are in hand (services/connectMode.ts).
 
     // Both only depend on the partner row we already have, so they travel
     // together instead of one waiting on the other.
@@ -148,9 +148,15 @@ export async function getNearbyBookings(req: AuthedRequest, res: Response): Prom
     // Demo sandbox fence: the demo partner only ever sees demo-user jobs,
     // and real partners never see demo jobs.
     const partnerIsDemo = isDemoEmail((partner as any).user?.email);
-    const inScope = bookings.filter((b: any) =>
-      partnerIsDemo ? isDemoUserEmail(b.user?.email) : !isDemoEmail(b.user?.email)
-    );
+    const inScope = bookings
+      .filter((b: any) =>
+        partnerIsDemo ? isDemoUserEmail(b.user?.email) : !isDemoEmail(b.user?.email)
+      )
+      // Only the sessions this partner said they take: the call/chat channel is
+      // read per booking, and legacy walking/carry rows keep their old mapping.
+      .filter((b: any) =>
+        partnerServes(partner, connectModeForBooking({ serviceType: b.serviceType, notes: b.notes }))
+      );
 
     // Mask the requester's full name down to a first name + initial for the feed.
     const masked = inScope

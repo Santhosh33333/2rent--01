@@ -13,6 +13,7 @@ import { AnimatedPage } from '../../components/AnimatedPage'
 import { GlassCard } from '../../components/GlassCard'
 import { SkeletonLoader } from '../../components/SkeletonLoader'
 import { RoleSwitcher } from '../../components/RoleSwitcher'
+import toast from 'react-hot-toast'
 
 interface PartnerStats {
   totalJobs: number
@@ -28,6 +29,33 @@ export function PartnerProfilePage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [stats, setStats] = useState<PartnerStats>({ totalJobs: 0, averageRating: 0, totalEarnings: 0, serviceTypes: [] })
   const [loading, setLoading] = useState(true)
+  // Which sessions this partner takes. Named `providesWalking`/`providesCarry`
+  // in the schema; on screen they are the two choices the apply flow offers.
+  const [services, setServices] = useState({ call: false, chat: false })
+  const [savingService, setSavingService] = useState<null | 'call' | 'chat'>(null)
+
+  const toggleService = async (key: 'call' | 'chat') => {
+    if (savingService) return
+    const next =
+      key === 'call' ? { ...services, call: !services.call } : { ...services, chat: !services.chat }
+    if (!next.call && !next.chat) {
+      toast.error('Keep at least one: choose Call sessions or Chat sessions.')
+      return
+    }
+    setSavingService(key)
+    setServices(next)
+    try {
+      await api.put('/partner/services', {
+        providesWalking: next.call,
+        providesCarry: next.chat,
+      })
+    } catch {
+      setServices(services) // the save failed — show the truth, not the optimism
+      toast.error('Could not update your services. Please try again.')
+    } finally {
+      setSavingService(null)
+    }
+  }
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -49,6 +77,7 @@ export function PartnerProfilePage() {
         if (statusRes.status === 'fulfilled') {
           const d = statusRes.value.data?.data || statusRes.value.data
           setStats((prev) => ({ ...prev, serviceTypes: d?.serviceTypes ?? prev.serviceTypes }))
+          setServices({ call: !!d?.providesWalking, chat: !!d?.providesCarry })
         }
         if (kycRes.status === 'fulfilled') {
           const d = kycRes.value.data?.data || kycRes.value.data
@@ -150,9 +179,14 @@ export function PartnerProfilePage() {
                 <h1 className="text-2xl sm:text-3xl font-bold font-display">{user?.name || 'Partner'}</h1>
               </div>
               <div className="flex items-center justify-center sm:justify-start gap-2 mt-2 flex-wrap">
-                {(stats.serviceTypes.includes('WALKING') || stats.serviceTypes.includes('CARRY_BUDDY')) && (
+                {services.call && (
                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/20 text-xs font-semibold backdrop-blur-sm">
-                    <User className="w-3 h-3" /> Companion
+                    <Phone className="w-3 h-3" /> Call sessions
+                  </span>
+                )}
+                {services.chat && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/20 text-xs font-semibold backdrop-blur-sm">
+                    <MessageCircle className="w-3 h-3" /> Chat sessions
                   </span>
                 )}
               </div>
@@ -181,6 +215,63 @@ export function PartnerProfilePage() {
             </div>
           ))}
         </div>
+      </AnimatedPage>
+
+      <AnimatedPage delay={150}>
+        <GlassCard variant="elevated" padding="lg">
+          <h3 className="section-title flex items-center gap-2 mb-1">
+            <CheckCircle className="w-5 h-5 text-primary-500" /> My services
+          </h3>
+          <p className="text-xs text-surface-500 mb-4">
+            Pick the sessions you take. Only matching jobs are sent to you, and you can change
+            this any time.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {([
+              { key: 'call', icon: Phone, label: 'Call sessions', desc: 'Jobs that start with a voice call in the app', on: services.call },
+              { key: 'chat', icon: MessageCircle, label: 'Chat sessions', desc: 'Jobs that start with an in-app chat', on: services.chat },
+            ] as const).map((s) => (
+              <button
+                key={s.key}
+                type="button"
+                aria-pressed={s.on}
+                disabled={savingService !== null}
+                onClick={() => toggleService(s.key)}
+                className={`flex items-center gap-3 p-4 rounded-xl border text-left transition-all active:scale-[0.99] disabled:opacity-60 ${
+                  s.on
+                    ? 'border-primary-500 bg-primary-500/10'
+                    : 'border-surface-200 dark:border-surface-700'
+                }`}
+              >
+                <span
+                  className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                    s.on ? 'bg-primary-500 text-white' : 'bg-surface-100 dark:bg-surface-800 text-surface-500'
+                  }`}
+                >
+                  <s.icon className="w-4 h-4" />
+                </span>
+                <span className="flex-1 min-w-0">
+                  <span className="block text-sm font-semibold text-surface-900 dark:text-white">
+                    {s.label}
+                  </span>
+                  <span className="block text-xs text-surface-500 dark:text-surface-400">
+                    {s.desc}
+                  </span>
+                </span>
+                <span
+                  className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                    s.on
+                      ? 'border-primary-500 bg-primary-500 text-white'
+                      : 'border-surface-300 dark:border-surface-600'
+                  }`}
+                >
+                  {s.on && <Check className="w-3 h-3" strokeWidth={3} />}
+                </span>
+              </button>
+            ))}
+          </div>
+          {savingService && <p className="mt-2 text-[11px] text-surface-400">Saving…</p>}
+        </GlassCard>
       </AnimatedPage>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
