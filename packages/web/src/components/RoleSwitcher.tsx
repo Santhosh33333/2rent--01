@@ -7,7 +7,7 @@ import { dashboardForRole } from '../lib/roles'
 import { RefreshCw, Check, ChevronDown, ArrowRight, Shield } from 'lucide-react'
 
 export function RoleSwitcher({ variant = 'header' }: { variant?: 'header' | 'settings' } = {}) {
-  const { approvedRoles, activeRole, accountRole, switchRole } = useRole()
+  const { approvedRoles, activeRole, accountRole, switchRole, partnerLocked } = useRole()
   const navigate = useNavigate()
   const [isOpen, setIsOpen] = useState(false)
   const [switching, setSwitching] = useState(false)
@@ -32,6 +32,12 @@ export function RoleSwitcher({ variant = 'header' }: { variant?: 'header' | 'set
   // to switch between, so no role control is shown to them at all - the
   // "Become a partner" path is a normal nav entry instead (see tabs.ts).
   if (isUserOnly) {
+    return null
+  }
+
+  // An approved partner is pinned to the partner surface (see roleContext), so
+  // offering them a switch back to "User" would only snap back — hide it.
+  if (partnerLocked) {
     return null
   }
 

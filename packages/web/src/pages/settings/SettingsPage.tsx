@@ -197,11 +197,13 @@ export function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const { setTheme, setAccent } = useTheme()
-  const { approvedRoles, accountRole } = useRole()
+  const { approvedRoles, accountRole, partnerLocked } = useRole()
   // The role switcher is a control for accounts that actually have more than one
   // surface to move between: admin-tier accounts and users approved for a
-  // second role (e.g. partner). A plain user gets no role control at all.
-  const canSwitchRoles = isAdminTierRole(accountRole) || approvedRoles.some((r) => r !== 'USER')
+  // second role (e.g. partner). A plain user gets no role control at all, and an
+  // approved partner is pinned to the partner surface, so neither sees one.
+  const canSwitchRoles =
+    !partnerLocked && (isAdminTierRole(accountRole) || approvedRoles.some((r) => r !== 'USER'))
   const { enabled: appLockEnabled, autoLockSec, enable, disable, changePin, lockNow, setAutoLockSec } = useAppLock()
   // Ads consent resolves at boot, which can finish after this page mounts, so
   // reading the flag once on mount hides the entry permanently. Subscribe so it

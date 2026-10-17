@@ -45,7 +45,7 @@ function ageYears(dob: string): number {
 
 export function ProfilePage() {
   const { user, updateUser, logout } = useAuth()
-  const { approvedRoles, activeRole } = useRole()
+  const { approvedRoles, activeRole, partnerLocked } = useRole()
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const saveLock = useRef(false)
@@ -494,7 +494,7 @@ export function ProfilePage() {
             </GlassCard>
 
             {/* Account Switching (USER <-> PARTNER, etc.) */}
-            {(approvedRoles.length > 1 || activeRole !== 'USER') && (
+            {!partnerLocked && (approvedRoles.length > 1 || activeRole !== 'USER') && (
               <GlassCard variant="elevated" padding="lg">
                 <h3 className="section-title text-sm flex items-center gap-2 mb-3">
                   <Repeat className="w-4 h-4 text-primary-500" /> Account Type

@@ -219,20 +219,10 @@ export function App() {
             <Route element={<Layout />}>
               <Route path="/profile/complete" element={<ProfileCompletionPage />} />
               <Route path="/dashboard" element={<Navigate to="/home" replace />} />
+              {/* /partner/apply is the customer's "become a partner" application,
+                  so it stays on the USER surface (an approved partner no longer
+                  needs it). */}
               <Route path="/partner/apply" element={<PartnerGatePage />} />
-              <Route path="/profile" element={<ProfilePage />} />
-              <Route path="/verification" element={<VerificationPage />} />
-              <Route path="/verification/step1" element={<KycStep1PersonalDetails />} />
-              <Route path="/verification/step2" element={<KycStep2GovId />} />
-              <Route path="/verification/step3" element={<KycStep3Selfie />} />
-              <Route path="/verification/step4" element={<KycStep4AddressProof />} />
-              <Route path="/verification/step5" element={<KycStep5EmergencyContact />} />
-              <Route path="/verification/step6" element={<KycStep6Review />} />
-              <Route path="/verification/selfie" element={<VerifySelfiePage />} />
-              <Route path="/agreements" element={<AgreementsPage />} />
-              <Route path="/legal/consent" element={<LegalConsentPage />} />
-              <Route path="/verification/gov-id" element={<VerifyGovIdPage />} />
-              <Route path="/verification/address" element={<VerifyAddressPage />} />
               <Route path="/wallet" element={<WalletPage />} />
               {/* New Home & Discovery */}
               <Route path="/home" element={<HomePage />} />
@@ -304,6 +294,24 @@ export function App() {
                   partner surfaces get it (the referral endpoints only require an
                   authenticated account). */}
               <Route path="/invite" element={<InvitePage />} />
+              {/* Account-level pages, not customer features. The partner profile
+                  page ("Edit Profile" / "Verification") and the profile editor
+                  ("My Agreements") link here, so a partner pinned to the partner
+                  surface must still reach them instead of being bounced to
+                  /partner/dashboard by the USER-only group above. */}
+              <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/verification" element={<VerificationPage />} />
+              <Route path="/verification/step1" element={<KycStep1PersonalDetails />} />
+              <Route path="/verification/step2" element={<KycStep2GovId />} />
+              <Route path="/verification/step3" element={<KycStep3Selfie />} />
+              <Route path="/verification/step4" element={<KycStep4AddressProof />} />
+              <Route path="/verification/step5" element={<KycStep5EmergencyContact />} />
+              <Route path="/verification/step6" element={<KycStep6Review />} />
+              <Route path="/verification/selfie" element={<VerifySelfiePage />} />
+              <Route path="/verification/gov-id" element={<VerifyGovIdPage />} />
+              <Route path="/verification/address" element={<VerifyAddressPage />} />
+              <Route path="/agreements" element={<AgreementsPage />} />
+              <Route path="/legal/consent" element={<LegalConsentPage />} />
             </Route>
           </Route>
 

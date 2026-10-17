@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react'
 import { api } from './api'
 import { useAuth } from './auth'
-import { isAdminTierRole, normalizeRole, resolveAccountRole } from './roles'
+import { isAdminTierRole, isApprovedPartner, normalizeRole, resolveAccountRole } from './roles'
 import type { UserRole } from './roles'
 
 export interface RoleInfo {
@@ -37,6 +37,12 @@ interface RoleContextType {
   isPartner: boolean
   isAdmin: boolean
   isUser: boolean
+  /**
+   * True when the account is an approved partner and therefore pinned to the
+   * partner surface. The customer app is not offered, so role switching is
+   * hidden for these accounts.
+   */
+  partnerLocked: boolean
 }
 
 const RoleContext = createContext<RoleContextType | undefined>(undefined)
@@ -174,24 +180,30 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     }
   }, [refreshRoles])
 
-  const isPartner = activeRole === 'PARTNER'
+  // An approved partner account is pinned to the partner surface: the customer
+  // app is not offered to partners, so a stored/previewed "USER" (the DB default
+  // for every partner) cannot move them off it. Admin-tier previews are left
+  // untouched — administrators inspect both surfaces deliberately.
+  const partnerLocked = !isAdminTierRole(accountRole) && isApprovedPartner(user)
+  const effectiveActiveRole: UserRole = partnerLocked ? 'PARTNER' : activeRole
   // Admin capability follows the account type, so a customer preview an admin
   // deliberately switched into cannot hide the admin affordances.
   const isAdmin = isAdminTierRole(accountRole)
-  const isUser = !isAdmin && activeRole === 'USER'
+  const isUser = !isAdmin && effectiveActiveRole === 'USER'
 
   return (
     <RoleContext.Provider value={{
       approvedRoles,
-      activeRole,
+      activeRole: effectiveActiveRole,
       accountRole,
       loading,
       switchRole,
       applyForRole,
       refreshRoles,
-      isPartner,
+      isPartner: !isAdmin && effectiveActiveRole === 'PARTNER',
       isAdmin,
       isUser,
+      partnerLocked,
     }}>
       {children}
     </RoleContext.Provider>

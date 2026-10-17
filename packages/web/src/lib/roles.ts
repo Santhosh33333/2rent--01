@@ -102,6 +102,23 @@ interface RoleBearingUser {
   baseRole?: string | null
 }
 
+interface PartnerBearingUser extends RoleBearingUser {
+  partnerStatus?: string | null
+}
+
+/**
+ * True when this account owns an admin-approved partner profile.
+ *
+ * Registration stores every partner as a plain `USER` account — `role` and
+ * `activeRole` are written as "USER" and the partner is only an attached
+ * `Partner` row (`status: "APPROVED"`). The account type is therefore never a
+ * partner signal; the partner record is. This is what keeps an approved partner
+ * on the partner surface instead of dropping them into the customer app.
+ */
+export function isApprovedPartner(user: PartnerBearingUser | null | undefined): boolean {
+  return String(user?.partnerStatus || '').toUpperCase() === 'APPROVED'
+}
+
 /**
  * The account type — the only value that decides whether this account is an
  * administrator. Prefers `role` (and the `/roles/my-roles` `baseRole`), and
@@ -122,13 +139,18 @@ export function resolveAccountRole(user: RoleBearingUser | null | undefined): Us
  * Admin-tier accounts always land in the admin console. Landing them on the
  * customer surface (because a stale `activeRole` said "USER") is what made
  * administrators believe they had been demoted.
+ *
+ * An approved partner account always lands on the partner surface. A partner is
+ * a `USER` record with an approved partner profile, so without this branch the
+ * stored preview "USER" won it and every partner opened the customer app.
  */
 export function resolveLandingRole(
-  user: RoleBearingUser | null | undefined,
+  user: PartnerBearingUser | null | undefined,
   activeRole?: string | null,
 ): UserRole {
   const accountRole = resolveAccountRole(user)
   if (isAdminTierRole(accountRole)) return accountRole
+  if (isApprovedPartner(user)) return 'PARTNER'
   // Consume the stored preview from the user object as well as the explicit
   // argument. Every caller passes only `user`, so reading the argument alone
   // made `preview` always "USER": an approved partner was routed to /dashboard
