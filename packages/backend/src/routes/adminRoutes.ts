@@ -15,6 +15,7 @@ import * as otpController from "../controllers/otpController";
 import * as kycTrialController from "../controllers/kycTrialController";
 import * as adminSubscriptionController from "../controllers/adminSubscriptionController";
 import * as formSubmissionController from "../controllers/formSubmissionController";
+import * as connectionCategoryController from "../controllers/connectionCategoryController";
 
 const router = Router();
 
@@ -328,6 +329,14 @@ router.get("/bookings/:id/logs", bookingsView, adminController.getBookingLogs);
 router.post("/pricing", pricingEdit, [body("key").notEmpty(), body("value").notEmpty()], sanitizeInput, validateRequest, adminController.createPricingConfig);
 router.put("/pricing/:id", pricingEdit, adminController.updatePricingConfig);
 router.delete("/pricing/:id", pricingEdit, adminController.deletePricingConfig);
+
+// Live connection categories — same PRICING section as the pricing config,
+// since these rows *are* pricing (per-mode, per-minute rates).
+router.get("/connection-categories", pricingManage, connectionCategoryController.adminListCategories);
+router.post("/connection-categories/seed", pricingEdit, connectionCategoryController.adminSeedCategories);
+router.post("/connection-categories", pricingEdit, connectionCategoryController.adminCreateCategory);
+router.put("/connection-categories/:id", pricingEdit, connectionCategoryController.adminUpdateCategory);
+router.delete("/connection-categories/:id", pricingEdit, connectionCategoryController.adminDeleteCategory);
 
 // Coupons
 router.get("/coupons", couponsManage, adminController.getCoupons);

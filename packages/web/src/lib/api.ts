@@ -667,6 +667,32 @@ export const callApi = {
   terms: () => api.get<{ success: boolean; data: CallTerms }>('/calls/terms'),
 }
 
+// One catalogue row for the live connection flow: whether each mode is offered
+// and what it costs per minute. `chatPricePerMinute` of 0 means chat is free.
+export interface ConnectionCategoryRow {
+  key: string
+  label: string
+  description: string | null
+  chatEnabled: boolean
+  callEnabled: boolean
+  videoEnabled: boolean
+  isPaid: boolean
+  chatPricePerMinute: number
+  callPricePerMinute: number
+  videoPricePerMinute: number
+  enabled: boolean
+  sortOrder: number
+}
+
+export const connectionCategoryApi = {
+  // The backend falls back to its built-in defaults while the table is
+  // unseeded, so this never comes back empty.
+  list: () =>
+    api.get<{ success: boolean; data: { items: ConnectionCategoryRow[]; source: 'db' | 'defaults' } }>(
+      '/connection-categories',
+    ),
+}
+
 // ============================================================================
 // CHAT REQUESTS
 //

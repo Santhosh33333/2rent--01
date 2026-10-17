@@ -18,6 +18,7 @@ const KNOWN_FLAGS = [
   "LIVE_STREAMING",
   "AI_ASSISTANT",
   "LOCAL_DISCOVERY",
+  "CONNECTIONS",
 ];
 
 export interface FeatureFlagState {

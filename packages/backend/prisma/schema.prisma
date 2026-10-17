@@ -1993,6 +1993,34 @@ model PricingConfig {
   @@index([serviceType])
 }
 
+/// Live connection categories: the DB-driven replacement for the hardcoded
+/// service catalogue when a user connects by chat or call instead of booking
+/// a scheduled service. `callPricePerMinute` is what the metered call billing
+/// uses; chat is free unless an admin sets a chat price.
+///
+/// Reads go through `connectionCategoryService`, which falls back to the
+/// built-in defaults until an admin seeds the table, so the flow never depends
+/// on a manual setup step.
+model ConnectionCategory {
+  id                  String   @id @default(uuid())
+  key                 String   @unique
+  label               String
+  description         String?
+  chatEnabled         Boolean  @default(true)
+  callEnabled         Boolean  @default(true)
+  videoEnabled        Boolean  @default(false)
+  isPaid              Boolean  @default(false)
+  chatPricePerMinute  Decimal  @default(0) @db.Decimal(10, 2)
+  callPricePerMinute  Decimal  @default(0) @db.Decimal(10, 2)
+  videoPricePerMinute Decimal  @default(0) @db.Decimal(10, 2)
+  enabled             Boolean  @default(true)
+  sortOrder           Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([enabled, sortOrder])
+}
+
 model PartnerLevel {
   id                  String   @id @default(uuid())
   userId              String   @unique
