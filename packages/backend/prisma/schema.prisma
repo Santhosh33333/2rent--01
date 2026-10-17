@@ -75,6 +75,7 @@ lastLoginAt                   DateTime?
   referrals                      Referral[]           @relation("ReferralSender")
   applications                   RoleApplication[]
   bookings                       Booking[]            @relation("BookingUser")
+  connectionRequests             ConnectionRequest[]  @relation("ConnectionRequester")
   transactions                   Transaction[]
   communities                    CommunityMember[]    @relation("CommunityMembership")
   ownedCommunities               Community[]          @relation("CommunityOwner")
@@ -2021,6 +2022,72 @@ model ConnectionCategory {
   @@index([enabled, sortOrder])
 }
 
+/// A user's live request for a connection (chat / voice / video) in a category.
+///
+/// Deliberately not a `Booking`: a connection has no pickup point, no schedule
+/// and no escrow — it is a metered session that only starts once the two people
+/// are actually connected. The request is fanned out to eligible partners; the
+/// first to accept wins, the rest are told it is gone, and an unanswered request
+/// expires.
+///
+/// `pricePerMinute` is a *snapshot* taken from the category at request time, so
+/// a later admin price edit cannot retroactively change what this request was
+/// agreed to cost. `totalAmount` is written by the session billing (a later
+/// phase); until then it stays 0 and no money moves for a request — searching,
+/// accepting and declining are free, and the requester is shown the price before
+/// they send anything.
+model ConnectionRequest {
+  id               String    @id @default(uuid())
+  requesterId      String
+  /// Key from `ConnectionCategory` (e.g. DATING). Snapshotted, not an FK, so a
+  /// retired category does not orphan or block a request already in flight.
+  categoryKey      String
+  /// CHAT | CALL | VIDEO
+  mode             String
+  /// SEARCHING | ACCEPTED | CANCELLED | EXPIRED | COMPLETED
+  status           String    @default("SEARCHING")
+  /// Set to the winning partner on accept; null while searching.
+  partnerId        String?
+  expiresAt        DateTime
+  pricePerMinute   Decimal   @default(0) @db.Decimal(10, 2)
+  estimatedMinutes Int       @default(10)
+  totalAmount      Decimal   @default(0) @db.Decimal(10, 2)
+  connectedAt      DateTime?
+  endedAt          DateTime?
+  notes            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  requester  User                         @relation("ConnectionRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  partner    Partner?                     @relation("ConnectionRequestPartner", fields: [partnerId], references: [id], onDelete: SetNull)
+  recipients ConnectionRequestRecipient[]
+
+  @@index([requesterId, status, createdAt])
+  @@index([partnerId, status, createdAt])
+  @@index([status, expiresAt])
+}
+
+/// One notified partner for one connection request. A decline is recorded here
+/// rather than on the request, so one partner saying no does not stop the others
+/// from accepting — the request only ends when someone wins, the requester
+/// cancels, or the window lapses.
+model ConnectionRequestRecipient {
+  id          String    @id @default(uuid())
+  requestId   String
+  partnerId   String
+  /// SENT | VIEWED | ACCEPTED | DECLINED | EXPIRED | CANCELLED
+  status      String    @default("SENT")
+  sentAt      DateTime  @default(now())
+  viewedAt    DateTime?
+  respondedAt DateTime?
+
+  request ConnectionRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  partner Partner           @relation("ConnectionRecipientPartner", fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@unique([requestId, partnerId])
+  @@index([partnerId, status])
+}
+
 model PartnerLevel {
   id                  String   @id @default(uuid())
   userId              String   @unique
@@ -2656,8 +2723,10 @@ model Partner {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  bookings Booking[] @relation("BookingPartner")
+  user                  User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookings              Booking[]                    @relation("BookingPartner")
+  connectionRequests    ConnectionRequest[]          @relation("ConnectionRequestPartner")
+  connectionRecipients  ConnectionRequestRecipient[] @relation("ConnectionRecipientPartner")
 
   @@index([status])
   @@index([isAvailable])

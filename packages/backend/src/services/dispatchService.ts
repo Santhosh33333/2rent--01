@@ -55,7 +55,31 @@ async function findEligiblePartners(booking: {
   // retired catalogue keys - every live service used to fan out to
   // call-capable partners alone. An unspecified channel reaches everyone.
   const serviceFilter = capabilityFilter(connectModeForBooking(booking));
+  return findEligibleByChannel(serviceFilter, booking.userId);
+}
 
+/**
+ * The single eligibility rule, shared by job dispatch and connection requests:
+ * approved, available, KYC-cleared, and neither the blocker nor the blocked of
+ * the requester. Keeping it in one place means a partner who can be sent a job
+ * today can be sent a connection request today, and vice versa.
+ *
+ * `mode` is CALL/CHAT (VIDEO resolves to CALL - a partner who takes voice calls
+ * can take video). The channel filter is deliberately the legacy capability
+ * flags, exactly as dispatch uses them.
+ */
+export async function findEligiblePartnersForConnection(
+  mode: "CALL" | "CHAT" | "VIDEO",
+  requesterUserId: string
+): Promise<DispatchTarget[]> {
+  const channel = mode === "CHAT" ? "CHAT" : "CALL";
+  return findEligibleByChannel(capabilityFilter(channel), requesterUserId);
+}
+
+async function findEligibleByChannel(
+  serviceFilter: { providesWalking?: boolean; providesCarry?: boolean },
+  requesterUserId: string
+): Promise<DispatchTarget[]> {
   const partners = await prisma.partner.findMany({
     where: {
       ...serviceFilter,
@@ -67,16 +91,16 @@ async function findEligiblePartners(booking: {
         verification: { status: { in: ["APPROVED", "VERIFIED"] } },
       },
       NOT: {
-        user: { blocksInitiated: { some: { blockedId: booking.userId } } },
+        user: { blocksInitiated: { some: { blockedId: requesterUserId } } },
       },
     },
     select: { id: true, userId: true },
   });
 
-  // Exclude partners blocked BY the booking user.
+  // Exclude partners blocked BY the requester.
   if (partners.length > 0) {
     const blocker = await prisma.userBlock.findMany({
-      where: { blockerId: booking.userId },
+      where: { blockerId: requesterUserId },
       select: { blockedId: true },
     });
     const blockedIds = new Set(blocker.map((b) => b.blockedId));

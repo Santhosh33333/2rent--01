@@ -67,6 +67,20 @@ export const aiRateLimiter = rateLimit({
   },
 });
 
+// Connection requests: creating one fans out to every eligible partner (a row,
+// a realtime event and an inbox notification each), so an unthrottled caller
+// could flood real partners. Bucketed per authenticated user, not per IP.
+export const connectionRequestLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: env.NODE_ENV === "development" ? 1000 : 6,
+  standardHeaders,
+  legacyHeaders,
+  keyGenerator: (req: any) => `connection-request:${req.user?.userId ?? req.ip}`,
+  handler: (_req, res) => {
+    sendError(res, "Too many connection requests. Please wait a moment.", 429, "CONNECTION_RATE_LIMIT_EXCEEDED");
+  },
+});
+
 // Search/autocomplete: DB-heavy, easy to abuse for scraping.
 export const searchRateLimiter = rateLimit({
   windowMs: 60 * 1000,

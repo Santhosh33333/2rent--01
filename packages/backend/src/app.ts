@@ -42,6 +42,7 @@ import pricingRoutes from "./routes/pricingRoutes";
 import notificationRoutes from "./routes/notificationRoutes";
 import settingsRoutes from "./routes/settingsRoutes";
 import connectionCategoryRoutes from "./routes/connectionCategoryRoutes";
+import connectionRoutes from "./routes/connectionRoutes";
 import appContentRoutes from "./routes/appContentRoutes";
 import crashRoutes from "./routes/appCrashRoutes";
 import callRoutes from "./routes/callRoutes";
@@ -358,6 +359,8 @@ app.use("/api/subscriptions", subscriptionRoutes);
   app.use("/api/notifications", notificationRoutes);
   app.use("/api/settings", settingsRoutes);
   app.use("/api/connection-categories", connectionCategoryRoutes);
+  // Connection requests: the user searches, eligible partners accept/decline.
+  app.use("/api/connections", connectionRoutes);
   app.use("/api/content", appContentRoutes);
   app.use("/api/calls", callRoutes);
   app.use("/api/carry-buddy", carryBuddyRoutes);
